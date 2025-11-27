@@ -32,8 +32,6 @@ Authorization: Bearer {api_key_or_access_token}
 
 **Access Token Format:** JWT signed with ES256 (returned from `/auth/token`)
 
-The API accepts BOTH API keys AND access tokens as Bearer tokens for backward compatibility.
-
 ### 1.3 Request/Response Format
 
 - **Content-Type:** `application/json`
@@ -184,32 +182,7 @@ POST /v1/auth/refresh
 
 - `401 Unauthorized` - Refresh token expired, revoked, or already used
 
-### 2.5 Verify API Key (Legacy)
-
-Verify an API key and get account info. **DEPRECATED:** Use `/auth/token` for new integrations.
-
-```
-GET /v1/auth/verify
-Authorization: Bearer {api_key}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "user_id": "usr_abc123def456",
-  "email": "user@example.com",
-  "credits_balance": 1850,
-  "tier": "pro",
-  "services_enabled": ["math", "code", "hosting"],
-  "rate_limits": {
-    "requests_per_minute": 100,
-    "requests_per_hour": 1000
-  },
-  "_deprecation_warning": "This endpoint is deprecated. Use POST /v1/auth/token for token-based auth."
-}
-```
-
-### 2.6 List API Keys
+### 2.5 List API Keys
 
 List all API keys for the authenticated account.
 
@@ -243,7 +216,7 @@ Authorization: Bearer {access_token}
 }
 ```
 
-### 2.7 Rotate API Key
+### 2.6 Rotate API Key
 
 Generate a new API key with a grace period for the old key. **Dashboard-triggered only** (not callable from gateway CLI).
 
@@ -276,7 +249,7 @@ Authorization: Bearer {access_token}
 }
 ```
 
-### 2.8 Revoke API Key
+### 2.7 Revoke API Key
 
 Immediately revoke a specific API key. Use with caution.
 
