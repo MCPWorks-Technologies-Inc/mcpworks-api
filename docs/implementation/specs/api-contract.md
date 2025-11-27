@@ -19,13 +19,20 @@ This document defines the HTTP/JSON API contract that the open-source MCP server
 
 ### 1.2 Authentication
 
-All API requests (except `/auth/register` and `/auth/login`) require authentication via Bearer token:
+All API requests (except `/auth/register`, `/auth/login`, and `/auth/token`) require authentication via Bearer token:
 
 ```
-Authorization: Bearer {api_key}
+Authorization: Bearer {api_key_or_access_token}
 ```
 
-**API Key Format:** `msp_live_{32_char_random}` or `msp_test_{32_char_random}`
+**API Key Format:** `sk_{env}_{keyID}_{random}`
+- `sk_live_k1_abc123...` - Production key #1
+- `sk_test_k1_xyz789...` - Test/sandbox key
+- Key ID (`k1`, `k2`, etc.) enables multiple active keys for rotation
+
+**Access Token Format:** JWT signed with ES256 (returned from `/auth/token`)
+
+The API accepts BOTH API keys AND access tokens as Bearer tokens for backward compatibility.
 
 ### 1.3 Request/Response Format
 
@@ -78,10 +85,219 @@ POST /v1/auth/login
 **Response:** `200 OK`
 ```json
 {
-  "api_key": "msp_live_a1b2c3d4e5f6...",
+  "api_key": "sk_live_k1_a1b2c3d4e5f6...",
   "account_id": "acc_1234567890abcdef"
 }
 ```
+
+### 2.3 Token Exchange (Gateway Authentication)
+
+Exchange an API key for short-lived access and refresh tokens. This is the primary authentication method for the mcpworks-gateway.
+
+```
+POST /v1/auth/token
+```
+
+**Request Body:**
+```json
+{
+  "api_key": "sk_live_k1_abc123...",
+  "token_config": {
+    "access_token_ttl": 3600,     // Optional: seconds (default 3600, range 900-14400)
+    "refresh_token_ttl": 604800   // Optional: seconds (default 604800, range 86400-2592000)
+  },
+  "client_info": {
+    "gateway_version": "1.0.0",   // Optional: for analytics
+    "platform": "linux",          // Optional
+    "hostname": "dev-machine"     // Optional
+  }
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im1jcHdvcmtzLTIwMjUtMDEifQ...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "rt_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+  "refresh_expires_in": 604800,
+  "user": {
+    "user_id": "usr_abc123def456",
+    "email": "user@example.com",
+    "tier": "pro",
+    "credits_balance": 1850
+  },
+  "key_info": {
+    "key_id": "k1",
+    "created_at": "2025-10-01T00:00:00Z",
+    "expires_at": "2025-12-30T00:00:00Z",
+    "days_until_expiry": 33,
+    "rotation_recommended": false,
+    "status": "active"
+  }
+}
+```
+
+**Error Responses:**
+
+- `401 Unauthorized` - Invalid or expired API key
+- `410 Gone` - API key has been rotated (new key available)
+
+```json
+{
+  "error": "key_rotated",
+  "message": "This API key has been rotated. Please use the new key.",
+  "error_code": "AUTH_KEY_ROTATED",
+  "old_key_hint": "sk_live_k1_***xyz",
+  "new_key_hint": "sk_live_k2_***abc"
+}
+```
+
+### 2.4 Token Refresh
+
+Refresh an access token using a refresh token. Returns new access AND refresh tokens (refresh tokens are single-use).
+
+```
+POST /v1/auth/refresh
+```
+
+**Request Body:**
+```json
+{
+  "refresh_token": "rt_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im1jcHdvcmtzLTIwMjUtMDEifQ...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "rt_newtoken123456789...",
+  "refresh_expires_in": 604800
+}
+```
+
+**Error Responses:**
+
+- `401 Unauthorized` - Refresh token expired, revoked, or already used
+
+### 2.5 Verify API Key (Legacy)
+
+Verify an API key and get account info. **DEPRECATED:** Use `/auth/token` for new integrations.
+
+```
+GET /v1/auth/verify
+Authorization: Bearer {api_key}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "user_id": "usr_abc123def456",
+  "email": "user@example.com",
+  "credits_balance": 1850,
+  "tier": "pro",
+  "services_enabled": ["math", "code", "hosting"],
+  "rate_limits": {
+    "requests_per_minute": 100,
+    "requests_per_hour": 1000
+  },
+  "_deprecation_warning": "This endpoint is deprecated. Use POST /v1/auth/token for token-based auth."
+}
+```
+
+### 2.6 List API Keys
+
+List all API keys for the authenticated account.
+
+```
+GET /v1/auth/keys
+Authorization: Bearer {access_token}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "keys": [
+    {
+      "key_id": "k1",
+      "key_hint": "sk_live_k1_***xyz",
+      "status": "active",
+      "created_at": "2025-10-01T00:00:00Z",
+      "last_used_at": "2025-11-27T10:30:00Z",
+      "expires_at": null
+    },
+    {
+      "key_id": "k2",
+      "key_hint": "sk_live_k2_***abc",
+      "status": "rotating",
+      "created_at": "2025-11-27T12:00:00Z",
+      "last_used_at": null,
+      "revokes_at": "2025-12-04T12:00:00Z"
+    }
+  ],
+  "max_keys": 5
+}
+```
+
+### 2.7 Rotate API Key
+
+Generate a new API key with a grace period for the old key. **Dashboard-triggered only** (not callable from gateway CLI).
+
+```
+POST /v1/auth/keys/rotate
+Authorization: Bearer {access_token}
+```
+
+**Request Body:**
+```json
+{
+  "grace_period_days": 7  // Optional: default 7, range 1-30
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "new_key": {
+    "api_key": "sk_live_k2_newrandom...",
+    "key_id": "k2",
+    "created_at": "2025-11-27T12:00:00Z"
+  },
+  "old_key": {
+    "key_id": "k1",
+    "status": "rotating",
+    "revokes_at": "2025-12-04T12:00:00Z"
+  },
+  "grace_period_ends_at": "2025-12-04T12:00:00Z"
+}
+```
+
+### 2.8 Revoke API Key
+
+Immediately revoke a specific API key. Use with caution.
+
+```
+DELETE /v1/auth/keys/{key_id}
+Authorization: Bearer {access_token}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "key_id": "k1",
+  "status": "revoked",
+  "revoked_at": "2025-11-27T12:00:00Z"
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Cannot revoke the only active key
+- `404 Not Found` - Key ID not found
 
 ---
 
@@ -537,10 +753,13 @@ All errors follow this format:
 | HTTP Status | Error Code | Description |
 |-------------|------------|-------------|
 | 400 | `invalid_request` | Request body validation failed |
-| 401 | `unauthorized` | Missing or invalid API key |
+| 401 | `unauthorized` | Missing or invalid API key/access token |
+| 401 | `token_expired` | Access token has expired (use refresh) |
+| 401 | `refresh_token_invalid` | Refresh token expired, revoked, or already used |
 | 402 | `insufficient_credits` | Account has insufficient credits |
 | 404 | `not_found` | Resource not found |
 | 409 | `conflict` | Resource already exists or in invalid state |
+| 410 | `key_rotated` | API key has been rotated, use new key |
 | 429 | `rate_limit_exceeded` | Too many requests |
 | 500 | `internal_error` | Server error |
 | 503 | `service_unavailable` | Temporary outage |
