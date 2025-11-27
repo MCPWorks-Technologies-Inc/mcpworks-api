@@ -1,0 +1,630 @@
+# mcpworks API Contract
+
+**Version:** 1.0.0
+**Created:** 2025-11-02
+**Status:** Draft
+**Purpose:** Defines the REST API contract between `mcpworks-mcp` (MCP client) and `mcpworks-api` (backend service)
+
+---
+
+## 1. Overview
+
+This document defines the HTTP/JSON API contract that the open-source MCP server (`mcpworks-mcp`) uses to communicate with the proprietary backend service (`mcpworks-api`).
+
+### 1.1 Base URL
+
+- **Production:** `https://api.mcpworks.io/v1`
+- **Staging:** `https://staging-api.mcpworks.io/v1`
+- **Local Development:** `http://localhost:8000/v1`
+
+### 1.2 Authentication
+
+All API requests (except `/auth/register` and `/auth/login`) require authentication via Bearer token:
+
+```
+Authorization: Bearer {api_key}
+```
+
+**API Key Format:** `msp_live_{32_char_random}` or `msp_test_{32_char_random}`
+
+### 1.3 Request/Response Format
+
+- **Content-Type:** `application/json`
+- **Character Encoding:** UTF-8
+- **Date Format:** ISO 8601 (`2025-11-02T20:00:00Z`)
+
+---
+
+## 2. Authentication Endpoints
+
+### 2.1 Register Account
+
+```
+POST /v1/auth/register
+```
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "secure_password",
+  "name": "John Doe"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "account_id": "acc_1234567890abcdef",
+  "email": "user@example.com",
+  "api_key": "msp_live_a1b2c3d4e5f6..."
+}
+```
+
+### 2.2 Login
+
+```
+POST /v1/auth/login
+```
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "secure_password"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "api_key": "msp_live_a1b2c3d4e5f6...",
+  "account_id": "acc_1234567890abcdef"
+}
+```
+
+---
+
+## 3. Account Endpoints
+
+### 3.1 Get Account Details
+
+```
+GET /v1/account
+```
+
+**Response:** `200 OK`
+```json
+{
+  "account_id": "acc_1234567890abcdef",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "created_at": "2025-10-15T14:30:00Z"
+}
+```
+
+### 3.2 Get Credit Balance
+
+```
+GET /v1/account/credits
+```
+
+**Response:** `200 OK`
+```json
+{
+  "balance": 10000,
+  "currency": "credits",
+  "burn_rate_per_hour": 12.5,
+  "estimated_hours_remaining": 800,
+  "holds": [
+    {
+      "hold_id": "hold_xyz123",
+      "amount": 100,
+      "reason": "Provisioning service svc_abc123",
+      "created_at": "2025-11-02T19:45:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 4. Service Endpoints (Hosting)
+
+### 4.1 Provision Service
+
+```
+POST /v1/services
+```
+
+**Request Body:**
+```json
+{
+  "type": "web_hosting",
+  "size": "small",
+  "region": "tor1",
+  "configuration": {
+    "memory_mb": 1024,
+    "vcpus": 1,
+    "disk_gb": 25
+  }
+}
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "service_id": "svc_abc123",
+  "status": "provisioning",
+  "type": "web_hosting",
+  "region": "tor1",
+  "credit_cost": 100,
+  "burn_rate_per_hour": 1.2,
+  "estimated_ready_at": "2025-11-02T20:02:00Z",
+  "stream_url": "https://api.mcpworks.io/v1/services/svc_abc123/logs"
+}
+```
+
+### 4.2 Get Service Status
+
+```
+GET /v1/services/{service_id}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "service_id": "svc_abc123",
+  "status": "running",
+  "type": "web_hosting",
+  "region": "tor1",
+  "created_at": "2025-11-02T20:00:00Z",
+  "ready_at": "2025-11-02T20:02:30Z",
+  "burn_rate_per_hour": 1.2,
+  "total_credits_burned": 125.5,
+  "endpoints": {
+    "public_ip": "142.93.123.45",
+    "ssh": "ssh://root@142.93.123.45"
+  }
+}
+```
+
+### 4.3 Scale Service
+
+```
+PATCH /v1/services/{service_id}
+```
+
+**Request Body:**
+```json
+{
+  "configuration": {
+    "memory_mb": 2048,
+    "vcpus": 2
+  }
+}
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "service_id": "svc_abc123",
+  "status": "scaling",
+  "new_burn_rate_per_hour": 2.4,
+  "stream_url": "https://api.mcpworks.io/v1/services/svc_abc123/logs"
+}
+```
+
+### 4.4 Deprovision Service
+
+```
+DELETE /v1/services/{service_id}
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "service_id": "svc_abc123",
+  "status": "deprovisioning",
+  "total_credits_burned": 1234.5,
+  "final_bill": "Account credited remaining time"
+}
+```
+
+---
+
+## 5. Deployment Endpoints
+
+### 5.1 Deploy Application
+
+```
+POST /v1/deployments
+```
+
+**Request Body:**
+```json
+{
+  "service_id": "svc_abc123",
+  "repository_url": "https://github.com/user/app.git",
+  "branch": "main",
+  "build_command": "npm install && npm run build",
+  "start_command": "npm start",
+  "env_vars": {
+    "NODE_ENV": "production",
+    "PORT": "3000"
+  }
+}
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "deployment_id": "dep_xyz789",
+  "service_id": "svc_abc123",
+  "status": "deploying",
+  "created_at": "2025-11-02T20:05:00Z",
+  "stream_url": "https://api.mcpworks.io/v1/deployments/dep_xyz789/logs"
+}
+```
+
+### 5.2 Get Deployment Status
+
+```
+GET /v1/deployments/{deployment_id}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "deployment_id": "dep_xyz789",
+  "service_id": "svc_abc123",
+  "status": "deployed",
+  "started_at": "2025-11-02T20:05:00Z",
+  "completed_at": "2025-11-02T20:08:15Z",
+  "url": "https://app.example.com"
+}
+```
+
+### 5.3 Stream Deployment Logs (SSE)
+
+```
+GET /v1/deployments/{deployment_id}/logs
+```
+
+**Response:** `200 OK` with `Content-Type: text/event-stream`
+
+```
+event: log
+data: {"timestamp": "2025-11-02T20:05:01Z", "message": "Cloning repository..."}
+
+event: log
+data: {"timestamp": "2025-11-02T20:05:05Z", "message": "Installing dependencies..."}
+
+event: log
+data: {"timestamp": "2025-11-02T20:07:30Z", "message": "Building application..."}
+
+event: status
+data: {"status": "deployed", "url": "https://app.example.com"}
+
+event: done
+data: {"deployment_id": "dep_xyz789", "status": "deployed"}
+```
+
+### 5.4 Rollback Deployment
+
+```
+POST /v1/deployments/{deployment_id}/rollback
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "deployment_id": "dep_new123",
+  "previous_deployment_id": "dep_xyz789",
+  "status": "deploying",
+  "stream_url": "https://api.mcpworks.io/v1/deployments/dep_new123/logs"
+}
+```
+
+---
+
+## 6. Domain Endpoints
+
+### 6.1 Register Domain
+
+```
+POST /v1/domains
+```
+
+**Request Body:**
+```json
+{
+  "domain_name": "example.com",
+  "privacy_protection": true,
+  "auto_renew": true
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "domain_id": "dom_abc123",
+  "domain_name": "example.com",
+  "status": "registering",
+  "credit_cost": 1500,
+  "expires_at": "2026-11-02T20:00:00Z",
+  "nameservers": [
+    "ns1.multisphere.ca",
+    "ns2.multisphere.ca"
+  ]
+}
+```
+
+### 6.2 Configure DNS
+
+```
+POST /v1/domains/{domain_id}/dns
+```
+
+**Request Body:**
+```json
+{
+  "records": [
+    {
+      "type": "A",
+      "name": "@",
+      "value": "142.93.123.45",
+      "ttl": 3600
+    },
+    {
+      "type": "CNAME",
+      "name": "www",
+      "value": "example.com",
+      "ttl": 3600
+    }
+  ]
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "domain_id": "dom_abc123",
+  "records_updated": 2,
+  "propagation_status": "pending"
+}
+```
+
+### 6.3 Check Domain Availability
+
+```
+GET /v1/domains/check?domain=example.com
+```
+
+**Response:** `200 OK`
+```json
+{
+  "domain": "example.com",
+  "available": false,
+  "price_credits": 1500,
+  "suggestions": ["example-app.com", "example-io.com"]
+}
+```
+
+---
+
+## 7. SSL Endpoints
+
+### 7.1 Provision SSL Certificate
+
+```
+POST /v1/ssl
+```
+
+**Request Body:**
+```json
+{
+  "domain_id": "dom_abc123",
+  "domain_name": "example.com",
+  "type": "letsencrypt"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "certificate_id": "cert_xyz789",
+  "domain_name": "example.com",
+  "status": "issuing",
+  "type": "letsencrypt",
+  "credit_cost": 0,
+  "expires_at": "2026-02-02T20:00:00Z"
+}
+```
+
+### 7.2 Renew Certificate
+
+```
+POST /v1/ssl/{cert_id}/renew
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "certificate_id": "cert_new456",
+  "previous_cert_id": "cert_xyz789",
+  "status": "issuing",
+  "expires_at": "2026-05-02T20:00:00Z"
+}
+```
+
+---
+
+## 8. Integration Endpoints
+
+### 8.1 Setup Stripe
+
+```
+POST /v1/integrations/stripe
+```
+
+**Request Body:**
+```json
+{
+  "account_name": "My Store",
+  "country": "CA",
+  "currency": "CAD"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "integration_id": "int_stripe_abc123",
+  "provider": "stripe",
+  "status": "active",
+  "account_id": "acct_1234567890",
+  "publishable_key": "pk_test_...",
+  "credit_cost": 0
+}
+```
+
+### 8.2 Setup Shopify
+
+```
+POST /v1/integrations/shopify
+```
+
+**Request Body:**
+```json
+{
+  "store_name": "my-store",
+  "email": "admin@example.com"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "integration_id": "int_shopify_xyz789",
+  "provider": "shopify",
+  "status": "active",
+  "store_url": "https://my-store.myshopify.com",
+  "admin_url": "https://my-store.myshopify.com/admin",
+  "credit_cost": 0
+}
+```
+
+---
+
+## 9. Error Responses
+
+All errors follow this format:
+
+```json
+{
+  "error": "error_code",
+  "message": "Human-readable error message",
+  "details": {
+    "field": "Additional context"
+  },
+  "request_id": "req_abc123"
+}
+```
+
+### Common Error Codes
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | `invalid_request` | Request body validation failed |
+| 401 | `unauthorized` | Missing or invalid API key |
+| 402 | `insufficient_credits` | Account has insufficient credits |
+| 404 | `not_found` | Resource not found |
+| 409 | `conflict` | Resource already exists or in invalid state |
+| 429 | `rate_limit_exceeded` | Too many requests |
+| 500 | `internal_error` | Server error |
+| 503 | `service_unavailable` | Temporary outage |
+
+**Example Error Response:**
+```json
+{
+  "error": "insufficient_credits",
+  "message": "Account has insufficient credits for this operation",
+  "details": {
+    "current_balance": 500,
+    "required": 1000,
+    "shortfall": 500
+  },
+  "request_id": "req_xyz789"
+}
+```
+
+---
+
+## 10. Rate Limiting
+
+**Limits:**
+- **Authenticated:** 100 requests per minute per API key
+- **Unauthenticated:** 10 requests per minute per IP
+
+**Headers:**
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 87
+X-RateLimit-Reset: 1698960000
+```
+
+**429 Response:**
+```json
+{
+  "error": "rate_limit_exceeded",
+  "message": "Rate limit exceeded. Retry after 42 seconds.",
+  "retry_after": 42
+}
+```
+
+---
+
+## 11. Pagination
+
+List endpoints support pagination:
+
+```
+GET /v1/services?page=1&per_page=20
+```
+
+**Response:**
+```json
+{
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total_pages": 5,
+    "total_count": 93
+  }
+}
+```
+
+---
+
+## 12. Versioning
+
+**Current Version:** `v1`
+
+**Version in URL:** `/v1/services`
+
+**Breaking Changes:** New major version (`/v2/...`)
+**Non-Breaking Changes:** Added to existing version
+
+---
+
+## 13. Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2025-11-02 | Initial API contract specification |
+
+---
+
+**This contract is the authoritative reference for MCP server developers. Any changes require coordination between `mcpworks-mcp` and `mcpworks-api` teams.**
