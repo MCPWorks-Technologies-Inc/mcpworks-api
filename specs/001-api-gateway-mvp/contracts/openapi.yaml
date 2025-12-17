@@ -1,0 +1,1275 @@
+openapi: 3.1.0
+info:
+  title: MCPWorks API Gateway
+  description: |
+    Thin API gateway for the mcpworks platform handling authentication,
+    credit accounting, and routing to microservices (mcpworks-math, mcpworks-agent).
+  version: 1.0.0
+  contact:
+    name: MCPWorks Support
+    url: https://mcpworks.io
+  license:
+    name: Proprietary
+    url: https://mcpworks.io/terms
+
+servers:
+  - url: https://api.mcpworks.io/v1
+    description: Production
+  - url: http://localhost:8000/v1
+    description: Local development
+
+tags:
+  - name: auth
+    description: Authentication and token management
+  - name: users
+    description: User profile and API key management
+  - name: credits
+    description: Credit balance and transactions
+  - name: services
+    description: Service catalog and routing
+  - name: subscriptions
+    description: Stripe subscription management
+  - name: webhooks
+    description: External webhook handlers
+
+paths:
+  # =============================================================================
+  # Authentication Endpoints (FR-AUTH-*)
+  # =============================================================================
+
+  /auth/token:
+    post:
+      tags: [auth]
+      summary: Exchange API key for JWT tokens
+      description: |
+        Validates API key and returns JWT access token (1h) and refresh token (7d).
+        Implements FR-AUTH-001, FR-AUTH-002, FR-AUTH-003.
+      operationId: createToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Tokens issued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh access token
+      description: Exchange valid refresh token for new access token.
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/InvalidToken'
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register new user account
+      description: |
+        Creates user account, sends verification email, returns initial API key.
+        Implements User Story 6.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '409':
+          $ref: '#/components/responses/EmailExists'
+
+  /auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Revoke all sessions
+      description: Invalidates all refresh tokens for the user (security measure).
+      operationId: logoutAll
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: All sessions revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # =============================================================================
+  # User Endpoints
+  # =============================================================================
+
+  /users/me:
+    get:
+      tags: [users]
+      summary: Get current user profile
+      description: Returns user profile including tier and credit balance.
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me/api-keys:
+    get:
+      tags: [users]
+      summary: List API keys
+      description: Returns all API keys for the user (prefix only, not full key).
+      operationId: listApiKeys
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [users]
+      summary: Create new API key
+      description: |
+        Generates new API key. Full key shown ONCE in response.
+        Implements FR-AUTH-005.
+      operationId: createApiKey
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me/api-keys/{keyId}:
+    delete:
+      tags: [users]
+      summary: Revoke API key
+      description: Revokes an API key. Key can no longer be used for authentication.
+      operationId: revokeApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/keyId'
+      responses:
+        '204':
+          description: API key revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # Credit Endpoints (FR-CREDIT-*)
+  # =============================================================================
+
+  /credits:
+    get:
+      tags: [credits]
+      summary: Get credit balance
+      description: Returns current credit balance and lifetime stats.
+      operationId: getCreditBalance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Credit balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditBalance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /credits/hold:
+    post:
+      tags: [credits]
+      summary: Hold credits
+      description: |
+        Reserves credits from available balance. Returns hold_id for commit/release.
+        Implements FR-CREDIT-001, FR-CREDIT-002.
+      operationId: holdCredits
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditHoldRequest'
+      responses:
+        '201':
+          description: Credits held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditHoldResponse'
+        '400':
+          $ref: '#/components/responses/InsufficientCredits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /credits/commit:
+    post:
+      tags: [credits]
+      summary: Commit held credits
+      description: |
+        Charges credits from hold. Partial commit returns excess to available.
+        Implements FR-CREDIT-001.
+      operationId: commitCredits
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditCommitRequest'
+      responses:
+        '200':
+          description: Credits committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditCommitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/HoldNotFound'
+
+  /credits/release:
+    post:
+      tags: [credits]
+      summary: Release held credits
+      description: |
+        Returns all held credits to available balance.
+        Implements FR-CREDIT-001.
+      operationId: releaseCredits
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditReleaseRequest'
+      responses:
+        '200':
+          description: Credits released
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditReleaseResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/HoldNotFound'
+
+  /credits/transactions:
+    get:
+      tags: [credits]
+      summary: List credit transactions
+      description: |
+        Returns paginated transaction history with filtering.
+        Implements FR-CREDIT-004.
+      operationId: listTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [hold, commit, release, purchase, grant, refund]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # =============================================================================
+  # Service Endpoints (FR-ROUTE-*)
+  # =============================================================================
+
+  /services:
+    get:
+      tags: [services]
+      summary: List available services
+      description: |
+        Returns service catalog with credit costs and tier requirements.
+        Implements FR-ROUTE-004.
+      operationId: listServices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Service catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceCatalog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /services/math/{operation}:
+    post:
+      tags: [services]
+      summary: Route to Math MCP
+      description: |
+        Routes request to mcpworks-math service. Free for all tiers.
+        Implements FR-ROUTE-001.
+      operationId: routeToMath
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: operation
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [verify, help]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MathRequest'
+      responses:
+        '200':
+          description: Math operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MathResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /services/agent/execute/{workflowId}:
+    post:
+      tags: [services]
+      summary: Execute workflow via Agent
+      description: |
+        Holds credits, routes to mcpworks-agent, commits on success.
+        Implements FR-ROUTE-002, User Story 4.
+      operationId: executeWorkflow
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowExecuteRequest'
+      responses:
+        '202':
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecuteResponse'
+        '400':
+          $ref: '#/components/responses/InsufficientCredits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/TierRequired'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  # =============================================================================
+  # Subscription Endpoints (FR-BILL-*)
+  # =============================================================================
+
+  /subscriptions:
+    get:
+      tags: [subscriptions]
+      summary: Get current subscription
+      description: Returns current subscription status and tier.
+      operationId: getSubscription
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [subscriptions]
+      summary: Create subscription checkout
+      description: |
+        Creates Stripe Checkout session for subscription upgrade.
+        Implements FR-BILL-001.
+      operationId: createSubscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /subscriptions/current:
+    delete:
+      tags: [subscriptions]
+      summary: Cancel subscription
+      description: Marks subscription for cancellation at period end.
+      operationId: cancelSubscription
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Subscription cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /subscriptions/credits:
+    post:
+      tags: [subscriptions]
+      summary: Purchase credits
+      description: |
+        Creates Stripe Checkout for one-time credit purchase.
+        Implements FR-BILL-005.
+      operationId: purchaseCredits
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseCreditsRequest'
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # =============================================================================
+  # Webhook Endpoints
+  # =============================================================================
+
+  /webhooks/stripe:
+    post:
+      tags: [webhooks]
+      summary: Stripe webhook handler
+      description: |
+        Handles Stripe subscription lifecycle events.
+        Implements FR-BILL-004.
+      operationId: handleStripeWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid webhook signature
+
+  /webhooks/agent:
+    post:
+      tags: [webhooks]
+      summary: Agent callback handler
+      description: |
+        Handles workflow execution completion callbacks from mcpworks-agent.
+        Commits or releases credits based on execution result.
+      operationId: handleAgentCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCallback'
+      responses:
+        '200':
+          description: Callback processed
+        '401':
+          description: Invalid callback signature
+
+  # =============================================================================
+  # Health & Observability (FR-OBS-*)
+  # =============================================================================
+
+  /health:
+    get:
+      tags: [health]
+      summary: Health check endpoint
+      description: |
+        Returns service health including database and Redis status.
+        Implements FR-OBS-002.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token from /auth/token
+
+  parameters:
+    keyId:
+      name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  responses:
+    InvalidApiKey:
+      description: Invalid or revoked API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: INVALID_API_KEY
+            message: API key is invalid or revoked
+
+    InvalidToken:
+      description: Invalid or expired token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: TOKEN_EXPIRED
+            message: Access token has expired
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: UNAUTHORIZED
+            message: Authentication required
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: NOT_FOUND
+            message: Resource not found
+
+    EmailExists:
+      description: Email already registered
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: EMAIL_EXISTS
+            message: Email is already registered
+
+    InsufficientCredits:
+      description: Insufficient credit balance
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: INSUFFICIENT_CREDITS
+            message: Insufficient credits for this operation
+            available: 10
+            required: 25
+
+    HoldNotFound:
+      description: Credit hold not found or already processed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: HOLD_NOT_FOUND
+            message: Credit hold not found or already processed
+
+    TierRequired:
+      description: Higher tier required for this service
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: TIER_REQUIRED
+            message: Starter tier or higher required
+            required_tier: starter
+
+    ServiceUnavailable:
+      description: Backend service unavailable
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until service expected to recover
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: SERVICE_UNAVAILABLE
+            message: mcpworks-math service is temporarily unavailable
+
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until rate limit resets
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: RATE_LIMITED
+            message: Too many authentication attempts
+
+  schemas:
+    # --- Auth Schemas ---
+    TokenRequest:
+      type: object
+      required: [api_key]
+      properties:
+        api_key:
+          type: string
+          pattern: '^sk_(live|test)_k\d+_[a-zA-Z0-9]{32}$'
+          example: sk_live_k1_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT access token (1h expiry)
+        refresh_token:
+          type: string
+          description: Refresh token (7d expiry)
+        token_type:
+          type: string
+          enum: [bearer]
+        expires_in:
+          type: integer
+          description: Access token TTL in seconds
+          example: 3600
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+
+    RegisterResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        api_key:
+          type: string
+          description: Initial API key (shown once)
+        message:
+          type: string
+          example: Verification email sent
+
+    # --- User Schemas ---
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        tier:
+          $ref: '#/components/schemas/Tier'
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+        email_verified:
+          type: boolean
+        credits:
+          $ref: '#/components/schemas/CreditBalance'
+        created_at:
+          type: string
+          format: date-time
+
+    ApiKeyList:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeySummary'
+
+    ApiKeySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key_prefix:
+          type: string
+          example: sk_live_k1_a
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        last_used_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [read, write, execute, admin]
+          default: [read, write, execute]
+        expires_at:
+          type: string
+          format: date-time
+
+    ApiKeyCreated:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        api_key:
+          type: string
+          description: Full API key (shown ONCE)
+          example: sk_live_k1_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456
+        key_prefix:
+          type: string
+          example: sk_live_k1_a
+        message:
+          type: string
+          example: Store this key securely - it will not be shown again
+
+    # --- Credit Schemas ---
+    CreditBalance:
+      type: object
+      properties:
+        available_balance:
+          type: number
+          format: decimal
+          example: 75.00
+        held_balance:
+          type: number
+          format: decimal
+          example: 25.00
+        total_balance:
+          type: number
+          format: decimal
+          example: 100.00
+        lifetime_earned:
+          type: number
+          format: decimal
+        lifetime_spent:
+          type: number
+          format: decimal
+        updated_at:
+          type: string
+          format: date-time
+
+    CreditHoldRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+        execution_id:
+          type: string
+          format: uuid
+          description: External reference for correlation
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreditHoldResponse:
+      type: object
+      properties:
+        hold_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        balance:
+          $ref: '#/components/schemas/CreditBalance'
+        expires_at:
+          type: string
+          format: date-time
+          description: Auto-release time (1 hour)
+
+    CreditCommitRequest:
+      type: object
+      required: [hold_id, amount]
+      properties:
+        hold_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+          description: Actual amount to charge (can be less than hold)
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreditCommitResponse:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+        amount_charged:
+          type: number
+          format: decimal
+        amount_returned:
+          type: number
+          format: decimal
+        balance:
+          $ref: '#/components/schemas/CreditBalance'
+
+    CreditReleaseRequest:
+      type: object
+      required: [hold_id]
+      properties:
+        hold_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+
+    CreditReleaseResponse:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+        amount_released:
+          type: number
+          format: decimal
+        balance:
+          $ref: '#/components/schemas/CreditBalance'
+
+    TransactionList:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [hold, commit, release, purchase, grant, refund]
+        amount:
+          type: number
+          format: decimal
+        balance_before:
+          type: number
+          format: decimal
+        balance_after:
+          type: number
+          format: decimal
+        hold_id:
+          type: string
+          format: uuid
+        execution_id:
+          type: string
+          format: uuid
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    # --- Service Schemas ---
+    ServiceCatalog:
+      type: object
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service'
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: math
+        display_name:
+          type: string
+          example: Math MCP
+        description:
+          type: string
+        credit_cost:
+          type: number
+          format: decimal
+          example: 0
+        tier_required:
+          $ref: '#/components/schemas/Tier'
+        status:
+          type: string
+          enum: [active, inactive, degraded]
+
+    MathRequest:
+      type: object
+      required: [problem]
+      properties:
+        problem:
+          type: string
+          description: Mathematical problem to verify
+        show_work:
+          type: boolean
+          default: true
+        verification_mode:
+          type: string
+          enum: [fast, smart, thorough]
+          default: smart
+
+    MathResponse:
+      type: object
+      properties:
+        result:
+          type: object
+          description: Response from mcpworks-math
+        credits_used:
+          type: number
+          format: decimal
+
+    WorkflowExecuteRequest:
+      type: object
+      properties:
+        inputs:
+          type: object
+          additionalProperties: true
+        callback_url:
+          type: string
+          format: uri
+
+    WorkflowExecuteResponse:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+        hold_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, in_progress]
+        estimated_credits:
+          type: number
+          format: decimal
+
+    AgentCallback:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [completed, failed]
+        result:
+          type: object
+        error:
+          type: string
+        credits_used:
+          type: number
+          format: decimal
+
+    # --- Subscription Schemas ---
+    Tier:
+      type: string
+      enum: [free, starter, pro, enterprise]
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tier:
+          $ref: '#/components/schemas/Tier'
+        status:
+          type: string
+          enum: [active, cancelled, past_due, trialing]
+        current_period_start:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+        cancel_at_period_end:
+          type: boolean
+        monthly_credits:
+          type: integer
+          description: Credits granted per billing period
+
+    CreateSubscriptionRequest:
+      type: object
+      required: [tier]
+      properties:
+        tier:
+          $ref: '#/components/schemas/Tier'
+        success_url:
+          type: string
+          format: uri
+        cancel_url:
+          type: string
+          format: uri
+
+    CheckoutSession:
+      type: object
+      properties:
+        session_id:
+          type: string
+        checkout_url:
+          type: string
+          format: uri
+
+    PurchaseCreditsRequest:
+      type: object
+      required: [credits]
+      properties:
+        credits:
+          type: integer
+          minimum: 100
+          description: Number of credits to purchase
+        success_url:
+          type: string
+          format: uri
+        cancel_url:
+          type: string
+          format: uri
+
+    # --- Common Schemas ---
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable message
+        details:
+          type: object
+          additionalProperties: true
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [ok, error]
+            redis:
+              type: string
+              enum: [ok, error]
+            math_service:
+              type: string
+              enum: [ok, error, degraded]
+            agent_service:
+              type: string
+              enum: [ok, error, degraded]
+        timestamp:
+          type: string
+          format: date-time

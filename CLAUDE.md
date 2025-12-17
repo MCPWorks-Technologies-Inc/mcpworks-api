@@ -538,3 +538,10 @@ This project is on a **15-month acquisition timeline** targeting $10M-$15M exit.
 ---
 
 **Remember:** Spec-first development, token efficiency, and transaction safety are non-negotiable. Read the Constitution and specs before writing any code.
+
+## Active Technologies
+- Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe (001-api-gateway-mvp)
+- PostgreSQL 15+ (primary), Redis 7+ (rate limiting, sessions) (001-api-gateway-mvp)
+
+## Recent Changes
+- 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
