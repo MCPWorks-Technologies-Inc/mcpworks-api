@@ -3,7 +3,9 @@
 **Input**: Design documents from `/specs/001-api-gateway-mvp/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/openapi.yaml
 
-**Tests**: Tests not explicitly requested - excluded per template guidelines. Add test tasks if TDD approach is desired.
+**Tests**: TDD approach enabled. Tests are written FIRST and must FAIL before implementation.
+
+**Email**: Mock email service for MVP (pilot users manually onboarded). Real email integration deferred to post-MVP.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing.
 
@@ -89,11 +91,19 @@ Based on plan.md project structure:
 
 - [ ] T034 Create `src/mcpworks_api/main.py` with FastAPI app, middleware registration, router inclusion, health endpoint stub
 
+### Test Infrastructure (TDD)
+
+- [ ] T035 [P] Create `tests/conftest.py` with pytest fixtures: async test client, test database, mock Redis, test user factory
+- [ ] T036 [P] Create `tests/factories/` directory with model factories using factory_boy for User, Credit, APIKey
+- [ ] T037 [P] Create `tests/fixtures/` directory with sample data (API keys, credit transactions, services)
+- [ ] T038 Add pytest-asyncio, pytest-cov, httpx, factory-boy to dev dependencies in pyproject.toml
+- [ ] T039 Create `tests/__init__.py` and `tests/unit/__init__.py` and `tests/integration/__init__.py`
+
 ### Seed Data
 
-- [ ] T035 Create `scripts/seed_services.py` to seed math and agent services into database
+- [ ] T040 Create `scripts/seed_services.py` to seed math and agent services into database
 
-**Checkpoint**: Foundation ready - can run migrations, start server, hit /health endpoint. User story implementation can now begin.
+**Checkpoint**: Foundation ready - can run migrations, start server, hit /health endpoint, run test suite. User story implementation can now begin.
 
 ---
 
@@ -110,19 +120,36 @@ Based on plan.md project structure:
 4. Expired JWT → 401 with TOKEN_EXPIRED
 5. Valid refresh token → new access_token
 
+### Tests for US1 (TDD - write FIRST, must fail before implementation)
+
+- [ ] T041 [US1] Create `tests/unit/test_auth_service.py` with failing tests for:
+  - `test_generate_api_key_format` - validates sk_{env}_k{n}_{random} format
+  - `test_hash_api_key_argon2id` - verifies Argon2id hashing
+  - `test_validate_api_key_success` - valid key returns user
+  - `test_validate_api_key_revoked` - revoked key raises error
+  - `test_create_access_token_es256` - ES256 JWT creation
+  - `test_validate_access_token_expired` - expired token raises error
+- [ ] T042 [US1] Create `tests/integration/test_auth_endpoints.py` with failing tests for:
+  - `test_token_exchange_valid_key` - POST /auth/token → 200 with tokens
+  - `test_token_exchange_invalid_key` - POST /auth/token → 401 INVALID_API_KEY
+  - `test_refresh_token_valid` - POST /auth/refresh → 200 with new access_token
+  - `test_users_me_with_valid_jwt` - GET /users/me → 200 with profile
+  - `test_users_me_expired_jwt` - GET /users/me → 401 TOKEN_EXPIRED
+  - `test_auth_rate_limit_exceeded` - 6 failures in 1 min → 429
+
 ### Models for US1
 
-- [ ] T036 [P] [US1] Create APIKey model in `src/mcpworks_api/models/user.py` with fields from data-model.md (id, user_id, key_hash, key_prefix, name, scopes, last_used_at, timestamps, expires_at, revoked_at)
-- [ ] T037 [US1] Create Alembic migration for api_keys table in `alembic/versions/004_create_api_keys_table.py`
+- [ ] T043 [P] [US1] Create APIKey model in `src/mcpworks_api/models/user.py` with fields from data-model.md (id, user_id, key_hash, key_prefix, name, scopes, last_used_at, timestamps, expires_at, revoked_at)
+- [ ] T044 [US1] Create Alembic migration for api_keys table in `alembic/versions/004_create_api_keys_table.py`
 
 ### Schemas for US1
 
-- [ ] T038 [P] [US1] Create auth schemas in `src/mcpworks_api/schemas/auth.py`: TokenRequest, TokenResponse, RefreshRequest per openapi.yaml
-- [ ] T039 [P] [US1] Create user schemas in `src/mcpworks_api/schemas/user.py`: UserProfile, ApiKeySummary, ApiKeyList per openapi.yaml
+- [ ] T045 [P] [US1] Create auth schemas in `src/mcpworks_api/schemas/auth.py`: TokenRequest, TokenResponse, RefreshRequest per openapi.yaml
+- [ ] T046 [P] [US1] Create user schemas in `src/mcpworks_api/schemas/user.py`: UserProfile, ApiKeySummary, ApiKeyList per openapi.yaml
 
 ### Services for US1
 
-- [ ] T040 [US1] Create AuthService in `src/mcpworks_api/services/auth.py` with:
+- [ ] T047 [US1] Create AuthService in `src/mcpworks_api/services/auth.py` with:
   - `generate_api_key()` - creates sk_{env}_{keyNum}_{random} format key per research.md decision 9
   - `hash_api_key()` - Argon2id hash
   - `validate_api_key()` - lookup by prefix, verify hash, check not revoked/expired
@@ -133,25 +160,30 @@ Based on plan.md project structure:
 
 ### Middleware for US1
 
-- [ ] T041 [US1] Create `src/mcpworks_api/middleware/auth.py` with JWT validation middleware extracting user from Bearer token
-- [ ] T042 [US1] Create `src/mcpworks_api/middleware/rate_limit.py` with Redis sliding window rate limiter per research.md decision 3 (5/min auth failures per IP)
+- [ ] T048 [US1] Create `src/mcpworks_api/middleware/auth.py` with JWT validation middleware extracting user from Bearer token
+- [ ] T049 [US1] Create `src/mcpworks_api/middleware/rate_limit.py` with Redis sliding window rate limiter per research.md decision 3 (5/min auth failures per IP)
 
 ### Endpoints for US1
 
-- [ ] T043 [US1] Create `src/mcpworks_api/api/v1/auth.py` with:
+- [ ] T050 [US1] Create `src/mcpworks_api/api/v1/auth.py` with:
   - POST /auth/token - exchange API key for JWT tokens (FR-AUTH-001, FR-AUTH-002, FR-AUTH-003)
   - POST /auth/refresh - refresh access token
   - POST /auth/logout-all - revoke all refresh tokens
-- [ ] T044 [US1] Create `src/mcpworks_api/api/v1/users.py` with:
+- [ ] T051 [US1] Create `src/mcpworks_api/api/v1/users.py` with:
   - GET /users/me - return authenticated user profile with credits
 
 ### Integration for US1
 
-- [ ] T045 [US1] Wire auth router and users router into `src/mcpworks_api/api/v1/router.py`
-- [ ] T046 [US1] Add rate limiting middleware to auth endpoints in `src/mcpworks_api/main.py`
-- [ ] T047 [US1] Add audit logging for login events in AuthService
+- [ ] T052 [US1] Wire auth router and users router into `src/mcpworks_api/api/v1/router.py`
+- [ ] T053 [US1] Add rate limiting middleware to auth endpoints in `src/mcpworks_api/main.py`
+- [ ] T054 [US1] Add audit logging for login events in AuthService
 
-**Checkpoint**: User Story 1 complete. Can authenticate with API key, receive JWT, access protected endpoints.
+### Verification for US1
+
+- [ ] T055 [US1] Run `pytest tests/unit/test_auth_service.py` - all tests must pass
+- [ ] T056 [US1] Run `pytest tests/integration/test_auth_endpoints.py` - all tests must pass
+
+**Checkpoint**: User Story 1 complete. All TDD tests pass. Can authenticate with API key, receive JWT, access protected endpoints.
 
 ---
 
@@ -168,19 +200,36 @@ Based on plan.md project structure:
 4. Insufficient credits → 400 INSUFFICIENT_CREDITS
 5. Concurrent holds → atomic, no overdraft
 
+### Tests for US2 (TDD - write FIRST, must fail before implementation)
+
+- [ ] T057 [US2] Create `tests/unit/test_credit_service.py` with failing tests for:
+  - `test_get_balance_returns_all_fields` - available, held, lifetime_earned, lifetime_spent
+  - `test_hold_credits_moves_to_held` - available decreases, held increases
+  - `test_hold_credits_insufficient_balance` - raises InsufficientCreditsError
+  - `test_commit_credits_partial` - partial commit returns remainder to available
+  - `test_release_credits_returns_to_available` - held returns to available
+  - `test_concurrent_holds_no_overdraft` - SELECT FOR UPDATE prevents race
+- [ ] T058 [US2] Create `tests/integration/test_credit_endpoints.py` with failing tests for:
+  - `test_get_balance_authenticated` - GET /credits → 200 with balance
+  - `test_hold_success` - POST /credits/hold → 200 with hold_id
+  - `test_hold_insufficient` - POST /credits/hold → 400 INSUFFICIENT_CREDITS
+  - `test_commit_success` - POST /credits/commit → 200
+  - `test_release_success` - POST /credits/release → 200
+  - `test_transactions_list_paginated` - GET /credits/transactions → paginated list
+
 ### Models for US2
 
-- [ ] T048 [P] [US2] Create Credit model in `src/mcpworks_api/models/credit.py` with fields from data-model.md (user_id PK, available_balance, held_balance, lifetime_earned, lifetime_spent, updated_at)
-- [ ] T049 [P] [US2] Create CreditTransaction model in `src/mcpworks_api/models/credit.py` with fields from data-model.md (id, user_id, type, amount, balance_before, balance_after, hold_id, execution_id, metadata, created_at)
-- [ ] T050 [US2] Create Alembic migration for credits and credit_transactions tables in `alembic/versions/005_create_credits_tables.py` with CHECK constraints for non-negative balances
+- [ ] T059 [P] [US2] Create Credit model in `src/mcpworks_api/models/credit.py` with fields from data-model.md (user_id PK, available_balance, held_balance, lifetime_earned, lifetime_spent, updated_at)
+- [ ] T060 [P] [US2] Create CreditTransaction model in `src/mcpworks_api/models/credit.py` with fields from data-model.md (id, user_id, type, amount, balance_before, balance_after, hold_id, execution_id, metadata, created_at)
+- [ ] T061 [US2] Create Alembic migration for credits and credit_transactions tables in `alembic/versions/005_create_credits_tables.py` with CHECK constraints for non-negative balances
 
 ### Schemas for US2
 
-- [ ] T051 [US2] Create credit schemas in `src/mcpworks_api/schemas/credit.py`: CreditBalance, CreditHoldRequest, CreditHoldResponse, CreditCommitRequest, CreditCommitResponse, CreditReleaseRequest, CreditReleaseResponse, Transaction, TransactionList per openapi.yaml
+- [ ] T062 [US2] Create credit schemas in `src/mcpworks_api/schemas/credit.py`: CreditBalance, CreditHoldRequest, CreditHoldResponse, CreditCommitRequest, CreditCommitResponse, CreditReleaseRequest, CreditReleaseResponse, Transaction, TransactionList per openapi.yaml
 
 ### Services for US2
 
-- [ ] T052 [US2] Create CreditService in `src/mcpworks_api/services/credit.py` with:
+- [ ] T063 [US2] Create CreditService in `src/mcpworks_api/services/credit.py` with:
   - `get_balance(user_id)` - return current credit balance
   - `hold_credits(user_id, amount, execution_id, metadata)` - SELECT FOR UPDATE NOWAIT, move from available to held, create transaction record per research.md decision 4
   - `commit_credits(hold_id, amount)` - deduct from held, handle partial commit, create transaction
@@ -189,11 +238,11 @@ Based on plan.md project structure:
 
 ### Background Tasks for US2
 
-- [ ] T053 [US2] Create `src/mcpworks_api/tasks/credit_cleanup.py` with stale hold auto-release (1h timeout) per research.md decision 8
+- [ ] T064 [US2] Create `src/mcpworks_api/tasks/credit_cleanup.py` with stale hold auto-release (1h timeout) per research.md decision 8
 
 ### Endpoints for US2
 
-- [ ] T054 [US2] Create `src/mcpworks_api/api/v1/credits.py` with:
+- [ ] T065 [US2] Create `src/mcpworks_api/api/v1/credits.py` with:
   - GET /credits - get balance (FR-CREDIT-003)
   - POST /credits/hold - hold credits (FR-CREDIT-001, FR-CREDIT-002)
   - POST /credits/commit - commit held credits (FR-CREDIT-001)
@@ -202,11 +251,16 @@ Based on plan.md project structure:
 
 ### Integration for US2
 
-- [ ] T055 [US2] Wire credits router into `src/mcpworks_api/api/v1/router.py`
-- [ ] T056 [US2] Add Credit record creation when user is created (trigger or service logic)
-- [ ] T057 [US2] Add audit logging for credit operations
+- [ ] T066 [US2] Wire credits router into `src/mcpworks_api/api/v1/router.py`
+- [ ] T067 [US2] Add Credit record creation when user is created (trigger or service logic)
+- [ ] T068 [US2] Add audit logging for credit operations
 
-**Checkpoint**: User Story 2 complete. Can hold, commit, release credits with full transaction safety and audit trail.
+### Verification for US2
+
+- [ ] T069 [US2] Run `pytest tests/unit/test_credit_service.py` - all tests must pass
+- [ ] T070 [US2] Run `pytest tests/integration/test_credit_endpoints.py` - all tests must pass
+
+**Checkpoint**: User Story 2 complete. All TDD tests pass. Can hold, commit, release credits with full transaction safety and audit trail.
 
 ---
 
@@ -221,36 +275,58 @@ Based on plan.md project structure:
 2. GET /services → service catalog with costs and tiers
 3. Math service unhealthy → 503 SERVICE_UNAVAILABLE with Retry-After
 
+### Tests for US3 (TDD - write FIRST, must fail before implementation)
+
+- [ ] T071 [US3] Create `tests/unit/test_routing_service.py` with failing tests for:
+  - `test_get_service_by_name` - returns service config
+  - `test_list_services_returns_catalog` - returns all active services
+  - `test_check_tier_access_allowed` - free user can access free service
+  - `test_check_tier_access_denied` - free user cannot access starter+ service
+  - `test_route_request_forwards_correctly` - httpx call with correct params
+- [ ] T072 [US3] Create `tests/unit/test_health_service.py` with failing tests for:
+  - `test_circuit_breaker_closed_to_open` - 3 failures → open
+  - `test_circuit_breaker_half_open` - timeout → half-open → success → closed
+  - `test_health_status_cached_in_redis` - health stored/retrieved from Redis
+- [ ] T073 [US3] Create `tests/integration/test_service_endpoints.py` with failing tests for:
+  - `test_list_services_authenticated` - GET /services → 200 with catalog
+  - `test_math_route_success` - POST /services/math/verify → 200 with result
+  - `test_math_route_service_unavailable` - unhealthy service → 503 with Retry-After
+
 ### Schemas for US3
 
-- [ ] T058 [P] [US3] Create service schemas in `src/mcpworks_api/schemas/service.py`: ServiceCatalog, Service, MathRequest, MathResponse per openapi.yaml
+- [ ] T074 [P] [US3] Create service schemas in `src/mcpworks_api/schemas/service.py`: ServiceCatalog, Service, MathRequest, MathResponse per openapi.yaml
 
 ### Services for US3
 
-- [ ] T059 [US3] Create RoutingService in `src/mcpworks_api/services/routing.py` with:
+- [ ] T075 [US3] Create RoutingService in `src/mcpworks_api/services/routing.py` with:
   - `get_service(name)` - lookup service by name
   - `list_services()` - return service catalog
   - `check_tier_access(user_tier, service)` - verify user can access service
   - `route_request(service, method, path, body)` - forward request via httpx
   - `get_service_health(service)` - check cached health status from Redis
-- [ ] T060 [US3] Create HealthCheckService in `src/mcpworks_api/services/health.py` with circuit breaker pattern per research.md decision 6:
+- [ ] T076 [US3] Create HealthCheckService in `src/mcpworks_api/services/health.py` with circuit breaker pattern per research.md decision 6:
   - Background health check task (every 30s)
   - Circuit breaker states: closed, open, half-open
   - Health status cached in Redis
 
 ### Endpoints for US3
 
-- [ ] T061 [US3] Create `src/mcpworks_api/api/v1/services.py` with:
+- [ ] T077 [US3] Create `src/mcpworks_api/api/v1/services.py` with:
   - GET /services - list service catalog (FR-ROUTE-004)
   - POST /services/math/{operation} - route to mcpworks-math (FR-ROUTE-001)
 
 ### Integration for US3
 
-- [ ] T062 [US3] Wire services router into `src/mcpworks_api/api/v1/router.py`
-- [ ] T063 [US3] Register health check background task in `src/mcpworks_api/main.py` startup event
-- [ ] T064 [US3] Add audit logging for service routing
+- [ ] T078 [US3] Wire services router into `src/mcpworks_api/api/v1/router.py`
+- [ ] T079 [US3] Register health check background task in `src/mcpworks_api/main.py` startup event
+- [ ] T080 [US3] Add audit logging for service routing
 
-**Checkpoint**: User Story 3 complete. Can call Math MCP through gateway, see service catalog, handle service unavailability.
+### Verification for US3
+
+- [ ] T081 [US3] Run `pytest tests/unit/test_routing_service.py tests/unit/test_health_service.py` - all tests must pass
+- [ ] T082 [US3] Run `pytest tests/integration/test_service_endpoints.py` - all tests must pass
+
+**Checkpoint**: User Story 3 complete. All TDD tests pass. Can call Math MCP through gateway, see service catalog, handle service unavailability.
 
 ---
 
@@ -265,30 +341,50 @@ Based on plan.md project structure:
 2. Agent success callback → credits committed
 3. Agent failure callback → credits released
 
+### Tests for US4 (TDD - write FIRST, must fail before implementation)
+
+- [ ] T083 [US4] Create `tests/unit/test_workflow_routing.py` with failing tests for:
+  - `test_execute_workflow_holds_credits` - credits held before routing
+  - `test_execute_workflow_routes_to_agent` - httpx call with correct params
+  - `test_handle_callback_success_commits` - success callback commits credits
+  - `test_handle_callback_failure_releases` - failure callback releases credits
+  - `test_execute_workflow_tier_check` - free user cannot execute (starter+ required)
+- [ ] T084 [US4] Create `tests/integration/test_agent_endpoints.py` with failing tests for:
+  - `test_execute_workflow_success` - POST /services/agent/execute → 200 with execution_id
+  - `test_execute_workflow_insufficient_credits` - POST → 400 INSUFFICIENT_CREDITS
+  - `test_execute_workflow_tier_denied` - free user POST → 403 INSUFFICIENT_TIER
+  - `test_agent_callback_success` - POST /webhooks/agent → 200, credits committed
+  - `test_agent_callback_failure` - POST /webhooks/agent → 200, credits released
+
 ### Schemas for US4
 
-- [ ] T065 [P] [US4] Add agent schemas to `src/mcpworks_api/schemas/service.py`: WorkflowExecuteRequest, WorkflowExecuteResponse, AgentCallback per openapi.yaml
+- [ ] T085 [P] [US4] Add agent schemas to `src/mcpworks_api/schemas/service.py`: WorkflowExecuteRequest, WorkflowExecuteResponse, AgentCallback per openapi.yaml
 
 ### Services for US4
 
-- [ ] T066 [US4] Extend RoutingService in `src/mcpworks_api/services/routing.py` with:
+- [ ] T086 [US4] Extend RoutingService in `src/mcpworks_api/services/routing.py` with:
   - `execute_workflow(user_id, workflow_id, inputs, callback_url)` - hold credits, route to agent
   - `handle_agent_callback(execution_id, status, credits_used)` - commit or release credits
 
 ### Endpoints for US4
 
-- [ ] T067 [US4] Add to `src/mcpworks_api/api/v1/services.py`:
+- [ ] T087 [US4] Add to `src/mcpworks_api/api/v1/services.py`:
   - POST /services/agent/execute/{workflowId} - execute workflow (FR-ROUTE-002)
-- [ ] T068 [US4] Create `src/mcpworks_api/api/v1/webhooks.py` with:
+- [ ] T088 [US4] Create `src/mcpworks_api/api/v1/webhooks.py` with:
   - POST /webhooks/agent - handle agent completion callbacks
 
 ### Integration for US4
 
-- [ ] T069 [US4] Wire webhooks router into `src/mcpworks_api/api/v1/router.py`
-- [ ] T070 [US4] Add tier check for agent service access (FR-ROUTE-005)
-- [ ] T071 [US4] Add audit logging for workflow executions
+- [ ] T089 [US4] Wire webhooks router into `src/mcpworks_api/api/v1/router.py`
+- [ ] T090 [US4] Add tier check for agent service access (FR-ROUTE-005)
+- [ ] T091 [US4] Add audit logging for workflow executions
 
-**Checkpoint**: User Story 4 complete. Can execute workflows with credit accounting and callback handling.
+### Verification for US4
+
+- [ ] T092 [US4] Run `pytest tests/unit/test_workflow_routing.py` - all tests must pass
+- [ ] T093 [US4] Run `pytest tests/integration/test_agent_endpoints.py` - all tests must pass
+
+**Checkpoint**: User Story 4 complete. All TDD tests pass. Can execute workflows with credit accounting and callback handling.
 
 ---
 
@@ -304,18 +400,34 @@ Based on plan.md project structure:
 3. invoice.payment_failed webhook → grace period started
 4. DELETE /subscriptions/current → cancellation scheduled
 
+### Tests for US5 (TDD - write FIRST, must fail before implementation)
+
+- [ ] T094 [US5] Create `tests/unit/test_stripe_service.py` with failing tests for:
+  - `test_create_checkout_session_returns_url` - Stripe session created with correct params
+  - `test_grant_credits_by_tier` - free=500, starter=2900, pro=9900
+  - `test_handle_checkout_completed_updates_tier` - user tier updated on event
+  - `test_handle_invoice_paid_grants_credits` - monthly credits granted
+  - `test_handle_invoice_failed_grace_period` - status set to past_due
+  - `test_cancel_subscription_at_period_end` - cancel_at_period_end set
+- [ ] T095 [US5] Create `tests/integration/test_subscription_endpoints.py` with failing tests for:
+  - `test_create_subscription_checkout` - POST /subscriptions → 200 with checkout_url
+  - `test_get_current_subscription` - GET /subscriptions → 200 with subscription
+  - `test_cancel_subscription` - DELETE /subscriptions/current → 200
+  - `test_stripe_webhook_checkout_completed` - POST /webhooks/stripe → 200, tier updated
+  - `test_stripe_webhook_signature_invalid` - bad signature → 400
+
 ### Models for US5
 
-- [ ] T072 [P] [US5] Create Subscription model in `src/mcpworks_api/models/subscription.py` with fields from data-model.md (id, user_id, tier, status, stripe_subscription_id, stripe_customer_id, period timestamps, cancel_at_period_end)
-- [ ] T073 [US5] Create Alembic migration for subscriptions table in `alembic/versions/006_create_subscriptions_table.py`
+- [ ] T096 [P] [US5] Create Subscription model in `src/mcpworks_api/models/subscription.py` with fields from data-model.md (id, user_id, tier, status, stripe_subscription_id, stripe_customer_id, period timestamps, cancel_at_period_end)
+- [ ] T097 [US5] Create Alembic migration for subscriptions table in `alembic/versions/006_create_subscriptions_table.py`
 
 ### Schemas for US5
 
-- [ ] T074 [US5] Create subscription schemas in `src/mcpworks_api/schemas/subscription.py`: Subscription, CreateSubscriptionRequest, CheckoutSession, PurchaseCreditsRequest per openapi.yaml
+- [ ] T098 [US5] Create subscription schemas in `src/mcpworks_api/schemas/subscription.py`: Subscription, CreateSubscriptionRequest, CheckoutSession, PurchaseCreditsRequest per openapi.yaml
 
 ### Services for US5
 
-- [ ] T075 [US5] Create StripeService in `src/mcpworks_api/services/stripe.py` with:
+- [ ] T099 [US5] Create StripeService in `src/mcpworks_api/services/stripe.py` with:
   - `create_checkout_session(user_id, tier)` - create Stripe Checkout session (FR-BILL-001)
   - `create_credit_purchase_session(user_id, credits)` - one-time credit purchase (FR-BILL-005)
   - `handle_webhook(event)` - process Stripe webhooks per research.md decision 5
@@ -324,22 +436,27 @@ Based on plan.md project structure:
 
 ### Endpoints for US5
 
-- [ ] T076 [US5] Create `src/mcpworks_api/api/v1/subscriptions.py` with:
+- [ ] T100 [US5] Create `src/mcpworks_api/api/v1/subscriptions.py` with:
   - GET /subscriptions - get current subscription
   - POST /subscriptions - create checkout session (FR-BILL-001)
   - DELETE /subscriptions/current - cancel subscription
   - POST /subscriptions/credits - purchase credits (FR-BILL-005)
-- [ ] T077 [US5] Add to `src/mcpworks_api/api/v1/webhooks.py`:
+- [ ] T101 [US5] Add to `src/mcpworks_api/api/v1/webhooks.py`:
   - POST /webhooks/stripe - handle Stripe webhooks (FR-BILL-004)
 
 ### Integration for US5
 
-- [ ] T078 [US5] Wire subscriptions router into `src/mcpworks_api/api/v1/router.py`
-- [ ] T079 [US5] Add Stripe webhook signature verification
-- [ ] T080 [US5] Add idempotency handling for webhook events
-- [ ] T081 [US5] Add audit logging for subscription events
+- [ ] T102 [US5] Wire subscriptions router into `src/mcpworks_api/api/v1/router.py`
+- [ ] T103 [US5] Add Stripe webhook signature verification
+- [ ] T104 [US5] Add idempotency handling for webhook events
+- [ ] T105 [US5] Add audit logging for subscription events
 
-**Checkpoint**: User Story 5 complete. Can subscribe via Stripe, receive credits, handle subscription lifecycle.
+### Verification for US5
+
+- [ ] T106 [US5] Run `pytest tests/unit/test_stripe_service.py` - all tests must pass
+- [ ] T107 [US5] Run `pytest tests/integration/test_subscription_endpoints.py` - all tests must pass
+
+**Checkpoint**: User Story 5 complete. All TDD tests pass. Can subscribe via Stripe, receive credits, handle subscription lifecycle.
 
 ---
 
@@ -355,15 +472,38 @@ Based on plan.md project structure:
 3. DELETE /users/me/api-keys/{key_id} → key revoked
 4. Key approaching expiry → notification (future: email)
 
+**Note**: Email sending is mocked for MVP. Pilot users are manually onboarded. Real email integration deferred to post-MVP.
+
+### Tests for US6 (TDD - write FIRST, must fail before implementation)
+
+- [ ] T108 [US6] Create `tests/unit/test_user_service.py` with failing tests for:
+  - `test_register_creates_user` - user created with hashed password
+  - `test_register_creates_credit_record` - 500 initial credits granted
+  - `test_register_creates_api_key` - initial API key returned
+  - `test_register_generates_verification_token` - token stored (email mocked)
+  - `test_create_api_key_format` - sk_{env}_{keyNum}_{random} format
+  - `test_revoke_api_key_sets_revoked_at` - revoked_at timestamp set
+  - `test_list_api_keys_returns_prefix_only` - full key not returned
+- [ ] T109 [US6] Create `tests/integration/test_registration_endpoints.py` with failing tests for:
+  - `test_register_success` - POST /auth/register → 200 with user_id, api_key
+  - `test_register_duplicate_email` - POST /auth/register → 409 EMAIL_EXISTS
+  - `test_list_api_keys` - GET /users/me/api-keys → 200 with key list
+  - `test_create_api_key` - POST /users/me/api-keys → 201 with new key (shown once)
+  - `test_revoke_api_key` - DELETE /users/me/api-keys/{id} → 200
+  - `test_revoked_key_cannot_auth` - revoked key → 401
+
 ### Schemas for US6
 
-- [ ] T082 [US6] Create registration schemas in `src/mcpworks_api/schemas/auth.py`: RegisterRequest, RegisterResponse per openapi.yaml
-- [ ] T083 [P] [US6] Create API key management schemas in `src/mcpworks_api/schemas/user.py`: CreateApiKeyRequest, ApiKeyCreated per openapi.yaml
+- [ ] T110 [US6] Create registration schemas in `src/mcpworks_api/schemas/auth.py`: RegisterRequest, RegisterResponse per openapi.yaml
+- [ ] T111 [P] [US6] Create API key management schemas in `src/mcpworks_api/schemas/user.py`: CreateApiKeyRequest, ApiKeyCreated per openapi.yaml
 
 ### Services for US6
 
-- [ ] T084 [US6] Create UserService in `src/mcpworks_api/services/user.py` with:
-  - `register(email, password, name)` - create user, send verification email, create initial Credit record, create initial API key
+- [ ] T112 [US6] Create MockEmailService in `src/mcpworks_api/services/email.py` with:
+  - `send_verification_email(email, token)` - logs email instead of sending (MVP mock)
+  - Interface for future real email integration (SendGrid, etc.)
+- [ ] T113 [US6] Create UserService in `src/mcpworks_api/services/user.py` with:
+  - `register(email, password, name)` - create user, call mock email, create initial Credit record, create initial API key
   - `create_api_key(user_id, name, scopes, expires_at)` - generate new API key (FR-AUTH-005)
   - `list_api_keys(user_id)` - list user's API keys (prefix only)
   - `revoke_api_key(user_id, key_id)` - mark key as revoked
@@ -371,20 +511,25 @@ Based on plan.md project structure:
 
 ### Endpoints for US6
 
-- [ ] T085 [US6] Add to `src/mcpworks_api/api/v1/auth.py`:
+- [ ] T114 [US6] Add to `src/mcpworks_api/api/v1/auth.py`:
   - POST /auth/register - register new user
-- [ ] T086 [US6] Add to `src/mcpworks_api/api/v1/users.py`:
+- [ ] T115 [US6] Add to `src/mcpworks_api/api/v1/users.py`:
   - GET /users/me/api-keys - list API keys
   - POST /users/me/api-keys - create new API key
   - DELETE /users/me/api-keys/{keyId} - revoke API key
 
 ### Integration for US6
 
-- [ ] T087 [US6] Add email verification token generation and validation
-- [ ] T088 [US6] Add initial credit grant (500 for free tier) on registration
-- [ ] T089 [US6] Add audit logging for registration and API key events
+- [ ] T116 [US6] Add email verification token generation and validation
+- [ ] T117 [US6] Add initial credit grant (500 for free tier) on registration
+- [ ] T118 [US6] Add audit logging for registration and API key events
 
-**Checkpoint**: User Story 6 complete. Can register, manage API keys, receive initial credits.
+### Verification for US6
+
+- [ ] T119 [US6] Run `pytest tests/unit/test_user_service.py` - all tests must pass
+- [ ] T120 [US6] Run `pytest tests/integration/test_registration_endpoints.py` - all tests must pass
+
+**Checkpoint**: User Story 6 complete. All TDD tests pass. Can register, manage API keys, receive initial credits.
 
 ---
 
@@ -394,26 +539,28 @@ Based on plan.md project structure:
 
 ### Observability (FR-OBS-*)
 
-- [ ] T090 [P] Add structured logging with correlation ID to all services (FR-OBS-001)
-- [ ] T091 [P] Enhance /health endpoint to check database, Redis, math_service, agent_service status (FR-OBS-002)
-- [ ] T092 [P] Add custom Prometheus metrics for credit_transactions_total, auth_attempts_total, service_health_status (FR-OBS-003)
-- [ ] T093 Add credit transaction logging for audit purposes (FR-OBS-004)
+- [ ] T121 [P] Add structured logging with correlation ID to all services (FR-OBS-001)
+- [ ] T122 [P] Enhance /health endpoint to check database, Redis, math_service, agent_service status (FR-OBS-002)
+- [ ] T123 [P] Add custom Prometheus metrics for credit_transactions_total, auth_attempts_total, service_health_status (FR-OBS-003)
+- [ ] T124 Add credit transaction logging for audit purposes (FR-OBS-004)
 
 ### Error Handling
 
-- [ ] T094 Create consistent error response format matching openapi.yaml Error schema
-- [ ] T095 Add global exception handlers in `src/mcpworks_api/main.py`
+- [ ] T125 Create consistent error response format matching openapi.yaml Error schema
+- [ ] T126 Add global exception handlers in `src/mcpworks_api/main.py`
 
 ### Configuration & Security
 
-- [ ] T096 Add environment validation on startup (required keys present)
-- [ ] T097 Add CORS configuration for production origins
-- [ ] T098 Add request size limits and timeout configuration
+- [ ] T127 Add environment validation on startup (required keys present)
+- [ ] T128 Add CORS configuration for production origins
+- [ ] T129 Add request size limits and timeout configuration
 
-### Documentation
+### Final Verification
 
-- [ ] T099 Validate implementation against contracts/openapi.yaml
-- [ ] T100 Run quickstart.md validation end-to-end
+- [ ] T130 Run full test suite: `pytest tests/ -v --cov=src --cov-report=term-missing`
+- [ ] T131 Verify coverage meets 80% threshold (constitution requirement)
+- [ ] T132 Validate implementation against contracts/openapi.yaml
+- [ ] T133 Run quickstart.md validation end-to-end
 
 ---
 
@@ -449,12 +596,14 @@ Phase 2 (Foundational) ─── BLOCKING ───┐
 | US5 (Stripe) | US2 (credits to grant) | Phase 4 complete |
 | US6 (Registration) | US1 (API key generation) | Phase 3 complete |
 
-### Within Each User Story
+### Within Each User Story (TDD Workflow)
 
-1. Models → Migrations → Schemas
-2. Services (business logic)
-3. Endpoints (API layer)
-4. Integration (wiring, middleware)
+1. **Tests (write FIRST, must fail)** → unit tests, integration tests
+2. Models → Migrations → Schemas
+3. Services (business logic) → tests should start passing
+4. Endpoints (API layer) → more tests should pass
+5. Integration (wiring, middleware)
+6. **Verification** → run all tests, ensure 100% of story tests pass
 
 ### Parallel Opportunities
 
@@ -541,26 +690,36 @@ With multiple developers:
 
 ## Task Summary
 
-| Phase | Task Count | Parallel Tasks |
-|-------|------------|----------------|
-| Phase 1: Setup | 8 | 4 |
-| Phase 2: Foundational | 27 | 10 |
-| Phase 3: US1 Auth | 12 | 4 |
-| Phase 4: US2 Credits | 10 | 3 |
-| Phase 5: US3 Math | 7 | 2 |
-| Phase 6: US4 Agent | 7 | 1 |
-| Phase 7: US5 Stripe | 10 | 2 |
-| Phase 8: US6 Registration | 8 | 2 |
-| Phase 9: Polish | 11 | 4 |
-| **Total** | **100** | **32** |
+| Phase | Task Count | Test Tasks | Parallel Tasks |
+|-------|------------|------------|----------------|
+| Phase 1: Setup | 8 | 0 | 4 |
+| Phase 2: Foundational | 32 | 5 (infra) | 12 |
+| Phase 3: US1 Auth | 16 | 4 | 4 |
+| Phase 4: US2 Credits | 14 | 4 | 3 |
+| Phase 5: US3 Math | 12 | 5 | 2 |
+| Phase 6: US4 Agent | 11 | 4 | 1 |
+| Phase 7: US5 Stripe | 14 | 4 | 2 |
+| Phase 8: US6 Registration | 13 | 4 | 2 |
+| Phase 9: Polish | 13 | 2 (verify) | 3 |
+| **Total** | **133** | **32** | **33** |
+
+**Test Distribution**:
+- Test infrastructure (Phase 2): 5 tasks
+- Unit + integration tests per user story: 2 tasks each × 6 stories = 12 tasks
+- Verification runs per user story: 2 tasks each × 6 stories = 12 tasks
+- Final verification (Phase 9): 2 tasks
+- Total test-related: 32 tasks (24% of all tasks)
 
 ---
 
 ## Notes
 
-- [P] tasks = different files, no dependencies
-- [Story] label maps task to specific user story for traceability
+- **TDD Workflow**: Tests are written FIRST and must FAIL before implementation code is written
+- **[P]** tasks = different files, no dependencies (can be parallelized)
+- **[Story]** label maps task to specific user story for traceability
 - Each user story is independently completable and testable
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- MVP scope: US1 + US2 = Auth + Credits (enables monetization)
+- **MVP scope**: US1 + US2 = Auth + Credits (enables monetization)
+- **Email**: Mocked for MVP; pilot users manually onboarded
+- **Coverage target**: 80% minimum (constitution requirement)
