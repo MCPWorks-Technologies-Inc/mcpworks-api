@@ -1,14 +1,15 @@
-# mcpworks Infrastructure MCP Specification Framework
+# mcpworks API Specification Framework
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-10-30
-**Purpose:** Guide for using spec-driven development in mcpworks Infrastructure MCP
+**Updated:** 2025-12-16
+**Purpose:** Guide for using spec-driven development in mcpworks API
 
 ---
 
 ## Overview
 
-This directory contains the specification framework for mcpworks Infrastructure MCP development. Following the [spec-kit methodology](https://github.com/github/spec-kit), we use a five-artifact approach to software development:
+This directory contains the specification framework for mcpworks API development. Following the [spec-kit methodology](https://github.com/github/spec-kit), we use a five-artifact approach to software development:
 
 ```
 Constitution (governing principles)
@@ -394,7 +395,7 @@ Token efficiency is core architecture, not optimization.
 ### Recommended Reading
 
 - [MCP Protocol Specification](https://spec.modelcontextprotocol.io/) - Official MCP docs
-- [mcpworks-mcp-server-spec.md](mcpworks-mcp-server-spec.md) - Overall system design
+- [SPEC.md](../../../SPEC.md) - Main API specification (workflow platform)
 - [technical-architecture.md](../plans/technical-architecture.md) - System architecture
 - [acquisition-strategy-2025-10.md](../../../../mcpworks-internals/docs/business/acquisition-strategy-2025-10.md) - Why we do spec-driven development (in planning repo)
 

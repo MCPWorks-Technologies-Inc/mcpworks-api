@@ -1,16 +1,17 @@
-# mcpworks Infrastructure MCP Project Constitution
+# mcpworks API Project Constitution
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-10-30
-**Purpose:** Governing principles for mcpworks Infrastructure MCP development
+**Updated:** 2025-12-16
+**Purpose:** Governing principles for mcpworks API development
 
 ---
 
 ## Project Mission
 
-Build a production-grade MCP server that provides AI assistants with complete application lifecycle management: infrastructure provisioning, deployment, domain/SSL management, and third-party integrations (Stripe, Shopify, SendGrid, Twilio, Zendesk).
+Build a production-grade AI-native workflow automation platform that enables AI assistants to create and execute workflows via the MCP protocol. Users create workflows visually (Activepieces), and invoke them as MCP tools from Claude Code, Codex, or GitHub Copilot.
 
-**Core Value Proposition:** Reduce 10-18 hours of manual setup across 6+ platforms to 8 minutes via one AI-native interface.
+**Core Value Proposition:** Zapier for AI assistants - create workflows once, execute from any MCP-compatible AI tool.
 
 ---
 
@@ -342,7 +343,7 @@ This Constitution may be amended when:
 ## References
 
 - [Spec-Kit Methodology](https://github.com/github/spec-kit)
-- [mcpworks Infrastructure MCP Spec](mcpworks-mcp-server-spec.md)
+- [mcpworks API Spec](../../../SPEC.md)
 - [Technical Architecture](../plans/technical-architecture.md)
 - [Token Optimization](../guidance/mcp-token-optimization.md)
 
