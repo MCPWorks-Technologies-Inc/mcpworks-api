@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mcpworks-postgres
+    environment:
+      POSTGRES_USER: mcpworks
+      POSTGRES_PASSWORD: mcpworks_dev
+      POSTGRES_DB: mcpworks
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcpworks -d mcpworks"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mcpworks-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DEV_MODE: 1
+    container_name: mcpworks-api
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mcpworks:mcpworks_dev@postgres:5432/mcpworks
+      - REDIS_URL=redis://redis:6379/0
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app/src
+      - JWT_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgMIdm1taSg7xoUit9\nuAINA7SDYH9lHr/MbsVh6fJUAyyhRANCAAQPbe+NgHb48a2Le4VbIMBMrO1fnLtM\nV1QvhBX3S5IUtHb2tHv9+XFeCy2Q6VYWA2tAEIztLMxa6A7ZeT47hEed\n-----END PRIVATE KEY-----
+      - JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED23vjYB2+PGti3uFWyDATKztX5y7\nTFdUL4QV90uSFLR29rR7/flxXgstkOlWFgNrQBCM7SzMWugO2Xk+O4RHnQ==\n-----END PUBLIC KEY-----
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+      - ./keys:/app/keys:ro
+    command: uvicorn mcpworks_api.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  redis_data:

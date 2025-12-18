@@ -13,6 +13,13 @@ The mcpworks-api serves as the central gateway for the mcpworks platform - an AI
 
 **Key Principle**: This service is the trust boundary. All requests from external clients (mcpworks-gateway proxy) authenticate here before being routed to internal services.
 
+## Clarifications
+
+### Session 2025-12-17
+
+- Q: What is the target availability SLA for the API Gateway? → A: 99.0% (87.6h downtime/year) - MVP-appropriate, manual intervention acceptable
+- Q: When Stripe webhook processing fails, what is the retry policy? → A: Rely on Stripe's built-in retry mechanism (3 days with exponential backoff); handlers must be idempotent
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - API Key Authentication Flow (Priority: P1)
@@ -122,6 +129,7 @@ New users register and obtain API keys to integrate with mcpworks-gateway.
 - **Race condition on credits**: Two simultaneous holds that would overdraft - second must fail atomically
 - **JWT stolen/compromised**: User can revoke all sessions via `/v1/auth/logout-all`
 - **Stripe webhook replay**: Idempotency keys prevent duplicate credit grants
+- **Stripe webhook failure**: Rely on Stripe's built-in retry mechanism (retries for up to 3 days with exponential backoff); no custom retry queue needed for MVP
 - **Service timeout**: Gateway returns 504 after 30s, releases any held credits
 - **User deleted mid-execution**: Execution completes, credits committed, but user marked deleted
 - **Negative balance prevention**: Database CHECK constraint ensures available_balance >= 0
@@ -189,6 +197,7 @@ New users register and obtain API keys to integrate with mcpworks-gateway.
 - **SC-008**: Health check endpoint responds within 100ms, accurately reflects service state
 - **SC-009**: Failed authentication attempts rate-limited effectively (no brute force possible)
 - **SC-010**: Pilot users (5-10) can complete full workflow: register, subscribe, execute workflow, view usage
+- **SC-011**: API Gateway maintains 99.0% availability (≤87.6h downtime/year), manual intervention acceptable for recovery
 
 ## Assumptions
 

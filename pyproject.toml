@@ -1,0 +1,167 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcpworks-api"
+version = "0.1.0"
+description = "API Gateway for mcpworks platform - authentication, credit accounting, and service routing"
+readme = "README.md"
+license = {text = "Proprietary - All Rights Reserved"}
+requires-python = ">=3.11"
+authors = [
+    { name = "mcpworks", email = "dev@mcpworks.io" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic[email]>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "redis>=5.0.0",
+    "httpx>=0.26.0",
+    "pyjwt[crypto]>=2.8.0",
+    "cryptography>=42.0.0",
+    "argon2-cffi>=23.1.0",
+    "stripe>=8.0.0",
+    "prometheus-fastapi-instrumentator>=6.1.0",
+    "python-multipart>=0.0.6",
+    "structlog>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.26.0",
+    "factory-boy>=3.3.0",
+    "ruff>=0.2.0",
+    "black>=24.1.0",
+    "mypy>=1.8.0",
+    "types-redis>=4.6.0",
+    "pre-commit>=3.6.0",
+]
+
+[project.scripts]
+mcpworks-api = "mcpworks_api.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcpworks_api"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/mcpworks_api"]
+branch = true
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+fail_under = 65
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | alembic
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by black)
+    "B008",   # do not perform function calls in argument defaults
+    "B904",   # raise without from (sometimes intentional)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["ARG001"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+strict_optional = true
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = [
+    "argon2.*",
+    "stripe.*",
+    "prometheus_fastapi_instrumentator.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mcpworks_api.middleware.metrics",
+]
+disable_error_code = ["arg-type", "call-arg"]
+
+[[tool.mypy.overrides]]
+module = [
+    "mcpworks_api.services.stripe",
+]
+disable_error_code = ["attr-defined", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = [
+    "mcpworks_api.services.credit",
+    "mcpworks_api.services.execution",
+    "mcpworks_api.services.router",
+    "mcpworks_api.services.auth",
+    "mcpworks_api.api.v1.users",
+]
+disable_error_code = ["attr-defined", "return-value", "arg-type"]
