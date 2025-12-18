@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.security import create_access_token
@@ -410,3 +411,59 @@ class TestStripeWebhook:
             data = response.json()
             assert data["processed"] is True
             assert data["event_type"] == "checkout.session.completed"
+
+    @pytest.mark.asyncio
+    async def test_webhook_credit_purchase(
+        self, client: AsyncClient, db: AsyncSession
+    ):
+        """Test handling checkout.session.completed for credit purchase."""
+        user_id = uuid.uuid4()
+
+        # Create user with unique email
+        user = User(
+            id=user_id,
+            email=f"credit_purchase_{user_id}@example.com",
+            password_hash="test_hash",
+            name="Credit Purchase User",
+            tier="free",
+            status="active",
+        )
+        db.add(user)
+        await db.commit()
+
+        # Mock Stripe response for credit purchase
+        with patch("stripe.Webhook.construct_event") as mock_construct:
+            mock_construct.return_value = {
+                "type": "checkout.session.completed",
+                "data": {
+                    "object": {
+                        "id": "cs_test_credit_purchase",
+                        "metadata": {
+                            "user_id": str(user_id),
+                            "credits": "500",
+                            "type": "credit_purchase",
+                        },
+                        # No subscription field for payment mode
+                        "customer": "cus_credit123",
+                    }
+                },
+            }
+
+            response = await client.post(
+                "/v1/webhooks/stripe",
+                content=b'{"type": "checkout.session.completed"}',
+                headers={"Stripe-Signature": "valid_sig_mock"},
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["processed"] is True
+            assert data["event_type"] == "checkout.session.completed"
+
+        # Verify credits were added
+        from mcpworks_api.models import Credit
+
+        result = await db.execute(select(Credit).where(Credit.user_id == user_id))
+        credit = result.scalar_one_or_none()
+        assert credit is not None
+        assert credit.available_balance == Decimal("500.00")
