@@ -1,6 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
@@ -9,18 +10,13 @@ import pytest_asyncio
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from mcpworks_api.config import Settings, get_settings
-from mcpworks_api.core.database import get_db
 from mcpworks_api.core import database as database_module
 from mcpworks_api.core import redis as redis_module
-from mcpworks_api.main import create_app
 from mcpworks_api.models.base import Base
-
 
 # Generate test ES256 keys at module load
 _test_private_key = ec.generate_private_key(ec.SECP256R1())
@@ -157,6 +153,7 @@ async def client(test_settings: Settings) -> AsyncGenerator[AsyncClient, None]:
     """
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
+
     from mcpworks_api.api.v1 import router as v1_router
     from mcpworks_api.middleware import register_exception_handlers
 
@@ -204,10 +201,8 @@ async def client(test_settings: Settings) -> AsyncGenerator[AsyncClient, None]:
     finally:
         # Clean up Redis pool after test completes
         if redis_module._pool is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await redis_module._pool.disconnect()
-            except Exception:
-                pass  # Ignore cleanup errors
             redis_module._pool = None
 
 

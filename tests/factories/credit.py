@@ -1,7 +1,7 @@
 """Test factories for Credit and CreditTransaction models."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import factory
@@ -20,7 +20,7 @@ class CreditFactory(factory.Factory):
     held_balance = Decimal("0.00")
     lifetime_earned = Decimal("500.00")
     lifetime_spent = Decimal("0.00")
-    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    updated_at = factory.LazyFunction(lambda: datetime.now(UTC))
 
 
 class EmptyCreditFactory(CreditFactory):
@@ -56,7 +56,7 @@ class CreditTransactionFactory(factory.Factory):
     hold_id = None
     execution_id = None
     metadata = None
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    created_at = factory.LazyFunction(lambda: datetime.now(UTC))
 
 
 class HoldTransactionFactory(CreditTransactionFactory):

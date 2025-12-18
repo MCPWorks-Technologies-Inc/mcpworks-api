@@ -7,13 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mcpworks_api.core.exceptions import (
-    InsufficientCreditsError,
     InsufficientTierError,
     ServiceTimeoutError,
     ServiceUnavailableError,
 )
 from mcpworks_api.models import Service, ServiceStatus
-from mcpworks_api.services.router import ServiceRouter, TIER_HIERARCHY
+from mcpworks_api.services.router import TIER_HIERARCHY, ServiceRouter
 
 
 class TestTierHierarchy:

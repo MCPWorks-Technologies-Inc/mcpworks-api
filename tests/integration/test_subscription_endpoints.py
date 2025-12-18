@@ -1,7 +1,7 @@
 """Integration tests for subscription endpoints."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -158,7 +158,7 @@ class TestGetCurrentSubscription:
         db.add(user)
 
         # Create subscription
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
             tier="starter",
@@ -238,7 +238,7 @@ class TestCancelSubscription:
         db.add(user)
 
         # Create cancelled subscription
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
             tier="starter",
@@ -338,7 +338,7 @@ class TestStripeWebhook:
 
     @pytest.mark.asyncio
     async def test_webhook_valid_unhandled_event(
-        self, client: AsyncClient, db: AsyncSession
+        self, client: AsyncClient, db: AsyncSession  # noqa: ARG002
     ):
         """Test that unhandled event types are acknowledged."""
         with patch("stripe.Webhook.construct_event") as mock_construct:
@@ -381,7 +381,7 @@ class TestStripeWebhook:
         with patch("stripe.Webhook.construct_event") as mock_construct, \
              patch("stripe.Subscription.retrieve") as mock_retrieve:
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             mock_construct.return_value = {
                 "type": "checkout.session.completed",
                 "data": {

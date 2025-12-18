@@ -1,7 +1,7 @@
 """Test factories for Service model."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import factory
@@ -25,8 +25,8 @@ class ServiceFactory(factory.Factory):
     tier_required = "free"
     status = ServiceStatus.ACTIVE.value
     last_health_check = None
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    created_at = factory.LazyFunction(lambda: datetime.now(UTC))
+    updated_at = factory.LazyFunction(lambda: datetime.now(UTC))
 
 
 class MathServiceFactory(ServiceFactory):

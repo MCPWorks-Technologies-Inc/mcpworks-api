@@ -1,7 +1,7 @@
 """Test factories for User and APIKey models."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import factory
 
@@ -22,8 +22,8 @@ class UserFactory(factory.Factory):
     status = UserStatus.ACTIVE.value
     email_verified = False
     verification_token = None
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    created_at = factory.LazyFunction(lambda: datetime.now(UTC))
+    updated_at = factory.LazyFunction(lambda: datetime.now(UTC))
 
 
 class ActiveUserFactory(UserFactory):
@@ -53,7 +53,7 @@ class APIKeyFactory(factory.Factory):
     key_prefix = factory.Sequence(lambda n: f"sk_test_k{n}_")
     name = factory.Sequence(lambda n: f"Test Key {n}")
     scopes = ["read", "write", "execute"]
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    created_at = factory.LazyFunction(lambda: datetime.now(UTC))
     last_used_at = None
     expires_at = None
     revoked_at = None
@@ -62,4 +62,4 @@ class APIKeyFactory(factory.Factory):
 class RevokedAPIKeyFactory(APIKeyFactory):
     """Factory for creating revoked API keys."""
 
-    revoked_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    revoked_at = factory.LazyFunction(lambda: datetime.now(UTC))

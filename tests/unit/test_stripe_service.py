@@ -1,14 +1,13 @@
 """Unit tests for StripeService."""
 
 import uuid
-from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcpworks_api.models import Subscription, SubscriptionStatus, User
-from mcpworks_api.services.stripe import StripeService, TIER_CREDITS
+from mcpworks_api.models import Subscription, SubscriptionStatus
+from mcpworks_api.services.stripe import TIER_CREDITS, StripeService
 
 
 class TestTierCredits:
