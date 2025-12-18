@@ -1,5 +1,6 @@
 """Stripe service - subscription and payment management."""
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -61,32 +62,51 @@ class StripeService:
         self.settings = get_settings()
         stripe.api_key = self.settings.stripe_secret_key
 
-    async def _is_event_processed(self, event_id: str) -> bool:
-        """Check if a webhook event has already been processed.
+    async def _try_claim_event(self, event_id: str) -> bool:
+        """Atomically try to claim an event for processing.
+
+        Uses Redis SETNX (SET if Not eXists) to atomically check and claim
+        the event in a single operation, preventing race conditions where
+        two concurrent requests both pass an exists() check.
 
         Args:
             event_id: Stripe event ID (e.g., evt_1234...)
 
         Returns:
-            True if event was already processed, False otherwise
+            True if we successfully claimed the event (proceed with processing)
+            False if event was already claimed (duplicate, skip processing)
         """
         if self.redis is None:
-            return False  # Skip idempotency check if Redis not available
+            return True  # No Redis = no idempotency, allow processing
 
         key = f"{WEBHOOK_IDEMPOTENCY_PREFIX}{event_id}"
-        return await self.redis.exists(key) > 0
+        try:
+            # SET with NX (only if not exists) - returns True if set, None if exists
+            # This is atomic - no race condition possible
+            result = await self.redis.set(key, "processing", nx=True, ex=WEBHOOK_IDEMPOTENCY_TTL)
+            return result is not None
+        except Exception:
+            # Redis error - allow processing but log would be ideal
+            # Better to risk duplicate than to block all webhooks
+            return True
 
-    async def _mark_event_processed(self, event_id: str) -> None:
-        """Mark a webhook event as processed.
+    async def _mark_event_completed(self, event_id: str) -> None:
+        """Mark a claimed event as successfully completed.
+
+        Updates the Redis key value from "processing" to "completed".
+        This is best-effort - if Redis fails, we've already processed
+        the event and don't want to cause a retry.
 
         Args:
-            event_id: Stripe event ID to mark as processed
+            event_id: Stripe event ID to mark as completed
         """
         if self.redis is None:
-            return  # Skip if Redis not available
+            return
 
         key = f"{WEBHOOK_IDEMPOTENCY_PREFIX}{event_id}"
-        await self.redis.set(key, "1", ex=WEBHOOK_IDEMPOTENCY_TTL)
+        # Best-effort update - don't fail the webhook response for Redis issues
+        with contextlib.suppress(Exception):
+            await self.redis.set(key, "completed", ex=WEBHOOK_IDEMPOTENCY_TTL)
 
     async def create_checkout_session(
         self,
@@ -173,8 +193,8 @@ class StripeService:
     async def handle_webhook_event(self, payload: bytes, signature: str) -> dict[str, Any]:
         """Handle incoming Stripe webhook event.
 
-        Implements idempotency by storing processed event IDs in Redis.
-        Duplicate events are detected and skipped to prevent double-processing.
+        Implements idempotency using atomic Redis SETNX to prevent race conditions.
+        The event is claimed before processing, preventing concurrent duplicates.
 
         Args:
             payload: Raw request body
@@ -199,8 +219,9 @@ class StripeService:
         event_type = event["type"]
         event_data = event["data"]["object"]
 
-        # Idempotency check - skip if already processed
-        if await self._is_event_processed(event_id):
+        # Atomic idempotency claim - prevents race conditions
+        # If we can't claim, another request is processing or has processed this event
+        if not await self._try_claim_event(event_id):
             return {
                 "processed": False,
                 "event_type": event_type,
@@ -221,8 +242,8 @@ class StripeService:
         handler = handlers.get(event_type)
         if handler:
             await handler(event_data)
-            # Mark as processed AFTER successful handling
-            await self._mark_event_processed(event_id)
+            # Mark as completed (best-effort, won't fail the response)
+            await self._mark_event_completed(event_id)
             return {"processed": True, "event_type": event_type, "event_id": event_id}
 
         return {"processed": False, "event_type": event_type, "message": "Unhandled event type"}
