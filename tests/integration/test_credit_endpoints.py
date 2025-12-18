@@ -25,6 +25,18 @@ def auth_headers(test_settings):
     return {"Authorization": f"Bearer {access_token}"}, user_id
 
 
+@pytest.fixture
+def admin_auth_headers(test_settings):
+    """Generate valid JWT auth headers with admin scope for testing."""
+    user_id = str(uuid.uuid4())
+    access_token = create_access_token(
+        user_id=user_id,
+        scopes=["read", "write", "execute", "admin"],
+    )
+
+    return {"Authorization": f"Bearer {access_token}"}, user_id
+
+
 class TestGetCreditBalance:
     """Tests for GET /v1/credits endpoint."""
 
@@ -99,14 +111,46 @@ class TestGetCreditBalance:
 
 
 class TestAddCredits:
-    """Tests for POST /v1/credits/add endpoint."""
+    """Tests for POST /v1/credits/add endpoint (requires admin scope)."""
+
+    @pytest.mark.asyncio
+    async def test_add_credits_requires_admin_scope(
+        self, client: AsyncClient, db: AsyncSession, auth_headers
+    ):
+        """Test that add_credits rejects non-admin users."""
+        headers, user_id = auth_headers
+
+        # Create user
+        user = User(
+            id=uuid.UUID(user_id),
+            email="add_credits_nonadmin@example.com",
+            password_hash="test_hash",
+            name="Non-Admin User",
+            tier="free",
+            status="active",
+        )
+        db.add(user)
+        await db.commit()
+
+        response = await client.post(
+            "/v1/credits/add",
+            headers=headers,
+            json={
+                "amount": "100.00",
+                "transaction_type": "grant",
+            },
+        )
+
+        assert response.status_code == 403
+        data = response.json()
+        assert data["error"] == "INSUFFICIENT_SCOPE"
 
     @pytest.mark.asyncio
     async def test_add_credits_grant(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
+        self, client: AsyncClient, db: AsyncSession, admin_auth_headers
     ):
-        """Test adding credits via grant."""
-        headers, user_id = auth_headers
+        """Test adding credits via grant (requires admin scope)."""
+        headers, user_id = admin_auth_headers
 
         # Create user
         user = User(
@@ -138,10 +182,10 @@ class TestAddCredits:
 
     @pytest.mark.asyncio
     async def test_add_credits_invalid_type(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
+        self, client: AsyncClient, db: AsyncSession, admin_auth_headers
     ):
-        """Test add_credits rejects invalid transaction type."""
-        headers, user_id = auth_headers
+        """Test add_credits rejects invalid transaction type (requires admin scope)."""
+        headers, user_id = admin_auth_headers
 
         # Create user
         user = User(
@@ -436,10 +480,10 @@ class TestGetTransactions:
 
     @pytest.mark.asyncio
     async def test_get_transactions_with_history(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
+        self, client: AsyncClient, db: AsyncSession, admin_auth_headers
     ):
         """Test getting transactions with history."""
-        headers, user_id = auth_headers
+        headers, user_id = admin_auth_headers
 
         # Create user with credits
         user = User(

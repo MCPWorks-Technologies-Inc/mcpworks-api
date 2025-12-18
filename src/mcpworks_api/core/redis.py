@@ -85,7 +85,9 @@ class RateLimiter:
         limit: int,
         window_seconds: int,
     ) -> tuple[bool, int]:
-        """Check if request should be rate limited.
+        """Check if request should be rate limited AND increment counter.
+
+        Use this method when you want to record an event (e.g., auth failure).
 
         Args:
             key: Unique identifier (e.g., "auth_fail:192.168.1.1")
@@ -103,6 +105,29 @@ class RateLimiter:
             await self.redis.expire(key, window_seconds)
 
         return current > limit, current
+
+    async def check_rate_limited(
+        self,
+        key: str,
+        limit: int,
+    ) -> tuple[bool, int]:
+        """Check if rate limited WITHOUT incrementing counter.
+
+        Use this method when you want to check the limit without recording
+        a new event (e.g., checking failure count before processing request).
+
+        Args:
+            key: Unique identifier (e.g., "auth_fail:192.168.1.1")
+            limit: Maximum requests allowed in window
+
+        Returns:
+            Tuple of (is_limited, current_count)
+        """
+        current = await self.redis.get(key)
+        if current is None:
+            return False, 0
+        count = int(current)
+        return count >= limit, count
 
     async def get_remaining(self, key: str, limit: int) -> int:
         """Get remaining requests before rate limit."""

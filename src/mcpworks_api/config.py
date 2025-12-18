@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         default="http://localhost:8002",
         description="URL for mcpworks-agent service",
     )
+    agent_callback_secret: str = Field(
+        default="",
+        description="Shared secret for agent callback authentication (required in production)",
+    )
     service_timeout_seconds: int = Field(default=30, ge=5, le=300)
 
     # Observability
