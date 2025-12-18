@@ -213,11 +213,13 @@ class TestHandleWebhookEvent:
         with patch.object(StripeService, "__init__", return_value=None):
             service = StripeService.__new__(StripeService)
             service.db = AsyncMock()
+            service.redis = None  # No Redis for unit test
             service.settings = MagicMock()
             service.settings.stripe_webhook_secret = "whsec_test"
 
             with patch("stripe.Webhook.construct_event") as mock_construct:
                 mock_construct.return_value = {
+                    "id": "evt_test_unhandled_123",
                     "type": "unknown.event.type",
                     "data": {"object": {}},
                 }
