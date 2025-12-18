@@ -177,18 +177,43 @@ class StripeService:
     async def _handle_checkout_completed(self, session: dict[str, Any]) -> None:
         """Handle checkout.session.completed event.
 
-        This fires when a user completes checkout. We use metadata to link
-        the subscription to our user.
-        """
-        user_id_str = session.get("metadata", {}).get("user_id")
-        tier = session.get("metadata", {}).get("tier")
-        subscription_id = session.get("subscription")
-        customer_id = session.get("customer")
+        This fires when a user completes checkout. Handles both:
+        - Subscription purchases (mode="subscription")
+        - One-time credit purchases (mode="payment")
 
-        if not user_id_str or not subscription_id:
+        We use metadata to link the purchase to our user.
+        """
+        metadata = session.get("metadata", {})
+        user_id_str = metadata.get("user_id")
+        checkout_type = metadata.get("type")
+
+        if not user_id_str:
             return
 
         user_id = uuid.UUID(user_id_str)
+
+        # Handle one-time credit purchase
+        if checkout_type == "credit_purchase":
+            credits_str = metadata.get("credits")
+            if credits_str:
+                credits_amount = int(credits_str)
+                credit_service = CreditService(self.db)
+                await credit_service.add_credits(
+                    user_id=user_id,
+                    amount=Decimal(str(credits_amount)),
+                    transaction_type=TransactionType.PURCHASE,
+                    metadata={"stripe_session_id": session.get("id")},
+                )
+                await self.db.commit()
+            return
+
+        # Handle subscription purchase
+        tier = metadata.get("tier")
+        subscription_id = session.get("subscription")
+        customer_id = session.get("customer")
+
+        if not subscription_id:
+            return
 
         # Get subscription details from Stripe
         stripe_sub = stripe.Subscription.retrieve(subscription_id)
