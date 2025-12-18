@@ -7,11 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mcpworks_api.core.exceptions import (
-    InsufficientCreditsError,
     InsufficientTierError,
     ServiceUnavailableError,
 )
-from mcpworks_api.models import CreditTransaction, Execution, ExecutionStatus, Service, ServiceStatus
+from mcpworks_api.models import (
+    CreditTransaction,
+    Execution,
+    ExecutionStatus,
+    Service,
+)
 from mcpworks_api.services.execution import ExecutionService
 
 

@@ -4,13 +4,11 @@ import uuid
 from decimal import Decimal
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.security import create_access_token
-from mcpworks_api.models import Credit, CreditTransaction, User
-from mcpworks_api.models.credit_transaction import TransactionType
+from mcpworks_api.models import Credit, User
 
 
 @pytest.fixture

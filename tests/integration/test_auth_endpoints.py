@@ -1,11 +1,17 @@
 """Integration tests for authentication endpoints - TDD tests written FIRST."""
 
+from datetime import UTC, timedelta
+
 import pytest
 from httpx import AsyncClient
 
-from mcpworks_api.core.security import create_access_token, create_refresh_token, generate_api_key, hash_api_key
-from mcpworks_api.models import APIKey, User
-from datetime import timedelta
+from mcpworks_api.core.security import (
+    create_access_token,
+    create_refresh_token,
+    generate_api_key,
+    hash_api_key,
+)
+from mcpworks_api.models import APIKey
 
 
 @pytest.mark.asyncio
@@ -58,7 +64,7 @@ class TestTokenExchange:
 
     async def test_token_exchange_revoked_key(self, client: AsyncClient, db, make_user):
         """Revoked API key should return 401 with INVALID_API_KEY error."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Create user and revoked API key
         user = make_user(email="revoked_test@example.com")
@@ -73,7 +79,7 @@ class TestTokenExchange:
             key_prefix=raw_key[:12],
             name="Revoked Key",
             scopes=["read", "write"],
-            revoked_at=datetime.now(timezone.utc),  # Already revoked
+            revoked_at=datetime.now(UTC),  # Already revoked
         )
         db.add(api_key)
         await db.commit()
@@ -89,7 +95,7 @@ class TestTokenExchange:
 
     async def test_token_exchange_expired_key(self, client: AsyncClient, db, make_user):
         """Expired API key should return 401 with INVALID_API_KEY error."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         # Create user and expired API key
         user = make_user(email="expired_test@example.com")
@@ -104,7 +110,7 @@ class TestTokenExchange:
             key_prefix=raw_key[:12],
             name="Expired Key",
             scopes=["read", "write"],
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),  # Already expired
+            expires_at=datetime.now(UTC) - timedelta(hours=1),  # Already expired
         )
         db.add(api_key)
         await db.commit()
@@ -278,7 +284,7 @@ class TestRateLimiting:
 class TestUserRegistration:
     """Tests for POST /v1/auth/register endpoint."""
 
-    async def test_register_success(self, client: AsyncClient, db):
+    async def test_register_success(self, client: AsyncClient, db):  # noqa: ARG002
         """Valid registration should return 201 with user info and tokens."""
         response = await client.post(
             "/v1/auth/register",
@@ -342,7 +348,7 @@ class TestUserRegistration:
 
         assert response.status_code == 422
 
-    async def test_register_without_name(self, client: AsyncClient, db):
+    async def test_register_without_name(self, client: AsyncClient, db):  # noqa: ARG002
         """Registration without name should succeed."""
         response = await client.post(
             "/v1/auth/register",
@@ -358,8 +364,9 @@ class TestUserRegistration:
 
     async def test_register_creates_credits(self, client: AsyncClient, db):
         """Registration should create credit record with free tier bonus."""
-        from mcpworks_api.models import Credit
         from sqlalchemy import select
+
+        from mcpworks_api.models import Credit
 
         response = await client.post(
             "/v1/auth/register",

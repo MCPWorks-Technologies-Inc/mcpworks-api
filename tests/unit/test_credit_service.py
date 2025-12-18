@@ -1,9 +1,9 @@
 """Unit tests for CreditService."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -162,7 +162,7 @@ class TestCommit:
             balance_before=Decimal("100.00"),
             balance_after=Decimal("70.00"),
         )
-        mock_hold_txn.created_at = datetime.now(timezone.utc)
+        mock_hold_txn.created_at = datetime.now(UTC)
 
         mock_credit = Credit(
             user_id=user_id,
@@ -206,7 +206,7 @@ class TestCommit:
             balance_before=Decimal("100.00"),
             balance_after=Decimal("70.00"),
         )
-        mock_hold_txn.created_at = datetime.now(timezone.utc)
+        mock_hold_txn.created_at = datetime.now(UTC)
 
         mock_credit = Credit(
             user_id=user_id,
@@ -247,7 +247,7 @@ class TestCommit:
             balance_before=Decimal("100.00"),
             balance_after=Decimal("70.00"),
         )
-        mock_hold_txn.created_at = datetime.now(timezone.utc)
+        mock_hold_txn.created_at = datetime.now(UTC)
 
         mock_db = AsyncMock()
         mock_results = [
@@ -295,7 +295,7 @@ class TestCommit:
             balance_after=Decimal("70.00"),
         )
         # Hold created 2 hours ago (expired)
-        mock_hold_txn.created_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        mock_hold_txn.created_at = datetime.now(UTC) - timedelta(hours=2)
 
         mock_db = AsyncMock()
         mock_result = MagicMock()
@@ -323,7 +323,7 @@ class TestCommit:
             balance_before=Decimal("100.00"),
             balance_after=Decimal("70.00"),
         )
-        mock_hold_txn.created_at = datetime.now(timezone.utc)
+        mock_hold_txn.created_at = datetime.now(UTC)
 
         # Existing commit transaction
         mock_commit_txn = CreditTransaction(
@@ -368,7 +368,7 @@ class TestRelease:
             balance_before=Decimal("100.00"),
             balance_after=Decimal("70.00"),
         )
-        mock_hold_txn.created_at = datetime.now(timezone.utc)
+        mock_hold_txn.created_at = datetime.now(UTC)
 
         mock_credit = Credit(
             user_id=user_id,

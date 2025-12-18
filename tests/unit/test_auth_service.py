@@ -1,10 +1,11 @@
 """Unit tests for authentication service - TDD tests written FIRST."""
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 
+from mcpworks_api.core.exceptions import InvalidTokenError, TokenExpiredError
 from mcpworks_api.core.security import (
     create_access_token,
     create_refresh_token,
@@ -17,7 +18,6 @@ from mcpworks_api.core.security import (
     verify_password,
     verify_refresh_token,
 )
-from mcpworks_api.core.exceptions import InvalidTokenError, TokenExpiredError
 
 
 class TestApiKeyGeneration:
