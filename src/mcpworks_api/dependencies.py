@@ -156,3 +156,44 @@ def require_scope(required_scope: str) -> Callable[..., Awaitable[None]]:
             )
 
     return check_scope
+
+
+async def verify_agent_callback_secret(
+    x_agent_secret: Annotated[str | None, Header()] = None,
+) -> None:
+    """Verify the shared secret for agent callback authentication.
+
+    The mcpworks-agent service must include the X-Agent-Secret header
+    when calling callback endpoints.
+
+    Raises:
+        HTTPException: If secret is missing or invalid.
+    """
+    from mcpworks_api.config import get_settings
+
+    settings = get_settings()
+
+    # In development (no secret configured), allow requests
+    if not settings.agent_callback_secret:
+        return
+
+    if not x_agent_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "MISSING_SECRET",
+                "message": "X-Agent-Secret header required",
+            },
+        )
+
+    # Use constant-time comparison to prevent timing attacks
+    import hmac
+
+    if not hmac.compare_digest(x_agent_secret, settings.agent_callback_secret):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "INVALID_SECRET",
+                "message": "Invalid agent callback secret",
+            },
+        )

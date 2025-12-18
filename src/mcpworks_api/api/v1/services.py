@@ -14,7 +14,7 @@ from mcpworks_api.core.exceptions import (
     ServiceTimeoutError,
     ServiceUnavailableError,
 )
-from mcpworks_api.dependencies import CurrentUserId
+from mcpworks_api.dependencies import CurrentUserId, verify_agent_callback_secret
 from mcpworks_api.models import User
 from mcpworks_api.schemas.service import (
     AgentCallbackRequest,
@@ -453,6 +453,8 @@ async def list_executions(
     responses={
         200: {"description": "Callback processed"},
         400: {"description": "Invalid request or execution state"},
+        401: {"description": "Missing X-Agent-Secret header"},
+        403: {"description": "Invalid agent secret"},
         404: {"description": "Execution not found"},
     },
 )
@@ -460,6 +462,7 @@ async def execution_callback(
     execution_id: str,
     body: AgentCallbackRequest,
     db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_agent_callback_secret),
 ) -> AgentCallbackResponse:
     """Handle callback from mcpworks-agent.
 
@@ -467,8 +470,7 @@ async def execution_callback(
     completes (success or failure). It commits or releases held credits
     based on the result.
 
-    Note: This endpoint is called by internal services, not end users.
-    In production, it should be protected by internal service authentication.
+    Requires X-Agent-Secret header with valid shared secret.
     """
     execution_service = ExecutionService(db)
 

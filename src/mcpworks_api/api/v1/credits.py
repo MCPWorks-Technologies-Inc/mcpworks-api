@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import InsufficientCreditsError, InvalidHoldError
-from mcpworks_api.dependencies import CurrentUserId
+from mcpworks_api.dependencies import CurrentUserId, require_scope
 from mcpworks_api.models.credit_transaction import TransactionType
 from mcpworks_api.schemas.credit import (
     AddCreditsRequest,
@@ -292,18 +292,23 @@ async def release_hold(
         200: {"description": "Credits successfully added"},
         400: {"description": "Invalid amount or transaction type"},
         401: {"description": "Not authenticated or token expired"},
+        403: {"description": "Admin scope required"},
     },
 )
 async def add_credits(
     body: AddCreditsRequest,
     user_id: CurrentUserId,
     db: AsyncSession = Depends(get_db),
+    _admin: None = Depends(require_scope("admin")),
 ) -> AddCreditsResponse:
     """Add credits to the user's available balance.
 
-    Used for purchases, grants (subscription), and refunds.
-    Note: In production, this would require additional authorization
-    (admin role or verified payment).
+    Requires admin scope. Used internally for:
+    - Subscription grants (via Stripe webhooks)
+    - Manual refunds by support staff
+    - Promotional credits
+
+    Regular users cannot call this endpoint directly.
     """
     credit_service = CreditService(db)
 

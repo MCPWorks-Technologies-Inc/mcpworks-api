@@ -1,5 +1,6 @@
 """Execution service - manages workflow execution lifecycle."""
 
+import contextlib
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.exceptions import (
     InsufficientTierError,
+    InvalidHoldError,
     ServiceTimeoutError,
     ServiceUnavailableError,
 )
@@ -319,18 +321,11 @@ class ExecutionService:
         if execution.is_terminal:
             raise ValueError(f"Cannot cancel execution in state: {execution.status}")
 
-        # Release any held credits
+        # Release any held credits (if not already processed)
         if execution.hold_transaction_id:
-            hold_result = await self.db.execute(
-                select(CreditTransaction).where(
-                    CreditTransaction.id == execution.hold_transaction_id
-                )
-            )
-            hold_txn = hold_result.scalar_one_or_none()
-
-            if hold_txn and hold_txn.status == "pending":
+            with contextlib.suppress(InvalidHoldError):
                 await self.credit_service.release(
-                    hold_id=hold_txn.id,
+                    hold_id=execution.hold_transaction_id,
                     metadata={
                         "execution_id": str(execution_id),
                         "reason": "cancelled",

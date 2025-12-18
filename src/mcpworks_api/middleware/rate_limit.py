@@ -36,10 +36,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Check if this is an auth endpoint
         if request.url.path.startswith("/v1/auth"):
+            # Check auth attempt limit (overall attempts)
             is_limited, remaining = await self._check_auth_rate_limit(client_ip)
             if is_limited:
                 return self._rate_limit_response(
                     limit=self.LIMITS["auth_attempt"]["limit"],
+                    window="1 minute",
+                    retry_after=60,
+                )
+
+            # Check auth failure limit (failed attempts only)
+            if await self._check_auth_failure_limit(client_ip):
+                return self._rate_limit_response(
+                    limit=self.LIMITS["auth_failure"]["limit"],
                     window="1 minute",
                     retry_after=60,
                 )
@@ -104,6 +113,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def _check_auth_failure_limit(self, client_ip: str) -> bool:
         """Check if client has exceeded auth failure limit.
 
+        Uses check_rate_limited to read without incrementing the counter.
+        Failures are only recorded via _record_auth_failure on actual 401 responses.
+
         Returns:
             True if rate limited, False otherwise
         """
@@ -112,7 +124,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         async with get_redis_context() as redis:
             limiter = RateLimiter(redis)
-            is_limited, _ = await limiter.is_rate_limited(key, config["limit"], config["window"])
+            is_limited, _ = await limiter.check_rate_limited(key, config["limit"])
 
         return is_limited
 
@@ -139,6 +151,9 @@ async def check_auth_rate_limit(request: Request) -> None:
     This can be used as a FastAPI dependency on specific endpoints
     for more granular control.
 
+    Uses check_rate_limited to read without incrementing the counter.
+    Failures are only recorded by the middleware on actual 401 responses.
+
     Raises:
         RateLimitExceededError if rate limited
     """
@@ -153,13 +168,13 @@ async def check_auth_rate_limit(request: Request) -> None:
     else:
         client_ip = "unknown"
 
-    # Check failure limit
+    # Check failure limit (without incrementing)
     config = RateLimitMiddleware.LIMITS["auth_failure"]
     key = f"ratelimit:auth_fail:{client_ip}"
 
     async with get_redis_context() as redis:
         limiter = RateLimiter(redis)
-        is_limited, _ = await limiter.is_rate_limited(key, config["limit"], config["window"])
+        is_limited, _ = await limiter.check_rate_limited(key, config["limit"])
 
     if is_limited:
         raise RateLimitExceededError(
