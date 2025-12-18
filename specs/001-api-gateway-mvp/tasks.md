@@ -28,14 +28,14 @@ Based on plan.md project structure:
 
 **Purpose**: Initialize Python project with FastAPI, dependencies, and basic structure
 
-- [ ] T001 Create project structure: `src/mcpworks_api/`, `tests/`, `alembic/` directories
-- [ ] T002 Initialize Python project with pyproject.toml including FastAPI 0.109+, SQLAlchemy 2.0+, Pydantic v2, httpx, PyJWT, argon2-cffi, stripe dependencies
-- [ ] T003 [P] Create `.env.example` with required environment variables per quickstart.md
-- [ ] T004 [P] Create `docker-compose.yml` for local PostgreSQL 15+ and Redis 7+ services
-- [ ] T005 [P] Create `Dockerfile` for API container
-- [ ] T006 [P] Configure ruff/black/mypy in pyproject.toml for code quality
-- [ ] T007 Create `src/mcpworks_api/__init__.py` with version string
-- [ ] T008 Create `src/mcpworks_api/config.py` with Settings class using pydantic-settings
+- [x] T001 Create project structure: `src/mcpworks_api/`, `tests/`, `alembic/` directories
+- [x] T002 Initialize Python project with pyproject.toml including FastAPI 0.109+, SQLAlchemy 2.0+, Pydantic v2, httpx, PyJWT, argon2-cffi, stripe dependencies
+- [x] T003 [P] Create `.env.example` with required environment variables per quickstart.md
+- [x] T004 [P] Create `docker-compose.yml` for local PostgreSQL 15+ and Redis 7+ services
+- [x] T005 [P] Create `Dockerfile` for API container
+- [x] T006 [P] Configure ruff/black/mypy in pyproject.toml for code quality
+- [x] T007 Create `src/mcpworks_api/__init__.py` with version string
+- [x] T008 Create `src/mcpworks_api/config.py` with Settings class using pydantic-settings
 
 **Checkpoint**: Project structure ready, can run `pip install -e .`
 
@@ -49,59 +49,59 @@ Based on plan.md project structure:
 
 ### Database & Core Infrastructure
 
-- [ ] T009 Create `src/mcpworks_api/core/__init__.py`
-- [ ] T010 Create `src/mcpworks_api/core/database.py` with async SQLAlchemy engine and session factory
-- [ ] T011 [P] Create `src/mcpworks_api/core/redis.py` with async Redis connection pool
-- [ ] T012 [P] Create `src/mcpworks_api/core/exceptions.py` with custom exception classes (InsufficientCreditsError, InvalidApiKeyError, etc.)
-- [ ] T013 Initialize Alembic in `alembic/` directory with async PostgreSQL support
-- [ ] T014 Create `src/mcpworks_api/models/__init__.py`
-- [ ] T015 Create `src/mcpworks_api/models/base.py` with SQLAlchemy declarative base and common mixins (TimestampMixin, UUIDMixin)
+- [x] T009 Create `src/mcpworks_api/core/__init__.py`
+- [x] T010 Create `src/mcpworks_api/core/database.py` with async SQLAlchemy engine and session factory
+- [x] T011 [P] Create `src/mcpworks_api/core/redis.py` with async Redis connection pool
+- [x] T012 [P] Create `src/mcpworks_api/core/exceptions.py` with custom exception classes (InsufficientCreditsError, InvalidApiKeyError, etc.)
+- [x] T013 Initialize Alembic in `alembic/` directory with async PostgreSQL support
+- [x] T014 Create `src/mcpworks_api/models/__init__.py`
+- [x] T015 Create `src/mcpworks_api/models/base.py` with SQLAlchemy declarative base and common mixins (TimestampMixin, UUIDMixin)
 
 ### Security Infrastructure (per research.md decisions)
 
-- [ ] T016 Create `src/mcpworks_api/core/security.py` with Argon2id password hasher (64MiB memory, 3 iterations, parallelism 4)
-- [ ] T017 Add ES256 JWT key pair generation script in `scripts/generate_keys.py`
-- [ ] T018 Add JWT encode/decode functions to `src/mcpworks_api/core/security.py` using PyJWT with ES256
+- [x] T016 Create `src/mcpworks_api/core/security.py` with Argon2id password hasher (64MiB memory, 3 iterations, parallelism 4)
+- [x] T017 Add ES256 JWT key pair generation script in `scripts/generate_keys.py`
+- [x] T018 Add JWT encode/decode functions to `src/mcpworks_api/core/security.py` using PyJWT with ES256
 
 ### Shared Models (used by multiple stories)
 
-- [ ] T019 Create User model in `src/mcpworks_api/models/user.py` with fields from data-model.md (id, email, password_hash, name, tier, status, email_verified, verification_token, timestamps)
-- [ ] T020 Create Alembic migration for users table in `alembic/versions/001_create_users_table.py`
-- [ ] T021 Create Service model in `src/mcpworks_api/models/service.py` with fields from data-model.md (id, name, display_name, url, health_check_url, credit_cost, tier_required, status, timestamps)
-- [ ] T022 Create Alembic migration for services table in `alembic/versions/002_create_services_table.py`
-- [ ] T023 Create AuditLog model in `src/mcpworks_api/models/audit.py` with fields from data-model.md
-- [ ] T024 Create Alembic migration for audit_logs table in `alembic/versions/003_create_audit_logs_table.py`
+- [x] T019 Create User model in `src/mcpworks_api/models/user.py` with fields from data-model.md (id, email, password_hash, name, tier, status, email_verified, verification_token, timestamps)
+- [x] T020 Create Alembic migration for users table in `alembic/versions/20251217_000001_initial_schema.py` (combined migration)
+- [x] T021 Create Service model in `src/mcpworks_api/models/service.py` with fields from data-model.md (id, name, display_name, url, health_check_url, credit_cost, tier_required, status, timestamps)
+- [x] T022 Create Alembic migration for services table in `alembic/versions/20251217_000001_initial_schema.py` (combined migration)
+- [x] T023 Create AuditLog model in `src/mcpworks_api/models/audit.py` with fields from data-model.md
+- [x] T024 Create Alembic migration for audit_logs table in `alembic/versions/20251217_000001_initial_schema.py` (combined migration)
 
 ### API Structure
 
-- [ ] T025 Create `src/mcpworks_api/api/__init__.py`
-- [ ] T026 Create `src/mcpworks_api/api/v1/__init__.py`
-- [ ] T027 Create `src/mcpworks_api/api/v1/router.py` as main v1 router aggregating all endpoint routers
-- [ ] T028 Create `src/mcpworks_api/schemas/__init__.py`
-- [ ] T029 Create `src/mcpworks_api/services/__init__.py`
+- [x] T025 Create `src/mcpworks_api/api/__init__.py`
+- [x] T026 Create `src/mcpworks_api/api/v1/__init__.py`
+- [x] T027 Create `src/mcpworks_api/api/v1/router.py` as main v1 router aggregating all endpoint routers
+- [x] T028 Create `src/mcpworks_api/schemas/__init__.py`
+- [x] T029 Create `src/mcpworks_api/services/__init__.py`
 
 ### Middleware Infrastructure
 
-- [ ] T030 Create `src/mcpworks_api/middleware/__init__.py`
-- [ ] T031 Create `src/mcpworks_api/middleware/correlation.py` with X-Request-ID handling per research.md decision 7
-- [ ] T032 [P] Create `src/mcpworks_api/middleware/metrics.py` with prometheus-fastapi-instrumentator setup per research.md decision 10
-- [ ] T033 Create `src/mcpworks_api/dependencies.py` with get_db, get_redis, get_current_user dependency providers
+- [x] T030 Create `src/mcpworks_api/middleware/__init__.py`
+- [x] T031 Create `src/mcpworks_api/middleware/correlation.py` with X-Request-ID handling per research.md decision 7
+- [x] T032 [P] Create `src/mcpworks_api/middleware/metrics.py` with prometheus-fastapi-instrumentator setup per research.md decision 10
+- [x] T033 Create `src/mcpworks_api/dependencies.py` with get_db, get_redis, get_current_user dependency providers
 
 ### Main Application
 
-- [ ] T034 Create `src/mcpworks_api/main.py` with FastAPI app, middleware registration, router inclusion, health endpoint stub
+- [x] T034 Create `src/mcpworks_api/main.py` with FastAPI app, middleware registration, router inclusion, health endpoint stub
 
 ### Test Infrastructure (TDD)
 
-- [ ] T035 [P] Create `tests/conftest.py` with pytest fixtures: async test client, test database, mock Redis, test user factory
-- [ ] T036 [P] Create `tests/factories/` directory with model factories using factory_boy for User, Credit, APIKey
-- [ ] T037 [P] Create `tests/fixtures/` directory with sample data (API keys, credit transactions, services)
-- [ ] T038 Add pytest-asyncio, pytest-cov, httpx, factory-boy to dev dependencies in pyproject.toml
-- [ ] T039 Create `tests/__init__.py` and `tests/unit/__init__.py` and `tests/integration/__init__.py`
+- [x] T035 [P] Create `tests/conftest.py` with pytest fixtures: async test client, test database, mock Redis, test user factory
+- [x] T036 [P] Create `tests/factories/` directory with model factories using factory_boy for User, Credit, APIKey
+- [x] T037 [P] Create `tests/fixtures/` directory with sample data (API keys, credit transactions, services)
+- [x] T038 Add pytest-asyncio, pytest-cov, httpx, factory-boy to dev dependencies in pyproject.toml
+- [x] T039 Create `tests/__init__.py` and `tests/unit/__init__.py` and `tests/integration/__init__.py`
 
 ### Seed Data
 
-- [ ] T040 Create `scripts/seed_services.py` to seed math and agent services into database
+- [x] T040 Create `scripts/seed_services.py` to seed math and agent services into database
 
 **Checkpoint**: Foundation ready - can run migrations, start server, hit /health endpoint, run test suite. User story implementation can now begin.
 
@@ -122,14 +122,14 @@ Based on plan.md project structure:
 
 ### Tests for US1 (TDD - write FIRST, must fail before implementation)
 
-- [ ] T041 [US1] Create `tests/unit/test_auth_service.py` with failing tests for:
+- [x] T041 [US1] Create `tests/unit/test_auth_service.py` with failing tests for:
   - `test_generate_api_key_format` - validates sk_{env}_k{n}_{random} format
   - `test_hash_api_key_argon2id` - verifies Argon2id hashing
   - `test_validate_api_key_success` - valid key returns user
   - `test_validate_api_key_revoked` - revoked key raises error
   - `test_create_access_token_es256` - ES256 JWT creation
   - `test_validate_access_token_expired` - expired token raises error
-- [ ] T042 [US1] Create `tests/integration/test_auth_endpoints.py` with failing tests for:
+- [x] T042 [US1] Create `tests/integration/test_auth_endpoints.py` with failing tests for:
   - `test_token_exchange_valid_key` - POST /auth/token → 200 with tokens
   - `test_token_exchange_invalid_key` - POST /auth/token → 401 INVALID_API_KEY
   - `test_refresh_token_valid` - POST /auth/refresh → 200 with new access_token
@@ -139,17 +139,17 @@ Based on plan.md project structure:
 
 ### Models for US1
 
-- [ ] T043 [P] [US1] Create APIKey model in `src/mcpworks_api/models/user.py` with fields from data-model.md (id, user_id, key_hash, key_prefix, name, scopes, last_used_at, timestamps, expires_at, revoked_at)
-- [ ] T044 [US1] Create Alembic migration for api_keys table in `alembic/versions/004_create_api_keys_table.py`
+- [x] T043 [P] [US1] Create APIKey model in `src/mcpworks_api/models/api_key.py` (created in Phase 2)
+- [x] T044 [US1] Create Alembic migration for api_keys table in `alembic/versions/20251217_000001_initial_schema.py` (included in initial migration)
 
 ### Schemas for US1
 
-- [ ] T045 [P] [US1] Create auth schemas in `src/mcpworks_api/schemas/auth.py`: TokenRequest, TokenResponse, RefreshRequest per openapi.yaml
-- [ ] T046 [P] [US1] Create user schemas in `src/mcpworks_api/schemas/user.py`: UserProfile, ApiKeySummary, ApiKeyList per openapi.yaml
+- [x] T045 [P] [US1] Create auth schemas in `src/mcpworks_api/schemas/auth.py`: TokenRequest, TokenResponse, RefreshRequest per openapi.yaml
+- [x] T046 [P] [US1] Create user schemas in `src/mcpworks_api/schemas/user.py`: UserProfile, ApiKeySummary, ApiKeyList per openapi.yaml
 
 ### Services for US1
 
-- [ ] T047 [US1] Create AuthService in `src/mcpworks_api/services/auth.py` with:
+- [x] T047 [US1] Create AuthService in `src/mcpworks_api/services/auth.py` with:
   - `generate_api_key()` - creates sk_{env}_{keyNum}_{random} format key per research.md decision 9
   - `hash_api_key()` - Argon2id hash
   - `validate_api_key()` - lookup by prefix, verify hash, check not revoked/expired
@@ -160,23 +160,23 @@ Based on plan.md project structure:
 
 ### Middleware for US1
 
-- [ ] T048 [US1] Create `src/mcpworks_api/middleware/auth.py` with JWT validation middleware extracting user from Bearer token
-- [ ] T049 [US1] Create `src/mcpworks_api/middleware/rate_limit.py` with Redis sliding window rate limiter per research.md decision 3 (5/min auth failures per IP)
+- [x] T048 [US1] Create `src/mcpworks_api/dependencies.py` with JWT validation (get_current_user_id dependency)
+- [x] T049 [US1] Create `src/mcpworks_api/middleware/rate_limit.py` with Redis sliding window rate limiter per research.md decision 3 (5/min auth failures per IP)
 
 ### Endpoints for US1
 
-- [ ] T050 [US1] Create `src/mcpworks_api/api/v1/auth.py` with:
+- [x] T050 [US1] Create `src/mcpworks_api/api/v1/auth.py` with:
   - POST /auth/token - exchange API key for JWT tokens (FR-AUTH-001, FR-AUTH-002, FR-AUTH-003)
   - POST /auth/refresh - refresh access token
   - POST /auth/logout-all - revoke all refresh tokens
-- [ ] T051 [US1] Create `src/mcpworks_api/api/v1/users.py` with:
+- [x] T051 [US1] Create `src/mcpworks_api/api/v1/users.py` with:
   - GET /users/me - return authenticated user profile with credits
 
 ### Integration for US1
 
-- [ ] T052 [US1] Wire auth router and users router into `src/mcpworks_api/api/v1/router.py`
-- [ ] T053 [US1] Add rate limiting middleware to auth endpoints in `src/mcpworks_api/main.py`
-- [ ] T054 [US1] Add audit logging for login events in AuthService
+- [x] T052 [US1] Wire auth router and users router into `src/mcpworks_api/api/v1/__init__.py`
+- [x] T053 [US1] Add rate limiting middleware to auth endpoints in `src/mcpworks_api/main.py`
+- [x] T054 [US1] Add audit logging for login events in AuthService
 
 ### Verification for US1
 
