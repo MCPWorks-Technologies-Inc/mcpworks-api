@@ -3,9 +3,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
+from mcpworks_api.core.redis import get_redis
 from mcpworks_api.dependencies import CurrentUserId
 from mcpworks_api.schemas.subscription import (
     CancelSubscriptionResponse,
@@ -196,6 +198,7 @@ async def stripe_webhook(
     request: Request,
     stripe_signature: str = Header(..., alias="Stripe-Signature"),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> WebhookResponse:
     """Handle Stripe webhook events.
 
@@ -204,9 +207,11 @@ async def stripe_webhook(
 
     Note: This endpoint uses Stripe signature verification for authentication
     instead of JWT, as it's called by Stripe servers.
+
+    Implements idempotency via Redis to prevent duplicate processing.
     """
     payload = await request.body()
-    stripe_service = StripeService(db)
+    stripe_service = StripeService(db, redis=redis)
 
     try:
         result = await stripe_service.handle_webhook_event(payload, stripe_signature)

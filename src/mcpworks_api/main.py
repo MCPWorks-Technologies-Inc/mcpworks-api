@@ -11,6 +11,7 @@ from mcpworks_api.config import get_settings
 from mcpworks_api.core.database import close_db, init_db
 from mcpworks_api.core.redis import close_redis, init_redis
 from mcpworks_api.middleware import CorrelationIdMiddleware, register_exception_handlers
+from mcpworks_api.middleware.metrics import setup_metrics
 from mcpworks_api.middleware.rate_limit import RateLimitMiddleware
 
 
@@ -71,6 +72,10 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(v1_router)
+
+    # Setup Prometheus metrics (after routers so routes are available)
+    if settings.prometheus_enabled:
+        setup_metrics(app)
 
     # Root endpoint
     @app.get("/")

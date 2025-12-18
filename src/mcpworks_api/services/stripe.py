@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 import stripe
+from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,10 @@ from mcpworks_api.models import (
     User,
 )
 from mcpworks_api.services.credit import CreditService
+
+# Webhook idempotency settings
+WEBHOOK_IDEMPOTENCY_PREFIX = "stripe:webhook:processed:"
+WEBHOOK_IDEMPOTENCY_TTL = 86400  # 24 hours - Stripe retries for up to 3 days
 
 # Tier to Stripe price ID mapping
 TIER_PRICE_MAP: dict[str, str] = {}
@@ -44,11 +49,44 @@ TIER_CREDITS = {
 class StripeService:
     """Handles Stripe subscription and payment operations."""
 
-    def __init__(self, db: AsyncSession) -> None:
-        """Initialize Stripe service."""
+    def __init__(self, db: AsyncSession, redis: Redis | None = None) -> None:
+        """Initialize Stripe service.
+
+        Args:
+            db: Database session for persistence
+            redis: Redis client for webhook idempotency (optional for backwards compat)
+        """
         self.db = db
+        self.redis = redis
         self.settings = get_settings()
         stripe.api_key = self.settings.stripe_secret_key
+
+    async def _is_event_processed(self, event_id: str) -> bool:
+        """Check if a webhook event has already been processed.
+
+        Args:
+            event_id: Stripe event ID (e.g., evt_1234...)
+
+        Returns:
+            True if event was already processed, False otherwise
+        """
+        if self.redis is None:
+            return False  # Skip idempotency check if Redis not available
+
+        key = f"{WEBHOOK_IDEMPOTENCY_PREFIX}{event_id}"
+        return await self.redis.exists(key) > 0
+
+    async def _mark_event_processed(self, event_id: str) -> None:
+        """Mark a webhook event as processed.
+
+        Args:
+            event_id: Stripe event ID to mark as processed
+        """
+        if self.redis is None:
+            return  # Skip if Redis not available
+
+        key = f"{WEBHOOK_IDEMPOTENCY_PREFIX}{event_id}"
+        await self.redis.set(key, "1", ex=WEBHOOK_IDEMPOTENCY_TTL)
 
     async def create_checkout_session(
         self,
@@ -135,6 +173,9 @@ class StripeService:
     async def handle_webhook_event(self, payload: bytes, signature: str) -> dict[str, Any]:
         """Handle incoming Stripe webhook event.
 
+        Implements idempotency by storing processed event IDs in Redis.
+        Duplicate events are detected and skipped to prevent double-processing.
+
         Args:
             payload: Raw request body
             signature: Stripe signature header
@@ -154,8 +195,18 @@ class StripeService:
         except stripe.error.SignatureVerificationError:
             raise ValueError("Invalid webhook signature")
 
+        event_id = event["id"]
         event_type = event["type"]
         event_data = event["data"]["object"]
+
+        # Idempotency check - skip if already processed
+        if await self._is_event_processed(event_id):
+            return {
+                "processed": False,
+                "event_type": event_type,
+                "event_id": event_id,
+                "message": "Event already processed (duplicate)",
+            }
 
         # Route to appropriate handler
         handlers = {
@@ -170,7 +221,9 @@ class StripeService:
         handler = handlers.get(event_type)
         if handler:
             await handler(event_data)
-            return {"processed": True, "event_type": event_type}
+            # Mark as processed AFTER successful handling
+            await self._mark_event_processed(event_id)
+            return {"processed": True, "event_type": event_type, "event_id": event_id}
 
         return {"processed": False, "event_type": event_type, "message": "Unhandled event type"}
 

@@ -343,6 +343,7 @@ class TestStripeWebhook:
         """Test that unhandled event types are acknowledged."""
         with patch("stripe.Webhook.construct_event") as mock_construct:
             mock_construct.return_value = {
+                "id": "evt_test_unknown_123",
                 "type": "unknown.event",
                 "data": {"object": {}},
             }
@@ -383,6 +384,7 @@ class TestStripeWebhook:
 
             now = datetime.now(UTC)
             mock_construct.return_value = {
+                "id": "evt_test_checkout_sub_123",
                 "type": "checkout.session.completed",
                 "data": {
                     "object": {
@@ -434,6 +436,7 @@ class TestStripeWebhook:
         # Mock Stripe response for credit purchase
         with patch("stripe.Webhook.construct_event") as mock_construct:
             mock_construct.return_value = {
+                "id": "evt_test_credit_purchase_123",
                 "type": "checkout.session.completed",
                 "data": {
                     "object": {
