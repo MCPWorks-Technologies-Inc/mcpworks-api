@@ -171,13 +171,26 @@ class ServiceRouter:
                 headers=headers,
             )
 
-            # Commit credits on success (if we held any)
+            status_code = response[0]
+
+            # Only commit credits on successful responses (2xx)
+            # Release credits on client errors (4xx) or server errors (5xx)
             if hold_txn is not None:
                 credit_service = CreditService(self.db)
-                await credit_service.commit(
-                    hold_id=hold_txn.id,
-                    metadata={"response_status": response[0]},
-                )
+                if 200 <= status_code < 300:
+                    await credit_service.commit(
+                        hold_id=hold_txn.id,
+                        metadata={"response_status": status_code},
+                    )
+                else:
+                    # Don't charge users for failed requests
+                    await credit_service.release(
+                        hold_id=hold_txn.id,
+                        metadata={
+                            "reason": "backend_error",
+                            "response_status": status_code,
+                        },
+                    )
 
             return response
 
