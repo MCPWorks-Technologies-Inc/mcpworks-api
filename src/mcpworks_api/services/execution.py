@@ -112,31 +112,64 @@ class ExecutionService:
 
         # Route to agent service (fire and forget - agent will callback)
         try:
-            await self._send_to_agent(
+            status_code, _, response_body = await self._send_to_agent(
                 execution_id=str(execution.id),
                 workflow_id=workflow_id,
                 input_data=input_data,
                 service=service,
             )
 
-            # Mark as running
-            execution.mark_running()
-            await self.db.commit()
+            # Check if agent accepted the request (2xx response)
+            if 200 <= status_code < 300:
+                # Mark as running
+                execution.mark_running()
+                await self.db.commit()
+            else:
+                # Agent rejected the request (4xx/5xx)
+                # Release credits and mark as failed
+                if hold_txn is not None:
+                    await self.credit_service.release(
+                        hold_id=hold_txn.id,
+                        metadata={
+                            "reason": "agent_rejected",
+                            "response_status": status_code,
+                        },
+                    )
+
+                # Extract error message from response
+                error_msg = "Agent rejected request"
+                if isinstance(response_body, dict):
+                    error_msg = str(
+                        response_body.get("error")
+                        or response_body.get("message")
+                        or error_msg
+                    )
+
+                execution.mark_failed(
+                    error_message=f"Agent returned {status_code}: {error_msg}",
+                    error_code="AGENT_REJECTED",
+                )
+                await self.db.commit()
+
+                raise ServiceUnavailableError(
+                    service_name="agent",
+                    message=f"Agent rejected execution: {error_msg}",
+                )
 
         except (ServiceTimeoutError, ServiceUnavailableError) as e:
-            # Release credits on service failure
-            if hold_txn is not None:
+            # Release credits on service failure (if not already released above)
+            if hold_txn is not None and execution.status == ExecutionStatus.PENDING.value:
                 await self.credit_service.release(
                     hold_id=hold_txn.id,
                     metadata={"reason": "agent_service_error"},
                 )
 
-            # Mark execution as failed
-            execution.mark_failed(
-                error_message=str(e),
-                error_code="AGENT_SERVICE_ERROR",
-            )
-            await self.db.commit()
+                # Mark execution as failed
+                execution.mark_failed(
+                    error_message=str(e),
+                    error_code="AGENT_SERVICE_ERROR",
+                )
+                await self.db.commit()
             raise
 
         return execution, hold_txn
@@ -147,7 +180,7 @@ class ExecutionService:
         workflow_id: str,
         input_data: dict[str, Any] | None,
         service: Service,
-    ) -> None:
+    ) -> tuple[int, dict[str, Any], Any]:
         """Send execution request to mcpworks-agent.
 
         Args:
@@ -155,8 +188,11 @@ class ExecutionService:
             workflow_id: Workflow to execute
             input_data: Workflow input
             service: Agent service record
+
+        Returns:
+            Tuple of (status_code, headers, body) from agent response
         """
-        await self.router._make_request(
+        return await self.router._make_request(
             method="POST",
             url=f"{service.url.rstrip('/')}/execute/{workflow_id}",
             body={
