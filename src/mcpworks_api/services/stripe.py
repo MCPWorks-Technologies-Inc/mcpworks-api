@@ -108,6 +108,23 @@ class StripeService:
         with contextlib.suppress(Exception):
             await self.redis.set(key, "completed", ex=WEBHOOK_IDEMPOTENCY_TTL)
 
+    async def _release_event_claim(self, event_id: str) -> None:
+        """Release the claim on an event to allow Stripe retries.
+
+        Called when a handler fails so that Stripe can retry the webhook.
+        Deletes the Redis key to remove the "processing" claim.
+
+        Args:
+            event_id: Stripe event ID to release
+        """
+        if self.redis is None:
+            return
+
+        key = f"{WEBHOOK_IDEMPOTENCY_PREFIX}{event_id}"
+        # Best-effort delete - don't block on Redis issues
+        with contextlib.suppress(Exception):
+            await self.redis.delete(key)
+
     async def create_checkout_session(
         self,
         user_id: uuid.UUID,
@@ -241,10 +258,16 @@ class StripeService:
 
         handler = handlers.get(event_type)
         if handler:
-            await handler(event_data)
-            # Mark as completed (best-effort, won't fail the response)
-            await self._mark_event_completed(event_id)
-            return {"processed": True, "event_type": event_type, "event_id": event_id}
+            try:
+                await handler(event_data)
+                # Mark as completed (best-effort, won't fail the response)
+                await self._mark_event_completed(event_id)
+                return {"processed": True, "event_type": event_type, "event_id": event_id}
+            except Exception:
+                # Handler failed - release the claim so Stripe can retry
+                # This prevents the event from being blocked for 24h
+                await self._release_event_claim(event_id)
+                raise
 
         return {"processed": False, "event_type": event_type, "message": "Unhandled event type"}
 
