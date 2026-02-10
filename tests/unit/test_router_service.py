@@ -2,14 +2,13 @@
 
 import uuid
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.exceptions import (
-    InsufficientCreditsError,
     InsufficientTierError,
     ServiceTimeoutError,
     ServiceUnavailableError,

@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from mcpworks_api.models import Account, Namespace, NamespaceService, User
+from mcpworks_api.models import Account, User
 from mcpworks_api.services.namespace import NamespaceServiceManager, NamespaceServiceService
 
 

@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestSetupMetrics:
     """Tests for setup_metrics function."""

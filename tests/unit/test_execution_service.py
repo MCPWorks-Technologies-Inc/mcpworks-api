@@ -2,17 +2,13 @@
 
 import uuid
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from mcpworks_api.models import (
-    Account,
     Credit,
-    CreditTransaction,
     Execution,
     ExecutionStatus,
-    Service,
     User,
 )
 from mcpworks_api.services.execution import ExecutionService
