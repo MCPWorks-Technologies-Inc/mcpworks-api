@@ -9,9 +9,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.models import Account, APIKey, Namespace, User
-from mcpworks_api.models.namespace_service import NamespaceService
 from mcpworks_api.models.function import Function
 from mcpworks_api.models.function_version import FunctionVersion
+from mcpworks_api.models.namespace_service import NamespaceService
 
 
 @pytest_asyncio.fixture
@@ -377,8 +377,8 @@ class TestRunMCPHandler:
         test_namespace: Namespace,
     ):
         """Test initialize method."""
-        from mcpworks_api.mcp.run_handler import RunMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
+        from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         handler = RunMCPHandler(
             namespace=test_namespace.name,
@@ -400,8 +400,8 @@ class TestRunMCPHandler:
         test_namespace: Namespace,
     ):
         """Test tools/list with no functions."""
-        from mcpworks_api.mcp.run_handler import RunMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
+        from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         handler = RunMCPHandler(
             namespace=test_namespace.name,
@@ -424,8 +424,8 @@ class TestRunMCPHandler:
         test_function: tuple[Function, FunctionVersion],
     ):
         """Test tools/list returns functions as tools."""
-        from mcpworks_api.mcp.run_handler import RunMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
+        from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         function, version = test_function
 
@@ -459,8 +459,8 @@ class TestRunMCPHandler:
         test_namespace: Namespace,
     ):
         """Test tools/call with invalid tool name format."""
-        from mcpworks_api.mcp.run_handler import RunMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
+        from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         handler = RunMCPHandler(
             namespace=test_namespace.name,
@@ -489,8 +489,8 @@ class TestRunMCPHandler:
         test_namespace: Namespace,
     ):
         """Test tools/call with invalid params structure."""
-        from mcpworks_api.mcp.run_handler import RunMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
+        from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         handler = RunMCPHandler(
             namespace=test_namespace.name,
@@ -515,8 +515,8 @@ class TestRunMCPHandler:
         test_namespace: Namespace,
     ):
         """Test unknown method returns error."""
-        from mcpworks_api.mcp.run_handler import RunMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
+        from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         handler = RunMCPHandler(
             namespace=test_namespace.name,

@@ -1,7 +1,7 @@
 """Unit tests for CorrelationIdMiddleware."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from starlette.datastructures import Headers

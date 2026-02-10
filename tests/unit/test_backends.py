@@ -1,6 +1,5 @@
 """Unit tests for backend base classes and utilities."""
 
-from datetime import datetime
 
 import pytest
 

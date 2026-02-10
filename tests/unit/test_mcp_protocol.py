@@ -1,6 +1,5 @@
 """Tests for MCP protocol helpers."""
 
-import pytest
 
 from mcpworks_api.mcp.protocol import (
     JSONRPCError,

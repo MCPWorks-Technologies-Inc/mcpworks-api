@@ -347,7 +347,6 @@ class TestSandboxCleanup:
     @pytest.mark.asyncio
     async def test_execution_cleanup(self, sandbox, mock_account):
         """Test execution directory is cleaned up."""
-        import os
 
         exec_id = str(uuid.uuid4())
         exec_dir = sandbox.exec_dir / f"exec-{exec_id}"

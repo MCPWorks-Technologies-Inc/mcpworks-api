@@ -6,9 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from pydantic import ValidationError
 
-from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
+from mcpworks_api.mcp.protocol import JSONRPCRequest
 from mcpworks_api.mcp.router import (
     get_account_from_api_key,
     parse_json_rpc_request,
