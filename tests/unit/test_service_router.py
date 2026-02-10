@@ -274,9 +274,10 @@ class TestRouteRequest:
         router = ServiceRouter(mock_db)
         user_id = uuid.uuid4()
 
-        with patch.object(router, "_make_request") as mock_request, \
-             patch("mcpworks_api.services.router.CreditService") as mock_credit_class:
-
+        with (
+            patch.object(router, "_make_request") as mock_request,
+            patch("mcpworks_api.services.router.CreditService") as mock_credit_class,
+        ):
             mock_request.return_value = (200, {}, {"result": "success"})
 
             mock_credit_service = MagicMock()
@@ -319,9 +320,10 @@ class TestRouteRequest:
         router = ServiceRouter(mock_db)
         user_id = uuid.uuid4()
 
-        with patch.object(router, "_make_request") as mock_request, \
-             patch("mcpworks_api.services.router.CreditService") as mock_credit_class:
-
+        with (
+            patch.object(router, "_make_request") as mock_request,
+            patch("mcpworks_api.services.router.CreditService") as mock_credit_class,
+        ):
             # Backend returns 400 Bad Request
             mock_request.return_value = (400, {}, {"error": "Invalid input"})
 
@@ -365,9 +367,10 @@ class TestRouteRequest:
         router = ServiceRouter(mock_db)
         user_id = uuid.uuid4()
 
-        with patch.object(router, "_make_request") as mock_request, \
-             patch("mcpworks_api.services.router.CreditService") as mock_credit_class:
-
+        with (
+            patch.object(router, "_make_request") as mock_request,
+            patch("mcpworks_api.services.router.CreditService") as mock_credit_class,
+        ):
             # Backend returns 500 Internal Server Error
             mock_request.return_value = (500, {}, {"error": "Internal error"})
 

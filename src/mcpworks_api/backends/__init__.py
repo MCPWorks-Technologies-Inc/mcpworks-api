@@ -10,8 +10,6 @@ Available Backends:
 - github_repo: GitHub repository-based functions (A3 milestone)
 """
 
-from typing import Dict, List, Optional
-
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
 
 # Registry of available backends

@@ -77,9 +77,7 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
         }
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Process request and extract subdomain information."""
         # Skip exempt paths
         if request.url.path in self.exempt_paths:

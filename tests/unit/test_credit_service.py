@@ -434,9 +434,7 @@ class TestAddCredits:
         mock_db.execute.return_value = mock_result
 
         service = CreditService(mock_db)
-        txn = await service.add_credits(
-            user_id, Decimal("100.00"), TransactionType.GRANT
-        )
+        txn = await service.add_credits(user_id, Decimal("100.00"), TransactionType.GRANT)
 
         assert mock_credit.available_balance == Decimal("150.00")
         assert mock_credit.lifetime_earned == Decimal("150.00")
@@ -461,9 +459,7 @@ class TestAddCredits:
         mock_db.execute.return_value = mock_result
 
         service = CreditService(mock_db)
-        txn = await service.add_credits(
-            user_id, Decimal("500.00"), TransactionType.PURCHASE
-        )
+        txn = await service.add_credits(user_id, Decimal("500.00"), TransactionType.PURCHASE)
 
         assert mock_credit.available_balance == Decimal("500.00")
         assert txn.type == TransactionType.PURCHASE.value
@@ -486,9 +482,7 @@ class TestAddCredits:
         mock_db.execute.return_value = mock_result
 
         service = CreditService(mock_db)
-        txn = await service.add_credits(
-            user_id, Decimal("25.00"), TransactionType.REFUND
-        )
+        txn = await service.add_credits(user_id, Decimal("25.00"), TransactionType.REFUND)
 
         assert mock_credit.available_balance == Decimal("35.00")
         assert txn.type == TransactionType.REFUND.value

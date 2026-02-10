@@ -153,6 +153,7 @@ class TestHandleCallback:
 
         # Setup execute to return different results for each call
         call_count = 0
+
         def execute_side_effect(query):
             nonlocal call_count
             call_count += 1
@@ -200,6 +201,7 @@ class TestHandleCallback:
         mock_hold_txn.amount = Decimal("1.00")
 
         call_count = 0
+
         def execute_side_effect(query):
             nonlocal call_count
             call_count += 1

@@ -113,4 +113,6 @@ class NamespaceService(Base, UUIDMixin, TimestampMixin):
         return len(self.functions) if self.functions else 0
 
     def __repr__(self) -> str:
-        return f"<NamespaceService(id={self.id}, name={self.name}, namespace_id={self.namespace_id})>"
+        return (
+            f"<NamespaceService(id={self.id}, name={self.name}, namespace_id={self.namespace_id})>"
+        )

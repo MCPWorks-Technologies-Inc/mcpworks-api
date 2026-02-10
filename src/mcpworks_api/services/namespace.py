@@ -51,9 +51,7 @@ class NamespaceServiceManager:
             ValidationError: If name format is invalid.
         """
         # Check if namespace already exists
-        existing = await self.db.execute(
-            select(Namespace).where(Namespace.name == name.lower())
-        )
+        existing = await self.db.execute(select(Namespace).where(Namespace.name == name.lower()))
         if existing.scalar_one_or_none():
             raise ConflictError(f"Namespace '{name}' already exists")
 
@@ -154,9 +152,7 @@ class NamespaceServiceManager:
         """
         # Get total count
         count_result = await self.db.execute(
-            select(func.count())
-            .select_from(Namespace)
-            .where(Namespace.account_id == account_id)
+            select(func.count()).select_from(Namespace).where(Namespace.account_id == account_id)
         )
         total = count_result.scalar() or 0
 
@@ -204,9 +200,7 @@ class NamespaceServiceManager:
         if network_whitelist is not None:
             # Check rate limit
             if not namespace.can_update_whitelist():
-                raise ValidationError(
-                    "Whitelist update rate limit exceeded (max 5 per 24 hours)"
-                )
+                raise ValidationError("Whitelist update rate limit exceeded (max 5 per 24 hours)")
             namespace.network_whitelist = network_whitelist
             namespace.whitelist_updated_at = datetime.now(UTC)
             namespace.whitelist_changes_today += 1
@@ -275,9 +269,7 @@ class NamespaceServiceService:
             )
         )
         if existing.scalar_one_or_none():
-            raise ConflictError(
-                f"Service '{name}' already exists in this namespace"
-            )
+            raise ConflictError(f"Service '{name}' already exists in this namespace")
 
         service = NamespaceService(
             namespace_id=namespace_id,

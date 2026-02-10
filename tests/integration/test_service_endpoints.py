@@ -28,9 +28,7 @@ class TestListServices:
     """Tests for GET /v1/services endpoint."""
 
     @pytest.mark.asyncio
-    async def test_list_services_empty(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_list_services_empty(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test listing services when none exist."""
         headers, user_id = auth_headers
 
@@ -127,9 +125,7 @@ class TestMathVerify:
     """Tests for POST /v1/services/math/verify endpoint."""
 
     @pytest.mark.asyncio
-    async def test_math_verify_success(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_math_verify_success(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test successful math verification."""
         headers, user_id = auth_headers
 
@@ -271,9 +267,7 @@ class TestMathHelp:
     """Tests for POST /v1/services/math/help endpoint."""
 
     @pytest.mark.asyncio
-    async def test_math_help_success(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_math_help_success(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test successful math help request."""
         headers, user_id = auth_headers
 
@@ -343,9 +337,7 @@ class TestServiceHealth:
     """Tests for GET /v1/services/{service_name}/health endpoint."""
 
     @pytest.mark.asyncio
-    async def test_service_health_check_healthy(
-        self, client: AsyncClient, db: AsyncSession
-    ):
+    async def test_service_health_check_healthy(self, client: AsyncClient, db: AsyncSession):
         """Test health check for healthy service."""
         # Create service
         math_service = Service(
@@ -379,9 +371,7 @@ class TestServiceHealth:
             assert data["status"] == "healthy"
 
     @pytest.mark.asyncio
-    async def test_service_health_check_unhealthy(
-        self, client: AsyncClient, db: AsyncSession
-    ):
+    async def test_service_health_check_unhealthy(self, client: AsyncClient, db: AsyncSession):
         """Test health check for unhealthy service."""
         # Create service
         unhealthy_service = Service(

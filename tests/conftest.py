@@ -25,10 +25,14 @@ _test_private_key_pem = _test_private_key.private_bytes(
     format=serialization.PrivateFormat.PKCS8,
     encryption_algorithm=serialization.NoEncryption(),
 ).decode("utf-8")
-_test_public_key_pem = _test_private_key.public_key().public_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-).decode("utf-8")
+_test_public_key_pem = (
+    _test_private_key.public_key()
+    .public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    .decode("utf-8")
+)
 
 
 # Test database URL (uses test database)
@@ -41,6 +45,7 @@ def get_test_settings() -> Settings:
     Uses localhost when running locally, or Docker hostnames inside containers.
     """
     import os
+
     # Use localhost for local testing, Docker hostnames inside containers
     db_host = os.getenv("POSTGRES_HOST", "localhost")
     redis_host = os.getenv("REDIS_HOST", "localhost")
