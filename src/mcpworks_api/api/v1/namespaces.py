@@ -4,8 +4,7 @@ Provides REST endpoints for managing namespaces, services, and functions.
 Complements the MCP interface for use by the web dashboard and CLI.
 """
 
-import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -34,8 +33,8 @@ class CreateNamespaceRequest(BaseModel):
         pattern=r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
         description="DNS-compliant namespace name",
     )
-    description: Optional[str] = Field(None, max_length=500)
-    network_whitelist: Optional[List[str]] = Field(
+    description: str | None = Field(None, max_length=500)
+    network_whitelist: list[str] | None = Field(
         None, description="List of allowed IPs/CIDRs"
     )
 
@@ -43,8 +42,8 @@ class CreateNamespaceRequest(BaseModel):
 class UpdateNamespaceRequest(BaseModel):
     """Request to update a namespace."""
 
-    description: Optional[str] = Field(None, max_length=500)
-    network_whitelist: Optional[List[str]] = Field(
+    description: str | None = Field(None, max_length=500)
+    network_whitelist: list[str] | None = Field(
         None, description="List of allowed IPs/CIDRs"
     )
 
@@ -54,18 +53,18 @@ class NamespaceResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     create_endpoint: str
     run_endpoint: str
-    network_whitelist: Optional[List[str]]
+    network_whitelist: list[str] | None
     created_at: str
-    updated_at: Optional[str]
+    updated_at: str | None
 
 
 class NamespaceListResponse(BaseModel):
     """List of namespaces."""
 
-    namespaces: List[NamespaceResponse]
+    namespaces: list[NamespaceResponse]
     total: int
     page: int
     page_size: int
@@ -75,7 +74,7 @@ class CreateServiceRequest(BaseModel):
     """Request to create a service."""
 
     name: str = Field(..., min_length=1, max_length=63)
-    description: Optional[str] = Field(None, max_length=500)
+    description: str | None = Field(None, max_length=500)
 
 
 class ServiceResponse(BaseModel):
@@ -83,7 +82,7 @@ class ServiceResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     namespace_id: str
     function_count: int
     created_at: str
@@ -92,7 +91,7 @@ class ServiceResponse(BaseModel):
 class ServiceListResponse(BaseModel):
     """List of services."""
 
-    services: List[ServiceResponse]
+    services: list[ServiceResponse]
     namespace: str
 
 
@@ -103,16 +102,16 @@ class CreateFunctionRequest(BaseModel):
     backend: str = Field(
         ..., description="Execution backend (code_sandbox, activepieces, nanobot, github_repo)"
     )
-    description: Optional[str] = Field(None, max_length=500)
-    tags: Optional[List[str]] = None
-    code: Optional[str] = Field(None, description="Function code (for code_sandbox)")
-    config: Optional[Dict[str, Any]] = Field(
+    description: str | None = Field(None, max_length=500)
+    tags: list[str] | None = None
+    code: str | None = Field(None, description="Function code (for code_sandbox)")
+    config: dict[str, Any] | None = Field(
         None, description="Backend-specific configuration"
     )
-    input_schema: Optional[Dict[str, Any]] = Field(
+    input_schema: dict[str, Any] | None = Field(
         None, description="JSON Schema for input"
     )
-    output_schema: Optional[Dict[str, Any]] = Field(
+    output_schema: dict[str, Any] | None = Field(
         None, description="JSON Schema for output"
     )
 
@@ -122,8 +121,8 @@ class FunctionResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
-    tags: Optional[List[str]]
+    description: str | None
+    tags: list[str] | None
     active_version: int
     service_id: str
     created_at: str
@@ -134,19 +133,19 @@ class FunctionDetailResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
-    tags: Optional[List[str]]
+    description: str | None
+    tags: list[str] | None
     active_version: int
-    active_version_details: Optional[Dict[str, Any]]
-    versions: List[Dict[str, Any]]
+    active_version_details: dict[str, Any] | None
+    versions: list[dict[str, Any]]
     created_at: str
-    updated_at: Optional[str]
+    updated_at: str | None
 
 
 class FunctionListResponse(BaseModel):
     """List of functions."""
 
-    functions: List[FunctionResponse]
+    functions: list[FunctionResponse]
     total: int
     service: str
 
@@ -461,7 +460,7 @@ async def create_function(
 async def list_functions(
     namespace_name: str,
     service_name: str,
-    tag: Optional[str] = None,
+    tag: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),

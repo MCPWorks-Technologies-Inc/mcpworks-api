@@ -5,9 +5,8 @@ without actually executing code. Used until Phase 6 implements
 the real code_sandbox backend.
 """
 
-import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
 from mcpworks_api.models import Account
@@ -34,15 +33,15 @@ class StubBackend(Backend):
         return "Stub code sandbox (development mode)"
 
     @property
-    def supported_languages(self) -> List[str]:
+    def supported_languages(self) -> list[str]:
         """Supported programming languages."""
         return ["python", "typescript", "javascript"]
 
     async def execute(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
-        input_data: Dict[str, Any],
+        code: str | None,
+        config: dict[str, Any] | None,
+        input_data: dict[str, Any],
         account: Account,
         execution_id: str,
         timeout_ms: int = 30000,
@@ -82,8 +81,8 @@ class StubBackend(Backend):
 
     async def validate(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
+        code: str | None,
+        config: dict[str, Any] | None,
     ) -> ValidationResult:
         """Basic validation of code/config.
 
@@ -114,8 +113,8 @@ class StubBackend(Backend):
 
     async def estimate_cost(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
+        code: str | None,
+        config: dict[str, Any] | None,
     ) -> float:
         """Estimate execution cost.
 
@@ -123,7 +122,7 @@ class StubBackend(Backend):
         """
         return 1.0
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check backend health."""
         return {
             "backend": self.name,

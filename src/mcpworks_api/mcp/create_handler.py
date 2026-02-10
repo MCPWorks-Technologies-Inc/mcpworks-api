@@ -7,8 +7,7 @@ Exposes 10 tools:
 """
 
 import json
-import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -253,7 +252,7 @@ class CreateMCPHandler:
 
     async def _handle_tools_call(
         self,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         request_id,
     ) -> JSONRPCResponse:
         """Dispatch tool call to appropriate method."""
@@ -329,7 +328,7 @@ class CreateMCPHandler:
     async def _make_namespace(
         self,
         name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> MCPToolResult:
         """Create a new namespace."""
         namespace = await self.namespace_service.create(
@@ -376,7 +375,7 @@ class CreateMCPHandler:
     async def _make_service(
         self,
         name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> MCPToolResult:
         """Create a new service in current namespace."""
         namespace = await self._get_current_namespace()
@@ -433,12 +432,12 @@ class CreateMCPHandler:
         service: str,
         name: str,
         backend: str,
-        code: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        input_schema: Optional[Dict[str, Any]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        code: str | None = None,
+        config: dict[str, Any] | None = None,
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
         namespace = await self._get_current_namespace()
@@ -472,14 +471,14 @@ class CreateMCPHandler:
         self,
         service: str,
         name: str,
-        backend: Optional[str] = None,
-        code: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        input_schema: Optional[Dict[str, Any]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        restore_version: Optional[int] = None,
+        backend: str | None = None,
+        code: str | None = None,
+        config: dict[str, Any] | None = None,
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        restore_version: int | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
         namespace = await self._get_current_namespace()
@@ -521,7 +520,6 @@ class CreateMCPHandler:
             message = "Created new version"
         else:
             message = "Updated metadata only"
-            version = await self.function_service.get_active_version(function.id)
 
         # Refresh function to get updated active_version
         function = await self.function_service.get_by_id(function.id)
@@ -551,7 +549,7 @@ class CreateMCPHandler:
     async def _list_functions(
         self,
         service: str,
-        tag: Optional[str] = None,
+        tag: str | None = None,
     ) -> MCPToolResult:
         """List functions in a service."""
         namespace = await self._get_current_namespace()

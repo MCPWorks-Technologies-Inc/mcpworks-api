@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
 
 # Registry of available backends
-_backends: Dict[str, Backend] = {}
+_backends: dict[str, Backend] = {}
 
 
 def register_backend(backend: Backend) -> None:
@@ -41,7 +41,7 @@ def unregister_backend(name: str) -> None:
     _backends.pop(name, None)
 
 
-def get_backend(name: str) -> Optional[Backend]:
+def get_backend(name: str) -> Backend | None:
     """Get a backend by name.
 
     Args:
@@ -53,7 +53,7 @@ def get_backend(name: str) -> Optional[Backend]:
     return _backends.get(name)
 
 
-def list_backends() -> List[str]:
+def list_backends() -> list[str]:
     """List available backend names.
 
     Returns:
@@ -62,7 +62,7 @@ def list_backends() -> List[str]:
     return list(_backends.keys())
 
 
-def get_all_backends() -> Dict[str, Backend]:
+def get_all_backends() -> dict[str, Backend]:
     """Get all registered backends.
 
     Returns:

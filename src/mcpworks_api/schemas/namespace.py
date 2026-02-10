@@ -2,7 +2,6 @@
 
 import re
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -19,7 +18,7 @@ class NamespaceBase(BaseModel):
         examples=["acme", "my-company", "prod-env"],
     )
 
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None,
         max_length=1000,
         description="Human-readable description",
@@ -40,7 +39,7 @@ class NamespaceBase(BaseModel):
 class NamespaceCreate(NamespaceBase):
     """Schema for creating a namespace."""
 
-    network_whitelist: Optional[List[str]] = Field(
+    network_whitelist: list[str] | None = Field(
         None,
         description="Optional IP whitelist (CIDR format)",
         examples=[["192.168.1.0/24", "10.0.0.1"]],
@@ -50,8 +49,8 @@ class NamespaceCreate(NamespaceBase):
 class NamespaceUpdate(BaseModel):
     """Schema for updating a namespace."""
 
-    description: Optional[str] = Field(None, max_length=1000)
-    network_whitelist: Optional[List[str]] = None
+    description: str | None = Field(None, max_length=1000)
+    network_whitelist: list[str] | None = None
 
 
 class NamespaceResponse(NamespaceBase):
@@ -61,11 +60,11 @@ class NamespaceResponse(NamespaceBase):
 
     id: UUID
     account_id: UUID
-    network_whitelist: Optional[List[str]] = None
-    whitelist_updated_at: Optional[datetime] = None
+    network_whitelist: list[str] | None = None
+    whitelist_updated_at: datetime | None = None
     whitelist_changes_today: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     create_endpoint: str = Field(
         ...,
         description="Management endpoint URL",
@@ -79,7 +78,7 @@ class NamespaceResponse(NamespaceBase):
 class NamespaceList(BaseModel):
     """Schema for paginated namespace list."""
 
-    namespaces: List[NamespaceResponse]
+    namespaces: list[NamespaceResponse]
     total: int
     page: int = 1
     page_size: int = 50

@@ -2,7 +2,6 @@
 
 import re
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -19,7 +18,7 @@ class NamespaceServiceBase(BaseModel):
         examples=["auth", "payment-processing", "data_sync"],
     )
 
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None,
         max_length=1000,
         description="Human-readable description",
@@ -45,7 +44,7 @@ class NamespaceServiceCreate(NamespaceServiceBase):
 class NamespaceServiceUpdate(BaseModel):
     """Schema for updating a service."""
 
-    description: Optional[str] = Field(None, max_length=1000)
+    description: str | None = Field(None, max_length=1000)
 
 
 class NamespaceServiceResponse(NamespaceServiceBase):
@@ -56,7 +55,7 @@ class NamespaceServiceResponse(NamespaceServiceBase):
     id: UUID
     namespace_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     function_count: int = Field(
         default=0,
         description="Number of functions in this service",
@@ -66,5 +65,5 @@ class NamespaceServiceResponse(NamespaceServiceBase):
 class NamespaceServiceList(BaseModel):
     """Schema for service list."""
 
-    services: List[NamespaceServiceResponse]
+    services: list[NamespaceServiceResponse]
     total: int

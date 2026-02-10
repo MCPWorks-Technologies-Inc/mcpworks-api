@@ -5,7 +5,7 @@ CreateMCPHandler or RunMCPHandler based on subdomain endpoint type.
 """
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
@@ -16,7 +16,6 @@ from mcpworks_api.core.exceptions import ForbiddenError, NotFoundError
 from mcpworks_api.mcp.create_handler import CreateMCPHandler
 from mcpworks_api.mcp.protocol import (
     JSONRPCRequest,
-    JSONRPCResponse,
     MCPErrorCodes,
     make_error_response,
 )
@@ -143,7 +142,7 @@ def parse_json_rpc_request(body: bytes) -> JSONRPCRequest:
 async def handle_mcp_request(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Handle MCP JSON-RPC requests.
 
     This endpoint:
@@ -222,7 +221,7 @@ async def handle_mcp_request(
 
 
 @router.get("/mcp")
-async def mcp_info(request: Request) -> Dict[str, Any]:
+async def mcp_info(request: Request) -> dict[str, Any]:
     """Return MCP endpoint information.
 
     Used for discovery and health checks.

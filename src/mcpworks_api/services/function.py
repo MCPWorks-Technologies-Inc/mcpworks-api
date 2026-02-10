@@ -1,16 +1,16 @@
 """Function service - CRUD operations for functions and versions."""
 
+import builtins
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from mcpworks_api.core.exceptions import (
-    NotFoundError,
     ConflictError,
-    ValidationError,
+    NotFoundError,
 )
 from mcpworks_api.models import Function, FunctionVersion
 
@@ -31,12 +31,12 @@ class FunctionService:
         service_id: uuid.UUID,
         name: str,
         backend: str,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        code: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        input_schema: Optional[Dict[str, Any]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        code: str | None = None,
+        config: dict[str, Any] | None = None,
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
     ) -> Function:
         """Create a new function with initial version.
 
@@ -163,8 +163,8 @@ class FunctionService:
         service_id: uuid.UUID,
         page: int = 1,
         page_size: int = 50,
-        tags: Optional[List[str]] = None,
-    ) -> tuple[List[Function], int]:
+        tags: list[str] | None = None,
+    ) -> tuple[list[Function], int]:
         """List functions in a service.
 
         Args:
@@ -201,8 +201,8 @@ class FunctionService:
     async def update(
         self,
         function_id: uuid.UUID,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        description: str | None = None,
+        tags: builtins.list[str] | None = None,
     ) -> Function:
         """Update function metadata (not code/version).
 
@@ -236,10 +236,10 @@ class FunctionService:
         self,
         function_id: uuid.UUID,
         backend: str,
-        code: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        input_schema: Optional[Dict[str, Any]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
+        code: str | None = None,
+        config: dict[str, Any] | None = None,
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
         activate: bool = True,
     ) -> FunctionVersion:
         """Create a new version of a function.
@@ -385,7 +385,7 @@ class FunctionService:
     async def list_all_for_namespace(
         self,
         namespace_id: uuid.UUID,
-    ) -> List[tuple["Function", "FunctionVersion"]]:
+    ) -> builtins.list[tuple["Function", "FunctionVersion"]]:
         """List all functions in a namespace with their active versions.
 
         Used by run handler to generate dynamic tools list.
@@ -472,7 +472,7 @@ class FunctionService:
     async def describe(
         self,
         function_id: uuid.UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get detailed description of a function.
 
         Includes function metadata, all versions, and active version details.

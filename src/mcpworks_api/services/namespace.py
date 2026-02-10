@@ -1,20 +1,20 @@
 """Namespace service - CRUD operations for namespaces."""
 
+import builtins
 import uuid
 from datetime import UTC, datetime
-from typing import List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from mcpworks_api.core.exceptions import (
-    NotFoundError,
     ConflictError,
     ForbiddenError,
+    NotFoundError,
     ValidationError,
 )
-from mcpworks_api.models import Account, Namespace, NamespaceService
+from mcpworks_api.models import Namespace, NamespaceService
 
 
 class NamespaceServiceManager:
@@ -32,8 +32,8 @@ class NamespaceServiceManager:
         self,
         account_id: uuid.UUID,
         name: str,
-        description: Optional[str] = None,
-        network_whitelist: Optional[List[str]] = None,
+        description: str | None = None,
+        network_whitelist: list[str] | None = None,
     ) -> Namespace:
         """Create a new namespace.
 
@@ -73,7 +73,7 @@ class NamespaceServiceManager:
     async def get_by_id(
         self,
         namespace_id: uuid.UUID,
-        account_id: Optional[uuid.UUID] = None,
+        account_id: uuid.UUID | None = None,
     ) -> Namespace:
         """Get namespace by ID.
 
@@ -106,7 +106,7 @@ class NamespaceServiceManager:
     async def get_by_name(
         self,
         name: str,
-        account_id: Optional[uuid.UUID] = None,
+        account_id: uuid.UUID | None = None,
     ) -> Namespace:
         """Get namespace by name.
 
@@ -141,7 +141,7 @@ class NamespaceServiceManager:
         account_id: uuid.UUID,
         page: int = 1,
         page_size: int = 50,
-    ) -> tuple[List[Namespace], int]:
+    ) -> tuple[list[Namespace], int]:
         """List namespaces for an account.
 
         Args:
@@ -177,8 +177,8 @@ class NamespaceServiceManager:
         self,
         namespace_id: uuid.UUID,
         account_id: uuid.UUID,
-        description: Optional[str] = None,
-        network_whitelist: Optional[List[str]] = None,
+        description: str | None = None,
+        network_whitelist: builtins.list[str] | None = None,
     ) -> Namespace:
         """Update a namespace.
 
@@ -252,7 +252,7 @@ class NamespaceServiceService:
         self,
         namespace_id: uuid.UUID,
         name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> NamespaceService:
         """Create a new service within a namespace.
 
@@ -352,7 +352,7 @@ class NamespaceServiceService:
     async def list(
         self,
         namespace_id: uuid.UUID,
-    ) -> List[NamespaceService]:
+    ) -> list[NamespaceService]:
         """List all services in a namespace.
 
         Args:
@@ -371,7 +371,7 @@ class NamespaceServiceService:
     async def update(
         self,
         service_id: uuid.UUID,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> NamespaceService:
         """Update a service.
 

@@ -18,11 +18,10 @@ import json
 import os
 import shutil
 import tempfile
-import uuid
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
 from mcpworks_api.models import Account
@@ -90,9 +89,9 @@ class SandboxBackend(Backend):
 
     def __init__(
         self,
-        sandbox_config: Optional[Path] = None,
-        spawn_script: Optional[Path] = None,
-        dev_mode: Optional[bool] = None,
+        sandbox_config: Path | None = None,
+        spawn_script: Path | None = None,
+        dev_mode: bool | None = None,
     ):
         """Initialize sandbox backend.
 
@@ -125,11 +124,11 @@ class SandboxBackend(Backend):
         return "Secure Python code execution sandbox"
 
     @property
-    def supported_languages(self) -> List[str]:
+    def supported_languages(self) -> list[str]:
         """Supported programming languages."""
         return ["python"]
 
-    def _get_tier_config(self, account: Account) -> Dict[str, Any]:
+    def _get_tier_config(self, account: Account) -> dict[str, Any]:
         """Get tier configuration for account.
 
         Args:
@@ -150,9 +149,9 @@ class SandboxBackend(Backend):
 
     async def execute(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
-        input_data: Dict[str, Any],
+        code: str | None,
+        config: dict[str, Any] | None,
+        input_data: dict[str, Any],
         account: Account,
         execution_id: str,
         timeout_ms: int = 30000,
@@ -201,7 +200,7 @@ class SandboxBackend(Backend):
     async def _execute_dev_mode(
         self,
         code: str,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         execution_id: str,
         timeout_sec: float,
     ) -> ExecutionResult:
@@ -242,7 +241,7 @@ class SandboxBackend(Backend):
                     process.communicate(),
                     timeout=timeout_sec,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 return ExecutionResult(
@@ -294,11 +293,11 @@ class SandboxBackend(Backend):
     async def _execute_nsjail(
         self,
         code: str,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         account: Account,
         execution_id: str,
         timeout_sec: float,
-        tier_config: Dict[str, Any],
+        tier_config: dict[str, Any],
     ) -> ExecutionResult:
         """Execute code in nsjail sandbox.
 
@@ -335,7 +334,7 @@ class SandboxBackend(Backend):
                     process.communicate(),
                     timeout=timeout_sec + 5,  # Grace period
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 return ExecutionResult(
@@ -471,8 +470,8 @@ if __name__ == "__main__":
 
     async def validate(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
+        code: str | None,
+        config: dict[str, Any] | None,
     ) -> ValidationResult:
         """Validate Python code before saving.
 
@@ -514,8 +513,8 @@ if __name__ == "__main__":
 
     async def estimate_cost(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
+        code: str | None,
+        config: dict[str, Any] | None,
     ) -> float:
         """Estimate execution cost in credits.
 
@@ -531,7 +530,7 @@ if __name__ == "__main__":
 
         return base_cost
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check sandbox health and availability."""
         nsjail_available = self.spawn_script.exists() and self.sandbox_config.exists()
 

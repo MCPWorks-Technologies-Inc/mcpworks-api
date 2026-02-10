@@ -1,10 +1,10 @@
 """Pydantic schemas for SecurityEvent model."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class SecurityEventResponse(BaseModel):
@@ -15,16 +15,16 @@ class SecurityEventResponse(BaseModel):
     id: UUID
     timestamp: datetime
     event_type: str
-    actor_ip: Optional[str] = None
-    actor_id: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    actor_ip: str | None = None
+    actor_id: str | None = None
+    details: dict[str, Any] | None = None
     severity: str
 
 
 class SecurityEventList(BaseModel):
     """Schema for security event list."""
 
-    events: List[SecurityEventResponse]
+    events: list[SecurityEventResponse]
     total: int
     page: int = 1
     page_size: int = 50

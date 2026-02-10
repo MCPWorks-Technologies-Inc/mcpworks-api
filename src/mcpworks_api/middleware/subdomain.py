@@ -9,7 +9,6 @@ Examples:
 
 import re
 from enum import Enum
-from typing import Optional
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -56,7 +55,7 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
         self,
         app,
         domain: str = DEFAULT_DOMAIN,
-        exempt_paths: Optional[set[str]] = None,
+        exempt_paths: set[str] | None = None,
     ):
         """Initialize subdomain middleware.
 

@@ -2,11 +2,10 @@
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 
 ALLOWED_BACKENDS = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
 
@@ -20,22 +19,22 @@ class FunctionVersionCreate(BaseModel):
         examples=["code_sandbox", "activepieces"],
     )
 
-    code: Optional[str] = Field(
+    code: str | None = Field(
         None,
         description="Function code (for code_sandbox backend)",
     )
 
-    config: Optional[Dict[str, Any]] = Field(
+    config: dict[str, Any] | None = Field(
         None,
         description="Backend-specific configuration",
     )
 
-    input_schema: Optional[Dict[str, Any]] = Field(
+    input_schema: dict[str, Any] | None = Field(
         None,
         description="JSON Schema for input validation",
     )
 
-    output_schema: Optional[Dict[str, Any]] = Field(
+    output_schema: dict[str, Any] | None = Field(
         None,
         description="JSON Schema for output validation",
     )
@@ -58,10 +57,10 @@ class FunctionVersionResponse(BaseModel):
     function_id: UUID
     version: int
     backend: str
-    code: Optional[str] = None
-    config: Optional[Dict[str, Any]] = None
-    input_schema: Optional[Dict[str, Any]] = None
-    output_schema: Optional[Dict[str, Any]] = None
+    code: str | None = None
+    config: dict[str, Any] | None = None
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
     created_at: datetime
 
 
@@ -76,13 +75,13 @@ class FunctionBase(BaseModel):
         examples=["authenticate_user", "process-payment", "sync_data"],
     )
 
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None,
         max_length=1000,
         description="Human-readable description",
     )
 
-    tags: Optional[List[str]] = Field(
+    tags: list[str] | None = Field(
         None,
         description="Tags for categorization",
         examples=[["auth", "security"], ["payment", "stripe"]],
@@ -111,9 +110,9 @@ class FunctionCreate(FunctionBase):
 class FunctionUpdate(BaseModel):
     """Schema for updating a function (creates new version)."""
 
-    description: Optional[str] = Field(None, max_length=1000)
-    tags: Optional[List[str]] = None
-    new_version: Optional[FunctionVersionCreate] = Field(
+    description: str | None = Field(None, max_length=1000)
+    tags: list[str] | None = None
+    new_version: FunctionVersionCreate | None = Field(
         None,
         description="New function version (creates and activates)",
     )
@@ -128,10 +127,10 @@ class FunctionResponse(FunctionBase):
     service_id: UUID
     active_version: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
     # Optional expanded fields
-    active_version_details: Optional[FunctionVersionResponse] = None
+    active_version_details: FunctionVersionResponse | None = None
     execution_count: int = Field(
         default=0,
         description="Total number of executions",
@@ -141,7 +140,7 @@ class FunctionResponse(FunctionBase):
 class FunctionList(BaseModel):
     """Schema for function list."""
 
-    functions: List[FunctionResponse]
+    functions: list[FunctionResponse]
     total: int
     page: int = 1
     page_size: int = 50
