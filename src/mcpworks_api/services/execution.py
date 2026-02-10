@@ -140,9 +140,7 @@ class ExecutionService:
                 error_msg = "Agent rejected request"
                 if isinstance(response_body, dict):
                     error_msg = str(
-                        response_body.get("error")
-                        or response_body.get("message")
-                        or error_msg
+                        response_body.get("error") or response_body.get("message") or error_msg
                     )
 
                 execution.mark_failed(

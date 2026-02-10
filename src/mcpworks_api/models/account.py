@@ -64,9 +64,7 @@ class Account(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
-    __table_args__ = (
-        Index("idx_accounts_user_id", "user_id"),
-    )
+    __table_args__ = (Index("idx_accounts_user_id", "user_id"),)
 
     def __repr__(self) -> str:
         return f"<Account(id={self.id}, user_id={self.user_id}, name={self.name})>"

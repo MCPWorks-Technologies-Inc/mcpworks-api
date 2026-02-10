@@ -66,9 +66,7 @@ class FunctionService:
             )
         )
         if existing.scalar_one_or_none():
-            raise ConflictError(
-                f"Function '{name}' already exists in this service"
-            )
+            raise ConflictError(f"Function '{name}' already exists in this service")
 
         # Create function
         function = Function(
@@ -184,9 +182,7 @@ class FunctionService:
             query = query.where(Function.tags.overlap(tags))
 
         # Get total count
-        count_result = await self.db.execute(
-            select(func.count()).select_from(query.subquery())
-        )
+        count_result = await self.db.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar() or 0
 
         # Get paginated results
@@ -314,9 +310,7 @@ class FunctionService:
         func_version = result.scalar_one_or_none()
 
         if not func_version:
-            raise NotFoundError(
-                f"Version {version} not found for function '{function_id}'"
-            )
+            raise NotFoundError(f"Version {version} not found for function '{function_id}'")
 
         return func_version
 
@@ -412,10 +406,10 @@ class FunctionService:
 
         # Pair each function with its active version
         pairs = []
-        for func in functions:
-            active_version = func.get_active_version_obj()
+        for fn in functions:
+            active_version = fn.get_active_version_obj()
             if active_version:
-                pairs.append((func, active_version))
+                pairs.append((fn, active_version))
 
         return pairs
 
@@ -457,15 +451,11 @@ class FunctionService:
         function = result.scalar_one_or_none()
 
         if not function:
-            raise NotFoundError(
-                f"Function '{service_name}.{function_name}' not found"
-            )
+            raise NotFoundError(f"Function '{service_name}.{function_name}' not found")
 
         active_version = function.get_active_version_obj()
         if not active_version:
-            raise NotFoundError(
-                f"Function '{service_name}.{function_name}' has no active version"
-            )
+            raise NotFoundError(f"Function '{service_name}.{function_name}' has no active version")
 
         return function, active_version
 
@@ -502,7 +492,9 @@ class FunctionService:
                 "input_schema": active_version.input_schema if active_version else None,
                 "output_schema": active_version.output_schema if active_version else None,
                 "created_at": active_version.created_at.isoformat() if active_version else None,
-            } if active_version else None,
+            }
+            if active_version
+            else None,
             "versions": [
                 {
                     "version": v.version,

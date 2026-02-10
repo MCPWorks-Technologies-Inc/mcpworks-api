@@ -380,9 +380,7 @@ class TestUserRegistration:
         user_id = response.json()["user"]["id"]
 
         # Verify credit record was created
-        result = await db.execute(
-            select(Credit).where(Credit.user_id == user_id)
-        )
+        result = await db.execute(select(Credit).where(Credit.user_id == user_id))
         credit = result.scalar_one_or_none()
 
         assert credit is not None

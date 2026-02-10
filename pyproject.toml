@@ -121,11 +121,14 @@ ignore = [
     "E501",   # line too long (handled by black)
     "B008",   # do not perform function calls in argument defaults
     "B904",   # raise without from (sometimes intentional)
+    "UP042",  # str + Enum inheritance is intentional pattern for string enums
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
+"__init__.py" = ["F401", "E402"]
 "tests/*" = ["ARG001"]
+"*/backends/*.py" = ["ARG002"]  # Interface method signatures require unused args
+"*/models/*.py" = ["ARG002"]    # SQLAlchemy validators have required key arg
 
 [tool.mypy]
 python_version = "3.11"

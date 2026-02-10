@@ -361,9 +361,7 @@ class TestGetExecution:
     """Tests for GET /v1/services/agent/executions/{execution_id} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_execution_success(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_get_execution_success(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test getting execution details."""
         headers, user_id = auth_headers
 
@@ -477,9 +475,7 @@ class TestListExecutions:
     """Tests for GET /v1/services/agent/executions endpoint."""
 
     @pytest.mark.asyncio
-    async def test_list_executions_empty(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_list_executions_empty(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test listing executions when none exist."""
         headers, user_id = auth_headers
 

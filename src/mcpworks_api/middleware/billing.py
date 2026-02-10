@@ -31,10 +31,10 @@ class BillingMiddleware(BaseHTTPMiddleware):
 
     # Tier limits (executions per month)
     TIER_LIMITS: dict[str, int] = {
-        "free": 100,           # Free tier: 100 executions/month
-        "founder": 1_000,      # Founder: 1,000 executions/month
+        "free": 100,  # Free tier: 100 executions/month
+        "founder": 1_000,  # Founder: 1,000 executions/month
         "founder_pro": 5_000,  # Founder Pro: 5,000 executions/month
-        "enterprise": 100_000, # Enterprise: 100,000 executions/month
+        "enterprise": 100_000,  # Enterprise: 100,000 executions/month
     }
 
     # Default limit for unknown tiers

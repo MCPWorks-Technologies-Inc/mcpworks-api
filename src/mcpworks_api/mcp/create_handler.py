@@ -339,13 +339,15 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "id": str(namespace.id),
-                        "name": namespace.name,
-                        "create_endpoint": namespace.create_endpoint,
-                        "run_endpoint": namespace.run_endpoint,
-                        "created_at": namespace.created_at.isoformat(),
-                    })
+                    text=json.dumps(
+                        {
+                            "id": str(namespace.id),
+                            "name": namespace.name,
+                            "create_endpoint": namespace.create_endpoint,
+                            "run_endpoint": namespace.run_endpoint,
+                            "created_at": namespace.created_at.isoformat(),
+                        }
+                    )
                 )
             ]
         )
@@ -356,18 +358,20 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "namespaces": [
-                            {
-                                "name": ns.name,
-                                "description": ns.description,
-                                "create_endpoint": ns.create_endpoint,
-                                "run_endpoint": ns.run_endpoint,
-                            }
-                            for ns in namespaces
-                        ],
-                        "total": total,
-                    })
+                    text=json.dumps(
+                        {
+                            "namespaces": [
+                                {
+                                    "name": ns.name,
+                                    "description": ns.description,
+                                    "create_endpoint": ns.create_endpoint,
+                                    "run_endpoint": ns.run_endpoint,
+                                }
+                                for ns in namespaces
+                            ],
+                            "total": total,
+                        }
+                    )
                 )
             ]
         )
@@ -387,11 +391,13 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "name": service.name,
-                        "namespace": self.namespace_name,
-                        "created_at": service.created_at.isoformat(),
-                    })
+                    text=json.dumps(
+                        {
+                            "name": service.name,
+                            "namespace": self.namespace_name,
+                            "created_at": service.created_at.isoformat(),
+                        }
+                    )
                 )
             ]
         )
@@ -403,17 +409,19 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "services": [
-                            {
-                                "name": s.name,
-                                "description": s.description,
-                                "function_count": s.function_count,
-                            }
-                            for s in services
-                        ],
-                        "namespace": self.namespace_name,
-                    })
+                    text=json.dumps(
+                        {
+                            "services": [
+                                {
+                                    "name": s.name,
+                                    "description": s.description,
+                                    "function_count": s.function_count,
+                                }
+                                for s in services
+                            ],
+                            "namespace": self.namespace_name,
+                        }
+                    )
                 )
             ]
         )
@@ -423,9 +431,7 @@ class CreateMCPHandler:
         namespace = await self._get_current_namespace()
         service = await self.service_service.get_by_name(namespace.id, name)
         await self.service_service.delete(service.id)
-        return MCPToolResult(
-            content=[MCPContent(text=f"Deleted service: {name}")]
-        )
+        return MCPToolResult(content=[MCPContent(text=f"Deleted service: {name}")])
 
     async def _make_function(
         self,
@@ -457,12 +463,14 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "name": f"{service}.{name}",
-                        "version": 1,
-                        "backend": backend,
-                        "created_at": function.created_at.isoformat(),
-                    })
+                    text=json.dumps(
+                        {
+                            "name": f"{service}.{name}",
+                            "version": 1,
+                            "backend": backend,
+                            "created_at": function.created_at.isoformat(),
+                        }
+                    )
                 )
             ]
         )
@@ -495,10 +503,8 @@ class CreateMCPHandler:
 
         # Create new version if code/config changes or restoring
         if restore_version:
-            old_version = await self.function_service.get_version(
-                function.id, restore_version
-            )
-            version = await self.function_service.create_version(
+            old_version = await self.function_service.get_version(function.id, restore_version)
+            await self.function_service.create_version(
                 function_id=function.id,
                 backend=old_version.backend,
                 code=old_version.code,
@@ -509,7 +515,7 @@ class CreateMCPHandler:
             message = f"Restored from v{restore_version}"
         elif any([backend, code, config, input_schema, output_schema]):
             active = await self.function_service.get_active_version(function.id)
-            version = await self.function_service.create_version(
+            await self.function_service.create_version(
                 function_id=function.id,
                 backend=backend or active.backend,
                 code=code if code is not None else active.code,
@@ -527,11 +533,13 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "name": f"{service}.{name}",
-                        "version": function.active_version,
-                        "message": message,
-                    })
+                    text=json.dumps(
+                        {
+                            "name": f"{service}.{name}",
+                            "version": function.active_version,
+                            "message": message,
+                        }
+                    )
                 )
             ]
         )
@@ -542,9 +550,7 @@ class CreateMCPHandler:
         svc = await self.service_service.get_by_name(namespace.id, service)
         function = await self.function_service.get_by_name(svc.id, name)
         await self.function_service.delete(function.id)
-        return MCPToolResult(
-            content=[MCPContent(text=f"Deleted function: {service}.{name}")]
-        )
+        return MCPToolResult(content=[MCPContent(text=f"Deleted function: {service}.{name}")])
 
     async def _list_functions(
         self,
@@ -561,18 +567,20 @@ class CreateMCPHandler:
         return MCPToolResult(
             content=[
                 MCPContent(
-                    text=json.dumps({
-                        "functions": [
-                            {
-                                "name": f"{service}.{f.name}",
-                                "description": f.description,
-                                "version": f.active_version,
-                                "tags": f.tags or [],
-                            }
-                            for f in functions
-                        ],
-                        "total": total,
-                    })
+                    text=json.dumps(
+                        {
+                            "functions": [
+                                {
+                                    "name": f"{service}.{f.name}",
+                                    "description": f.description,
+                                    "version": f.active_version,
+                                    "tags": f.tags or [],
+                                }
+                                for f in functions
+                            ],
+                            "total": total,
+                        }
+                    )
                 )
             ]
         )
@@ -583,6 +591,4 @@ class CreateMCPHandler:
         svc = await self.service_service.get_by_name(namespace.id, service)
         function = await self.function_service.get_by_name(svc.id, name)
         details = await self.function_service.describe(function.id)
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps(details))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(details))])

@@ -105,7 +105,9 @@ class TestCreateSubscription:
         # Should fail because Stripe prices are placeholders
         assert response.status_code == 400
         data = response.json()
-        assert "not configured" in data["message"].lower() or "placeholder" in data["message"].lower()
+        assert (
+            "not configured" in data["message"].lower() or "placeholder" in data["message"].lower()
+        )
 
 
 class TestGetCurrentSubscription:
@@ -338,7 +340,9 @@ class TestStripeWebhook:
 
     @pytest.mark.asyncio
     async def test_webhook_valid_unhandled_event(
-        self, client: AsyncClient, db: AsyncSession  # noqa: ARG002
+        self,
+        client: AsyncClient,
+        db: AsyncSession,  # noqa: ARG002
     ):
         """Test that unhandled event types are acknowledged."""
         with patch("stripe.Webhook.construct_event") as mock_construct:
@@ -360,9 +364,7 @@ class TestStripeWebhook:
             assert data["event_type"] == "unknown.event"
 
     @pytest.mark.asyncio
-    async def test_webhook_subscription_created(
-        self, client: AsyncClient, db: AsyncSession
-    ):
+    async def test_webhook_subscription_created(self, client: AsyncClient, db: AsyncSession):
         """Test handling checkout.session.completed webhook."""
         user_id = uuid.uuid4()
 
@@ -379,9 +381,10 @@ class TestStripeWebhook:
         await db.commit()
 
         # Mock Stripe responses
-        with patch("stripe.Webhook.construct_event") as mock_construct, \
-             patch("stripe.Subscription.retrieve") as mock_retrieve:
-
+        with (
+            patch("stripe.Webhook.construct_event") as mock_construct,
+            patch("stripe.Subscription.retrieve") as mock_retrieve,
+        ):
             now = datetime.now(UTC)
             mock_construct.return_value = {
                 "id": "evt_test_checkout_sub_123",
@@ -415,9 +418,7 @@ class TestStripeWebhook:
             assert data["event_type"] == "checkout.session.completed"
 
     @pytest.mark.asyncio
-    async def test_webhook_credit_purchase(
-        self, client: AsyncClient, db: AsyncSession
-    ):
+    async def test_webhook_credit_purchase(self, client: AsyncClient, db: AsyncSession):
         """Test handling checkout.session.completed for credit purchase."""
         user_id = uuid.uuid4()
 

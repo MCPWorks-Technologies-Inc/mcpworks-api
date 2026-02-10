@@ -34,18 +34,14 @@ class CreateNamespaceRequest(BaseModel):
         description="DNS-compliant namespace name",
     )
     description: str | None = Field(None, max_length=500)
-    network_whitelist: list[str] | None = Field(
-        None, description="List of allowed IPs/CIDRs"
-    )
+    network_whitelist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
 
 
 class UpdateNamespaceRequest(BaseModel):
     """Request to update a namespace."""
 
     description: str | None = Field(None, max_length=500)
-    network_whitelist: list[str] | None = Field(
-        None, description="List of allowed IPs/CIDRs"
-    )
+    network_whitelist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
 
 
 class NamespaceResponse(BaseModel):
@@ -105,15 +101,9 @@ class CreateFunctionRequest(BaseModel):
     description: str | None = Field(None, max_length=500)
     tags: list[str] | None = None
     code: str | None = Field(None, description="Function code (for code_sandbox)")
-    config: dict[str, Any] | None = Field(
-        None, description="Backend-specific configuration"
-    )
-    input_schema: dict[str, Any] | None = Field(
-        None, description="JSON Schema for input"
-    )
-    output_schema: dict[str, Any] | None = Field(
-        None, description="JSON Schema for output"
-    )
+    config: dict[str, Any] | None = Field(None, description="Backend-specific configuration")
+    input_schema: dict[str, Any] | None = Field(None, description="JSON Schema for input")
+    output_schema: dict[str, Any] | None = Field(None, description="JSON Schema for output")
 
 
 class FunctionResponse(BaseModel):

@@ -101,9 +101,7 @@ class StubBackend(Backend):
             dangerous = ["os.system", "subprocess", "eval(", "exec("]
             for pattern in dangerous:
                 if pattern in code:
-                    warnings.append(
-                        f"Potentially dangerous pattern detected: {pattern}"
-                    )
+                    warnings.append(f"Potentially dangerous pattern detected: {pattern}")
 
         return ValidationResult(
             valid=len(errors) == 0,

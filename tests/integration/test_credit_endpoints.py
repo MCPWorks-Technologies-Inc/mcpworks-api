@@ -213,9 +213,7 @@ class TestHoldCommitRelease:
     """Tests for hold/commit/release flow."""
 
     @pytest.mark.asyncio
-    async def test_full_hold_commit_flow(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_full_hold_commit_flow(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test complete hold -> commit flow."""
         headers, user_id = auth_headers
 

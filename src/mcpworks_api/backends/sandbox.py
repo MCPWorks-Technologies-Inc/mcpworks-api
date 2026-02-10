@@ -254,9 +254,7 @@ class SandboxBackend(Backend):
                     execution_time_ms=int(timeout_sec * 1000),
                 )
 
-            execution_time_ms = int(
-                (datetime.now(UTC) - start_time).total_seconds() * 1000
-            )
+            execution_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             # Read output
             if output_file.exists():
@@ -310,9 +308,7 @@ class SandboxBackend(Backend):
             exec_dir.mkdir(mode=0o700, exist_ok=True)
 
             # Write input and code files
-            (exec_dir / "input.json").write_text(
-                json.dumps(input_data, default=str)
-            )
+            (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))
             (exec_dir / "user_code.py").write_text(code)
 
             # Get tier from account
@@ -345,9 +341,7 @@ class SandboxBackend(Backend):
                     execution_time_ms=int(timeout_sec * 1000),
                 )
 
-            execution_time_ms = int(
-                (datetime.now(UTC) - start_time).total_seconds() * 1000
-            )
+            execution_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
             # Read output
             output_file = exec_dir / "output.json"

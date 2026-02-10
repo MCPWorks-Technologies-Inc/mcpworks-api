@@ -102,9 +102,7 @@ class RunMCPHandler:
     async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
         """Generate tools list from database functions."""
         namespace = await self._get_namespace()
-        functions = await self.function_service.list_all_for_namespace(
-            namespace_id=namespace.id
-        )
+        functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
         tools = []
         for func, version in functions:
@@ -115,8 +113,7 @@ class RunMCPHandler:
                 MCPTool(
                     name=tool_name,
                     description=func.description or f"Execute {tool_name}",
-                    inputSchema=version.input_schema
-                    or {"type": "object", "properties": {}},
+                    inputSchema=version.input_schema or {"type": "object", "properties": {}},
                 )
             )
 
@@ -205,11 +202,13 @@ class RunMCPHandler:
             if result.success:
                 content_text = json.dumps(result.output)
             else:
-                content_text = json.dumps({
-                    "error": result.error,
-                    "error_type": result.error_type,
-                    "stderr": result.stderr,
-                })
+                content_text = json.dumps(
+                    {
+                        "error": result.error,
+                        "error_type": result.error_type,
+                        "stderr": result.stderr,
+                    }
+                )
 
             # Return result with metadata
             tool_result = MCPToolResult(
