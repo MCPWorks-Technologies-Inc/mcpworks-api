@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from mcpworks_api.models.base import Base, UUIDMixin
 
 if TYPE_CHECKING:
+    from mcpworks_api.models.namespace import Namespace
     from mcpworks_api.models.user import User
 
 
@@ -77,9 +78,21 @@ class APIKey(Base, UUIDMixin):
         nullable=True,
     )
 
+    # Optional namespace scope (A0 extension)
+    namespace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("namespaces.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
     # Relationships
     user: Mapped["User"] = relationship(
         "User",
+        back_populates="api_keys",
+    )
+    namespace: Mapped["Namespace | None"] = relationship(
+        "Namespace",
         back_populates="api_keys",
     )
 
@@ -87,6 +100,7 @@ class APIKey(Base, UUIDMixin):
         Index("idx_api_keys_user", "user_id"),
         Index("idx_api_keys_hash", "key_hash"),
         Index("idx_api_keys_prefix", "key_prefix"),
+        Index("idx_api_keys_namespace", "namespace_id"),
     )
 
     @property

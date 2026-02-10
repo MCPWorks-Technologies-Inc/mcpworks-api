@@ -1,0 +1,148 @@
+"""Pydantic schemas for Function and FunctionVersion models."""
+
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+ALLOWED_BACKENDS = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+
+
+class FunctionVersionCreate(BaseModel):
+    """Schema for creating a function version."""
+
+    backend: str = Field(
+        ...,
+        description="Function backend",
+        examples=["code_sandbox", "activepieces"],
+    )
+
+    code: Optional[str] = Field(
+        None,
+        description="Function code (for code_sandbox backend)",
+    )
+
+    config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Backend-specific configuration",
+    )
+
+    input_schema: Optional[Dict[str, Any]] = Field(
+        None,
+        description="JSON Schema for input validation",
+    )
+
+    output_schema: Optional[Dict[str, Any]] = Field(
+        None,
+        description="JSON Schema for output validation",
+    )
+
+    @field_validator("backend")
+    @classmethod
+    def validate_backend(cls, v: str) -> str:
+        """Validate backend is supported."""
+        if v not in ALLOWED_BACKENDS:
+            raise ValueError(f"Backend must be one of {ALLOWED_BACKENDS}")
+        return v
+
+
+class FunctionVersionResponse(BaseModel):
+    """Schema for function version responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    function_id: UUID
+    version: int
+    backend: str
+    code: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    input_schema: Optional[Dict[str, Any]] = None
+    output_schema: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+
+class FunctionBase(BaseModel):
+    """Base function fields."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=63,
+        description="Function name (URL-safe)",
+        examples=["authenticate_user", "process-payment", "sync_data"],
+    )
+
+    description: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Human-readable description",
+    )
+
+    tags: Optional[List[str]] = Field(
+        None,
+        description="Tags for categorization",
+        examples=[["auth", "security"], ["payment", "stripe"]],
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate function name is URL-safe."""
+        if not re.match(r"^[a-z0-9]([a-z0-9-_]{0,61}[a-z0-9])?$", v):
+            raise ValueError(
+                "Function name must be lowercase alphanumeric with hyphens/underscores"
+            )
+        return v.lower()
+
+
+class FunctionCreate(FunctionBase):
+    """Schema for creating a function."""
+
+    initial_version: FunctionVersionCreate = Field(
+        ...,
+        description="Initial function version",
+    )
+
+
+class FunctionUpdate(BaseModel):
+    """Schema for updating a function (creates new version)."""
+
+    description: Optional[str] = Field(None, max_length=1000)
+    tags: Optional[List[str]] = None
+    new_version: Optional[FunctionVersionCreate] = Field(
+        None,
+        description="New function version (creates and activates)",
+    )
+
+
+class FunctionResponse(FunctionBase):
+    """Schema for function responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    service_id: UUID
+    active_version: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    # Optional expanded fields
+    active_version_details: Optional[FunctionVersionResponse] = None
+    execution_count: int = Field(
+        default=0,
+        description="Total number of executions",
+    )
+
+
+class FunctionList(BaseModel):
+    """Schema for function list."""
+
+    functions: List[FunctionResponse]
+    total: int
+    page: int = 1
+    page_size: int = 50
+    has_more: bool

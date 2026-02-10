@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
     from mcpworks_api.models.credit import Credit
     from mcpworks_api.models.execution import Execution
@@ -104,6 +105,12 @@ class User(Base, UUIDMixin, TimestampMixin):
     executions: Mapped[list["Execution"]] = relationship(
         "Execution",
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    account: Mapped["Account"] = relationship(
+        "Account",
+        back_populates="user",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 

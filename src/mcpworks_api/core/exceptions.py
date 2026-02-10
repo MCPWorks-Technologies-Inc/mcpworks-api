@@ -136,6 +136,30 @@ class CreditLockError(MCPWorksException):
 
 
 # Resource Errors (404, 409)
+class NotFoundError(MCPWorksException):
+    """Raised when a resource is not found."""
+
+    error_code = "NOT_FOUND"
+    status_code = 404
+    message = "Resource not found"
+
+
+class ConflictError(MCPWorksException):
+    """Raised when there is a conflict with existing resource."""
+
+    error_code = "CONFLICT"
+    status_code = 409
+    message = "Resource already exists"
+
+
+class ForbiddenError(MCPWorksException):
+    """Raised when access is denied to a resource."""
+
+    error_code = "FORBIDDEN"
+    status_code = 403
+    message = "Access denied"
+
+
 class UserNotFoundError(MCPWorksException):
     """Raised when user doesn't exist."""
 
