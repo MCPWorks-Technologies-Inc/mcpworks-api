@@ -27,12 +27,11 @@ class Service(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "services"
 
-    # Identity
+    # Identity - Index in __table_args__
     name: Mapped[str] = mapped_column(
         String(100),
         unique=True,
         nullable=False,
-        index=True,
     )
     display_name: Mapped[str | None] = mapped_column(
         String(255),
@@ -65,12 +64,11 @@ class Service(Base, UUIDMixin, TimestampMixin):
         default="free",
     )
 
-    # Health status
+    # Health status - Index in __table_args__
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=ServiceStatus.ACTIVE.value,
-        index=True,
     )
     last_health_check: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

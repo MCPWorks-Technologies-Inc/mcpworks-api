@@ -3,7 +3,7 @@
 import re
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
@@ -43,11 +43,11 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "namespaces"
 
     # Core Fields
+    # Note: Index is defined in __table_args__ with explicit name
     account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("accounts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name: Mapped[str] = mapped_column(
@@ -62,7 +62,7 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     )
 
     # Network Security
-    network_whitelist: Mapped[List[str] | None] = mapped_column(
+    network_whitelist: Mapped[list[str] | None] = mapped_column(
         ARRAY(String),
         nullable=True,
     )
@@ -84,14 +84,14 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         back_populates="namespaces",
     )
 
-    services: Mapped[List["NamespaceService"]] = relationship(
+    services: Mapped[list["NamespaceService"]] = relationship(
         "NamespaceService",
         back_populates="namespace",
         cascade="all, delete-orphan",
         order_by="NamespaceService.name",
     )
 
-    api_keys: Mapped[List["APIKey"]] = relationship(
+    api_keys: Mapped[list["APIKey"]] = relationship(
         "APIKey",
         back_populates="namespace",
         cascade="all, delete-orphan",

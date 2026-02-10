@@ -47,19 +47,17 @@ class CreditTransaction(Base, UUIDMixin):
 
     __tablename__ = "credit_transactions"
 
-    # User reference
+    # User reference - Index in __table_args__
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
-    # Transaction details
+    # Transaction details - Index in __table_args__
     type: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        index=True,
     )
     amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
@@ -93,12 +91,11 @@ class CreditTransaction(Base, UUIDMixin):
         nullable=True,
     )
 
-    # Timestamp
+    # Timestamp - Index in __table_args__
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        index=True,
     )
 
     # Relationships

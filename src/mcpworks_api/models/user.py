@@ -44,12 +44,11 @@ class User(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "users"
 
-    # Core fields
+    # Core fields - Index in __table_args__
     email: Mapped[str] = mapped_column(
         String(255),
         unique=True,
         nullable=False,
-        index=True,
     )
     password_hash: Mapped[str] = mapped_column(
         String(255),
@@ -66,11 +65,11 @@ class User(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default=UserTier.FREE.value,
     )
+    # Index in __table_args__
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=UserStatus.ACTIVE.value,
-        index=True,
     )
 
     # Email verification

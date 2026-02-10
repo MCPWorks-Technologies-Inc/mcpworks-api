@@ -1,7 +1,7 @@
 """Account model - billing entity that owns namespaces and resources."""
 
 import uuid
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -31,12 +31,12 @@ class Account(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "accounts"
 
     # Link to user (1:1 for now)
+    # Note: Index is defined in __table_args__ with explicit name
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
-        index=True,
     )
 
     # Account name for display
@@ -51,14 +51,14 @@ class Account(Base, UUIDMixin, TimestampMixin):
         back_populates="account",
     )
 
-    namespaces: Mapped[List["Namespace"]] = relationship(
+    namespaces: Mapped[list["Namespace"]] = relationship(
         "Namespace",
         back_populates="account",
         cascade="all, delete-orphan",
         order_by="Namespace.name",
     )
 
-    webhooks: Mapped[List["Webhook"]] = relationship(
+    webhooks: Mapped[list["Webhook"]] = relationship(
         "Webhook",
         back_populates="account",
         cascade="all, delete-orphan",

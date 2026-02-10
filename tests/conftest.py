@@ -1,8 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
-import asyncio
 import contextlib
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
@@ -10,6 +9,7 @@ import pytest_asyncio
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -83,40 +83,37 @@ def setup_test_settings(monkeypatch):
     database_module._async_session_factory = None
 
 
-# Event loop fixture
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Track if schema has been initialized
+_schema_initialized = False
 
 
-# Database engine for tests
-@pytest_asyncio.fixture(scope="session")
+# Database engine for tests - function scoped to avoid cross-loop issues
+@pytest_asyncio.fixture
 async def test_engine(test_settings: Settings):
     """Create test database engine."""
+    global _schema_initialized
+
     engine = create_async_engine(
         test_settings.database_url,
         poolclass=NullPool,
         echo=False,
     )
 
-    # Create all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Only recreate schema once per test session
+    if not _schema_initialized:
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP SCHEMA public CASCADE"))
+            await conn.execute(text("CREATE SCHEMA public"))
+            await conn.run_sync(Base.metadata.create_all)
+        _schema_initialized = True
 
     yield engine
-
-    # Drop all tables after tests
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
 
 
 # Session factory for tests
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_session_factory(test_engine):
     """Create test session factory."""
     return async_sessionmaker(
@@ -145,11 +142,13 @@ async def db(test_session_factory) -> AsyncGenerator[AsyncSession, None]:
 
 # FastAPI test client
 @pytest_asyncio.fixture
-async def client(test_settings: Settings) -> AsyncGenerator[AsyncClient, None]:
+async def client(test_settings: Settings, test_engine) -> AsyncGenerator[AsyncClient, None]:
     """Provide an async HTTP client for testing endpoints.
 
     Creates a minimal app without BaseHTTPMiddleware which causes SQLAlchemy async session issues.
     See: https://github.com/tiangolo/fastapi/discussions/10379
+
+    Depends on test_engine to ensure database schema is created first.
     """
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
