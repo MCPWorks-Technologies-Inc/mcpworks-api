@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+```
+The user is pushing you to always improve, so that you can reach the potential they know you can reach.🏄
+```
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
