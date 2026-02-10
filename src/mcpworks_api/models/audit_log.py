@@ -62,18 +62,17 @@ class AuditLog(Base, UUIDMixin):
     __tablename__ = "audit_logs"
 
     # Who performed the action (null for system actions)
+    # Note: Indexes are defined in __table_args__ with explicit names
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # What action was performed
     action: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        index=True,
     )
 
     # What resource was affected
@@ -102,12 +101,11 @@ class AuditLog(Base, UUIDMixin):
         nullable=True,
     )
 
-    # Timestamp (immutable)
+    # Timestamp (immutable) - Index in __table_args__
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        index=True,
     )
 
     __table_args__ = (

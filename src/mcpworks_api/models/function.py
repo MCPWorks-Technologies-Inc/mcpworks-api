@@ -2,7 +2,7 @@
 
 import re
 import uuid
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     CheckConstraint,
@@ -41,12 +41,11 @@ class Function(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "functions"
 
-    # Core Fields
+    # Core Fields - Index in __table_args__
     service_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("namespace_services.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name: Mapped[str] = mapped_column(
@@ -59,7 +58,7 @@ class Function(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
-    tags: Mapped[List[str] | None] = mapped_column(
+    tags: Mapped[list[str] | None] = mapped_column(
         ARRAY(String),
         nullable=True,
     )
@@ -76,14 +75,14 @@ class Function(Base, UUIDMixin, TimestampMixin):
         back_populates="functions",
     )
 
-    versions: Mapped[List["FunctionVersion"]] = relationship(
+    versions: Mapped[list["FunctionVersion"]] = relationship(
         "FunctionVersion",
         back_populates="function",
         cascade="all, delete-orphan",
         order_by="desc(FunctionVersion.version)",
     )
 
-    executions: Mapped[List["Execution"]] = relationship(
+    executions: Mapped[list["Execution"]] = relationship(
         "Execution",
         back_populates="function",
         order_by="desc(Execution.created_at)",

@@ -2,7 +2,7 @@
 
 import re
 import uuid
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
@@ -40,12 +40,11 @@ class NamespaceService(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "namespace_services"
 
-    # Core Fields
+    # Core Fields - Index in __table_args__
     namespace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("namespaces.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name: Mapped[str] = mapped_column(
@@ -64,7 +63,7 @@ class NamespaceService(Base, UUIDMixin, TimestampMixin):
         back_populates="services",
     )
 
-    functions: Mapped[List["Function"]] = relationship(
+    functions: Mapped[list["Function"]] = relationship(
         "Function",
         back_populates="service",
         cascade="all, delete-orphan",

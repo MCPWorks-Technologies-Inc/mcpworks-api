@@ -60,13 +60,12 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "subscriptions"
 
-    # User reference (one subscription per user)
+    # User reference (one subscription per user) - Index in __table_args__
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
-        index=True,
     )
 
     # Subscription details
@@ -79,12 +78,11 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
-    # Stripe references
+    # Stripe references - Index in __table_args__
     stripe_subscription_id: Mapped[str | None] = mapped_column(
         String(255),
         unique=True,
         nullable=True,
-        index=True,
     )
     stripe_customer_id: Mapped[str | None] = mapped_column(
         String(255),

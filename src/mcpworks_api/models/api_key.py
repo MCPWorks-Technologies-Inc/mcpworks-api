@@ -28,11 +28,11 @@ class APIKey(Base, UUIDMixin):
     __tablename__ = "api_keys"
 
     # Owner reference
+    # Note: Indexes are defined in __table_args__ with explicit names
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Key storage (hash only, prefix for identification)
@@ -40,12 +40,10 @@ class APIKey(Base, UUIDMixin):
         String(255),
         unique=True,
         nullable=False,
-        index=True,
     )
     key_prefix: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        index=True,
     )
 
     # Metadata
@@ -79,11 +77,11 @@ class APIKey(Base, UUIDMixin):
     )
 
     # Optional namespace scope (A0 extension)
+    # Note: Index is defined in __table_args__
     namespace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("namespaces.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     # Relationships

@@ -1,7 +1,7 @@
 """Webhook model for event notification delivery."""
 
 import uuid
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -44,12 +44,11 @@ class Webhook(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "webhooks"
 
-    # Core Fields
+    # Core Fields - Index in __table_args__
     account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("accounts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     url: Mapped[str] = mapped_column(
@@ -62,7 +61,7 @@ class Webhook(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
-    events: Mapped[List[str]] = mapped_column(
+    events: Mapped[list[str]] = mapped_column(
         ARRAY(String),
         nullable=False,
     )
@@ -97,7 +96,7 @@ class Webhook(Base, UUIDMixin, TimestampMixin):
         return value
 
     @validates("events")
-    def validate_events(self, key: str, value: List[str]) -> List[str]:
+    def validate_events(self, key: str, value: list[str]) -> list[str]:
         """Validate events list is not empty."""
         if not value or len(value) == 0:
             raise ValueError("Webhook must subscribe to at least one event")

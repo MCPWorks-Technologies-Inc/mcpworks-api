@@ -1,7 +1,7 @@
 """SecurityEvent model for tracking security-relevant events."""
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -14,7 +14,6 @@ from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from mcpworks_api.models.base import Base, UUIDMixin
-
 
 # Allowed severity levels
 ALLOWED_SEVERITIES = {"info", "warning", "error", "critical"}
@@ -48,17 +47,16 @@ class SecurityEvent(Base, UUIDMixin):
     __tablename__ = "security_events"
 
     # Event Metadata
+    # Note: Indexes are defined in __table_args__ with explicit names
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        index=True,
     )
 
     event_type: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        index=True,
     )
 
     # Actor Information
@@ -70,11 +68,10 @@ class SecurityEvent(Base, UUIDMixin):
     actor_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
-        index=True,
     )
 
     # Event Details
-    details: Mapped[Dict[str, Any] | None] = mapped_column(
+    details: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
@@ -82,7 +79,6 @@ class SecurityEvent(Base, UUIDMixin):
     severity: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        index=True,
     )
 
     __table_args__ = (

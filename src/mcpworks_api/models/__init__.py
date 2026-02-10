@@ -8,10 +8,10 @@ from mcpworks_api.models.credit import Credit
 from mcpworks_api.models.credit_transaction import CreditTransaction, TransactionType
 from mcpworks_api.models.execution import Execution, ExecutionStatus
 from mcpworks_api.models.function import Function
-from mcpworks_api.models.function_version import FunctionVersion, ALLOWED_BACKENDS
+from mcpworks_api.models.function_version import ALLOWED_BACKENDS, FunctionVersion
 from mcpworks_api.models.namespace import Namespace
 from mcpworks_api.models.namespace_service import NamespaceService
-from mcpworks_api.models.security_event import SecurityEvent, ALLOWED_SEVERITIES
+from mcpworks_api.models.security_event import ALLOWED_SEVERITIES, SecurityEvent
 from mcpworks_api.models.service import Service, ServiceStatus
 from mcpworks_api.models.subscription import Subscription, SubscriptionStatus, SubscriptionTier
 from mcpworks_api.models.user import User, UserStatus, UserTier

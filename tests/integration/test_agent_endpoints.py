@@ -240,12 +240,15 @@ class TestExecutionCallback:
         await db.commit()
         await db.refresh(execution)
 
+        # Agent callback requires X-Agent-Secret header
+        callback_headers = {"X-Agent-Secret": "test-callback-secret-32-chars-min"}
         response = await client.post(
             f"/v1/services/agent/executions/{execution.id}/callback",
             json={
                 "status": "completed",
                 "result_data": {"output": "success"},
             },
+            headers=callback_headers,
         )
 
         assert response.status_code == 200
@@ -282,6 +285,8 @@ class TestExecutionCallback:
         await db.commit()
         await db.refresh(execution)
 
+        # Agent callback requires X-Agent-Secret header
+        callback_headers = {"X-Agent-Secret": "test-callback-secret-32-chars-min"}
         response = await client.post(
             f"/v1/services/agent/executions/{execution.id}/callback",
             json={
@@ -289,6 +294,7 @@ class TestExecutionCallback:
                 "error_message": "Workflow error occurred",
                 "error_code": "WF_ERROR",
             },
+            headers=callback_headers,
         )
 
         assert response.status_code == 200
@@ -298,9 +304,12 @@ class TestExecutionCallback:
     @pytest.mark.asyncio
     async def test_callback_invalid_execution(self, client: AsyncClient):
         """Test callback with invalid execution ID."""
+        # Agent callback requires X-Agent-Secret header
+        callback_headers = {"X-Agent-Secret": "test-callback-secret-32-chars-min"}
         response = await client.post(
             f"/v1/services/agent/executions/{uuid.uuid4()}/callback",
             json={"status": "completed"},
+            headers=callback_headers,
         )
 
         assert response.status_code == 400
@@ -335,9 +344,12 @@ class TestExecutionCallback:
         await db.commit()
         await db.refresh(execution)
 
+        # Agent callback requires X-Agent-Secret header
+        callback_headers = {"X-Agent-Secret": "test-callback-secret-32-chars-min"}
         response = await client.post(
             f"/v1/services/agent/executions/{execution.id}/callback",
             json={"status": "completed"},
+            headers=callback_headers,
         )
 
         assert response.status_code == 400

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -46,12 +46,11 @@ class FunctionVersion(Base, UUIDMixin):
 
     __tablename__ = "function_versions"
 
-    # Core Fields
+    # Core Fields - Index in __table_args__
     function_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("functions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     version: Mapped[int] = mapped_column(
@@ -70,18 +69,18 @@ class FunctionVersion(Base, UUIDMixin):
         nullable=True,
     )
 
-    config: Mapped[Dict[str, Any] | None] = mapped_column(
+    config: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
 
     # Schema Definitions
-    input_schema: Mapped[Dict[str, Any] | None] = mapped_column(
+    input_schema: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
 
-    output_schema: Mapped[Dict[str, Any] | None] = mapped_column(
+    output_schema: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
