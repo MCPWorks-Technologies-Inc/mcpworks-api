@@ -287,3 +287,352 @@ class TestSubscriptionStatus:
         assert SubscriptionStatus.CANCELLED.value == "cancelled"
         assert SubscriptionStatus.PAST_DUE.value == "past_due"
         assert SubscriptionStatus.TRIALING.value == "trialing"
+
+
+class TestTryClaimEvent:
+    """Tests for _try_claim_event method."""
+
+    @pytest.mark.asyncio
+    async def test_claim_event_without_redis(self):
+        """Test claiming event without Redis always succeeds."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = None  # No Redis
+
+            result = await service._try_claim_event("evt_test123")
+
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_claim_event_with_redis_success(self):
+        """Test successfully claiming an event with Redis."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = AsyncMock()
+            service.redis.set = AsyncMock(return_value=True)  # SETNX success
+
+            result = await service._try_claim_event("evt_test123")
+
+            assert result is True
+            service.redis.set.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_claim_event_already_claimed(self):
+        """Test claiming already claimed event returns False."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = AsyncMock()
+            service.redis.set = AsyncMock(return_value=None)  # Already exists
+
+            result = await service._try_claim_event("evt_test123")
+
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_claim_event_redis_error_allows_processing(self):
+        """Test Redis error allows processing (fail-open)."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = AsyncMock()
+            service.redis.set = AsyncMock(side_effect=Exception("Redis error"))
+
+            result = await service._try_claim_event("evt_test123")
+
+            assert result is True  # Fail-open
+
+
+class TestMarkEventCompleted:
+    """Tests for _mark_event_completed method."""
+
+    @pytest.mark.asyncio
+    async def test_mark_completed_without_redis(self):
+        """Test marking completed without Redis does nothing."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = None
+
+            # Should not raise
+            await service._mark_event_completed("evt_test123")
+
+    @pytest.mark.asyncio
+    async def test_mark_completed_with_redis(self):
+        """Test marking event as completed."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = AsyncMock()
+
+            await service._mark_event_completed("evt_test123")
+
+            service.redis.set.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mark_completed_redis_error_suppressed(self):
+        """Test Redis error is suppressed."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = AsyncMock()
+            service.redis.set = AsyncMock(side_effect=Exception("Redis error"))
+
+            # Should not raise
+            await service._mark_event_completed("evt_test123")
+
+
+class TestReleaseEventClaim:
+    """Tests for _release_event_claim method."""
+
+    @pytest.mark.asyncio
+    async def test_release_without_redis(self):
+        """Test releasing without Redis does nothing."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = None
+
+            # Should not raise
+            await service._release_event_claim("evt_test123")
+
+    @pytest.mark.asyncio
+    async def test_release_with_redis(self):
+        """Test releasing event claim."""
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.redis = AsyncMock()
+
+            await service._release_event_claim("evt_test123")
+
+            service.redis.delete.assert_called_once()
+
+
+class TestCreateCreditPurchaseSession:
+    """Tests for create_credit_purchase_session method."""
+
+    @pytest.mark.asyncio
+    async def test_minimum_credits_enforced(self):
+        """Test minimum credit purchase is enforced."""
+        mock_db = AsyncMock()
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+            service.settings = MagicMock()
+
+            with pytest.raises(ValueError, match="Minimum purchase"):
+                await service.create_credit_purchase_session(
+                    user_id=uuid.uuid4(),
+                    credits=50,  # Below minimum
+                    success_url="https://example.com/success",
+                    cancel_url="https://example.com/cancel",
+                )
+
+    @pytest.mark.asyncio
+    async def test_user_not_found_rejected(self):
+        """Test user not found is rejected."""
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+            service.settings = MagicMock()
+
+            with pytest.raises(ValueError, match="not found"):
+                await service.create_credit_purchase_session(
+                    user_id=uuid.uuid4(),
+                    credits=100,
+                    success_url="https://example.com/success",
+                    cancel_url="https://example.com/cancel",
+                )
+
+
+class TestHandleSubscriptionUpdated:
+    """Tests for _handle_subscription_updated method."""
+
+    @pytest.mark.asyncio
+    async def test_subscription_not_found(self):
+        """Test handler ignores unknown subscriptions."""
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            # Should not raise
+            await service._handle_subscription_updated({
+                "id": "sub_unknown",
+                "status": "active",
+                "current_period_start": 1704067200,
+                "current_period_end": 1706745600,
+            })
+
+    @pytest.mark.asyncio
+    async def test_status_mapping_active(self):
+        """Test active status is mapped correctly."""
+        mock_db = AsyncMock()
+        mock_subscription = MagicMock(spec=Subscription)
+        mock_subscription.status = "trialing"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_subscription
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            await service._handle_subscription_updated({
+                "id": "sub_123",
+                "status": "active",
+                "cancel_at_period_end": False,
+                "current_period_start": 1704067200,
+                "current_period_end": 1706745600,
+            })
+
+            assert mock_subscription.status == SubscriptionStatus.ACTIVE.value
+
+
+class TestHandleSubscriptionDeleted:
+    """Tests for _handle_subscription_deleted method."""
+
+    @pytest.mark.asyncio
+    async def test_subscription_not_found(self):
+        """Test handler ignores unknown subscriptions."""
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            # Should not raise
+            await service._handle_subscription_deleted({"id": "sub_unknown"})
+
+    @pytest.mark.asyncio
+    async def test_marks_cancelled_and_downgrades(self):
+        """Test subscription is cancelled and user downgraded."""
+        mock_db = AsyncMock()
+        mock_subscription = MagicMock(spec=Subscription)
+        mock_subscription.user_id = uuid.uuid4()
+        mock_subscription.status = SubscriptionStatus.ACTIVE.value
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_subscription
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            await service._handle_subscription_deleted({"id": "sub_123"})
+
+            assert mock_subscription.status == SubscriptionStatus.CANCELLED.value
+            mock_db.commit.assert_called()
+
+
+class TestHandlePaymentSucceeded:
+    """Tests for _handle_payment_succeeded method."""
+
+    @pytest.mark.asyncio
+    async def test_no_subscription_id(self):
+        """Test handler ignores events without subscription."""
+        mock_db = AsyncMock()
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            # Should not raise
+            await service._handle_payment_succeeded({
+                "subscription": None,
+                "billing_reason": "subscription_cycle",
+            })
+
+    @pytest.mark.asyncio
+    async def test_non_renewal_skipped(self):
+        """Test non-renewal payments don't grant credits."""
+        mock_db = AsyncMock()
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            with patch.object(service, "_grant_monthly_credits") as mock_grant:
+                await service._handle_payment_succeeded({
+                    "subscription": "sub_123",
+                    "billing_reason": "subscription_create",  # Not renewal
+                })
+
+                mock_grant.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_subscription_not_found(self):
+        """Test handler ignores unknown subscriptions."""
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            # Should not raise
+            await service._handle_payment_succeeded({
+                "subscription": "sub_unknown",
+                "billing_reason": "subscription_cycle",
+            })
+
+
+class TestHandlePaymentFailed:
+    """Tests for _handle_payment_failed method."""
+
+    @pytest.mark.asyncio
+    async def test_no_subscription_id(self):
+        """Test handler ignores events without subscription."""
+        mock_db = AsyncMock()
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            # Should not raise
+            await service._handle_payment_failed({"subscription": None})
+
+    @pytest.mark.asyncio
+    async def test_subscription_not_found(self):
+        """Test handler ignores unknown subscriptions."""
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            # Should not raise
+            await service._handle_payment_failed({"subscription": "sub_unknown"})
+
+    @pytest.mark.asyncio
+    async def test_marks_past_due(self):
+        """Test subscription is marked past due."""
+        mock_db = AsyncMock()
+        mock_subscription = MagicMock(spec=Subscription)
+        mock_subscription.status = SubscriptionStatus.ACTIVE.value
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_subscription
+        mock_db.execute.return_value = mock_result
+
+        with patch.object(StripeService, "__init__", return_value=None):
+            service = StripeService.__new__(StripeService)
+            service.db = mock_db
+
+            await service._handle_payment_failed({"subscription": "sub_123"})
+
+            assert mock_subscription.status == SubscriptionStatus.PAST_DUE.value
