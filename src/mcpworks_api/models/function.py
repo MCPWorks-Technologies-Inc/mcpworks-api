@@ -95,7 +95,7 @@ class Function(Base, UUIDMixin, TimestampMixin):
             name="uq_function_service_name",
         ),
         CheckConstraint(
-            "name ~ '^[a-z0-9]([a-z0-9-_]{0,61}[a-z0-9])?$'",
+            "name ~ '^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$'",
             name="function_name_format",
         ),
         CheckConstraint(
@@ -122,7 +122,7 @@ class Function(Base, UUIDMixin, TimestampMixin):
         if len(value) > 63:
             raise ValueError("Function name must be 63 characters or less")
 
-        if not re.match(r"^[a-z0-9]([a-z0-9-_]{0,61}[a-z0-9])?$", value):
+        if not re.match(r"^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$", value):
             raise ValueError(
                 "Function name must be lowercase alphanumeric with hyphens/underscores, "
                 "starting and ending with alphanumeric character"

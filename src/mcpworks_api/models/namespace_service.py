@@ -77,7 +77,7 @@ class NamespaceService(Base, UUIDMixin, TimestampMixin):
             name="uq_namespace_service_name",
         ),
         CheckConstraint(
-            "name ~ '^[a-z0-9]([a-z0-9-_]{0,61}[a-z0-9])?$'",
+            "name ~ '^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$'",
             name="namespace_service_name_format",
         ),
         Index("ix_namespace_services_namespace_id", "namespace_id"),
@@ -99,7 +99,7 @@ class NamespaceService(Base, UUIDMixin, TimestampMixin):
         if len(value) > 63:
             raise ValueError("Service name must be 63 characters or less")
 
-        if not re.match(r"^[a-z0-9]([a-z0-9-_]{0,61}[a-z0-9])?$", value):
+        if not re.match(r"^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$", value):
             raise ValueError(
                 "Service name must be lowercase alphanumeric with hyphens/underscores, "
                 "starting and ending with alphanumeric character"

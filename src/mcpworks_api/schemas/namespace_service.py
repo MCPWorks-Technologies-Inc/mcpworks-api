@@ -28,7 +28,7 @@ class NamespaceServiceBase(BaseModel):
     @classmethod
     def validate_name(cls, v: str) -> str:
         """Validate service name is URL-safe."""
-        if not re.match(r"^[a-z0-9]([a-z0-9-_]{0,61}[a-z0-9])?$", v):
+        if not re.match(r"^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$", v):
             raise ValueError("Service name must be lowercase alphanumeric with hyphens/underscores")
         return v.lower()
 
