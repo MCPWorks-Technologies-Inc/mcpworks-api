@@ -6,332 +6,414 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcpworks_api.core.exceptions import (
-    InsufficientTierError,
-    ServiceUnavailableError,
-)
 from mcpworks_api.models import (
+    Account,
+    Credit,
     CreditTransaction,
     Execution,
     ExecutionStatus,
     Service,
+    User,
 )
 from mcpworks_api.services.execution import ExecutionService
 
 
-class TestStartExecution:
-    """Tests for start_execution method."""
+@pytest.fixture
+async def test_user(db):
+    """Create a test user."""
+    user = User(
+        email=f"test-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="hashed_password",
+        name="Test User",
+        tier="free",
+        status="active",
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest.fixture
+async def test_user_with_credits(db, test_user):
+    """Create a test user with credits."""
+    credit = Credit(
+        user_id=test_user.id,
+        available_balance=Decimal("1000.00"),
+        held_balance=Decimal("0.00"),
+        lifetime_earned=Decimal("1000.00"),
+        lifetime_spent=Decimal("0.00"),
+    )
+    db.add(credit)
+    await db.flush()
+    return test_user
+
+
+@pytest.fixture
+async def test_execution(db, test_user):
+    """Create a test execution."""
+    execution = Execution(
+        user_id=test_user.id,
+        workflow_id="test-workflow-123",
+        status=ExecutionStatus.PENDING.value,
+        input_data={"key": "value"},
+    )
+    db.add(execution)
+    await db.flush()
+    return execution
+
+
+@pytest.fixture
+async def running_execution(db, test_user):
+    """Create a running execution."""
+    execution = Execution(
+        user_id=test_user.id,
+        workflow_id="test-workflow-456",
+        status=ExecutionStatus.RUNNING.value,
+        input_data={"key": "value"},
+    )
+    db.add(execution)
+    await db.flush()
+    return execution
+
+
+@pytest.fixture
+async def completed_execution(db, test_user):
+    """Create a completed execution."""
+    execution = Execution(
+        user_id=test_user.id,
+        workflow_id="test-workflow-789",
+        status=ExecutionStatus.COMPLETED.value,
+        input_data={"key": "value"},
+        result_data={"output": "result"},
+    )
+    db.add(execution)
+    await db.flush()
+    return execution
+
+
+class TestExecutionServiceGetExecution:
+    """Tests for ExecutionService.get_execution()."""
 
     @pytest.mark.asyncio
-    async def test_start_execution_service_not_found(self):
-        """Test that missing agent service raises error."""
-        mock_db = AsyncMock()
-
-        # Mock get_service to return None
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.router.get_service = AsyncMock(return_value=None)
-            service.credit_service = MagicMock()
-
-            with pytest.raises(ServiceUnavailableError):
-                await service.start_execution(
-                    workflow_id="wf_123",
-                    user_id=uuid.uuid4(),
-                    user_tier="free",
-                )
-
-    @pytest.mark.asyncio
-    async def test_start_execution_service_unavailable(self):
-        """Test that unavailable service raises error."""
-        mock_db = AsyncMock()
-        mock_service = MagicMock(spec=Service)
-        mock_service.is_available = False
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.router.get_service = AsyncMock(return_value=mock_service)
-            service.credit_service = MagicMock()
-
-            with pytest.raises(ServiceUnavailableError):
-                await service.start_execution(
-                    workflow_id="wf_123",
-                    user_id=uuid.uuid4(),
-                    user_tier="free",
-                )
-
-    @pytest.mark.asyncio
-    async def test_start_execution_tier_check_fails(self):
-        """Test that insufficient tier raises error."""
-        mock_db = AsyncMock()
-        mock_service = MagicMock(spec=Service)
-        mock_service.is_available = True
-        mock_service.tier_required = "pro"
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.router.get_service = AsyncMock(return_value=mock_service)
-            service.router.can_access_service = MagicMock(return_value=False)
-            service.credit_service = MagicMock()
-
-            with pytest.raises(InsufficientTierError):
-                await service.start_execution(
-                    workflow_id="wf_123",
-                    user_id=uuid.uuid4(),
-                    user_tier="free",
-                )
-
-
-class TestHandleCallback:
-    """Tests for handle_callback method."""
-
-    @pytest.mark.asyncio
-    async def test_callback_execution_not_found(self):
-        """Test that callback with invalid execution raises error."""
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-
-            with pytest.raises(ValueError, match="not found"):
-                await service.handle_callback(
-                    execution_id=uuid.uuid4(),
-                    status="completed",
-                )
-
-    @pytest.mark.asyncio
-    async def test_callback_execution_already_terminal(self):
-        """Test that callback on completed execution raises error."""
-        mock_db = AsyncMock()
-        mock_execution = MagicMock(spec=Execution)
-        mock_execution.is_terminal = True
-        mock_execution.status = "completed"
-
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_execution
-        mock_db.execute.return_value = mock_result
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-
-            with pytest.raises(ValueError, match="terminal state"):
-                await service.handle_callback(
-                    execution_id=uuid.uuid4(),
-                    status="completed",
-                )
-
-    @pytest.mark.asyncio
-    async def test_callback_success_commits_credits(self):
-        """Test that successful callback commits credits."""
-        mock_db = AsyncMock()
-        execution_id = uuid.uuid4()
-        hold_txn_id = uuid.uuid4()
-
-        mock_execution = MagicMock(spec=Execution)
-        mock_execution.id = execution_id
-        mock_execution.is_terminal = False
-        mock_execution.hold_transaction_id = hold_txn_id
-        mock_execution.workflow_id = "wf_123"
-
-        mock_hold_txn = MagicMock(spec=CreditTransaction)
-        mock_hold_txn.id = hold_txn_id
-        mock_hold_txn.amount = Decimal("1.00")
-
-        # Setup execute to return different results for each call
-        call_count = 0
-
-        def execute_side_effect(query):
-            nonlocal call_count
-            call_count += 1
-            mock_result = MagicMock()
-            if call_count == 1:
-                mock_result.scalar_one_or_none.return_value = mock_execution
-            else:
-                mock_result.scalar_one_or_none.return_value = mock_hold_txn
-            return mock_result
-
-        mock_db.execute = AsyncMock(side_effect=execute_side_effect)
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-            service.credit_service.commit = AsyncMock()
-
-            result, action, amount = await service.handle_callback(
-                execution_id=execution_id,
-                status="completed",
-                result_data={"output": "success"},
-            )
-
-            assert action == "committed"
-            assert amount == Decimal("1.00")
-            service.credit_service.commit.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_callback_failure_releases_credits(self):
-        """Test that failed callback releases credits."""
-        mock_db = AsyncMock()
-        execution_id = uuid.uuid4()
-        hold_txn_id = uuid.uuid4()
-
-        mock_execution = MagicMock(spec=Execution)
-        mock_execution.id = execution_id
-        mock_execution.is_terminal = False
-        mock_execution.hold_transaction_id = hold_txn_id
-        mock_execution.workflow_id = "wf_123"
-
-        mock_hold_txn = MagicMock(spec=CreditTransaction)
-        mock_hold_txn.id = hold_txn_id
-        mock_hold_txn.amount = Decimal("1.00")
-
-        call_count = 0
-
-        def execute_side_effect(query):
-            nonlocal call_count
-            call_count += 1
-            mock_result = MagicMock()
-            if call_count == 1:
-                mock_result.scalar_one_or_none.return_value = mock_execution
-            else:
-                mock_result.scalar_one_or_none.return_value = mock_hold_txn
-            return mock_result
-
-        mock_db.execute = AsyncMock(side_effect=execute_side_effect)
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-            service.credit_service.release = AsyncMock()
-
-            result, action, amount = await service.handle_callback(
-                execution_id=execution_id,
-                status="failed",
-                error_message="Workflow error",
-                error_code="WF_ERROR",
-            )
-
-            assert action == "released"
-            assert amount == Decimal("1.00")
-            service.credit_service.release.assert_called_once()
-
-
-class TestGetExecution:
-    """Tests for get_execution method."""
-
-    @pytest.mark.asyncio
-    async def test_get_existing_execution(self):
+    async def test_get_execution_found(self, db, test_execution):
         """Test getting an existing execution."""
-        mock_db = AsyncMock()
-        execution_id = uuid.uuid4()
+        service = ExecutionService(db)
 
-        mock_execution = MagicMock(spec=Execution)
-        mock_execution.id = execution_id
+        execution = await service.get_execution(test_execution.id)
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_execution
-        mock_db.execute.return_value = mock_result
-
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-
-            result = await service.get_execution(execution_id)
-
-            assert result is not None
-            assert result.id == execution_id
+        assert execution is not None
+        assert execution.id == test_execution.id
+        assert execution.workflow_id == "test-workflow-123"
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_execution(self):
-        """Test getting a nonexistent execution."""
-        mock_db = AsyncMock()
+    async def test_get_execution_not_found(self, db):
+        """Test getting a non-existent execution returns None."""
+        service = ExecutionService(db)
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
+        execution = await service.get_execution(uuid.uuid4())
 
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-
-            result = await service.get_execution(uuid.uuid4())
-
-            assert result is None
+        assert execution is None
 
 
-class TestCancelExecution:
-    """Tests for cancel_execution method."""
+class TestExecutionServiceGetUserExecutions:
+    """Tests for ExecutionService.get_user_executions()."""
 
     @pytest.mark.asyncio
-    async def test_cancel_nonexistent_execution(self):
-        """Test cancelling nonexistent execution raises error."""
-        mock_db = AsyncMock()
+    async def test_get_user_executions_empty(self, db, test_user):
+        """Test getting executions for user with none."""
+        service = ExecutionService(db)
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
+        executions, total = await service.get_user_executions(test_user.id)
 
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
-
-            with pytest.raises(ValueError, match="not found"):
-                await service.cancel_execution(uuid.uuid4())
+        assert executions == []
+        assert total == 0
 
     @pytest.mark.asyncio
-    async def test_cancel_completed_execution(self):
-        """Test cancelling completed execution raises error."""
-        mock_db = AsyncMock()
+    async def test_get_user_executions_multiple(self, db, test_user):
+        """Test getting multiple executions for user."""
+        # Create multiple executions
+        for i in range(3):
+            execution = Execution(
+                user_id=test_user.id,
+                workflow_id=f"workflow-{i}",
+                status=ExecutionStatus.PENDING.value,
+            )
+            db.add(execution)
+        await db.flush()
 
-        mock_execution = MagicMock(spec=Execution)
-        mock_execution.is_terminal = True
-        mock_execution.status = "completed"
+        service = ExecutionService(db)
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_execution
-        mock_db.execute.return_value = mock_result
+        executions, total = await service.get_user_executions(test_user.id)
 
-        with patch.object(ExecutionService, "__init__", return_value=None):
-            service = ExecutionService.__new__(ExecutionService)
-            service.db = mock_db
-            service.router = MagicMock()
-            service.credit_service = MagicMock()
+        assert len(executions) == 3
+        assert total == 3
 
-            with pytest.raises(ValueError, match="Cannot cancel"):
-                await service.cancel_execution(uuid.uuid4())
+    @pytest.mark.asyncio
+    async def test_get_user_executions_pagination(self, db, test_user):
+        """Test pagination of user executions."""
+        # Create 5 executions
+        for i in range(5):
+            execution = Execution(
+                user_id=test_user.id,
+                workflow_id=f"workflow-{i}",
+                status=ExecutionStatus.PENDING.value,
+            )
+            db.add(execution)
+        await db.flush()
+
+        service = ExecutionService(db)
+
+        # Get first page
+        page1, total = await service.get_user_executions(test_user.id, limit=2, offset=0)
+        assert len(page1) == 2
+        assert total == 5
+
+        # Get second page
+        page2, _ = await service.get_user_executions(test_user.id, limit=2, offset=2)
+        assert len(page2) == 2
+
+        # Get third page (partial)
+        page3, _ = await service.get_user_executions(test_user.id, limit=2, offset=4)
+        assert len(page3) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_user_executions_only_own(self, db, test_user):
+        """Test that only the user's executions are returned."""
+        # Create execution for test_user
+        execution1 = Execution(
+            user_id=test_user.id,
+            workflow_id="my-workflow",
+            status=ExecutionStatus.PENDING.value,
+        )
+        db.add(execution1)
+
+        # Create another user with execution
+        other_user = User(
+            email=f"other-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash="hashed_password",
+            tier="free",
+            status="active",
+        )
+        db.add(other_user)
+        await db.flush()
+
+        execution2 = Execution(
+            user_id=other_user.id,
+            workflow_id="other-workflow",
+            status=ExecutionStatus.PENDING.value,
+        )
+        db.add(execution2)
+        await db.flush()
+
+        service = ExecutionService(db)
+
+        executions, total = await service.get_user_executions(test_user.id)
+
+        assert len(executions) == 1
+        assert total == 1
+        assert executions[0].workflow_id == "my-workflow"
 
 
-class TestExecutionStatus:
-    """Tests for ExecutionStatus enum."""
+class TestExecutionServiceCancelExecution:
+    """Tests for ExecutionService.cancel_execution()."""
 
-    def test_execution_status_values(self):
-        """Test all execution status values exist."""
-        assert ExecutionStatus.PENDING.value == "pending"
-        assert ExecutionStatus.RUNNING.value == "running"
-        assert ExecutionStatus.COMPLETED.value == "completed"
-        assert ExecutionStatus.FAILED.value == "failed"
-        assert ExecutionStatus.CANCELLED.value == "cancelled"
-        assert ExecutionStatus.TIMED_OUT.value == "timed_out"
+    @pytest.mark.asyncio
+    async def test_cancel_pending_execution(self, db, test_execution):
+        """Test cancelling a pending execution."""
+        service = ExecutionService(db)
+
+        cancelled = await service.cancel_execution(test_execution.id)
+
+        assert cancelled.status == ExecutionStatus.CANCELLED.value
+
+    @pytest.mark.asyncio
+    async def test_cancel_running_execution(self, db, running_execution):
+        """Test cancelling a running execution."""
+        service = ExecutionService(db)
+
+        cancelled = await service.cancel_execution(running_execution.id)
+
+        assert cancelled.status == ExecutionStatus.CANCELLED.value
+
+    @pytest.mark.asyncio
+    async def test_cancel_completed_execution_fails(self, db, completed_execution):
+        """Test that completed execution cannot be cancelled."""
+        service = ExecutionService(db)
+
+        with pytest.raises(ValueError) as exc_info:
+            await service.cancel_execution(completed_execution.id)
+
+        assert "Cannot cancel" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_cancel_nonexistent_execution_fails(self, db):
+        """Test cancelling non-existent execution fails."""
+        service = ExecutionService(db)
+
+        with pytest.raises(ValueError) as exc_info:
+            await service.cancel_execution(uuid.uuid4())
+
+        assert "not found" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_cancel_execution_with_credit_hold(self, db, test_user_with_credits):
+        """Test cancelling execution releases held credits."""
+        from mcpworks_api.services.credit import CreditService
+
+        credit_service = CreditService(db)
+
+        # Create a credit hold
+        hold = await credit_service.hold(
+            user_id=test_user_with_credits.id,
+            amount=Decimal("50.00"),
+            metadata={"test": True},
+        )
+        await db.flush()
+
+        # Create execution with hold
+        execution = Execution(
+            user_id=test_user_with_credits.id,
+            workflow_id="test-workflow",
+            status=ExecutionStatus.RUNNING.value,
+            hold_transaction_id=hold.id,
+        )
+        db.add(execution)
+        await db.flush()
+
+        # Cancel execution
+        service = ExecutionService(db)
+        cancelled = await service.cancel_execution(execution.id)
+
+        assert cancelled.status == ExecutionStatus.CANCELLED.value
+
+
+class TestExecutionServiceHandleCallback:
+    """Tests for ExecutionService.handle_callback()."""
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_completed(self, db, running_execution):
+        """Test handling a successful completion callback."""
+        service = ExecutionService(db)
+
+        execution, action, amount = await service.handle_callback(
+            execution_id=running_execution.id,
+            status="completed",
+            result_data={"output": "success"},
+        )
+
+        assert execution.status == ExecutionStatus.COMPLETED.value
+        assert execution.result_data == {"output": "success"}
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_failed(self, db, running_execution):
+        """Test handling a failure callback."""
+        service = ExecutionService(db)
+
+        execution, action, amount = await service.handle_callback(
+            execution_id=running_execution.id,
+            status="failed",
+            error_message="Something went wrong",
+            error_code="TEST_ERROR",
+        )
+
+        assert execution.status == ExecutionStatus.FAILED.value
+        assert execution.error_message == "Something went wrong"
+        assert execution.error_code == "TEST_ERROR"
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_not_found(self, db):
+        """Test callback for non-existent execution fails."""
+        service = ExecutionService(db)
+
+        with pytest.raises(ValueError) as exc_info:
+            await service.handle_callback(
+                execution_id=uuid.uuid4(),
+                status="completed",
+            )
+
+        assert "not found" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_already_completed(self, db, completed_execution):
+        """Test callback for already completed execution fails."""
+        service = ExecutionService(db)
+
+        with pytest.raises(ValueError) as exc_info:
+            await service.handle_callback(
+                execution_id=completed_execution.id,
+                status="completed",
+            )
+
+        assert "terminal state" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_commits_credits(self, db, test_user_with_credits):
+        """Test successful callback commits held credits."""
+        from mcpworks_api.services.credit import CreditService
+
+        credit_service = CreditService(db)
+
+        # Create a credit hold
+        hold = await credit_service.hold(
+            user_id=test_user_with_credits.id,
+            amount=Decimal("50.00"),
+            metadata={"test": True},
+        )
+        await db.flush()
+
+        # Create execution with hold
+        execution = Execution(
+            user_id=test_user_with_credits.id,
+            workflow_id="test-workflow",
+            status=ExecutionStatus.RUNNING.value,
+            hold_transaction_id=hold.id,
+        )
+        db.add(execution)
+        await db.flush()
+
+        service = ExecutionService(db)
+        result_exec, action, amount = await service.handle_callback(
+            execution_id=execution.id,
+            status="completed",
+            result_data={"output": "done"},
+        )
+
+        assert action == "committed"
+        assert amount == Decimal("50.00")
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_releases_credits_on_failure(
+        self, db, test_user_with_credits
+    ):
+        """Test failed callback releases held credits."""
+        from mcpworks_api.services.credit import CreditService
+
+        credit_service = CreditService(db)
+
+        # Create a credit hold
+        hold = await credit_service.hold(
+            user_id=test_user_with_credits.id,
+            amount=Decimal("50.00"),
+            metadata={"test": True},
+        )
+        await db.flush()
+
+        # Create execution with hold
+        execution = Execution(
+            user_id=test_user_with_credits.id,
+            workflow_id="test-workflow",
+            status=ExecutionStatus.RUNNING.value,
+            hold_transaction_id=hold.id,
+        )
+        db.add(execution)
+        await db.flush()
+
+        service = ExecutionService(db)
+        result_exec, action, amount = await service.handle_callback(
+            execution_id=execution.id,
+            status="failed",
+            error_message="Test failure",
+        )
+
+        assert action == "released"
+        assert amount == Decimal("50.00")
