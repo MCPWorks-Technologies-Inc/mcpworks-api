@@ -1,0 +1,590 @@
+"""Create MCP Handler - Management interface for namespaces, services, functions.
+
+Exposes 10 tools:
+- make_namespace, list_namespaces
+- make_service, list_services, delete_service
+- make_function, update_function, delete_function, list_functions, describe_function
+"""
+
+import json
+import uuid
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from mcpworks_api.mcp.protocol import (
+    JSONRPCRequest,
+    JSONRPCResponse,
+    MCPContent,
+    MCPErrorCodes,
+    MCPTool,
+    MCPToolCallParams,
+    MCPToolResult,
+    MCPToolsListResult,
+    make_error_response,
+    make_success_response,
+)
+from mcpworks_api.models import Account, Namespace
+from mcpworks_api.services.function import FunctionService
+from mcpworks_api.services.namespace import (
+    NamespaceServiceManager,
+    NamespaceServiceService,
+)
+
+
+class CreateMCPHandler:
+    """Handler for *.create.mcpworks.io endpoints.
+
+    Provides management operations for namespaces, services, and functions.
+    """
+
+    def __init__(
+        self,
+        namespace: str,
+        account: Account,
+        db: AsyncSession,
+    ):
+        """Initialize handler.
+
+        Args:
+            namespace: The namespace name from subdomain.
+            account: The authenticated account.
+            db: Database session.
+        """
+        self.namespace_name = namespace
+        self.account = account
+        self.db = db
+        self.namespace_service = NamespaceServiceManager(db)
+        self.service_service = NamespaceServiceService(db)
+        self.function_service = FunctionService(db)
+
+    async def handle(self, request: JSONRPCRequest) -> JSONRPCResponse:
+        """Handle MCP request."""
+        method = request.method
+        params = request.params or {}
+
+        if method == "initialize":
+            return await self._handle_initialize(request.id)
+        elif method == "tools/list":
+            return await self._handle_tools_list(request.id)
+        elif method == "tools/call":
+            return await self._handle_tools_call(params, request.id)
+        else:
+            return make_error_response(
+                MCPErrorCodes.METHOD_NOT_FOUND,
+                f"Unknown method: {method}",
+                request_id=request.id,
+            )
+
+    async def _handle_initialize(self, request_id) -> JSONRPCResponse:
+        """Handle initialize method."""
+        return make_success_response(
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {
+                    "name": f"mcpworks-create-{self.namespace_name}",
+                    "version": "1.0.0",
+                },
+            },
+            request_id,
+        )
+
+    async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
+        """Return list of available management tools."""
+        tools = [
+            MCPTool(
+                name="make_namespace",
+                description="Create a new namespace for organizing services and functions",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Namespace name (lowercase, alphanumeric, hyphens, 1-63 chars)",
+                            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional description",
+                        },
+                    },
+                    "required": ["name"],
+                },
+            ),
+            MCPTool(
+                name="list_namespaces",
+                description="List all namespaces for the current account",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            MCPTool(
+                name="make_service",
+                description="Create a new service within the current namespace",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Service name",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional description",
+                        },
+                    },
+                    "required": ["name"],
+                },
+            ),
+            MCPTool(
+                name="list_services",
+                description="List all services in the current namespace",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            MCPTool(
+                name="delete_service",
+                description="Delete a service and all its functions",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Service name"},
+                    },
+                    "required": ["name"],
+                },
+            ),
+            MCPTool(
+                name="make_function",
+                description="Create a new function in a service",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "service": {"type": "string", "description": "Service name"},
+                        "name": {"type": "string", "description": "Function name"},
+                        "backend": {
+                            "type": "string",
+                            "enum": ["code_sandbox", "activepieces", "nanobot", "github_repo"],
+                            "description": "Execution backend",
+                        },
+                        "code": {
+                            "type": "string",
+                            "description": "Function code (for code_sandbox)",
+                        },
+                        "config": {
+                            "type": "object",
+                            "description": "Backend-specific configuration",
+                        },
+                        "input_schema": {
+                            "type": "object",
+                            "description": "JSON Schema for input",
+                        },
+                        "output_schema": {
+                            "type": "object",
+                            "description": "JSON Schema for output",
+                        },
+                        "description": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["service", "name", "backend"],
+                },
+            ),
+            MCPTool(
+                name="update_function",
+                description="Update a function (creates new version)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "service": {"type": "string"},
+                        "name": {"type": "string"},
+                        "backend": {"type": "string"},
+                        "code": {"type": "string"},
+                        "config": {"type": "object"},
+                        "input_schema": {"type": "object"},
+                        "output_schema": {"type": "object"},
+                        "description": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "restore_version": {
+                            "type": "integer",
+                            "description": "Restore from a previous version number",
+                        },
+                    },
+                    "required": ["service", "name"],
+                },
+            ),
+            MCPTool(
+                name="delete_function",
+                description="Delete a function",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "service": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["service", "name"],
+                },
+            ),
+            MCPTool(
+                name="list_functions",
+                description="List functions in a service",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "service": {"type": "string"},
+                        "tag": {"type": "string", "description": "Filter by tag"},
+                    },
+                    "required": ["service"],
+                },
+            ),
+            MCPTool(
+                name="describe_function",
+                description="Get detailed function info including version history",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "service": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["service", "name"],
+                },
+            ),
+        ]
+
+        result = MCPToolsListResult(tools=tools)
+        return make_success_response(result.model_dump(), request_id)
+
+    async def _handle_tools_call(
+        self,
+        params: Dict[str, Any],
+        request_id,
+    ) -> JSONRPCResponse:
+        """Dispatch tool call to appropriate method."""
+        try:
+            call_params = MCPToolCallParams(**params)
+        except Exception as e:
+            return make_error_response(
+                MCPErrorCodes.INVALID_PARAMS,
+                f"Invalid tool call params: {e}",
+                request_id=request_id,
+            )
+
+        tool_name = call_params.name
+        args = call_params.arguments
+
+        handlers = {
+            "make_namespace": self._make_namespace,
+            "list_namespaces": self._list_namespaces,
+            "make_service": self._make_service,
+            "list_services": self._list_services,
+            "delete_service": self._delete_service,
+            "make_function": self._make_function,
+            "update_function": self._update_function,
+            "delete_function": self._delete_function,
+            "list_functions": self._list_functions,
+            "describe_function": self._describe_function,
+        }
+
+        handler = handlers.get(tool_name)
+        if not handler:
+            return make_error_response(
+                MCPErrorCodes.METHOD_NOT_FOUND,
+                f"Unknown tool: {tool_name}",
+                request_id=request_id,
+            )
+
+        try:
+            result = await handler(**args)
+            return make_success_response(result.model_dump(), request_id)
+        except NotFoundError as e:
+            return make_error_response(
+                MCPErrorCodes.NOT_FOUND,
+                str(e),
+                request_id=request_id,
+            )
+        except ConflictError as e:
+            return make_error_response(
+                MCPErrorCodes.INVALID_PARAMS,
+                str(e),
+                request_id=request_id,
+            )
+        except ForbiddenError as e:
+            return make_error_response(
+                MCPErrorCodes.FORBIDDEN,
+                str(e),
+                request_id=request_id,
+            )
+        except Exception as e:
+            return make_error_response(
+                MCPErrorCodes.EXECUTION_ERROR,
+                str(e),
+                request_id=request_id,
+            )
+
+    async def _get_current_namespace(self) -> Namespace:
+        """Get the current namespace from the subdomain."""
+        return await self.namespace_service.get_by_name(
+            self.namespace_name,
+            self.account.id,
+        )
+
+    # Tool implementations
+    async def _make_namespace(
+        self,
+        name: str,
+        description: Optional[str] = None,
+    ) -> MCPToolResult:
+        """Create a new namespace."""
+        namespace = await self.namespace_service.create(
+            account_id=self.account.id,
+            name=name,
+            description=description,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "id": str(namespace.id),
+                        "name": namespace.name,
+                        "create_endpoint": namespace.create_endpoint,
+                        "run_endpoint": namespace.run_endpoint,
+                        "created_at": namespace.created_at.isoformat(),
+                    })
+                )
+            ]
+        )
+
+    async def _list_namespaces(self) -> MCPToolResult:
+        """List all namespaces for account."""
+        namespaces, total = await self.namespace_service.list(self.account.id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "namespaces": [
+                            {
+                                "name": ns.name,
+                                "description": ns.description,
+                                "create_endpoint": ns.create_endpoint,
+                                "run_endpoint": ns.run_endpoint,
+                            }
+                            for ns in namespaces
+                        ],
+                        "total": total,
+                    })
+                )
+            ]
+        )
+
+    async def _make_service(
+        self,
+        name: str,
+        description: Optional[str] = None,
+    ) -> MCPToolResult:
+        """Create a new service in current namespace."""
+        namespace = await self._get_current_namespace()
+        service = await self.service_service.create(
+            namespace_id=namespace.id,
+            name=name,
+            description=description,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "name": service.name,
+                        "namespace": self.namespace_name,
+                        "created_at": service.created_at.isoformat(),
+                    })
+                )
+            ]
+        )
+
+    async def _list_services(self) -> MCPToolResult:
+        """List services in current namespace."""
+        namespace = await self._get_current_namespace()
+        services = await self.service_service.list(namespace.id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "services": [
+                            {
+                                "name": s.name,
+                                "description": s.description,
+                                "function_count": s.function_count,
+                            }
+                            for s in services
+                        ],
+                        "namespace": self.namespace_name,
+                    })
+                )
+            ]
+        )
+
+    async def _delete_service(self, name: str) -> MCPToolResult:
+        """Delete a service."""
+        namespace = await self._get_current_namespace()
+        service = await self.service_service.get_by_name(namespace.id, name)
+        await self.service_service.delete(service.id)
+        return MCPToolResult(
+            content=[MCPContent(text=f"Deleted service: {name}")]
+        )
+
+    async def _make_function(
+        self,
+        service: str,
+        name: str,
+        backend: str,
+        code: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None,
+        input_schema: Optional[Dict[str, Any]] = None,
+        output_schema: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> MCPToolResult:
+        """Create a new function."""
+        namespace = await self._get_current_namespace()
+        svc = await self.service_service.get_by_name(namespace.id, service)
+
+        function = await self.function_service.create(
+            service_id=svc.id,
+            name=name,
+            backend=backend,
+            code=code,
+            config=config,
+            input_schema=input_schema,
+            output_schema=output_schema,
+            description=description,
+            tags=tags,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "name": f"{service}.{name}",
+                        "version": 1,
+                        "backend": backend,
+                        "created_at": function.created_at.isoformat(),
+                    })
+                )
+            ]
+        )
+
+    async def _update_function(
+        self,
+        service: str,
+        name: str,
+        backend: Optional[str] = None,
+        code: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None,
+        input_schema: Optional[Dict[str, Any]] = None,
+        output_schema: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        restore_version: Optional[int] = None,
+    ) -> MCPToolResult:
+        """Update a function (creates new version)."""
+        namespace = await self._get_current_namespace()
+        svc = await self.service_service.get_by_name(namespace.id, service)
+        function = await self.function_service.get_by_name(svc.id, name)
+
+        # Update metadata if provided
+        if description is not None or tags is not None:
+            await self.function_service.update(
+                function_id=function.id,
+                description=description,
+                tags=tags,
+            )
+
+        # Create new version if code/config changes or restoring
+        if restore_version:
+            old_version = await self.function_service.get_version(
+                function.id, restore_version
+            )
+            version = await self.function_service.create_version(
+                function_id=function.id,
+                backend=old_version.backend,
+                code=old_version.code,
+                config=old_version.config,
+                input_schema=old_version.input_schema,
+                output_schema=old_version.output_schema,
+            )
+            message = f"Restored from v{restore_version}"
+        elif any([backend, code, config, input_schema, output_schema]):
+            active = await self.function_service.get_active_version(function.id)
+            version = await self.function_service.create_version(
+                function_id=function.id,
+                backend=backend or active.backend,
+                code=code if code is not None else active.code,
+                config=config if config is not None else active.config,
+                input_schema=input_schema if input_schema is not None else active.input_schema,
+                output_schema=output_schema if output_schema is not None else active.output_schema,
+            )
+            message = "Created new version"
+        else:
+            message = "Updated metadata only"
+            version = await self.function_service.get_active_version(function.id)
+
+        # Refresh function to get updated active_version
+        function = await self.function_service.get_by_id(function.id)
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "name": f"{service}.{name}",
+                        "version": function.active_version,
+                        "message": message,
+                    })
+                )
+            ]
+        )
+
+    async def _delete_function(self, service: str, name: str) -> MCPToolResult:
+        """Delete a function."""
+        namespace = await self._get_current_namespace()
+        svc = await self.service_service.get_by_name(namespace.id, service)
+        function = await self.function_service.get_by_name(svc.id, name)
+        await self.function_service.delete(function.id)
+        return MCPToolResult(
+            content=[MCPContent(text=f"Deleted function: {service}.{name}")]
+        )
+
+    async def _list_functions(
+        self,
+        service: str,
+        tag: Optional[str] = None,
+    ) -> MCPToolResult:
+        """List functions in a service."""
+        namespace = await self._get_current_namespace()
+        svc = await self.service_service.get_by_name(namespace.id, service)
+
+        tags = [tag] if tag else None
+        functions, total = await self.function_service.list(svc.id, tags=tags)
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({
+                        "functions": [
+                            {
+                                "name": f"{service}.{f.name}",
+                                "description": f.description,
+                                "version": f.active_version,
+                                "tags": f.tags or [],
+                            }
+                            for f in functions
+                        ],
+                        "total": total,
+                    })
+                )
+            ]
+        )
+
+    async def _describe_function(self, service: str, name: str) -> MCPToolResult:
+        """Get detailed function info."""
+        namespace = await self._get_current_namespace()
+        svc = await self.service_service.get_by_name(namespace.id, service)
+        function = await self.function_service.get_by_name(svc.id, name)
+        details = await self.function_service.describe(function.id)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps(details))]
+        )

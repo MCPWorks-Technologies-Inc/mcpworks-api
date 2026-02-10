@@ -8,9 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
+from mcpworks_api.mcp import mcp_router
 from mcpworks_api.core.database import close_db, init_db
 from mcpworks_api.core.redis import close_redis, init_redis
-from mcpworks_api.middleware import CorrelationIdMiddleware, register_exception_handlers
+from mcpworks_api.middleware import (
+    BillingMiddleware,
+    CorrelationIdMiddleware,
+    SubdomainMiddleware,
+    register_exception_handlers,
+)
 from mcpworks_api.middleware.metrics import setup_metrics
 from mcpworks_api.middleware.rate_limit import RateLimitMiddleware
 
@@ -51,9 +57,19 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add middleware (order matters - first added = last executed)
-    # Rate limiting middleware (outermost)
+    # Add middleware (order matters - first added = last executed on request)
+    # So add in reverse order of desired execution:
+    # 1. Subdomain Parsing → 2. Rate Limiting → 3. Billing (innermost)
+
+    # Billing middleware (innermost - runs last on request, first on response)
+    # Tracks usage and enforces quotas for run endpoints
+    app.add_middleware(BillingMiddleware)
+
+    # Rate limiting middleware
     app.add_middleware(RateLimitMiddleware)
+
+    # Subdomain parsing (A0: namespace + endpoint type extraction)
+    app.add_middleware(SubdomainMiddleware)
 
     # Correlation ID middleware
     app.add_middleware(CorrelationIdMiddleware)
@@ -72,6 +88,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(v1_router)
+    app.include_router(mcp_router)  # MCP Protocol endpoints for namespace create/run
 
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:

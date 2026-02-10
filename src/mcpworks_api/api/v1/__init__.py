@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from mcpworks_api.api.v1.auth import router as auth_router
 from mcpworks_api.api.v1.credits import router as credits_router
 from mcpworks_api.api.v1.health import router as health_router
+from mcpworks_api.api.v1.namespaces import router as namespaces_router
 from mcpworks_api.api.v1.services import router as services_router
 from mcpworks_api.api.v1.subscriptions import router as subscriptions_router
 from mcpworks_api.api.v1.subscriptions import webhook_router
@@ -21,5 +22,6 @@ router.include_router(credits_router)
 router.include_router(services_router)
 router.include_router(subscriptions_router)
 router.include_router(webhook_router)
+router.include_router(namespaces_router)  # A0: Namespace management
 
 __all__ = ["router"]

@@ -56,6 +56,41 @@ from mcpworks_api.schemas.user import (
     UserProfile,
     UserProfileWithCredits,
 )
+# A0 Namespace Platform Schemas
+from mcpworks_api.schemas.namespace import (
+    NamespaceBase,
+    NamespaceCreate,
+    NamespaceUpdate,
+    NamespaceResponse,
+    NamespaceList,
+)
+from mcpworks_api.schemas.namespace_service import (
+    NamespaceServiceBase,
+    NamespaceServiceCreate,
+    NamespaceServiceUpdate,
+    NamespaceServiceResponse,
+    NamespaceServiceList,
+)
+from mcpworks_api.schemas.function import (
+    FunctionBase,
+    FunctionCreate,
+    FunctionUpdate,
+    FunctionResponse,
+    FunctionList,
+    FunctionVersionCreate,
+    FunctionVersionResponse,
+)
+from mcpworks_api.schemas.security_event import (
+    SecurityEventResponse,
+    SecurityEventList,
+)
+from mcpworks_api.schemas.webhook import (
+    WebhookBase,
+    WebhookCreate,
+    WebhookUpdate,
+    WebhookResponse as WebhookEndpointResponse,
+    WebhookList,
+)
 
 __all__ = [
     # Common
@@ -113,4 +148,29 @@ __all__ = [
     "CancelSubscriptionResponse",
     "PurchaseCreditsRequest",
     "WebhookResponse",
+    # A0 Namespace Platform
+    "NamespaceBase",
+    "NamespaceCreate",
+    "NamespaceUpdate",
+    "NamespaceResponse",
+    "NamespaceList",
+    "NamespaceServiceBase",
+    "NamespaceServiceCreate",
+    "NamespaceServiceUpdate",
+    "NamespaceServiceResponse",
+    "NamespaceServiceList",
+    "FunctionBase",
+    "FunctionCreate",
+    "FunctionUpdate",
+    "FunctionResponse",
+    "FunctionList",
+    "FunctionVersionCreate",
+    "FunctionVersionResponse",
+    "SecurityEventResponse",
+    "SecurityEventList",
+    "WebhookBase",
+    "WebhookCreate",
+    "WebhookUpdate",
+    "WebhookEndpointResponse",
+    "WebhookList",
 ]
