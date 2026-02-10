@@ -1,10 +1,20 @@
+# CI/CD Pipeline
+#
+# STAGING HOOK: When ready for staging environment, add 'staging' branch:
+#   push:
+#     branches: [main, staging]
+#   pull_request:
+#     branches: [main, staging]
+
 name: CI
 
 on:
   push:
     branches: [main, 001-api-gateway-mvp]
+    # STAGING HOOK: Add staging branch here
   pull_request:
     branches: [main]
+    # STAGING HOOK: Add staging branch here
 
 env:
   PYTHON_VERSION: "3.11"
@@ -173,3 +183,19 @@ jobs:
         with:
           extra_args: --only-verified
         continue-on-error: true
+
+  # STAGING HOOK: Add deployment notification job when staging is ready
+  # deploy-notify:
+  #   name: Deployment Notification
+  #   runs-on: ubuntu-latest
+  #   needs: [test, build, security]
+  #   if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+  #   steps:
+  #     - name: Determine environment
+  #       run: |
+  #         if [ "${{ github.ref }}" == "refs/heads/staging" ]; then
+  #           echo "Deploying to STAGING (api-staging.mcpworks.io)"
+  #         else
+  #           echo "Deploying to PRODUCTION (api.mcpworks.io)"
+  #         fi
+  #         echo "DigitalOcean App Platform will auto-deploy"
