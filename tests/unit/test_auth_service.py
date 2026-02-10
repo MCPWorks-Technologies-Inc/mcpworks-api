@@ -1,287 +1,523 @@
-"""Unit tests for authentication service - TDD tests written FIRST."""
+"""Unit tests for AuthService."""
 
-import re
-from datetime import timedelta
+import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
-from mcpworks_api.core.exceptions import InvalidTokenError, TokenExpiredError
-from mcpworks_api.core.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    generate_api_key,
-    hash_api_key,
-    hash_password,
-    verify_access_token,
-    verify_api_key,
-    verify_password,
-    verify_refresh_token,
+from mcpworks_api.core.exceptions import (
+    ApiKeyNotFoundError,
+    EmailExistsError,
+    InvalidApiKeyError,
+    InvalidCredentialsError,
+    UserNotFoundError,
 )
+from mcpworks_api.core.security import hash_password
+from mcpworks_api.models import APIKey, Credit, User
+from mcpworks_api.services.auth import AuthService
 
 
-class TestApiKeyGeneration:
-    """Tests for API key generation and format validation."""
-
-    def test_generate_api_key_format(self):
-        """API key should match sk_{env}_{keyNum}_{random} format.
-
-        Format: mcp_{64_hex_chars}
-        Example: mcp_a1b2c3d4e5f6...
-        """
-        api_key = generate_api_key()
-
-        # Should have correct prefix
-        assert api_key.startswith("mcp_")
-
-        # Should be correct total length (4 prefix + 64 hex = 68)
-        assert len(api_key) == 68
-
-        # Random part should be hex characters
-        random_part = api_key[4:]
-        assert re.match(r"^[a-f0-9]+$", random_part)
-
-    def test_generate_api_key_unique(self):
-        """Each generated API key should be unique."""
-        keys = [generate_api_key() for _ in range(100)]
-        assert len(set(keys)) == 100  # All unique
-
-    def test_generate_api_key_custom_prefix(self):
-        """API key should use custom prefix if provided."""
-        api_key = generate_api_key(prefix="sk_test")
-        assert api_key.startswith("sk_test_")
+@pytest.fixture
+async def test_user(db):
+    """Create a test user with hashed password."""
+    user = User(
+        email=f"test-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=hash_password("testpassword123"),
+        name="Test User",
+        tier="free",
+        status="active",
+    )
+    db.add(user)
+    await db.flush()
+    return user
 
 
-class TestApiKeyHashing:
-    """Tests for API key hashing with Argon2id."""
-
-    def test_hash_api_key_argon2id(self):
-        """API key hash should use Argon2id algorithm."""
-        api_key = "mcp_" + "a" * 64
-        hashed = hash_api_key(api_key)
-
-        # Argon2id hash starts with $argon2id$
-        assert hashed.startswith("$argon2id$")
-
-    def test_verify_api_key_success(self):
-        """Valid API key should verify against its hash."""
-        api_key = generate_api_key()
-        hashed = hash_api_key(api_key)
-
-        assert verify_api_key(api_key, hashed) is True
-
-    def test_verify_api_key_wrong_key(self):
-        """Wrong API key should fail verification."""
-        api_key = generate_api_key()
-        hashed = hash_api_key(api_key)
-        wrong_key = generate_api_key()
-
-        assert verify_api_key(wrong_key, hashed) is False
-
-    def test_verify_api_key_invalid_hash(self):
-        """Invalid hash should fail verification."""
-        api_key = generate_api_key()
-        invalid_hash = "not_a_valid_hash"
-
-        assert verify_api_key(api_key, invalid_hash) is False
+@pytest.fixture
+async def test_user_with_credits(db, test_user):
+    """Create a test user with credits."""
+    credit = Credit(
+        user_id=test_user.id,
+        available_balance=Decimal("1000.00"),
+        held_balance=Decimal("0.00"),
+        lifetime_earned=Decimal("1000.00"),
+        lifetime_spent=Decimal("0.00"),
+    )
+    db.add(credit)
+    await db.flush()
+    return test_user
 
 
-class TestJwtAccessToken:
-    """Tests for ES256 JWT access token creation and validation."""
-
-    def test_create_access_token_es256(self):
-        """Access token should be created with ES256 algorithm."""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-
-        # Should be a valid JWT (3 parts separated by dots)
-        parts = token.split(".")
-        assert len(parts) == 3
-
-    def test_create_access_token_contains_user_id(self):
-        """Access token payload should contain user_id as subject."""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-        payload = decode_token(token)
-
-        assert payload["sub"] == user_id
-
-    def test_create_access_token_contains_type(self):
-        """Access token payload should have type 'access'."""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-        payload = decode_token(token)
-
-        assert payload["type"] == "access"
-
-    def test_create_access_token_with_scopes(self):
-        """Access token should include scopes if provided."""
-        user_id = "user_123"
-        scopes = ["read", "write"]
-        token = create_access_token(user_id, scopes=scopes)
-        payload = decode_token(token)
-
-        assert payload["scopes"] == scopes
-
-    def test_verify_access_token_success(self):
-        """Valid access token should verify successfully."""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-        payload = verify_access_token(token)
-
-        assert payload["sub"] == user_id
-
-    def test_verify_access_token_wrong_type(self):
-        """Refresh token should not verify as access token."""
-        user_id = "user_123"
-        refresh_token = create_refresh_token(user_id)
-
-        with pytest.raises(InvalidTokenError) as exc_info:
-            verify_access_token(refresh_token)
-
-        assert "not an access token" in str(exc_info.value)
+@pytest.fixture
+async def test_api_key(db, test_user):
+    """Create a test API key and return both record and raw key."""
+    auth_service = AuthService(db)
+    api_key, raw_key = await auth_service.create_api_key(
+        user_id=test_user.id,
+        name="Test API Key",
+        scopes=["read", "write", "execute"],
+    )
+    await db.commit()
+    return api_key, raw_key
 
 
-class TestJwtRefreshToken:
-    """Tests for JWT refresh token creation and validation."""
+class TestAuthServiceRegister:
+    """Tests for AuthService.register_user()."""
 
-    def test_create_refresh_token(self):
-        """Refresh token should be created successfully."""
-        user_id = "user_123"
-        token = create_refresh_token(user_id)
+    @pytest.mark.asyncio
+    async def test_register_user_basic(self, db):
+        """Test registering a new user."""
+        auth_service = AuthService(db)
+        unique_email = f"newuser-{uuid.uuid4().hex[:8]}@example.com"
 
-        # Should be a valid JWT
-        parts = token.split(".")
-        assert len(parts) == 3
-
-    def test_create_refresh_token_contains_type(self):
-        """Refresh token payload should have type 'refresh'."""
-        user_id = "user_123"
-        token = create_refresh_token(user_id)
-        payload = decode_token(token)
-
-        assert payload["type"] == "refresh"
-
-    def test_create_refresh_token_has_jti(self):
-        """Refresh token should have unique JTI for revocation."""
-        user_id = "user_123"
-        token = create_refresh_token(user_id)
-        payload = decode_token(token)
-
-        assert "jti" in payload
-        assert len(payload["jti"]) > 0
-
-    def test_verify_refresh_token_success(self):
-        """Valid refresh token should verify successfully."""
-        user_id = "user_123"
-        token = create_refresh_token(user_id)
-        payload = verify_refresh_token(token)
-
-        assert payload["sub"] == user_id
-
-    def test_verify_refresh_token_wrong_type(self):
-        """Access token should not verify as refresh token."""
-        user_id = "user_123"
-        access_token = create_access_token(user_id)
-
-        with pytest.raises(InvalidTokenError) as exc_info:
-            verify_refresh_token(access_token)
-
-        assert "not a refresh token" in str(exc_info.value)
-
-
-class TestTokenExpiration:
-    """Tests for token expiration handling."""
-
-    def test_validate_access_token_expired(self):
-        """Expired access token should raise TokenExpiredError."""
-        user_id = "user_123"
-        # Create token that's already expired
-        token = create_access_token(
-            user_id,
-            expires_delta=timedelta(seconds=-1),  # Already expired
+        user, access_token, refresh_token, expires_in = await auth_service.register_user(
+            email=unique_email,
+            password="securepassword123",
         )
 
-        with pytest.raises(TokenExpiredError):
-            verify_access_token(token)
+        assert user.email == unique_email
+        assert user.tier == "free"
+        assert user.status == "active"
+        assert access_token is not None
+        assert refresh_token is not None
+        assert expires_in > 0
 
-    def test_validate_refresh_token_expired(self):
-        """Expired refresh token should raise TokenExpiredError."""
-        user_id = "user_123"
-        # Create token that's already expired
-        token = create_refresh_token(
-            user_id,
-            expires_delta=timedelta(seconds=-1),  # Already expired
+    @pytest.mark.asyncio
+    async def test_register_user_with_name(self, db):
+        """Test registering user with name."""
+        auth_service = AuthService(db)
+        unique_email = f"named-{uuid.uuid4().hex[:8]}@example.com"
+
+        user, _, _, _ = await auth_service.register_user(
+            email=unique_email,
+            password="securepassword123",
+            name="John Doe",
         )
 
-        with pytest.raises(TokenExpiredError):
-            verify_refresh_token(token)
+        assert user.name == "John Doe"
+
+    @pytest.mark.asyncio
+    async def test_register_user_email_normalized(self, db):
+        """Test email is normalized to lowercase."""
+        auth_service = AuthService(db)
+        unique_suffix = uuid.uuid4().hex[:8]
+        uppercase_email = f"UPPERCASE-{unique_suffix}@EXAMPLE.COM"
+
+        user, _, _, _ = await auth_service.register_user(
+            email=uppercase_email,
+            password="securepassword123",
+        )
+
+        assert user.email == f"uppercase-{unique_suffix}@example.com"
+
+    @pytest.mark.asyncio
+    async def test_register_user_creates_credits(self, db):
+        """Test registration creates credit record with free tier bonus."""
+        auth_service = AuthService(db)
+        unique_email = f"credituser-{uuid.uuid4().hex[:8]}@example.com"
+
+        user, _, _, _ = await auth_service.register_user(
+            email=unique_email,
+            password="securepassword123",
+        )
+        await db.commit()
+        await db.refresh(user, ["credit"])
+
+        assert user.credit is not None
+        assert user.credit.available_balance == Decimal("500.00")
+
+    @pytest.mark.asyncio
+    async def test_register_user_duplicate_email(self, db, test_user):
+        """Test registering with existing email raises error."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(EmailExistsError):
+            await auth_service.register_user(
+                email=test_user.email,
+                password="differentpassword",
+            )
 
 
-class TestInvalidToken:
-    """Tests for invalid token handling."""
+class TestAuthServiceLogin:
+    """Tests for AuthService.login_user()."""
 
-    def test_decode_malformed_token(self):
-        """Malformed token should raise InvalidTokenError."""
-        with pytest.raises(InvalidTokenError):
-            decode_token("not.a.valid.jwt")
+    @pytest.mark.asyncio
+    async def test_login_user_success(self, db, test_user):
+        """Test successful login."""
+        auth_service = AuthService(db)
 
-    def test_decode_tampered_token(self):
-        """Tampered token should raise InvalidTokenError."""
-        user_id = "user_123"
-        token = create_access_token(user_id)
+        access_token, refresh_token, expires_in = await auth_service.login_user(
+            email=test_user.email,
+            password="testpassword123",
+        )
 
-        # Tamper with the payload
-        parts = token.split(".")
-        parts[1] = parts[1] + "tampered"
-        tampered_token = ".".join(parts)
+        assert access_token is not None
+        assert refresh_token is not None
+        assert expires_in > 0
 
-        with pytest.raises(InvalidTokenError):
-            decode_token(tampered_token)
+    @pytest.mark.asyncio
+    async def test_login_user_wrong_password(self, db, test_user):
+        """Test login with wrong password fails."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidCredentialsError):
+            await auth_service.login_user(
+                email=test_user.email,
+                password="wrongpassword",
+            )
+
+    @pytest.mark.asyncio
+    async def test_login_user_nonexistent_email(self, db):
+        """Test login with non-existent email fails."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidCredentialsError):
+            await auth_service.login_user(
+                email="nonexistent@example.com",
+                password="anypassword",
+            )
+
+    @pytest.mark.asyncio
+    async def test_login_user_inactive(self, db):
+        """Test login with inactive user fails."""
+        # Create inactive user
+        user = User(
+            email=f"inactive-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("password123"),
+            name="Inactive User",
+            tier="free",
+            status="suspended",
+        )
+        db.add(user)
+        await db.flush()
+
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidCredentialsError) as exc_info:
+            await auth_service.login_user(
+                email=user.email,
+                password="password123",
+            )
+
+        assert "not active" in str(exc_info.value)
 
 
-class TestPasswordHashing:
-    """Tests for password hashing with Argon2id."""
+class TestAuthServiceApiKeyCreate:
+    """Tests for AuthService.create_api_key()."""
 
-    def test_hash_password_argon2id(self):
-        """Password hash should use Argon2id algorithm."""
-        password = "secure_password_123"
-        hashed = hash_password(password)
+    @pytest.mark.asyncio
+    async def test_create_api_key_basic(self, db, test_user):
+        """Test creating a basic API key."""
+        auth_service = AuthService(db)
 
-        # Argon2id hash starts with $argon2id$
-        assert hashed.startswith("$argon2id$")
+        api_key, raw_key = await auth_service.create_api_key(
+            user_id=test_user.id,
+        )
 
-    def test_verify_password_success(self):
-        """Valid password should verify against its hash."""
-        password = "secure_password_123"
-        hashed = hash_password(password)
+        assert api_key.user_id == test_user.id
+        assert api_key.key_prefix == raw_key[:12]
+        assert raw_key.startswith("mcp_")
+        assert api_key.scopes == ["read", "write", "execute"]
 
-        assert verify_password(password, hashed) is True
+    @pytest.mark.asyncio
+    async def test_create_api_key_with_name(self, db, test_user):
+        """Test creating API key with name."""
+        auth_service = AuthService(db)
 
-    def test_verify_password_wrong_password(self):
-        """Wrong password should fail verification."""
-        password = "secure_password_123"
-        hashed = hash_password(password)
-        wrong_password = "wrong_password_456"
+        api_key, _ = await auth_service.create_api_key(
+            user_id=test_user.id,
+            name="Production Key",
+        )
 
-        assert verify_password(wrong_password, hashed) is False
+        assert api_key.name == "Production Key"
 
-    def test_verify_password_invalid_hash(self):
-        """Invalid hash should fail verification."""
-        password = "secure_password_123"
-        invalid_hash = "not_a_valid_hash"
+    @pytest.mark.asyncio
+    async def test_create_api_key_with_scopes(self, db, test_user):
+        """Test creating API key with custom scopes."""
+        auth_service = AuthService(db)
 
-        assert verify_password(password, invalid_hash) is False
+        api_key, _ = await auth_service.create_api_key(
+            user_id=test_user.id,
+            scopes=["read"],
+        )
 
-    def test_hash_password_unique_salts(self):
-        """Same password should produce different hashes (different salts)."""
-        password = "same_password"
-        hash1 = hash_password(password)
-        hash2 = hash_password(password)
+        assert api_key.scopes == ["read"]
 
-        # Hashes should be different due to random salts
-        assert hash1 != hash2
+    @pytest.mark.asyncio
+    async def test_create_api_key_with_expiration(self, db, test_user):
+        """Test creating API key with expiration."""
+        auth_service = AuthService(db)
 
-        # Both should verify correctly
-        assert verify_password(password, hash1) is True
-        assert verify_password(password, hash2) is True
+        api_key, _ = await auth_service.create_api_key(
+            user_id=test_user.id,
+            expires_in_days=30,
+        )
+
+        assert api_key.expires_at is not None
+        # Should expire in approximately 30 days
+        expected = datetime.now(UTC) + timedelta(days=30)
+        delta = abs((api_key.expires_at - expected).total_seconds())
+        assert delta < 60  # Within 1 minute
+
+    @pytest.mark.asyncio
+    async def test_create_api_key_user_not_found(self, db):
+        """Test creating API key for non-existent user fails."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(UserNotFoundError):
+            await auth_service.create_api_key(
+                user_id=uuid.uuid4(),
+            )
+
+
+class TestAuthServiceApiKeyValidate:
+    """Tests for AuthService.validate_api_key()."""
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_success(self, db, test_user, test_api_key):
+        """Test validating a valid API key."""
+        api_key, raw_key = test_api_key
+        auth_service = AuthService(db)
+
+        user = await auth_service.validate_api_key(raw_key)
+
+        assert user.id == test_user.id
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_updates_last_used(self, db, test_user, test_api_key):
+        """Test validation updates last_used_at timestamp."""
+        api_key, raw_key = test_api_key
+        api_key_id = api_key.id
+        original_last_used = api_key.last_used_at
+
+        auth_service = AuthService(db)
+        await auth_service.validate_api_key(raw_key)
+        await db.flush()
+        db.expire_all()
+
+        # Re-fetch the key to see the updated value
+        from sqlalchemy import select
+        from mcpworks_api.models import APIKey
+        result = await db.execute(select(APIKey).where(APIKey.id == api_key_id))
+        updated_key = result.scalar_one()
+
+        assert updated_key.last_used_at is not None
+        if original_last_used:
+            assert updated_key.last_used_at >= original_last_used
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_invalid_format(self, db):
+        """Test validation fails for short key."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidApiKeyError):
+            await auth_service.validate_api_key("short")
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_wrong_key(self, db, test_api_key):
+        """Test validation fails for wrong key."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidApiKeyError):
+            await auth_service.validate_api_key("mcp_wrongkeywrongkey")
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_expired(self, db, test_user):
+        """Test validation fails for expired key."""
+        auth_service = AuthService(db)
+
+        # Create an already-expired key
+        api_key, raw_key = await auth_service.create_api_key(
+            user_id=test_user.id,
+            expires_in_days=-1,  # Expired yesterday
+        )
+        await db.commit()
+
+        with pytest.raises(InvalidApiKeyError) as exc_info:
+            await auth_service.validate_api_key(raw_key)
+
+        assert "expired" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_revoked(self, db, test_user, test_api_key):
+        """Test validation fails for revoked key."""
+        api_key, raw_key = test_api_key
+
+        # Revoke the key
+        api_key.revoked_at = datetime.now(UTC)
+        await db.flush()
+
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidApiKeyError):
+            await auth_service.validate_api_key(raw_key)
+
+    @pytest.mark.asyncio
+    async def test_validate_api_key_inactive_user(self, db):
+        """Test validation fails for inactive user's key."""
+        # Create inactive user
+        user = User(
+            email=f"inactive-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("password123"),
+            tier="free",
+            status="suspended",
+        )
+        db.add(user)
+        await db.flush()
+
+        auth_service = AuthService(db)
+
+        # Create API key for inactive user
+        api_key, raw_key = await auth_service.create_api_key(user_id=user.id)
+        await db.commit()
+
+        with pytest.raises(InvalidApiKeyError) as exc_info:
+            await auth_service.validate_api_key(raw_key)
+
+        assert "not active" in str(exc_info.value)
+
+
+class TestAuthServiceApiKeyList:
+    """Tests for AuthService.list_api_keys()."""
+
+    @pytest.mark.asyncio
+    async def test_list_api_keys_empty(self, db, test_user):
+        """Test listing API keys when none exist."""
+        auth_service = AuthService(db)
+
+        keys = await auth_service.list_api_keys(test_user.id)
+
+        assert keys == []
+
+    @pytest.mark.asyncio
+    async def test_list_api_keys_multiple(self, db, test_user):
+        """Test listing multiple API keys."""
+        auth_service = AuthService(db)
+
+        await auth_service.create_api_key(user_id=test_user.id, name="Key 1")
+        await auth_service.create_api_key(user_id=test_user.id, name="Key 2")
+        await auth_service.create_api_key(user_id=test_user.id, name="Key 3")
+
+        keys = await auth_service.list_api_keys(test_user.id)
+
+        assert len(keys) == 3
+
+    @pytest.mark.asyncio
+    async def test_list_api_keys_excludes_revoked(self, db, test_user):
+        """Test listing excludes revoked keys by default."""
+        auth_service = AuthService(db)
+
+        api_key1, _ = await auth_service.create_api_key(user_id=test_user.id, name="Active Key")
+        api_key2, _ = await auth_service.create_api_key(user_id=test_user.id, name="Revoked Key")
+        await db.flush()
+
+        # Revoke one key - the change is visible in the same session
+        await auth_service.revoke_api_key(test_user.id, api_key2.id)
+        await db.flush()
+
+        keys = await auth_service.list_api_keys(test_user.id)
+
+        assert len(keys) == 1
+        assert keys[0].name == "Active Key"
+
+    @pytest.mark.asyncio
+    async def test_list_api_keys_include_revoked(self, db, test_user):
+        """Test listing includes revoked keys when requested."""
+        auth_service = AuthService(db)
+
+        api_key1, _ = await auth_service.create_api_key(user_id=test_user.id, name="Active Key")
+        api_key2, _ = await auth_service.create_api_key(user_id=test_user.id, name="Revoked Key")
+        await db.flush()
+
+        await auth_service.revoke_api_key(test_user.id, api_key2.id)
+
+        keys = await auth_service.list_api_keys(test_user.id, include_revoked=True)
+
+        assert len(keys) == 2
+
+
+class TestAuthServiceApiKeyRevoke:
+    """Tests for AuthService.revoke_api_key()."""
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_success(self, db, test_user, test_api_key):
+        """Test revoking an API key."""
+        api_key, _ = test_api_key
+        auth_service = AuthService(db)
+
+        revoked = await auth_service.revoke_api_key(test_user.id, api_key.id)
+
+        assert revoked.revoked_at is not None
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_not_found(self, db, test_user):
+        """Test revoking non-existent key fails."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(ApiKeyNotFoundError):
+            await auth_service.revoke_api_key(test_user.id, uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_wrong_user(self, db, test_api_key):
+        """Test revoking key belonging to different user fails."""
+        api_key, _ = test_api_key
+        auth_service = AuthService(db)
+
+        with pytest.raises(ApiKeyNotFoundError):
+            await auth_service.revoke_api_key(uuid.uuid4(), api_key.id)
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_already_revoked(self, db, test_user, test_api_key):
+        """Test revoking already-revoked key fails."""
+        api_key, _ = test_api_key
+        auth_service = AuthService(db)
+
+        # Revoke once
+        await auth_service.revoke_api_key(test_user.id, api_key.id)
+
+        # Try to revoke again
+        with pytest.raises(ApiKeyNotFoundError) as exc_info:
+            await auth_service.revoke_api_key(test_user.id, api_key.id)
+
+        assert "already revoked" in str(exc_info.value)
+
+
+class TestAuthServiceTokenExchange:
+    """Tests for token exchange methods."""
+
+    @pytest.mark.asyncio
+    async def test_exchange_api_key_for_tokens(self, db, test_user, test_api_key):
+        """Test exchanging API key for JWT tokens."""
+        _, raw_key = test_api_key
+        auth_service = AuthService(db)
+
+        access_token, refresh_token, expires_in = await auth_service.exchange_api_key_for_tokens(
+            raw_key
+        )
+
+        assert access_token is not None
+        assert refresh_token is not None
+        assert expires_in > 0
+
+    @pytest.mark.asyncio
+    async def test_exchange_invalid_api_key(self, db):
+        """Test exchanging invalid API key fails."""
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidApiKeyError):
+            await auth_service.exchange_api_key_for_tokens("mcp_invalidkeyhere")
+
+    @pytest.mark.asyncio
+    async def test_refresh_access_token(self, db, test_user, test_api_key):
+        """Test refreshing access token."""
+        _, raw_key = test_api_key
+        auth_service = AuthService(db)
+
+        # First, get tokens
+        _, refresh_token, _ = await auth_service.exchange_api_key_for_tokens(raw_key)
+
+        # Then refresh
+        new_access_token, expires_in = await auth_service.refresh_access_token(refresh_token)
+
+        assert new_access_token is not None
+        assert expires_in > 0
