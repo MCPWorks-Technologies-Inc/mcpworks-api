@@ -43,7 +43,13 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
-COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+
+# Make startup script executable
+RUN chmod +x ./scripts/start.sh
+
+# Set Python path
+ENV PYTHONPATH=/app/src
 
 # Expose port
 EXPOSE 8000
@@ -52,5 +58,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/v1/health')" || exit 1
 
-# Run application
-CMD ["uvicorn", "mcpworks_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run application via startup script (handles migrations)
+# STAGING HOOK: Same script works for staging, behavior controlled by APP_ENV
+CMD ["./scripts/start.sh"]
