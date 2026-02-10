@@ -4,7 +4,7 @@ Implements the Model Context Protocol for AI assistant communication.
 Based on the MCP specification: https://spec.modelcontextprotocol.io/
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -14,8 +14,8 @@ class JSONRPCRequest(BaseModel):
 
     jsonrpc: str = "2.0"
     method: str
-    params: Optional[Dict[str, Any]] = None
-    id: Optional[Union[str, int]] = None
+    params: dict[str, Any] | None = None
+    id: str | int | None = None
 
 
 class JSONRPCError(BaseModel):
@@ -23,16 +23,16 @@ class JSONRPCError(BaseModel):
 
     code: int
     message: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class JSONRPCResponse(BaseModel):
     """JSON-RPC 2.0 response."""
 
     jsonrpc: str = "2.0"
-    result: Optional[Any] = None
-    error: Optional[JSONRPCError] = None
-    id: Optional[Union[str, int]] = None
+    result: Any | None = None
+    error: JSONRPCError | None = None
+    id: str | int | None = None
 
 
 class MCPTool(BaseModel):
@@ -40,20 +40,20 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    inputSchema: Dict[str, Any]
+    inputSchema: dict[str, Any]
 
 
 class MCPToolsListResult(BaseModel):
     """Result of tools/list method."""
 
-    tools: List[MCPTool]
+    tools: list[MCPTool]
 
 
 class MCPToolCallParams(BaseModel):
     """Parameters for tools/call method."""
 
     name: str
-    arguments: Dict[str, Any] = Field(default_factory=dict)
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPContent(BaseModel):
@@ -66,9 +66,9 @@ class MCPContent(BaseModel):
 class MCPToolResult(BaseModel):
     """Result of tools/call method."""
 
-    content: List[MCPContent]
+    content: list[MCPContent]
     isError: bool = False
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class MCPErrorCodes:
@@ -96,7 +96,7 @@ def make_error_response(
     code: int,
     message: str,
     data: Any = None,
-    request_id: Optional[Union[str, int]] = None,
+    request_id: str | int | None = None,
 ) -> JSONRPCResponse:
     """Create a JSON-RPC error response."""
     return JSONRPCResponse(
@@ -107,7 +107,7 @@ def make_error_response(
 
 def make_success_response(
     result: Any,
-    request_id: Optional[Union[str, int]] = None,
+    request_id: str | int | None = None,
 ) -> JSONRPCResponse:
     """Create a JSON-RPC success response."""
     return JSONRPCResponse(result=result, id=request_id)
@@ -116,7 +116,7 @@ def make_success_response(
 def make_tool_result(
     text: str,
     is_error: bool = False,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MCPToolResult:
     """Create an MCP tool result."""
     return MCPToolResult(

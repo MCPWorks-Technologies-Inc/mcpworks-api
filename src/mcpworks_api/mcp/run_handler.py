@@ -6,7 +6,7 @@ Generates dynamic tools from database and dispatches to backends.
 import json
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,7 +125,7 @@ class RunMCPHandler:
 
     async def _handle_tools_call(
         self,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         request_id,
     ) -> JSONRPCResponse:
         """Execute a function via its backend."""

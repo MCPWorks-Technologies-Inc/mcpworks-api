@@ -7,7 +7,7 @@ Backends provide the execution layer for functions. Each backend type
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcpworks_api.models import Account
 
@@ -29,12 +29,12 @@ class ExecutionResult:
 
     success: bool
     output: Any
-    stdout: Optional[str] = None
-    stderr: Optional[str] = None
-    error: Optional[str] = None
-    error_type: Optional[str] = None
-    execution_time_ms: Optional[int] = None
-    resource_usage: Optional[Dict[str, Any]] = None
+    stdout: str | None = None
+    stderr: str | None = None
+    error: str | None = None
+    error_type: str | None = None
+    execution_time_ms: int | None = None
+    resource_usage: dict[str, Any] | None = None
 
 
 @dataclass
@@ -48,8 +48,8 @@ class ValidationResult:
     """
 
     valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class Backend(ABC):
@@ -71,16 +71,16 @@ class Backend(ABC):
         return f"{self.name} backend"
 
     @property
-    def supported_languages(self) -> List[str]:
+    def supported_languages(self) -> list[str]:
         """List of supported programming languages (for code backends)."""
         return []
 
     @abstractmethod
     async def execute(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
-        input_data: Dict[str, Any],
+        code: str | None,
+        config: dict[str, Any] | None,
+        input_data: dict[str, Any],
         account: Account,
         execution_id: str,
         timeout_ms: int = 30000,
@@ -103,8 +103,8 @@ class Backend(ABC):
     @abstractmethod
     async def validate(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
+        code: str | None,
+        config: dict[str, Any] | None,
     ) -> ValidationResult:
         """Validate code/config before saving.
 
@@ -125,8 +125,8 @@ class Backend(ABC):
 
     async def estimate_cost(
         self,
-        code: Optional[str],
-        config: Optional[Dict[str, Any]],
+        code: str | None,
+        config: dict[str, Any] | None,
     ) -> float:
         """Estimate execution cost in credits.
 
@@ -142,7 +142,7 @@ class Backend(ABC):
         """
         return 1.0  # Base cost of 1 credit per execution
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check backend health and availability.
 
         Returns:

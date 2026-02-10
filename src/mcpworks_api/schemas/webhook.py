@@ -1,7 +1,6 @@
 """Pydantic schemas for Webhook model."""
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -16,7 +15,7 @@ class WebhookBase(BaseModel):
         examples=["https://api.example.com/webhooks/mcpworks"],
     )
 
-    events: List[str] = Field(
+    events: list[str] = Field(
         ...,
         min_length=1,
         description="Event types to subscribe to",
@@ -45,10 +44,10 @@ class WebhookCreate(WebhookBase):
 class WebhookUpdate(BaseModel):
     """Schema for updating a webhook."""
 
-    url: Optional[str] = None
-    events: Optional[List[str]] = None
-    enabled: Optional[bool] = None
-    secret: Optional[str] = Field(
+    url: str | None = None
+    events: list[str] | None = None
+    enabled: bool | None = None
+    secret: str | None = Field(
         None,
         min_length=32,
         description="New webhook secret (will be hashed)",
@@ -56,7 +55,7 @@ class WebhookUpdate(BaseModel):
 
     @field_validator("url")
     @classmethod
-    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_url(cls, v: str | None) -> str | None:
         """Validate webhook URL is HTTPS if provided."""
         if v is not None and not v.startswith("https://"):
             raise ValueError("Webhook URL must use HTTPS")
@@ -71,14 +70,14 @@ class WebhookResponse(BaseModel):
     id: UUID
     account_id: UUID
     url: str
-    events: List[str]
+    events: list[str]
     enabled: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class WebhookList(BaseModel):
     """Schema for webhook list."""
 
-    webhooks: List[WebhookResponse]
+    webhooks: list[WebhookResponse]
     total: int

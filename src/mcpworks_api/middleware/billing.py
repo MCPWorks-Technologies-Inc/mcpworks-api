@@ -6,7 +6,7 @@ Usage is stored in Redis for fast access.
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -30,7 +30,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
     """
 
     # Tier limits (executions per month)
-    TIER_LIMITS: Dict[str, int] = {
+    TIER_LIMITS: dict[str, int] = {
         "free": 100,           # Free tier: 100 executions/month
         "founder": 1_000,      # Founder: 1,000 executions/month
         "founder_pro": 5_000,  # Founder Pro: 5,000 executions/month
@@ -149,7 +149,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
         return int(future.timestamp())
 
 
-async def get_account_usage(account_id: Any) -> Dict[str, Any]:
+async def get_account_usage(account_id: Any) -> dict[str, Any]:
     """Get usage stats for an account (utility function).
 
     Args:

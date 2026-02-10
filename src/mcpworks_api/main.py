@@ -8,9 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
-from mcpworks_api.mcp import mcp_router
 from mcpworks_api.core.database import close_db, init_db
 from mcpworks_api.core.redis import close_redis, init_redis
+from mcpworks_api.mcp import mcp_router
 from mcpworks_api.middleware import (
     BillingMiddleware,
     CorrelationIdMiddleware,
