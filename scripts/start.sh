@@ -1,9 +1,6 @@
 #!/bin/bash
 # Production startup script
 # Runs database migrations before starting the application
-#
-# STAGING HOOK: This script works for both staging and production.
-# The APP_ENV variable determines behavior differences.
 
 set -e
 
@@ -12,7 +9,7 @@ echo "MCPWorks API Startup"
 echo "Environment: ${APP_ENV:-development}"
 echo "========================================"
 
-# Wait for database to be ready (App Platform should handle this, but just in case)
+# Wait for database to be ready
 echo "Checking database connection..."
 python -c "
 import asyncio
@@ -34,12 +31,6 @@ asyncio.run(check_db())
 echo "Running database migrations..."
 alembic upgrade head
 echo "Migrations complete"
-
-# STAGING HOOK: Add seed data for staging environment
-# if [ "$APP_ENV" == "staging" ]; then
-#     echo "Seeding staging data..."
-#     python -m mcpworks_api.scripts.seed_staging
-# fi
 
 # Start the application
 echo "Starting uvicorn..."
