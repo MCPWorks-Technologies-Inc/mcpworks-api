@@ -2,9 +2,11 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
@@ -103,6 +105,14 @@ def create_app() -> FastAPI:
             "version": "0.1.0",
             "docs": "/docs" if settings.app_debug else "disabled",
         }
+
+    # Admin HTML page
+    _admin_html_path = Path(__file__).parent / "static" / "admin.html"
+
+    @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+    async def admin_page() -> HTMLResponse:
+        """Serve the admin dashboard HTML page."""
+        return HTMLResponse(content=_admin_html_path.read_text())
 
     return app
 

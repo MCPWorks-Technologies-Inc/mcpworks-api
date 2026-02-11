@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mcpworks admin</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+  body { background: #0f172a; color: #e2e8f0; font-family: ui-monospace, monospace; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
+  .btn { background: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-family: inherit; }
+  .btn:hover { background: #2563eb; }
+  .btn-sm { padding: 4px 10px; font-size: 13px; }
+  input { background: #0f172a; border: 1px solid #475569; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-family: inherit; }
+  input:focus { outline: none; border-color: #3b82f6; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 12px; color: #94a3b8; font-weight: 500; font-size: 13px; border-bottom: 1px solid #334155; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 14px; }
+  tr:hover td { background: #1e293b; }
+  .clickable { cursor: pointer; }
+  .clickable:hover { color: #60a5fa; }
+  .breadcrumb { color: #64748b; font-size: 14px; }
+  .breadcrumb a { color: #60a5fa; text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .tag { background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; }
+  .stat-num { font-size: 28px; font-weight: 700; color: #f8fafc; }
+  .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  pre.code-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+  .schema-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; font-size: 12px; overflow-x: auto; }
+  .hidden { display: none; }
+  .fade-in { animation: fadeIn 0.15s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #475569; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="app" class="max-w-6xl mx-auto px-4 py-6">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-lg font-bold text-white">mcpworks <span class="text-blue-400">admin</span></h1>
+    <div id="user-info" class="text-sm text-gray-400 hidden"></div>
+  </div>
+
+  <!-- Login -->
+  <div id="login-section" class="card p-8 max-w-sm mx-auto mt-20">
+    <h2 class="text-white font-semibold mb-4">Sign in</h2>
+    <div id="login-error" class="text-red-400 text-sm mb-3 hidden"></div>
+    <input id="login-email" type="email" placeholder="Email" class="block w-full mb-3">
+    <input id="login-password" type="password" placeholder="Password" class="block w-full mb-4">
+    <button id="login-btn" class="btn w-full" onclick="doLogin()">Login</button>
+  </div>
+
+  <!-- Dashboard (hidden until login) -->
+  <div id="dashboard" class="hidden">
+
+    <!-- Stats bar -->
+    <div id="stats-bar" class="grid grid-cols-5 gap-4 mb-6">
+      <div class="card p-4 text-center"><div class="stat-num" id="stat-users">-</div><div class="stat-label">Users</div></div>
+      <div class="card p-4 text-center"><div class="stat-num" id="stat-namespaces">-</div><div class="stat-label">Namespaces</div></div>
+      <div class="card p-4 text-center"><div class="stat-num" id="stat-services">-</div><div class="stat-label">Services</div></div>
+      <div class="card p-4 text-center"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
+      <div class="card p-4 text-center"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <div id="breadcrumb" class="breadcrumb mb-4"></div>
+
+    <!-- Content area -->
+    <div id="content" class="card"></div>
+  </div>
+
+</div>
+
+<script>
+let TOKEN = null;
+const API = window.location.origin;
+
+// --- Auth ---
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail?.message || data.detail || 'Login failed');
+    }
+
+    const data = await res.json();
+    TOKEN = data.access_token;
+
+    document.getElementById('login-section').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('user-info').classList.remove('hidden');
+    document.getElementById('user-info').textContent = email;
+
+    loadStats();
+    loadNamespaces();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+// Enter key to login
+document.getElementById('login-password').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('login-email').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('login-password').focus();
+});
+
+async function apiFetch(path) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { 'Authorization': `Bearer ${TOKEN}` },
+  });
+  if (res.status === 401 || res.status === 403) {
+    TOKEN = null;
+    document.getElementById('login-section').classList.remove('hidden');
+    document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('login-error').textContent = 'Session expired or access denied';
+    document.getElementById('login-error').classList.remove('hidden');
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
+}
+
+// --- Stats ---
+
+async function loadStats() {
+  try {
+    const stats = await apiFetch('/v1/admin/stats');
+    document.getElementById('stat-users').textContent = stats.users;
+    document.getElementById('stat-namespaces').textContent = stats.namespaces;
+    document.getElementById('stat-services').textContent = stats.services;
+    document.getElementById('stat-functions').textContent = stats.functions;
+    document.getElementById('stat-executions').textContent = stats.executions;
+  } catch (e) {
+    console.error('Failed to load stats', e);
+  }
+}
+
+// --- Breadcrumb ---
+
+function setBreadcrumb(parts) {
+  // parts: [{label, onclick?}]
+  const el = document.getElementById('breadcrumb');
+  el.innerHTML = parts.map((p, i) => {
+    if (i < parts.length - 1 && p.onclick) {
+      return `<a href="#" onclick="${p.onclick}; return false;">${p.label}</a>`;
+    }
+    return `<span class="text-gray-300">${p.label}</span>`;
+  }).join(' <span class="text-gray-600">/</span> ');
+}
+
+// --- Namespaces list ---
+
+async function loadNamespaces() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading namespaces...</div>';
+  setBreadcrumb([{ label: 'Namespaces' }]);
+
+  try {
+    const namespaces = await apiFetch('/v1/admin/namespaces');
+    if (namespaces.length === 0) {
+      content.innerHTML = '<div class="p-6 text-gray-400">No namespaces found.</div>';
+      return;
+    }
+
+    content.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Namespace</th>
+            <th>Owner</th>
+            <th>Account</th>
+            <th>Services</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${namespaces.map(ns => `
+            <tr class="clickable" onclick="loadNamespace('${esc(ns.name)}')">
+              <td class="text-blue-400 font-medium">${esc(ns.name)}</td>
+              <td class="text-gray-400">${esc(ns.owner_email || '-')}</td>
+              <td class="text-gray-400">${esc(ns.account_name || '-')}</td>
+              <td>${ns.service_count}</td>
+              <td class="text-gray-500 text-sm">${fmtDate(ns.created_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Namespace detail ---
+
+async function loadNamespace(nsName) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading...</div>';
+  setBreadcrumb([
+    { label: 'Namespaces', onclick: 'loadNamespaces()' },
+    { label: nsName },
+  ]);
+
+  try {
+    const ns = await apiFetch(`/v1/admin/namespaces/${encodeURIComponent(nsName)}`);
+
+    let servicesHtml = '<div class="text-gray-400 p-4">No services.</div>';
+    if (ns.services && ns.services.length > 0) {
+      servicesHtml = `
+        <table>
+          <thead>
+            <tr><th>Service</th><th>Description</th><th>Functions</th><th>Created</th></tr>
+          </thead>
+          <tbody>
+            ${ns.services.map(svc => `
+              <tr class="clickable" onclick="loadFunctions('${esc(nsName)}', '${esc(svc.name)}')">
+                <td class="text-blue-400 font-medium">${esc(svc.name)}</td>
+                <td class="text-gray-400">${esc(svc.description || '-')}</td>
+                <td>${svc.function_count}</td>
+                <td class="text-gray-500 text-sm">${fmtDate(svc.created_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    content.innerHTML = `
+      <div class="p-6 fade-in">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white text-lg font-semibold">${esc(nsName)}</h2>
+          <span class="text-gray-500 text-sm">${esc(ns.owner_email || '')}</span>
+        </div>
+        ${ns.description ? `<p class="text-gray-400 mb-4">${esc(ns.description)}</p>` : ''}
+        ${ns.network_whitelist && ns.network_whitelist.length ? `<p class="text-gray-500 text-sm mb-4">Whitelist: ${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</p>` : ''}
+        <h3 class="text-gray-300 font-medium mb-2">Services</h3>
+        ${servicesHtml}
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Functions list ---
+
+async function loadFunctions(nsName, svcName) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading...</div>';
+  setBreadcrumb([
+    { label: 'Namespaces', onclick: 'loadNamespaces()' },
+    { label: nsName, onclick: `loadNamespace('${esc(nsName)}')` },
+    { label: svcName },
+  ]);
+
+  try {
+    const functions = await apiFetch(`/v1/admin/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions`);
+
+    if (functions.length === 0) {
+      content.innerHTML = '<div class="p-6 text-gray-400">No functions in this service.</div>';
+      return;
+    }
+
+    content.innerHTML = `
+      <table>
+        <thead>
+          <tr><th>Function</th><th>Description</th><th>Tags</th><th>Version</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+          ${functions.map(fn => `
+            <tr class="clickable" onclick="loadFunction('${esc(nsName)}', '${esc(svcName)}', '${esc(fn.name)}')">
+              <td class="text-blue-400 font-medium">${esc(fn.name)}</td>
+              <td class="text-gray-400">${esc(fn.description || '-')}</td>
+              <td>${(fn.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
+              <td>v${fn.active_version}</td>
+              <td class="text-gray-500 text-sm">${fmtDate(fn.created_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Function detail ---
+
+async function loadFunction(nsName, svcName, fnName) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading...</div>';
+  setBreadcrumb([
+    { label: 'Namespaces', onclick: 'loadNamespaces()' },
+    { label: nsName, onclick: `loadNamespace('${esc(nsName)}')` },
+    { label: svcName, onclick: `loadFunctions('${esc(nsName)}', '${esc(svcName)}')` },
+    { label: fnName },
+  ]);
+
+  try {
+    const fn = await apiFetch(`/v1/admin/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions/${encodeURIComponent(fnName)}`);
+
+    const av = fn.active_version_details;
+
+    content.innerHTML = `
+      <div class="p-6 fade-in">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-white text-lg font-semibold">${esc(fn.name)}</h2>
+          <span class="text-gray-500 text-sm">v${fn.active_version}</span>
+        </div>
+        ${fn.description ? `<p class="text-gray-400 mb-3">${esc(fn.description)}</p>` : ''}
+        ${(fn.tags || []).length ? `<div class="mb-4">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+
+        ${av ? `
+          <div class="mb-4">
+            <div class="text-sm text-gray-500 mb-1">Backend: <span class="text-gray-300">${esc(av.backend)}</span></div>
+          </div>
+
+          ${av.code ? `
+            <h3 class="text-gray-300 font-medium mb-2">Code</h3>
+            <pre class="code-block mb-4">${esc(av.code)}</pre>
+          ` : ''}
+
+          ${av.config ? `
+            <h3 class="text-gray-300 font-medium mb-2">Config</h3>
+            <div class="schema-block mb-4">${esc(JSON.stringify(av.config, null, 2))}</div>
+          ` : ''}
+
+          ${av.input_schema ? `
+            <h3 class="text-gray-300 font-medium mb-2">Input Schema</h3>
+            <div class="schema-block mb-4">${esc(JSON.stringify(av.input_schema, null, 2))}</div>
+          ` : ''}
+
+          ${av.output_schema ? `
+            <h3 class="text-gray-300 font-medium mb-2">Output Schema</h3>
+            <div class="schema-block mb-4">${esc(JSON.stringify(av.output_schema, null, 2))}</div>
+          ` : ''}
+        ` : '<div class="text-gray-500">No active version details.</div>'}
+
+        ${fn.versions && fn.versions.length > 1 ? `
+          <h3 class="text-gray-300 font-medium mb-2 mt-6">Version History</h3>
+          <table>
+            <thead><tr><th>Version</th><th>Backend</th><th>Created</th></tr></thead>
+            <tbody>
+              ${fn.versions.map(v => `
+                <tr>
+                  <td>${v.version === fn.active_version ? '<span class="text-green-400">v' + v.version + ' (active)</span>' : 'v' + v.version}</td>
+                  <td class="text-gray-400">${esc(v.backend)}</td>
+                  <td class="text-gray-500 text-sm">${fmtDate(v.created_at)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Helpers ---
+
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return iso;
+  }
+}
+</script>
+
+</body>
+</html>

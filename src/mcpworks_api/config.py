@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     rate_limit_auth_failures_per_minute: int = Field(default=5, ge=1, le=60)
     rate_limit_requests_per_hour: int = Field(default=1000, ge=100, le=10000)
 
+    # Admin
+    admin_emails: list[str] = Field(default_factory=lambda: ["simon.carr@gmail.com"])
+
     # Tier Execution Limits (monthly) - per PRICING.md
     tier_executions_free: int = Field(default=100)
     tier_executions_founder: int = Field(default=1_000)
