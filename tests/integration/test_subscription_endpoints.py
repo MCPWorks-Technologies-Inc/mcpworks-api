@@ -365,4 +365,3 @@ class TestStripeWebhook:
             data = response.json()
             assert data["processed"] is True
             assert data["event_type"] == "checkout.session.completed"
-

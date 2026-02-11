@@ -146,9 +146,7 @@ class TestExecutionCallback:
     """Tests for POST /v1/services/agent/executions/{execution_id}/callback endpoint."""
 
     @pytest.mark.asyncio
-    async def test_callback_success(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_callback_success(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test that successful callback updates execution status."""
         headers, user_id = auth_headers
 
@@ -190,9 +188,7 @@ class TestExecutionCallback:
         assert data["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_callback_failure(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
+    async def test_callback_failure(self, client: AsyncClient, db: AsyncSession, auth_headers):
         """Test that failed callback updates execution status."""
         headers, user_id = auth_headers
 

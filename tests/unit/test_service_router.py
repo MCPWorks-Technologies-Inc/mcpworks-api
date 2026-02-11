@@ -255,6 +255,7 @@ class TestRouteRequest:
             assert status_code == 200
             assert body["is_correct"] is True
 
+
 class TestMakeRequest:
     """Tests for _make_request method."""
 

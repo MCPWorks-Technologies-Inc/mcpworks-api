@@ -179,9 +179,7 @@ async def require_admin(
 
     settings = get_settings()
 
-    result = await db.execute(
-        select(User.email).where(User.id == user_id)
-    )
+    result = await db.execute(select(User.email).where(User.id == user_id))
     email = result.scalar_one_or_none()
 
     if not email or email not in settings.admin_emails:
