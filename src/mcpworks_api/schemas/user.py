@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -39,19 +38,6 @@ class UserProfile(BaseModel):
     created_at: datetime = Field(
         ...,
         description="Account creation timestamp",
-    )
-
-
-class UserProfileWithCredits(UserProfile):
-    """User profile with credit balance information."""
-
-    available_credits: Decimal = Field(
-        ...,
-        description="Available credit balance",
-    )
-    held_credits: Decimal = Field(
-        ...,
-        description="Credits currently held for pending operations",
     )
 
 

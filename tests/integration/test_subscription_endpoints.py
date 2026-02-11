@@ -2,12 +2,10 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.security import create_access_token
@@ -183,7 +181,7 @@ class TestGetCurrentSubscription:
         assert data["tier"] == "founder"
         assert data["status"] == "active"
         assert data["cancel_at_period_end"] is False
-        assert data["monthly_executions"] == 10_000  # founder tier limit
+        assert data["monthly_executions"] == 1_000  # founder tier limit per PRICING.md
 
     @pytest.mark.asyncio
     async def test_get_subscription_no_auth(self, client: AsyncClient):
@@ -261,55 +259,6 @@ class TestCancelSubscription:
         assert response.status_code == 400
         data = response.json()
         assert "cancelled" in data["message"].lower()
-
-
-class TestPurchaseCredits:
-    """Tests for POST /v1/subscriptions/credits endpoint."""
-
-    @pytest.mark.asyncio
-    async def test_purchase_credits_minimum(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
-        """Test that minimum credit purchase is enforced."""
-        headers, user_id = auth_headers
-
-        # Create user with unique email
-        user = User(
-            id=uuid.UUID(user_id),
-            email=f"purchase_min_{user_id}@example.com",
-            password_hash="test_hash",
-            name="Purchase Test User",
-            tier="free",
-            status="active",
-        )
-        db.add(user)
-        await db.commit()
-
-        response = await client.post(
-            "/v1/subscriptions/credits",
-            headers=headers,
-            json={
-                "credits": 50,  # Below minimum of 100
-                "success_url": "https://example.com/success",
-                "cancel_url": "https://example.com/cancel",
-            },
-        )
-
-        assert response.status_code == 422  # Validation error
-
-    @pytest.mark.asyncio
-    async def test_purchase_credits_no_auth(self, client: AsyncClient):
-        """Test that credit purchase requires authentication."""
-        response = await client.post(
-            "/v1/subscriptions/credits",
-            json={
-                "credits": 1000,
-                "success_url": "https://example.com/success",
-                "cancel_url": "https://example.com/cancel",
-            },
-        )
-
-        assert response.status_code == 401
 
 
 class TestStripeWebhook:
@@ -417,57 +366,3 @@ class TestStripeWebhook:
             assert data["processed"] is True
             assert data["event_type"] == "checkout.session.completed"
 
-    @pytest.mark.asyncio
-    async def test_webhook_credit_purchase(self, client: AsyncClient, db: AsyncSession):
-        """Test handling checkout.session.completed for credit purchase."""
-        user_id = uuid.uuid4()
-
-        # Create user with unique email
-        user = User(
-            id=user_id,
-            email=f"credit_purchase_{user_id}@example.com",
-            password_hash="test_hash",
-            name="Credit Purchase User",
-            tier="free",
-            status="active",
-        )
-        db.add(user)
-        await db.commit()
-
-        # Mock Stripe response for credit purchase
-        with patch("stripe.Webhook.construct_event") as mock_construct:
-            mock_construct.return_value = {
-                "id": "evt_test_credit_purchase_123",
-                "type": "checkout.session.completed",
-                "data": {
-                    "object": {
-                        "id": "cs_test_credit_purchase",
-                        "metadata": {
-                            "user_id": str(user_id),
-                            "credits": "500",
-                            "type": "credit_purchase",
-                        },
-                        # No subscription field for payment mode
-                        "customer": "cus_credit123",
-                    }
-                },
-            }
-
-            response = await client.post(
-                "/v1/webhooks/stripe",
-                content=b'{"type": "checkout.session.completed"}',
-                headers={"Stripe-Signature": "valid_sig_mock"},
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["processed"] is True
-            assert data["event_type"] == "checkout.session.completed"
-
-        # Verify credits were added
-        from mcpworks_api.models import Credit
-
-        result = await db.execute(select(Credit).where(Credit.user_id == user_id))
-        credit = result.scalar_one_or_none()
-        assert credit is not None
-        assert credit.available_balance == Decimal("500.00")

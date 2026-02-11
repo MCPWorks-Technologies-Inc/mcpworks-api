@@ -242,10 +242,6 @@ class AgentExecuteResponse(BaseModel):
         ...,
         description="Execution status: pending, running",
     )
-    credits_held: Decimal = Field(
-        ...,
-        description="Credits held for this execution",
-    )
     message: str = Field(
         default="Execution started",
         description="Status message",
@@ -281,13 +277,9 @@ class AgentCallbackResponse(BaseModel):
         ...,
         description="Execution identifier",
     )
-    credits_action: str = Field(
+    status: str = Field(
         ...,
-        description="Action taken on credits: committed, released",
-    )
-    credits_amount: Decimal = Field(
-        ...,
-        description="Credits committed or released",
+        description="Execution status after callback",
     )
 
 

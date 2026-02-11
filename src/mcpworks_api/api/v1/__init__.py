@@ -3,7 +3,6 @@
 from fastapi import APIRouter
 
 from mcpworks_api.api.v1.auth import router as auth_router
-from mcpworks_api.api.v1.credits import router as credits_router
 from mcpworks_api.api.v1.health import router as health_router
 from mcpworks_api.api.v1.llm import router as llm_router
 from mcpworks_api.api.v1.namespaces import router as namespaces_router
@@ -21,7 +20,6 @@ router.include_router(health_router)
 router.include_router(llm_router)  # LLM-oriented instructions
 router.include_router(auth_router)
 router.include_router(users_router)
-router.include_router(credits_router)
 router.include_router(services_router)
 router.include_router(subscriptions_router)
 router.include_router(webhook_router)

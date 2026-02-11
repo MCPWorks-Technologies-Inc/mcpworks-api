@@ -55,24 +55,24 @@ class TestBillingMiddlewareTierLimits:
         assert "enterprise" in billing_middleware.TIER_LIMITS
 
     def test_free_tier_limit(self, billing_middleware):
-        """Test free tier limit is 500 per A0-SYSTEM-SPECIFICATION.md."""
-        assert billing_middleware.TIER_LIMITS["free"] == 500
+        """Test free tier limit is 100 per PRICING.md."""
+        assert billing_middleware.TIER_LIMITS["free"] == 100
 
     def test_founder_tier_limit(self, billing_middleware):
-        """Test founder tier limit is 10,000 per A0-SYSTEM-SPECIFICATION.md."""
-        assert billing_middleware.TIER_LIMITS["founder"] == 10_000
+        """Test founder tier limit is 1,000 per PRICING.md."""
+        assert billing_middleware.TIER_LIMITS["founder"] == 1_000
 
     def test_founder_pro_tier_limit(self, billing_middleware):
-        """Test founder_pro tier limit is 50,000 per A0-SYSTEM-SPECIFICATION.md."""
-        assert billing_middleware.TIER_LIMITS["founder_pro"] == 50_000
+        """Test founder_pro tier limit is 10,000 per PRICING.md."""
+        assert billing_middleware.TIER_LIMITS["founder_pro"] == 10_000
 
     def test_enterprise_tier_limit(self, billing_middleware):
-        """Test enterprise tier is unlimited (-1) per A0-SYSTEM-SPECIFICATION.md."""
+        """Test enterprise tier is unlimited (-1) per PRICING.md."""
         assert billing_middleware.TIER_LIMITS["enterprise"] == -1
 
     def test_default_limit(self, billing_middleware):
-        """Test default limit for unknown tiers."""
-        assert billing_middleware.DEFAULT_LIMIT == 500
+        """Test default limit for unknown tiers (matches free tier)."""
+        assert billing_middleware.DEFAULT_LIMIT == 100
 
 
 class TestBillingMiddlewareDispatch:
@@ -238,7 +238,7 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 50
-            assert limit == 500  # A0 spec: 500/mo free tier
+            assert limit == 100  # PRICING.md: 100/mo free tier
 
     @pytest.mark.asyncio
     async def test_check_quota_founder_tier(self, billing_middleware):
@@ -253,7 +253,7 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 500
-            assert limit == 10_000  # A0 spec: 10,000/mo founder tier
+            assert limit == 1_000  # PRICING.md: 1,000/mo founder tier
 
     @pytest.mark.asyncio
     async def test_check_quota_zero_usage(self, billing_middleware):
@@ -268,7 +268,7 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 0
-            assert limit == 500  # A0 spec: 500/mo free tier
+            assert limit == 100  # PRICING.md: 100/mo free tier
 
     @pytest.mark.asyncio
     async def test_check_quota_unknown_tier_uses_default(self, billing_middleware):

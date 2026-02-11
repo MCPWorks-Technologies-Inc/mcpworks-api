@@ -1,4 +1,7 @@
-"""Service router - proxy requests to backend services."""
+"""Service router - proxy requests to backend services.
+
+Usage tracking is handled by BillingMiddleware via Redis, not this service.
+"""
 
 import uuid
 from datetime import UTC, datetime
@@ -11,13 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.config import get_settings
 from mcpworks_api.core.exceptions import (
-    InsufficientCreditsError,
     InsufficientTierError,
     ServiceTimeoutError,
     ServiceUnavailableError,
 )
 from mcpworks_api.models import Service, ServiceStatus
-from mcpworks_api.services.credit import CreditService
 
 # Tier hierarchy for access control - per A0-SYSTEM-SPECIFICATION.md
 TIER_HIERARCHY = {
@@ -98,9 +99,10 @@ class ServiceRouter:
         Handles:
         - Service availability check
         - Tier access control
-        - Credit hold/commit (if service has cost)
         - Request proxying
         - Error handling
+
+        Note: Usage tracking is handled by BillingMiddleware via Redis.
 
         Args:
             service_name: Target service name
@@ -117,7 +119,6 @@ class ServiceRouter:
         Raises:
             ServiceUnavailableError: If service is not healthy
             InsufficientTierError: If user's tier doesn't permit access
-            InsufficientCreditsError: If user doesn't have enough credits
             ServiceTimeoutError: If request times out
         """
         # Get service
@@ -145,74 +146,14 @@ class ServiceRouter:
                 },
             )
 
-        # Handle credit hold if service has cost
-        hold_txn = None
-        if service.credit_cost > 0:
-            credit_service = CreditService(self.db)
-            try:
-                hold_txn = await credit_service.hold(
-                    user_id=user_id,
-                    amount=service.credit_cost,
-                    metadata={
-                        "service": service_name,
-                        "path": path,
-                    },
-                )
-            except InsufficientCreditsError:
-                raise
-
         # Make the request
-        try:
-            url = f"{service.url.rstrip('/')}/{path.lstrip('/')}"
-            response = await self._make_request(
-                method=method,
-                url=url,
-                body=body,
-                headers=headers,
-            )
-
-            status_code = response[0]
-
-            # Only commit credits on successful responses (2xx)
-            # Release credits on client errors (4xx) or server errors (5xx)
-            if hold_txn is not None:
-                credit_service = CreditService(self.db)
-                if 200 <= status_code < 300:
-                    await credit_service.commit(
-                        hold_id=hold_txn.id,
-                        metadata={"response_status": status_code},
-                    )
-                else:
-                    # Don't charge users for failed requests
-                    await credit_service.release(
-                        hold_id=hold_txn.id,
-                        metadata={
-                            "reason": "backend_error",
-                            "response_status": status_code,
-                        },
-                    )
-
-            return response
-
-        except (ServiceTimeoutError, ServiceUnavailableError):
-            # Release credits on service failure
-            if hold_txn is not None:
-                credit_service = CreditService(self.db)
-                await credit_service.release(
-                    hold_id=hold_txn.id,
-                    metadata={"reason": "service_error"},
-                )
-            raise
-
-        except Exception:
-            # Release credits on unexpected error
-            if hold_txn is not None:
-                credit_service = CreditService(self.db)
-                await credit_service.release(
-                    hold_id=hold_txn.id,
-                    metadata={"reason": "unexpected_error"},
-                )
-            raise
+        url = f"{service.url.rstrip('/')}/{path.lstrip('/')}"
+        return await self._make_request(
+            method=method,
+            url=url,
+            body=body,
+            headers=headers,
+        )
 
     async def _make_request(
         self,

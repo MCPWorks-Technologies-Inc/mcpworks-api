@@ -86,55 +86,6 @@ class InsufficientScopeError(MCPWorksException):
     message = "API key does not have required scope"
 
 
-# Credit Errors (400)
-class InsufficientCreditsError(MCPWorksException):
-    """Raised when user doesn't have enough credits."""
-
-    error_code = "INSUFFICIENT_CREDITS"
-    status_code = 400
-    message = "Insufficient credits for this operation"
-
-    def __init__(
-        self,
-        required: float,
-        available: float,
-        message: str | None = None,
-    ) -> None:
-        details = {"required": required, "available": available}
-        super().__init__(
-            message=message or f"Insufficient credits: {available} available, {required} required",
-            details=details,
-        )
-
-
-class InvalidHoldError(MCPWorksException):
-    """Raised when credit hold is invalid or already processed."""
-
-    error_code = "INVALID_HOLD"
-    status_code = 400
-    message = "Invalid or already processed credit hold"
-
-    def __init__(
-        self,
-        hold_id: str,
-        reason: str,
-        message: str | None = None,
-    ) -> None:
-        details = {"hold_id": hold_id, "reason": reason}
-        super().__init__(
-            message=message or f"Invalid hold {hold_id}: {reason}",
-            details=details,
-        )
-
-
-class CreditLockError(MCPWorksException):
-    """Raised when credit row lock cannot be acquired."""
-
-    error_code = "CREDIT_LOCK_ERROR"
-    status_code = 409
-    message = "Unable to acquire credit lock, please retry"
-
-
 # Resource Errors (404, 409)
 class NotFoundError(MCPWorksException):
     """Raised when a resource is not found."""

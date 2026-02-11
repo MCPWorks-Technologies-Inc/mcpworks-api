@@ -10,19 +10,19 @@ from mcpworks_api.services.stripe import TIER_EXECUTIONS, StripeService
 
 
 class TestTierExecutions:
-    """Tests for tier execution limit configuration per A0-SYSTEM-SPECIFICATION.md."""
+    """Tests for tier execution limit configuration per PRICING.md."""
 
     def test_free_tier_executions(self):
-        """Test free tier has 500 executions/month."""
-        assert TIER_EXECUTIONS["free"] == 500
+        """Test free tier has 100 executions/month."""
+        assert TIER_EXECUTIONS["free"] == 100
 
     def test_founder_tier_executions(self):
-        """Test founder tier has 10,000 executions/month."""
-        assert TIER_EXECUTIONS["founder"] == 10_000
+        """Test founder tier has 1,000 executions/month."""
+        assert TIER_EXECUTIONS["founder"] == 1_000
 
     def test_founder_pro_tier_executions(self):
-        """Test founder_pro tier has 50,000 executions/month."""
-        assert TIER_EXECUTIONS["founder_pro"] == 50_000
+        """Test founder_pro tier has 10,000 executions/month."""
+        assert TIER_EXECUTIONS["founder_pro"] == 10_000
 
     def test_enterprise_tier_executions(self):
         """Test enterprise tier is unlimited (-1)."""
@@ -229,36 +229,6 @@ class TestHandleWebhookEvent:
                 assert result["event_type"] == "unknown.event.type"
 
 
-class TestGrantMonthlyCredits:
-    """Tests for _grant_monthly_credits method.
-
-    NOTE: As of A0-SYSTEM-SPECIFICATION.md, billing is execution-based,
-    not credit-based. This method is deprecated and now does nothing.
-    """
-
-    @pytest.mark.asyncio
-    async def test_deprecated_method_does_nothing(self):
-        """Test that deprecated method does nothing (no-op)."""
-        mock_db = AsyncMock()
-
-        with patch.object(StripeService, "__init__", return_value=None):
-            service = StripeService.__new__(StripeService)
-            service.db = mock_db
-            service.settings = MagicMock()
-
-            with patch("mcpworks_api.services.stripe.CreditService") as mock_credit_service:
-                mock_instance = MagicMock()
-                mock_instance.add_credits = AsyncMock()
-                mock_credit_service.return_value = mock_instance
-
-                user_id = uuid.uuid4()
-                # Should not raise and should not call CreditService
-                await service._grant_monthly_credits(user_id, "founder")
-
-                # Method is deprecated - CreditService should not be instantiated
-                mock_credit_service.assert_not_called()
-
-
 class TestSubscriptionStatus:
     """Tests for SubscriptionStatus enum."""
 
@@ -383,49 +353,6 @@ class TestReleaseEventClaim:
             service.redis.delete.assert_called_once()
 
 
-class TestCreateCreditPurchaseSession:
-    """Tests for create_credit_purchase_session method."""
-
-    @pytest.mark.asyncio
-    async def test_minimum_credits_enforced(self):
-        """Test minimum credit purchase is enforced."""
-        mock_db = AsyncMock()
-
-        with patch.object(StripeService, "__init__", return_value=None):
-            service = StripeService.__new__(StripeService)
-            service.db = mock_db
-            service.settings = MagicMock()
-
-            with pytest.raises(ValueError, match="Minimum purchase"):
-                await service.create_credit_purchase_session(
-                    user_id=uuid.uuid4(),
-                    credits=50,  # Below minimum
-                    success_url="https://example.com/success",
-                    cancel_url="https://example.com/cancel",
-                )
-
-    @pytest.mark.asyncio
-    async def test_user_not_found_rejected(self):
-        """Test user not found is rejected."""
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
-
-        with patch.object(StripeService, "__init__", return_value=None):
-            service = StripeService.__new__(StripeService)
-            service.db = mock_db
-            service.settings = MagicMock()
-
-            with pytest.raises(ValueError, match="not found"):
-                await service.create_credit_purchase_session(
-                    user_id=uuid.uuid4(),
-                    credits=100,
-                    success_url="https://example.com/success",
-                    cancel_url="https://example.com/cancel",
-                )
-
-
 class TestHandleSubscriptionUpdated:
     """Tests for _handle_subscription_updated method."""
 
@@ -520,60 +447,26 @@ class TestHandleSubscriptionDeleted:
 
 
 class TestHandlePaymentSucceeded:
-    """Tests for _handle_payment_succeeded method."""
+    """Tests for _handle_payment_succeeded method.
+
+    NOTE: As of PRICING.md update, billing is execution-based with Redis
+    tracking. This handler is now a no-op since usage limits reset
+    automatically via Redis key expiry.
+    """
 
     @pytest.mark.asyncio
-    async def test_no_subscription_id(self):
-        """Test handler ignores events without subscription."""
+    async def test_payment_succeeded_is_noop(self):
+        """Test handler is a no-op (usage tracking via Redis)."""
         mock_db = AsyncMock()
 
         with patch.object(StripeService, "__init__", return_value=None):
             service = StripeService.__new__(StripeService)
             service.db = mock_db
 
-            # Should not raise
+            # Should not raise - method is a no-op
             await service._handle_payment_succeeded(
                 {
-                    "subscription": None,
-                    "billing_reason": "subscription_cycle",
-                }
-            )
-
-    @pytest.mark.asyncio
-    async def test_non_renewal_skipped(self):
-        """Test non-renewal payments don't grant credits."""
-        mock_db = AsyncMock()
-
-        with patch.object(StripeService, "__init__", return_value=None):
-            service = StripeService.__new__(StripeService)
-            service.db = mock_db
-
-            with patch.object(service, "_grant_monthly_credits") as mock_grant:
-                await service._handle_payment_succeeded(
-                    {
-                        "subscription": "sub_123",
-                        "billing_reason": "subscription_create",  # Not renewal
-                    }
-                )
-
-                mock_grant.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_subscription_not_found(self):
-        """Test handler ignores unknown subscriptions."""
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
-
-        with patch.object(StripeService, "__init__", return_value=None):
-            service = StripeService.__new__(StripeService)
-            service.db = mock_db
-
-            # Should not raise
-            await service._handle_payment_succeeded(
-                {
-                    "subscription": "sub_unknown",
+                    "subscription": "sub_123",
                     "billing_reason": "subscription_cycle",
                 }
             )

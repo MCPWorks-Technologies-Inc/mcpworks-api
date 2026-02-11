@@ -84,24 +84,6 @@ class CancelSubscriptionResponse(BaseModel):
     )
 
 
-class PurchaseCreditsRequest(BaseModel):
-    """Request body for POST /v1/subscriptions/credits."""
-
-    credits: int = Field(
-        ...,
-        description="Number of credits to purchase (minimum 100)",
-        ge=100,
-    )
-    success_url: str = Field(
-        ...,
-        description="URL to redirect after successful purchase",
-    )
-    cancel_url: str = Field(
-        ...,
-        description="URL to redirect if purchase is cancelled",
-    )
-
-
 class WebhookResponse(BaseModel):
     """Response for webhook processing."""
 

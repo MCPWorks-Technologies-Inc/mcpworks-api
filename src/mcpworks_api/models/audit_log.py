@@ -26,14 +26,6 @@ class AuditAction(str, Enum):
     API_KEY_REVOKED = "api_key_revoked"
     API_KEY_USED = "api_key_used"
 
-    # Credit operations
-    CREDIT_HOLD = "credit_hold"
-    CREDIT_COMMIT = "credit_commit"
-    CREDIT_RELEASE = "credit_release"
-    CREDIT_PURCHASE = "credit_purchase"
-    CREDIT_GRANT = "credit_grant"
-    CREDIT_REFUND = "credit_refund"
-
     # Subscription management
     SUBSCRIPTION_CREATED = "subscription_created"
     SUBSCRIPTION_UPDATED = "subscription_updated"

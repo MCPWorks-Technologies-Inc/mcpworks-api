@@ -1,7 +1,6 @@
 """User endpoints - profile and account management."""
 
 import uuid
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -10,14 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ApiKeyNotFoundError, UserNotFoundError
 from mcpworks_api.dependencies import CurrentUserId
-from mcpworks_api.models import Credit, User
+from mcpworks_api.models import User
 from mcpworks_api.schemas.user import (
     ApiKeyCreated,
     ApiKeyList,
     ApiKeySummary,
     CreateApiKeyRequest,
     UserProfile,
-    UserProfileWithCredits,
 )
 from mcpworks_api.services.auth import AuthService
 
@@ -26,70 +24,21 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get(
     "/me",
-    response_model=UserProfileWithCredits,
+    response_model=UserProfile,
     responses={
-        200: {"description": "Current user profile with credit balance"},
+        200: {"description": "Current user profile"},
         401: {"description": "Not authenticated or token expired"},
     },
 )
 async def get_current_user(
     user_id: CurrentUserId,
     db: AsyncSession = Depends(get_db),
-) -> UserProfileWithCredits:
-    """Get the authenticated user's profile with credit balance.
+) -> UserProfile:
+    """Get the authenticated user's profile.
 
     Requires valid JWT access token in Authorization header.
     """
     # Fetch user
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error": "USER_NOT_FOUND",
-                "message": "User not found",
-            },
-        )
-
-    # Fetch credit balance
-    result = await db.execute(select(Credit).where(Credit.user_id == uuid.UUID(user_id)))
-    credit = result.scalar_one_or_none()
-
-    # Default to zero if no credit record exists
-    available_credits = credit.available_balance if credit else Decimal("0.00")
-    held_credits = credit.held_balance if credit else Decimal("0.00")
-
-    return UserProfileWithCredits(
-        id=user.id,
-        email=user.email,
-        name=user.name,
-        tier=user.tier,
-        status=user.status,
-        email_verified=user.email_verified,
-        created_at=user.created_at,
-        available_credits=available_credits,
-        held_credits=held_credits,
-    )
-
-
-@router.get(
-    "/me/profile",
-    response_model=UserProfile,
-    responses={
-        200: {"description": "Current user profile (without credits)"},
-        401: {"description": "Not authenticated or token expired"},
-    },
-)
-async def get_current_user_profile(
-    user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_db),
-) -> UserProfile:
-    """Get the authenticated user's basic profile.
-
-    Lighter endpoint when credit info is not needed.
-    """
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
 

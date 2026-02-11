@@ -3,7 +3,6 @@
 import contextlib
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 import stripe
@@ -15,10 +14,8 @@ from mcpworks_api.config import get_settings
 from mcpworks_api.models import (
     Subscription,
     SubscriptionStatus,
-    TransactionType,
     User,
 )
-from mcpworks_api.services.credit import CreditService
 
 # Webhook idempotency settings
 WEBHOOK_IDEMPOTENCY_PREFIX = "stripe:webhook:processed:"
@@ -46,9 +43,9 @@ def get_tier_price_map() -> dict[str, str]:
 
 # Monthly execution limits per tier (for reference, primarily enforced by BillingMiddleware)
 TIER_EXECUTIONS = {
-    "free": 500,
-    "founder": 10_000,
-    "founder_pro": 50_000,
+    "free": 100,
+    "founder": 1_000,
+    "founder_pro": 10_000,
     "enterprise": -1,  # Unlimited
 }
 
@@ -280,35 +277,16 @@ class StripeService:
     async def _handle_checkout_completed(self, session: dict[str, Any]) -> None:
         """Handle checkout.session.completed event.
 
-        This fires when a user completes checkout. Handles both:
-        - Subscription purchases (mode="subscription")
-        - One-time credit purchases (mode="payment")
-
+        This fires when a user completes checkout for subscription purchases.
         We use metadata to link the purchase to our user.
         """
         metadata = session.get("metadata", {})
         user_id_str = metadata.get("user_id")
-        checkout_type = metadata.get("type")
 
         if not user_id_str:
             return
 
         user_id = uuid.UUID(user_id_str)
-
-        # Handle one-time credit purchase
-        if checkout_type == "credit_purchase":
-            credits_str = metadata.get("credits")
-            if credits_str:
-                credits_amount = int(credits_str)
-                credit_service = CreditService(self.db)
-                await credit_service.add_credits(
-                    user_id=user_id,
-                    amount=Decimal(str(credits_amount)),
-                    transaction_type=TransactionType.PURCHASE,
-                    metadata={"stripe_session_id": session.get("id")},
-                )
-                await self.db.commit()
-            return
 
         # Handle subscription purchase
         tier = metadata.get("tier")
@@ -350,9 +328,6 @@ class StripeService:
 
         # Update user tier
         await self.db.execute(update(User).where(User.id == user_id).values(tier=tier))
-
-        # Grant monthly credits
-        await self._grant_monthly_credits(user_id, tier)
 
         await self.db.commit()
 
@@ -423,30 +398,10 @@ class StripeService:
     async def _handle_payment_succeeded(self, invoice: dict[str, Any]) -> None:
         """Handle invoice.payment_succeeded event.
 
-        Grant monthly credits on successful renewal.
+        For subscription renewals. Usage limits are managed by BillingMiddleware.
         """
-        subscription_id = invoice.get("subscription")
-        billing_reason = invoice.get("billing_reason")
-
-        if not subscription_id:
-            return
-
-        # Only grant credits for renewals (not first payment)
-        if billing_reason != "subscription_cycle":
-            return
-
-        # Find our subscription
-        result = await self.db.execute(
-            select(Subscription).where(Subscription.stripe_subscription_id == subscription_id)
-        )
-        subscription = result.scalar_one_or_none()
-
-        if not subscription:
-            return
-
-        # Grant monthly credits
-        await self._grant_monthly_credits(subscription.user_id, subscription.tier)
-        await self.db.commit()
+        # No action needed - usage limits reset automatically via Redis key expiry
+        pass
 
     async def _handle_payment_failed(self, invoice: dict[str, Any]) -> None:
         """Handle invoice.payment_failed event.
@@ -470,21 +425,6 @@ class StripeService:
         # Mark as past due
         subscription.status = SubscriptionStatus.PAST_DUE.value
         await self.db.commit()
-
-    async def _grant_monthly_credits(self, user_id: uuid.UUID, tier: str) -> None:
-        """[DEPRECATED] Grant monthly credits for a tier.
-
-        NOTE: As of A0-SYSTEM-SPECIFICATION.md, billing is execution-based,
-        not credit-based. This method is retained for backwards compatibility
-        but may be removed in a future version.
-
-        Args:
-            user_id: User to grant credits to
-            tier: Subscription tier
-        """
-        # Execution-based billing: credits are deprecated
-        # Tier limits are enforced by BillingMiddleware via Redis
-        pass
 
     async def cancel_subscription(self, user_id: uuid.UUID) -> dict[str, Any]:
         """Cancel subscription at end of billing period.
@@ -538,70 +478,3 @@ class StripeService:
         """
         result = await self.db.execute(select(Subscription).where(Subscription.user_id == user_id))
         return result.scalar_one_or_none()
-
-    async def create_credit_purchase_session(
-        self,
-        user_id: uuid.UUID,
-        credits: int,
-        success_url: str,
-        cancel_url: str,
-    ) -> dict[str, Any]:
-        """Create checkout session for one-time credit purchase.
-
-        Args:
-            user_id: User purchasing credits
-            credits: Number of credits to purchase
-            success_url: Success redirect URL
-            cancel_url: Cancel redirect URL
-
-        Returns:
-            Dict with checkout URL and session ID
-
-        Raises:
-            ValueError: If invalid credit amount
-        """
-        if credits < 100:
-            raise ValueError("Minimum purchase is 100 credits")
-
-        # Get user
-        result = await self.db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if user is None:
-            raise ValueError(f"User {user_id} not found")
-
-        # Get or create customer
-        customer_id = await self._get_or_create_customer(user)
-
-        # Calculate price (100 credits = $1 = 100 cents)
-        amount_cents = credits  # 1 credit = 1 cent
-
-        # Create checkout session for one-time payment
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            mode="payment",
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "usd",
-                        "unit_amount": amount_cents,
-                        "product_data": {
-                            "name": f"{credits} Credits",
-                            "description": "MCPWorks platform credits",
-                        },
-                    },
-                    "quantity": 1,
-                }
-            ],
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={
-                "user_id": str(user_id),
-                "credits": str(credits),
-                "type": "credit_purchase",
-            },
-        )
-
-        return {
-            "checkout_url": session.url,
-            "session_id": session.id,
-        }

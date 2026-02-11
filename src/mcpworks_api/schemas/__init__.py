@@ -12,19 +12,6 @@ from mcpworks_api.schemas.auth import (
     UserInfo,
 )
 from mcpworks_api.schemas.common import ErrorResponse, PaginatedResponse, SuccessResponse
-from mcpworks_api.schemas.credit import (
-    AddCreditsRequest,
-    AddCreditsResponse,
-    CommitRequest,
-    CommitResponse,
-    CreditBalance,
-    HoldRequest,
-    HoldResponse,
-    ReleaseRequest,
-    ReleaseResponse,
-    TransactionList,
-    TransactionSummary,
-)
 from mcpworks_api.schemas.function import (
     FunctionBase,
     FunctionCreate,
@@ -73,7 +60,6 @@ from mcpworks_api.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutSessionResponse,
     CreateSubscriptionRequest,
-    PurchaseCreditsRequest,
     SubscriptionInfo,
     WebhookResponse,
 )
@@ -83,7 +69,6 @@ from mcpworks_api.schemas.user import (
     ApiKeySummary,
     CreateApiKeyRequest,
     UserProfile,
-    UserProfileWithCredits,
 )
 from mcpworks_api.schemas.webhook import (
     WebhookBase,
@@ -112,23 +97,10 @@ __all__ = [
     "UserInfo",
     # User
     "UserProfile",
-    "UserProfileWithCredits",
     "ApiKeySummary",
     "ApiKeyCreated",
     "ApiKeyList",
     "CreateApiKeyRequest",
-    # Credits
-    "CreditBalance",
-    "HoldRequest",
-    "HoldResponse",
-    "CommitRequest",
-    "CommitResponse",
-    "ReleaseRequest",
-    "ReleaseResponse",
-    "AddCreditsRequest",
-    "AddCreditsResponse",
-    "TransactionList",
-    "TransactionSummary",
     # Services
     "ServiceInfo",
     "ServiceCatalog",
@@ -149,7 +121,6 @@ __all__ = [
     "CheckoutSessionResponse",
     "SubscriptionInfo",
     "CancelSubscriptionResponse",
-    "PurchaseCreditsRequest",
     "WebhookResponse",
     # A0 Namespace Platform
     "NamespaceBase",

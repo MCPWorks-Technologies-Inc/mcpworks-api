@@ -4,8 +4,6 @@ from mcpworks_api.models.account import Account
 from mcpworks_api.models.api_key import APIKey
 from mcpworks_api.models.audit_log import AuditAction, AuditLog
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
-from mcpworks_api.models.credit import Credit
-from mcpworks_api.models.credit_transaction import CreditTransaction, TransactionType
 from mcpworks_api.models.execution import Execution, ExecutionStatus
 from mcpworks_api.models.function import Function
 from mcpworks_api.models.function_version import ALLOWED_BACKENDS, FunctionVersion
@@ -38,10 +36,6 @@ __all__ = [
     "Function",
     "FunctionVersion",
     "ALLOWED_BACKENDS",
-    # Credit
-    "Credit",
-    "CreditTransaction",
-    "TransactionType",
     # Service (Backend Registry)
     "Service",
     "ServiceStatus",
