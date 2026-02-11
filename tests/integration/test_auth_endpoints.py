@@ -498,7 +498,7 @@ class TestApiKeyManagement:
         data = response.json()
         assert "id" in data
         assert "key" in data
-        assert data["key"].startswith("mcp_")
+        assert data["key"].startswith("mcpw_")
         assert data["name"] == "My API Key"
         assert data["scopes"] == ["read", "write"]
 

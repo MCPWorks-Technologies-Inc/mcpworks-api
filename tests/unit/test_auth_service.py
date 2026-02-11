@@ -216,7 +216,7 @@ class TestAuthServiceApiKeyCreate:
 
         assert api_key.user_id == test_user.id
         assert api_key.key_prefix == raw_key[:12]
-        assert raw_key.startswith("mcp_")
+        assert raw_key.startswith("mcpw_")
         assert api_key.scopes == ["read", "write", "execute"]
 
     @pytest.mark.asyncio
