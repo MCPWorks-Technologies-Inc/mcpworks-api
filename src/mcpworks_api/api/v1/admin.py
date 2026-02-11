@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -90,8 +90,6 @@ async def get_namespace(
     ns = result.scalar_one_or_none()
 
     if not ns:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail=f"Namespace '{ns_name}' not found")
 
     return {
@@ -165,8 +163,6 @@ async def get_function(
     fn = result.scalar_one_or_none()
 
     if not fn:
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=404,
             detail=f"Function '{fn_name}' not found in {ns_name}/{svc_name}",
@@ -197,3 +193,137 @@ def _version_to_dict(v: FunctionVersion) -> dict[str, Any]:
         "output_schema": v.output_schema,
         "created_at": v.created_at.isoformat() if v.created_at else None,
     }
+
+
+# --- Additional list endpoints for stat card drill-down ---
+
+
+@router.get("/users")
+async def list_users(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """All users with tier, status, namespace count."""
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.account).selectinload(Account.namespaces),
+            selectinload(User.subscription),
+        )
+        .order_by(User.created_at.desc())
+    )
+    users = result.scalars().all()
+
+    return [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "name": u.name,
+            "tier": u.tier,
+            "status": u.status,
+            "namespace_count": len(u.account.namespaces)
+            if u.account and u.account.namespaces
+            else 0,
+            "subscription_status": u.subscription.status if u.subscription else None,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]
+
+
+@router.get("/services")
+async def list_all_services(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """All services across all namespaces."""
+    result = await db.execute(
+        select(NamespaceService)
+        .options(
+            selectinload(NamespaceService.namespace)
+            .selectinload(Namespace.account)
+            .selectinload(Account.user),
+            selectinload(NamespaceService.functions),
+        )
+        .order_by(NamespaceService.created_at.desc())
+    )
+    services = result.scalars().all()
+
+    return [
+        {
+            "name": svc.name,
+            "description": svc.description,
+            "namespace": svc.namespace.name if svc.namespace else None,
+            "owner_email": (
+                svc.namespace.account.user.email
+                if svc.namespace and svc.namespace.account and svc.namespace.account.user
+                else None
+            ),
+            "function_count": len(svc.functions) if svc.functions else 0,
+            "created_at": svc.created_at.isoformat() if svc.created_at else None,
+        }
+        for svc in services
+    ]
+
+
+@router.get("/functions")
+async def list_all_functions(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """All functions across all namespaces/services."""
+    result = await db.execute(
+        select(Function)
+        .options(
+            selectinload(Function.service).selectinload(NamespaceService.namespace),
+        )
+        .order_by(Function.created_at.desc())
+    )
+    functions = result.scalars().all()
+
+    return [
+        {
+            "name": fn.name,
+            "description": fn.description,
+            "tags": fn.tags,
+            "active_version": fn.active_version,
+            "service": fn.service.name if fn.service else None,
+            "namespace": fn.service.namespace.name if fn.service and fn.service.namespace else None,
+            "created_at": fn.created_at.isoformat() if fn.created_at else None,
+        }
+        for fn in functions
+    ]
+
+
+@router.get("/executions")
+async def list_all_executions(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Recent executions across all users (last 100)."""
+    result = await db.execute(
+        select(Execution)
+        .options(
+            selectinload(Execution.user),
+            selectinload(Execution.function),
+        )
+        .order_by(Execution.created_at.desc())
+        .limit(100)
+    )
+    executions = result.scalars().all()
+
+    return [
+        {
+            "id": str(ex.id),
+            "user_email": ex.user.email if ex.user else None,
+            "function_name": ex.function.name if ex.function else None,
+            "workflow_id": ex.workflow_id,
+            "status": ex.status,
+            "started_at": ex.started_at.isoformat() if ex.started_at else None,
+            "completed_at": ex.completed_at.isoformat() if ex.completed_at else None,
+            "duration_seconds": ex.duration_seconds,
+            "error_message": ex.error_message,
+            "created_at": ex.created_at.isoformat() if ex.created_at else None,
+        }
+        for ex in executions
+    ]
