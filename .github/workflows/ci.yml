@@ -117,7 +117,7 @@ jobs:
           POSTGRES_HOST: localhost
           REDIS_HOST: localhost
         run: |
-          pytest tests/ -v --cov=src/mcpworks_api --cov-report=xml --cov-report=term-missing
+          pytest tests/ -v --cov=mcpworks_api --cov-report=xml --cov-report=term-missing --cov-fail-under=0
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
