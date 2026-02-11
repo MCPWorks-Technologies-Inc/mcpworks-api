@@ -4,64 +4,32 @@ This file tracks significant issues discovered during API testing that need reso
 
 ---
 
-## PROBLEM-001: Usage Tracking Endpoint Not Implemented
+## No Open Issues
 
-**Severity:** High - Core feature missing
-**Discovered:** 2026-02-11
-**Status:** Open
-
-### Summary
-
-The credit system has been correctly removed, but the replacement `/v1/account/usage` endpoint is not yet implemented.
-
-### What Works
-
-- `/v1/credits` returns 404 (correctly removed)
-- User profile no longer includes `available_credits` or `held_credits` fields
-- User profile correctly shows `tier: "free"`
-
-### What's Missing
-
-```bash
-curl https://api.mcpworks.io/v1/account/usage \
-  -H "Authorization: Bearer {token}"
-```
-
-**Actual Response:**
-```json
-{"detail":"Not Found"}
-```
-HTTP Status: 404
-
-**Expected Response (per testing manual):**
-```json
-{
-  "executions_count": 42,
-  "executions_limit": 100,
-  "executions_remaining": 58,
-  "billing_period_start": "2026-02-01T00:00:00Z",
-  "billing_period_end": "2026-03-01T00:00:00Z"
-}
-```
-
-### Required Implementation
-
-1. Create `GET /v1/account/usage` endpoint
-2. Track executions via Redis-based BillingMiddleware
-3. Return execution counts and limits based on user tier:
-   - Free: 100/month
-   - Founder: 1,000/month
-   - Founder Pro: 10,000/month
-   - Enterprise: Unlimited
-
-### References
-
-- `mcpworks-internals/PRICING.md` - Tier limits
-- `mcpworks-internals/incoming/mcpworks-api-testing-manual.md` - Expected response format
+All known issues have been resolved. 🎉
 
 ---
 
 ## Resolved Issues
+
+### ~~PROBLEM-001: Usage Tracking Endpoint Not Implemented~~
+
+**Status:** RESOLVED (2026-02-11)
+
+The `/v1/account/usage` endpoint is now implemented and returns:
+```json
+{
+  "executions_count": 0,
+  "executions_limit": 100,
+  "executions_remaining": 100,
+  "billing_period_start": "2026-02-01T00:00:00Z",
+  "billing_period_end": "2026-03-01T00:00:00Z",
+  "tier": "free"
+}
+```
+HTTP Status: 200
+
+---
 
 ### ~~PROBLEM-002: List Services Endpoint Returns INTERNAL_ERROR~~
 
@@ -98,7 +66,7 @@ API now correctly uses `mcpw_` prefix:
 
 ---
 
-## Test Summary (2026-02-11, Run 2)
+## Test Summary (2026-02-11, Run 3 - All Issues Resolved)
 
 ### Passing Endpoints
 
@@ -123,12 +91,11 @@ API now correctly uses `mcpw_` prefix:
 | `/v1/namespaces/{ns}/services/{svc}/functions` | GET | Pass |
 | `/v1/namespaces/{ns}/services/{svc}/functions/{fn}` | GET | Pass |
 | `/v1/subscriptions/current` | GET | Pass (404 for free tier = expected) |
+| `/v1/account/usage` | GET | Pass (FIXED - PROBLEM-001) |
 
-### Missing/Not Implemented
+### All Endpoints Implemented
 
-| Endpoint | Method | Issue |
-|----------|--------|-------|
-| `/v1/account/usage` | GET | PROBLEM-001 - Not implemented |
+All planned endpoints are now implemented and passing.
 
 ### Removed (Correctly)
 
