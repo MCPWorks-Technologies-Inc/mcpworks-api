@@ -34,7 +34,32 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to server
+      - name: Sync code to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          # Sync source code (excludes sensitive/generated files)
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.venv' \
+            --exclude='venv' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.env' \
+            --exclude='.coverage' \
+            --exclude='htmlcov' \
+            --exclude='.pytest_cache' \
+            --exclude='.mypy_cache' \
+            --exclude='keys' \
+            --exclude='logs' \
+            --exclude='data' \
+            --exclude='sandbox' \
+            --exclude='nsjail' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ ${DEPLOY_USER}@${DEPLOY_HOST}:/opt/mcpworks/
+
+      - name: Rebuild and restart
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -44,11 +69,6 @@ jobs:
 
             echo "=== Starting deployment ==="
             cd /opt/mcpworks
-
-            # Pull latest changes
-            echo "Pulling latest changes..."
-            git fetch origin main
-            git reset --hard origin/main
 
             # Rebuild and restart
             echo "Rebuilding Docker image..."
