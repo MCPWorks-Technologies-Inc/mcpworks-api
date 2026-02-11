@@ -362,6 +362,7 @@ class TestUserRegistration:
         data = response.json()
         assert data["user"]["name"] is None
 
+
 @pytest.mark.asyncio
 class TestUserLogin:
     """Tests for POST /v1/auth/login endpoint."""

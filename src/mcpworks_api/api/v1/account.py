@@ -87,9 +87,7 @@ async def get_usage(
     - Enterprise: Unlimited
     """
     # Get user tier
-    result = await db.execute(
-        select(User.tier).where(User.id == uuid.UUID(user_id))
-    )
+    result = await db.execute(select(User.tier).where(User.id == uuid.UUID(user_id)))
     tier = result.scalar_one_or_none() or "free"
 
     # Get limit for tier
