@@ -36,9 +36,7 @@ class TestParseJsonRpcRequest:
 
     def test_parse_valid_request(self):
         """Test parsing a valid JSON-RPC request."""
-        body = json.dumps(
-            {"jsonrpc": "2.0", "method": "tools/list", "id": "req-123"}
-        ).encode()
+        body = json.dumps({"jsonrpc": "2.0", "method": "tools/list", "id": "req-123"}).encode()
 
         result = parse_json_rpc_request(body)
 
@@ -152,13 +150,9 @@ class TestValidateNamespaceAccess:
         account = MagicMock()
         account.id = uuid.uuid4()
 
-        with patch(
-            "mcpworks_api.mcp.router.NamespaceServiceManager"
-        ) as mock_manager_class:
+        with patch("mcpworks_api.mcp.router.NamespaceServiceManager") as mock_manager_class:
             mock_manager = MagicMock()
-            mock_manager.get_by_name = AsyncMock(
-                side_effect=NotFoundError("Namespace not found")
-            )
+            mock_manager.get_by_name = AsyncMock(side_effect=NotFoundError("Namespace not found"))
             mock_manager_class.return_value = mock_manager
 
             with pytest.raises(HTTPException) as exc_info:
@@ -176,13 +170,9 @@ class TestValidateNamespaceAccess:
         account = MagicMock()
         account.id = uuid.uuid4()
 
-        with patch(
-            "mcpworks_api.mcp.router.NamespaceServiceManager"
-        ) as mock_manager_class:
+        with patch("mcpworks_api.mcp.router.NamespaceServiceManager") as mock_manager_class:
             mock_manager = MagicMock()
-            mock_manager.get_by_name = AsyncMock(
-                side_effect=ForbiddenError("Access denied")
-            )
+            mock_manager.get_by_name = AsyncMock(side_effect=ForbiddenError("Access denied"))
             mock_manager_class.return_value = mock_manager
 
             with pytest.raises(HTTPException) as exc_info:
@@ -201,9 +191,7 @@ class TestValidateNamespaceAccess:
         mock_namespace = MagicMock()
         mock_namespace.name = "test-ns"
 
-        with patch(
-            "mcpworks_api.mcp.router.NamespaceServiceManager"
-        ) as mock_manager_class:
+        with patch("mcpworks_api.mcp.router.NamespaceServiceManager") as mock_manager_class:
             mock_manager = MagicMock()
             mock_manager.get_by_name = AsyncMock(return_value=mock_namespace)
             mock_manager_class.return_value = mock_manager

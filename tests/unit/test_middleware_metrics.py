@@ -10,20 +10,16 @@ class TestSetupMetrics:
         """Test that setup_metrics creates an Instrumentator."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
 
-                result = setup_metrics(mock_app)
+                setup_metrics(mock_app)
 
                 # Verify instrumentator was created
                 mock_instrumentator_class.assert_called_once()
@@ -32,15 +28,11 @@ class TestSetupMetrics:
         """Test that setup_metrics instruments the app."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -53,15 +45,11 @@ class TestSetupMetrics:
         """Test that setup_metrics exposes /metrics endpoint."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -76,15 +64,11 @@ class TestSetupMetrics:
         """Test that setup_metrics adds default HTTP metrics."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -97,15 +81,11 @@ class TestSetupMetrics:
         """Test that health/metrics endpoints are excluded."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -124,15 +104,11 @@ class TestSetupMetrics:
         """Test that in-progress tracking is configured."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -148,15 +124,11 @@ class TestSetupMetrics:
         """Test that env var configuration is enabled."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -170,15 +142,11 @@ class TestSetupMetrics:
         """Test that status codes are not grouped (e.g., 2xx)."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -192,15 +160,11 @@ class TestSetupMetrics:
         """Test that untemplated routes are ignored."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -214,15 +178,11 @@ class TestSetupMetrics:
         """Test that setup_metrics returns the instrumentator."""
         mock_app = MagicMock()
 
-        with patch(
-            "mcpworks_api.middleware.metrics.Instrumentator"
-        ) as mock_instrumentator_class:
+        with patch("mcpworks_api.middleware.metrics.Instrumentator") as mock_instrumentator_class:
             mock_instrumentator = MagicMock()
             mock_instrumentator_class.return_value = mock_instrumentator
 
-            with patch(
-                "mcpworks_api.middleware.metrics.default_http_metrics"
-            ) as mock_metrics:
+            with patch("mcpworks_api.middleware.metrics.default_http_metrics") as mock_metrics:
                 mock_metrics.return_value = MagicMock()
 
                 from mcpworks_api.middleware.metrics import setup_metrics
@@ -247,7 +207,7 @@ class TestDefaultHttpMetrics:
 
             from mcpworks_api.middleware.metrics import default_http_metrics
 
-            result = default_http_metrics()
+            default_http_metrics()
 
             mock_info_class.assert_called_once()
 

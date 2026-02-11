@@ -154,9 +154,7 @@ class TestSubdomainMiddlewareInit:
 
     def test_custom_exempt_paths(self):
         """Test custom exempt paths."""
-        middleware = SubdomainMiddleware(
-            app=MagicMock(), exempt_paths={"/custom", "/paths"}
-        )
+        middleware = SubdomainMiddleware(app=MagicMock(), exempt_paths={"/custom", "/paths"})
         assert middleware.exempt_paths == {"/custom", "/paths"}
 
 
@@ -242,9 +240,7 @@ class TestSubdomainMiddlewareDispatch:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_dispatch_localhost_invalid_endpoint_raises(
-        self, subdomain_middleware
-    ):
+    async def test_dispatch_localhost_invalid_endpoint_raises(self, subdomain_middleware):
         """Test that invalid endpoint on localhost raises 400."""
         from fastapi import HTTPException
 

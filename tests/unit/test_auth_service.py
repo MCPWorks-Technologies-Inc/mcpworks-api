@@ -297,6 +297,7 @@ class TestAuthServiceApiKeyValidate:
 
         # Re-fetch the key to see the updated value
         from sqlalchemy import select
+
         result = await db.execute(select(APIKey).where(APIKey.id == api_key_id))
         updated_key = result.scalar_one()
 

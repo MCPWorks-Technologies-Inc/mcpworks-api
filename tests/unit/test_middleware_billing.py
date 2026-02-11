@@ -118,9 +118,7 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(
-            billing_middleware, "_check_quota", new_callable=AsyncMock
-        ) as mock_check:
+        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
             mock_check.return_value = (50, 100)  # 50 used, 100 limit
 
             with patch.object(
@@ -139,9 +137,7 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock()
 
-        with patch.object(
-            billing_middleware, "_check_quota", new_callable=AsyncMock
-        ) as mock_check:
+        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
             mock_check.return_value = (500, 500)  # At limit
 
             with pytest.raises(HTTPException) as exc_info:
@@ -160,14 +156,10 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(
-            billing_middleware, "_check_quota", new_callable=AsyncMock
-        ) as mock_check:
+        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
             mock_check.return_value = (1_000_000, -1)  # High usage, unlimited
 
-            with patch.object(
-                billing_middleware, "_increment_usage", new_callable=AsyncMock
-            ):
+            with patch.object(billing_middleware, "_increment_usage", new_callable=AsyncMock):
                 response = await billing_middleware.dispatch(request, call_next)
 
                 # Should not raise, -1 means unlimited
@@ -181,9 +173,7 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(
-            billing_middleware, "_check_quota", new_callable=AsyncMock
-        ) as mock_check:
+        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
             mock_check.side_effect = Exception("Redis error")
 
             response = await billing_middleware.dispatch(request, call_next)
@@ -199,9 +189,7 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(400))  # Error response
 
-        with patch.object(
-            billing_middleware, "_check_quota", new_callable=AsyncMock
-        ) as mock_check:
+        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
             mock_check.return_value = (50, 100)
 
             with patch.object(
@@ -214,17 +202,13 @@ class TestBillingMiddlewareDispatch:
                 assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_dispatch_handles_increment_error_gracefully(
-        self, billing_middleware
-    ):
+    async def test_dispatch_handles_increment_error_gracefully(self, billing_middleware):
         """Test that increment errors don't fail the request."""
         account = MockAccount(tier="free")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(
-            billing_middleware, "_check_quota", new_callable=AsyncMock
-        ) as mock_check:
+        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
             mock_check.return_value = (50, 100)
 
             with patch.object(

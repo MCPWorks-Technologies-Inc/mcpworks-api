@@ -12,6 +12,7 @@ from mcpworks_api.core.exceptions import (
     RateLimitExceededError,
     TokenExpiredError,
 )
+from mcpworks_api.dependencies import get_current_user_id
 from mcpworks_api.middleware.rate_limit import check_auth_rate_limit
 from mcpworks_api.schemas.auth import (
     ApiKeyInfo,
@@ -27,7 +28,6 @@ from mcpworks_api.schemas.auth import (
     TokenResponse,
     UserInfo,
 )
-from mcpworks_api.dependencies import get_current_user_id
 from mcpworks_api.services.auth import AuthService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])

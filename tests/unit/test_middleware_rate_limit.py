@@ -94,9 +94,7 @@ class TestRateLimitMiddlewareDispatch:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_dispatch_auth_endpoint_checks_rate_limit(
-        self, rate_limit_middleware
-    ):
+    async def test_dispatch_auth_endpoint_checks_rate_limit(self, rate_limit_middleware):
         """Test that auth endpoints are rate limited."""
         request = MockRequest(path="/v1/auth/token")
         call_next = AsyncMock(return_value=MockResponse(200))
@@ -136,9 +134,7 @@ class TestRateLimitMiddlewareDispatch:
             call_next.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_dispatch_returns_429_on_auth_failure_limit(
-        self, rate_limit_middleware
-    ):
+    async def test_dispatch_returns_429_on_auth_failure_limit(self, rate_limit_middleware):
         """Test that too many auth failures returns 429."""
         request = MockRequest(path="/v1/auth/token")
         call_next = AsyncMock()
@@ -290,17 +286,13 @@ class TestRateLimitMiddlewareCheckAuthRateLimit:
     @pytest.mark.asyncio
     async def test_check_auth_rate_limit_not_limited(self, rate_limit_middleware):
         """Test check when not rate limited."""
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.is_rate_limited = AsyncMock(return_value=(False, 5))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 is_limited, remaining = await rate_limit_middleware._check_auth_rate_limit(
@@ -313,17 +305,13 @@ class TestRateLimitMiddlewareCheckAuthRateLimit:
     @pytest.mark.asyncio
     async def test_check_auth_rate_limit_limited(self, rate_limit_middleware):
         """Test check when rate limited."""
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.is_rate_limited = AsyncMock(return_value=(True, 25))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 is_limited, remaining = await rate_limit_middleware._check_auth_rate_limit(
@@ -340,17 +328,13 @@ class TestRateLimitMiddlewareRecordAuthFailure:
     @pytest.mark.asyncio
     async def test_record_auth_failure(self, rate_limit_middleware):
         """Test recording auth failure."""
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.is_rate_limited = AsyncMock(return_value=(False, 1))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 await rate_limit_middleware._record_auth_failure("1.2.3.4")
@@ -364,44 +348,32 @@ class TestRateLimitMiddlewareCheckAuthFailureLimit:
     @pytest.mark.asyncio
     async def test_check_auth_failure_limit_not_limited(self, rate_limit_middleware):
         """Test check when not failure limited."""
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.check_rate_limited = AsyncMock(return_value=(False, 2))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
-                is_limited = await rate_limit_middleware._check_auth_failure_limit(
-                    "1.2.3.4"
-                )
+                is_limited = await rate_limit_middleware._check_auth_failure_limit("1.2.3.4")
 
                 assert is_limited is False
 
     @pytest.mark.asyncio
     async def test_check_auth_failure_limit_limited(self, rate_limit_middleware):
         """Test check when failure limited."""
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.check_rate_limited = AsyncMock(return_value=(True, 5))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
-                is_limited = await rate_limit_middleware._check_auth_failure_limit(
-                    "1.2.3.4"
-                )
+                is_limited = await rate_limit_middleware._check_auth_failure_limit("1.2.3.4")
 
                 assert is_limited is True
 
@@ -443,17 +415,13 @@ class TestCheckAuthRateLimitDependency:
         """Test dependency when not rate limited."""
         request = MockRequest()
 
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.check_rate_limited = AsyncMock(return_value=(False, 2))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 # Should not raise
@@ -466,17 +434,13 @@ class TestCheckAuthRateLimitDependency:
 
         request = MockRequest()
 
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.check_rate_limited = AsyncMock(return_value=(True, 5))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 with pytest.raises(RateLimitExceededError):
@@ -487,17 +451,13 @@ class TestCheckAuthRateLimitDependency:
         """Test dependency extracts IP from X-Forwarded-For."""
         request = MockRequest(headers={"X-Forwarded-For": "1.2.3.4"})
 
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.check_rate_limited = AsyncMock(return_value=(False, 2))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 await check_auth_rate_limit(request)
@@ -512,17 +472,13 @@ class TestCheckAuthRateLimitDependency:
         request = MockRequest()
         request.client = None
 
-        with patch(
-            "mcpworks_api.middleware.rate_limit.get_redis_context"
-        ) as mock_ctx:
+        with patch("mcpworks_api.middleware.rate_limit.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
             mock_limiter = MagicMock()
             mock_limiter.check_rate_limited = AsyncMock(return_value=(False, 2))
             mock_ctx.return_value.__aenter__.return_value = mock_redis
 
-            with patch(
-                "mcpworks_api.middleware.rate_limit.RateLimiter"
-            ) as mock_limiter_class:
+            with patch("mcpworks_api.middleware.rate_limit.RateLimiter") as mock_limiter_class:
                 mock_limiter_class.return_value = mock_limiter
 
                 await check_auth_rate_limit(request)
