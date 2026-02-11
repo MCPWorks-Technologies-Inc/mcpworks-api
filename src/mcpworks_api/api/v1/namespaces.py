@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from mcpworks_api.dependencies import get_current_user_id
 from mcpworks_api.models import Account
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import (
@@ -140,19 +141,22 @@ class FunctionListResponse(BaseModel):
     service: str
 
 
-# Dependency to get account (placeholder - should use actual auth)
-async def get_current_account(db: AsyncSession = Depends(get_db)) -> Account:
-    """Get current account from request context.
+# Dependency to get authenticated account
+async def get_current_account(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+) -> Account:
+    """Get current account from authenticated user.
 
-    TODO: Implement actual authentication.
-    For now, returns first account or raises 401.
+    Validates JWT token and retrieves the associated account.
     """
     from sqlalchemy import select
 
-    result = await db.execute(select(Account).limit(1))
+    # Get account by user_id from JWT
+    result = await db.execute(select(Account).where(Account.user_id == user_id))
     account = result.scalar_one_or_none()
     if not account:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Account not found for user")
     return account
 
 
