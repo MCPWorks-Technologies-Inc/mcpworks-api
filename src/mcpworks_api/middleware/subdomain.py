@@ -68,6 +68,7 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
         self.domain = domain
         self.exempt_paths = exempt_paths or {
             "/",
+            "/admin",
             "/health",
             "/health/ready",
             "/health/live",
