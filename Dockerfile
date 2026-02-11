@@ -59,5 +59,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/v1/health')" || exit 1
 
 # Run application via startup script (handles migrations)
-# STAGING HOOK: Same script works for staging, behavior controlled by APP_ENV
 CMD ["./scripts/start.sh"]
