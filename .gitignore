@@ -67,6 +67,9 @@ Thumbs.db
 keys/
 secrets/
 
+# MCP config (contains API tokens)
+.mcp.json
+
 # Database
 *.db
 *.sqlite3

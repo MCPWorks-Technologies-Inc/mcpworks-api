@@ -1,0 +1,29 @@
+# MCPWorks Production Caddyfile
+# Caddy automatically provisions SSL via Let's Encrypt
+
+{
+    email admin@mcpworks.io
+}
+
+api.mcpworks.io {
+    reverse_proxy api:8000
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    # Logging
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Health check endpoint (no SSL required)
+:80 {
+    respond /health "OK" 200
+}
