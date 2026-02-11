@@ -158,6 +158,45 @@ def require_scope(required_scope: str) -> Callable[..., Awaitable[None]]:
     return check_scope
 
 
+async def require_admin(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """Require the authenticated user to be an admin.
+
+    Checks the user's email against the admin_emails allowlist in settings.
+
+    Returns:
+        The admin user's ID.
+
+    Raises:
+        HTTPException: 403 if user is not an admin.
+    """
+    from sqlalchemy import select
+
+    from mcpworks_api.config import get_settings
+    from mcpworks_api.models import User
+
+    settings = get_settings()
+
+    result = await db.execute(
+        select(User.email).where(User.id == user_id)
+    )
+    email = result.scalar_one_or_none()
+
+    if not email or email not in settings.admin_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "Admin access required"},
+        )
+
+    return user_id
+
+
+# Type alias for admin user ID
+AdminUserId = Annotated[str, Depends(require_admin)]
+
+
 async def verify_agent_callback_secret(
     x_agent_secret: Annotated[str | None, Header()] = None,
 ) -> None:
