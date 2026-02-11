@@ -26,7 +26,7 @@ class UserProfile(BaseModel):
     )
     tier: str = Field(
         ...,
-        description="Subscription tier (free, starter, pro, enterprise)",
+        description="Subscription tier (free, founder, founder_pro, enterprise)",
     )
     status: str = Field(
         ...,

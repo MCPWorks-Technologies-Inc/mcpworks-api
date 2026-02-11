@@ -46,11 +46,11 @@ Access tokens are JSON Web Tokens signed with ES256 (ECDSA P-256).
   "exp": 1732716000,
   "iat": 1732712400,
   "jti": "tok_01HZXK5N9RTYUIO67890DEF",
-  "scope": "math:read math:write credits:read",
+  "scope": "math:read math:write usage:read",
   "mcpworks": {
     "tier": "pro",
     "user_id": "usr_01HZXK4M8QWERTY12345ABC",
-    "credits_at_issue": 2500
+    "executions_limit": 10000
   }
 }
 ```
@@ -73,7 +73,7 @@ Access tokens are JSON Web Tokens signed with ES256 (ECDSA P-256).
 |-------|-------------|
 | `tier` | Subscription: `free`, `pro`, `enterprise` |
 | `user_id` | User identifier |
-| `credits_at_issue` | Credit balance snapshot |
+| `executions_limit` | Monthly execution limit for tier |
 
 ### Token Lifetimes
 
@@ -95,14 +95,14 @@ Access tokens are JSON Web Tokens signed with ES256 (ECDSA P-256).
 | `math:write` | Full access to Math MCP |
 | `text:read` | Read-only access to Text MCP |
 | `text:write` | Full access to Text MCP |
-| `credits:read` | View credit balance |
-| `credits:write` | Purchase credits, billing |
+| `usage:read` | View usage and billing period |
+| `billing:write` | Manage subscription, billing |
 
 ### Scope Hierarchy
 
 Write scopes include read:
 - `math:write` implies `math:read`
-- `credits:write` implies `credits:read`
+- `billing:write` implies `usage:read`
 
 ---
 
@@ -242,7 +242,7 @@ Content-Type: application/x-www-form-urlencoded
 Authorization: Bearer sk_live_k1_abc123...
 
 grant_type=api_key&
-scope=math:read%20credits:read
+scope=math:read%20usage:read
 ```
 
 **Response:**
@@ -252,7 +252,7 @@ scope=math:read%20credits:read
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "rt_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
-  "scope": "math:read credits:read"
+  "scope": "math:read usage:read"
 }
 ```
 
@@ -276,7 +276,7 @@ refresh_token=rt_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "rt_new_token_xyz",
-  "scope": "math:read credits:read"
+  "scope": "math:read usage:read"
 }
 ```
 
@@ -292,7 +292,7 @@ List user's API keys.
       "id": "key_01HZXK5N9RTYUIO67890DEF",
       "prefix": "sk_live_k1_",
       "name": "Default",
-      "scopes": "math:read math:write credits:read",
+      "scopes": "math:read math:write usage:read",
       "last_used_at": "2025-12-15T10:30:00Z",
       "created_at": "2025-12-01T00:00:00Z"
     }
@@ -308,7 +308,7 @@ Create a new API key.
 ```json
 {
   "name": "CI/CD Pipeline",
-  "scopes": "math:read credits:read"
+  "scopes": "math:read usage:read"
 }
 ```
 
@@ -318,7 +318,7 @@ Create a new API key.
   "id": "key_01HZXK6P0SZXCVB23456JKL",
   "key": "sk_live_k2_def456...",
   "name": "CI/CD Pipeline",
-  "scopes": "math:read credits:read",
+  "scopes": "math:read usage:read",
   "created_at": "2025-12-16T00:00:00Z"
 }
 ```

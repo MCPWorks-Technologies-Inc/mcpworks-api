@@ -53,8 +53,7 @@ These components are fully aligned with A0 and require no changes:
 | `models/user.py` | Account | Rename to `account.py` in A0 |
 | `models/api_key.py` | API Keys | Add `namespace_id` FK for scoping |
 | `models/subscription.py` | Subscription | Already tier-based |
-| `models/credit.py` | Credit | Keep for usage tracking |
-| `models/credit_transaction.py` | Transactions | Keep hold/commit/release pattern |
+| `models/usage.py` | UsageRecord | Track executions per billing period |
 | `models/audit_log.py` | AuditLog | Already SOC 2 ready |
 
 ### Services (Direct Reuse)
@@ -62,7 +61,7 @@ These components are fully aligned with A0 and require no changes:
 | File | A0 Role | Notes |
 |------|---------|-------|
 | `services/auth.py` | Auth | Keep API key validation |
-| `services/credit.py` | Credits | Keep hold/commit/release |
+| `services/usage.py` | Usage | Track/check execution limits |
 | `services/stripe.py` | Billing | Keep Stripe integration |
 | `services/router.py` | Routing | Adapt for backend dispatch |
 
@@ -115,7 +114,6 @@ class Service(Base):
     name: Mapped[str]
     url: Mapped[str]
     tier_required: Mapped[str]
-    credit_cost: Mapped[Decimal]
 
 # NEW (add in separate file)
 class Function(Base):  # This is different from Service
@@ -254,7 +252,7 @@ backends/
 
 ```
 alembic/versions/
-├── 20251217_000001_initial_schema.py  # Users, APIKeys, Credits, Subscriptions
+├── 20251217_000001_initial_schema.py  # Users, APIKeys, Usage, Subscriptions
 └── 20251217_000002_add_executions_table.py  # Executions
 ```
 
@@ -289,8 +287,7 @@ def upgrade():
 | `POST /v1/auth/login` | Login | Keep |
 | `POST /v1/auth/register` | Register | Keep |
 | `GET /v1/users/me` | Account info | Rename path to `/v1/accounts/me` |
-| `POST /v1/credits/purchase` | Buy credits | Keep |
-| `GET /v1/credits/balance` | Get balance | Keep |
+| `GET /v1/usage` | Get usage | Returns executions count/limit |
 | `GET /v1/subscriptions` | List subs | Keep |
 | `POST /v1/subscriptions` | Create sub | Keep |
 
@@ -367,8 +364,7 @@ src/mcpworks_api/
 │   ├── function_version.py # NEW
 │   ├── execution.py        # EXTEND
 │   ├── subscription.py     # KEEP
-│   ├── credit.py           # KEEP
-│   ├── credit_transaction.py # KEEP
+│   ├── usage.py            # Usage records per billing period
 │   ├── audit_log.py        # KEEP
 │   ├── security_event.py   # NEW
 │   └── webhook.py          # NEW
@@ -381,13 +377,13 @@ src/mcpworks_api/
 │   ├── namespace.py        # NEW
 │   ├── function.py         # NEW
 │   ├── service.py          # EXTEND
-│   ├── credit.py           # KEEP
+│   ├── usage.py            # Usage tracking schemas
 │   └── subscription.py     # KEEP
 │
 ├── services/
 │   ├── __init__.py
 │   ├── auth.py             # KEEP
-│   ├── credit.py           # KEEP
+│   ├── usage.py            # Usage tracking
 │   ├── stripe.py           # KEEP
 │   ├── router.py           # EXTEND for backends
 │   ├── execution.py        # EXTEND
@@ -400,7 +396,7 @@ src/mcpworks_api/
 │   ├── auth.py             # KEEP
 │   ├── users.py            # RENAME to accounts.py
 │   ├── namespaces.py       # NEW
-│   ├── credits.py          # KEEP
+│   ├── usage.py            # Usage tracking
 │   ├── subscriptions.py    # KEEP
 │   ├── services.py         # EXTEND
 │   └── api_keys.py         # NEW
@@ -481,7 +477,7 @@ Before marking consolidation complete:
 - [ ] MCP protocol layer responding to JSON-RPC
 - [ ] At least one management tool working (list_namespaces)
 - [ ] Sandbox executing simple Python code
-- [ ] Credit hold/commit/release working for executions
+- [ ] Usage tracking working for executions
 
 ---
 
@@ -499,8 +495,8 @@ Before marking consolidation complete:
 
 ## Summary
 
-**What exists:** 75-80% of foundation (auth, credits, billing, middleware, core)
+**What exists:** 75-80% of foundation (auth, usage tracking, billing, middleware, core)
 **What to extend:** User→Account, APIKey scoping, Execution→Function context
 **What to add:** Namespaces, Functions, FunctionVersions, MCP layer, Sandbox backend
 
-The existing codebase is well-structured and follows the same patterns. The A0 consolidation adds namespace-scoped function management while preserving all existing account/credit/subscription functionality.
+The existing codebase is well-structured and follows the same patterns. The A0 consolidation adds namespace-scoped function management while preserving all existing account/subscription functionality.

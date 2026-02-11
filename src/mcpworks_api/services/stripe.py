@@ -29,21 +29,27 @@ TIER_PRICE_MAP: dict[str, str] = {}
 
 
 def get_tier_price_map() -> dict[str, str]:
-    """Get tier to price ID mapping from settings."""
+    """Get tier to price ID mapping from settings.
+
+    Per A0-SYSTEM-SPECIFICATION.md:
+    - founder: $29/mo
+    - founder_pro: $59/mo
+    - enterprise: $129+/mo
+    """
     settings = get_settings()
     return {
-        "starter": settings.stripe_price_starter,
-        "pro": settings.stripe_price_pro,
+        "founder": settings.stripe_price_founder,
+        "founder_pro": settings.stripe_price_founder_pro,
         "enterprise": settings.stripe_price_enterprise,
     }
 
 
-# Monthly credits per tier
-TIER_CREDITS = {
+# Monthly execution limits per tier (for reference, primarily enforced by BillingMiddleware)
+TIER_EXECUTIONS = {
     "free": 500,
-    "starter": 2900,
-    "pro": 9900,
-    "enterprise": 99999,
+    "founder": 10_000,
+    "founder_pro": 50_000,
+    "enterprise": -1,  # Unlimited
 }
 
 
@@ -136,7 +142,7 @@ class StripeService:
 
         Args:
             user_id: User upgrading subscription
-            tier: Target tier (starter, pro, enterprise)
+            tier: Target tier (founder, founder_pro, enterprise)
             success_url: URL to redirect on success
             cancel_url: URL to redirect on cancel
 
@@ -146,8 +152,8 @@ class StripeService:
         Raises:
             ValueError: If tier is invalid or user not found
         """
-        if tier not in ["starter", "pro", "enterprise"]:
-            raise ValueError(f"Invalid tier: {tier}. Must be starter, pro, or enterprise")
+        if tier not in ["founder", "founder_pro", "enterprise"]:
+            raise ValueError(f"Invalid tier: {tier}. Must be founder, founder_pro, or enterprise")
 
         # Get price ID for tier - check configuration BEFORE calling Stripe
         price_map = get_tier_price_map()
@@ -466,26 +472,19 @@ class StripeService:
         await self.db.commit()
 
     async def _grant_monthly_credits(self, user_id: uuid.UUID, tier: str) -> None:
-        """Grant monthly credits for a tier.
+        """[DEPRECATED] Grant monthly credits for a tier.
+
+        NOTE: As of A0-SYSTEM-SPECIFICATION.md, billing is execution-based,
+        not credit-based. This method is retained for backwards compatibility
+        but may be removed in a future version.
 
         Args:
             user_id: User to grant credits to
             tier: Subscription tier
         """
-        credits_amount = TIER_CREDITS.get(tier, 0)
-        if credits_amount <= 0:
-            return
-
-        credit_service = CreditService(self.db)
-        await credit_service.add_credits(
-            user_id=user_id,
-            amount=Decimal(str(credits_amount)),
-            transaction_type=TransactionType.GRANT,
-            metadata={
-                "reason": "monthly_subscription",
-                "tier": tier,
-            },
-        )
+        # Execution-based billing: credits are deprecated
+        # Tier limits are enforced by BillingMiddleware via Redis
+        pass
 
     async def cancel_subscription(self, user_id: uuid.UUID) -> dict[str, Any]:
         """Cancel subscription at end of billing period.

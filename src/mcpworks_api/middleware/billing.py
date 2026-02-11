@@ -29,16 +29,16 @@ class BillingMiddleware(BaseHTTPMiddleware):
     - Credit balance (future)
     """
 
-    # Tier limits (executions per month)
+    # Tier limits (executions per month) - per A0-SYSTEM-SPECIFICATION.md
     TIER_LIMITS: dict[str, int] = {
-        "free": 100,  # Free tier: 100 executions/month
-        "founder": 1_000,  # Founder: 1,000 executions/month
-        "founder_pro": 5_000,  # Founder Pro: 5,000 executions/month
-        "enterprise": 100_000,  # Enterprise: 100,000 executions/month
+        "free": 500,  # Free tier: 500 executions/month
+        "founder": 10_000,  # Founder ($29/mo): 10,000 executions/month
+        "founder_pro": 50_000,  # Founder Pro ($59/mo): 50,000 executions/month
+        "enterprise": -1,  # Enterprise ($129+/mo): Unlimited (-1 = no limit)
     }
 
     # Default limit for unknown tiers
-    DEFAULT_LIMIT = 100
+    DEFAULT_LIMIT = 500
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request and track usage.
@@ -61,7 +61,8 @@ class BillingMiddleware(BaseHTTPMiddleware):
         # Check quota before execution
         try:
             usage, limit = await self._check_quota(account)
-            if usage >= limit:
+            # -1 means unlimited (enterprise tier)
+            if limit != -1 and usage >= limit:
                 raise HTTPException(
                     status_code=429,
                     detail={

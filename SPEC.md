@@ -1,8 +1,16 @@
 # MCPWorks API Specification
 
-**Version:** 1.0.0
+**Version:** 2.0.0
 **Status:** Ready for Implementation
-**Last Updated:** 2025-01-15
+**Last Updated:** 2026-02-10
+
+> **A0 Architecture Migration Note:**
+> This specification is transitioning from "workflows" terminology to the new **namespace-based function architecture**.
+> - **Old model:** Workflows → Activepieces
+> - **New model:** Namespaces → Services → Functions → Backends (Code Sandbox, Activepieces, nanobot.ai, GitHub Repo)
+>
+> See [database-models-specification.md](docs/implementation/database-models-specification.md) for the A0 data models.
+> See [namespace-architecture.md](../mcpworks-internals/docs/implementation/namespace-architecture.md) for the complete A0 architecture.
 
 ## Table of Contents
 
@@ -10,7 +18,7 @@
 2. [Architecture](#architecture)
 3. [Data Models](#data-models)
 4. [API Endpoints](#api-endpoints)
-5. [Credit System](#credit-system)
+5. [Usage Tracking](#usage-tracking)
 6. [Activepieces Integration](#activepieces-integration)
 7. [Authentication & Security](#authentication--security)
 8. [Pricing & Subscriptions](#pricing--subscriptions)
@@ -19,6 +27,7 @@
 11. [Deployment](#deployment)
 12. [Testing Strategy](#testing-strategy)
 13. [Implementation Roadmap](#implementation-roadmap)
+14. [Related Documentation](#related-documentation)
 
 ---
 
@@ -26,16 +35,16 @@
 
 ### Purpose
 
-The **mcpworks-api** is the backend REST API service that powers the mcpworks AI-native workflow automation platform. It serves as the central orchestration layer between the mcpworks-gateway (secure proxy) and the workflow execution engine (Activepieces).
+The **mcpworks-api** is the backend REST API service that powers the mcpworks namespace-based function hosting platform. AI assistants connect directly via HTTPS to namespace endpoints where they can create and execute functions backed by multiple backends.
 
 ### Key Responsibilities
 
 - **User & Account Management**: Registration, authentication, API key management
-- **Credit System**: Hold/commit/release pattern for transaction safety
-- **Workflow Management**: CRUD operations for user workflows
-- **Execution Orchestration**: Coordinate workflow execution with Activepieces
+- **Usage Tracking**: Monitor execution counts against subscription tier limits
+- **Namespace & Function Management**: CRUD operations for namespaces, services, and functions
+- **Execution Orchestration**: Route function execution to appropriate backend (Code Sandbox, Activepieces, etc.)
 - **Billing & Subscriptions**: Stripe integration for payments and subscriptions
-- **Service Discovery**: Expose available workflows and first-party MCPs to gateway
+- **Service Discovery**: Expose available functions via namespace endpoints
 - **Audit & Compliance**: Comprehensive logging for GDPR/HIPAA/SOX compliance
 
 ### Technology Stack
@@ -56,34 +65,55 @@ The **mcpworks-api** is the backend REST API service that powers the mcpworks AI
 
 ### System Context
 
+> **Note:** As of v4.0.0, AI assistants connect directly via HTTPS to namespace endpoints.
+> No local proxy/gateway is required. See [Namespace Architecture](../mcpworks-internals/docs/implementation/namespace-architecture.md).
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Claude Code / Codex / GitHub Copilot (MCP Client)     │
 └────────────────────┬────────────────────────────────────┘
-                     │ stdio (local IPC)
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  mcpworks-gateway (Secure Proxy)                        │
-│  - stdio ↔ HTTPS translation                           │
-│  - API key authentication                               │
-│  - TLS 1.3 encryption                                   │
-└────────────────────┬────────────────────────────────────┘
-                     │ HTTPS
-                     ▼
+                     │ HTTPS (direct connection)
+                     │
+         ┌───────────┴───────────┐
+         ▼                       ▼
+┌─────────────────────┐  ┌─────────────────────┐
+│ {ns}.create.mcpworks.io │  │ {ns}.run.mcpworks.io │
+│ (Management)         │  │ (Execution)         │
+└─────────┬───────────┘  └─────────┬───────────┘
+          │                        │
+          └────────────┬───────────┘
+                       ▼
 ┌─────────────────────────────────────────────────────────┐
 │  mcpworks-api (This Service)                            │
-│  - Authenticate requests                                │
-│  - Manage credits (hold/commit/release)                 │
-│  - Orchestrate workflow execution                       │
-│  - Track usage & billing                                │
+│  - Authenticate requests (API key / JWT)                │
+│  - Track usage against subscription limits              │
+│  - Orchestrate function execution                       │
+│  - Route to appropriate backend                         │
 └────────┬───────────┬───────────┬─────────────┬──────────┘
          │           │           │             │
          ▼           ▼           ▼             ▼
     ┌────────┐  ┌──────────┐  ┌──────┐  ┌──────────┐
-    │Postgres│  │  Redis   │  │Active│  │  Stripe  │
-    │   DB   │  │  Cache   │  │pieces│  │ Payments │
+    │Postgres│  │  Redis   │  │ Code │  │  Stripe  │
+    │   DB   │  │  Cache   │  │Sandbox│  │ Payments │
     └────────┘  └──────────┘  └──────┘  └──────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+               ┌────────┐  ┌──────────┐  ┌────────┐
+               │Active  │  │ nanobot  │  │ GitHub │
+               │pieces  │  │   .ai    │  │  Repo  │
+               └────────┘  └──────────┘  └────────┘
 ```
+
+**Endpoint Pattern:**
+- `{namespace}.create.mcpworks.io` - Management interface (CRUD functions/services)
+- `{namespace}.run.mcpworks.io` - Execution interface (call functions)
+
+**Function Backends:**
+- **Code Sandbox** - LLM-authored Python/TypeScript execution (nsjail isolation)
+- **Activepieces** - Visual workflow builder (150+ integrations)
+- **nanobot.ai** - Definition TBD
+- **GitHub Repo** - Future: MCPWorks Framework functions
 
 ### Service Components
 
@@ -95,7 +125,7 @@ The **mcpworks-api** is the backend REST API service that powers the mcpworks AI
 
 #### Service Layer (`src/mcpworks_api/services/`)
 - Business logic implementation
-- Credit transaction management
+- Usage tracking and limits
 - Workflow orchestration
 - External service integration (Activepieces, Stripe)
 
@@ -167,7 +197,7 @@ CREATE INDEX idx_api_keys_hash ON api_keys(key_hash);
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-    tier VARCHAR(20) NOT NULL CHECK (tier IN ('free', 'starter', 'pro', 'enterprise')),
+    tier VARCHAR(20) NOT NULL CHECK (tier IN ('free', 'founder', 'founder_pro', 'enterprise')),
     status VARCHAR(20) NOT NULL CHECK (status IN ('active', 'cancelled', 'past_due', 'trialing')),
     stripe_subscription_id VARCHAR(255) UNIQUE,
     stripe_customer_id VARCHAR(255),
@@ -182,39 +212,23 @@ CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
 CREATE INDEX idx_subscriptions_stripe ON subscriptions(stripe_subscription_id);
 ```
 
-#### Credits Table
+#### Usage Records Table
 
 ```sql
-CREATE TABLE credits (
-    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    available_balance DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (available_balance >= 0),
-    held_balance DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (held_balance >= 0),
-    total_balance DECIMAL(10, 2) GENERATED ALWAYS AS (available_balance + held_balance) STORED,
-    lifetime_earned DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    lifetime_spent DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-```
-
-#### Credit Transactions Table
-
-```sql
-CREATE TABLE credit_transactions (
+CREATE TABLE usage_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type VARCHAR(20) NOT NULL CHECK (type IN ('purchase', 'subscription_grant', 'hold', 'commit', 'release', 'refund')),
-    amount DECIMAL(10, 2) NOT NULL,
-    balance_before DECIMAL(10, 2) NOT NULL,
-    balance_after DECIMAL(10, 2) NOT NULL,
-    execution_id UUID REFERENCES workflow_executions(id),
-    hold_id UUID,  -- Reference to original HOLD transaction
-    metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    billing_period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    billing_period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    executions_count INTEGER NOT NULL DEFAULT 0,
+    executions_limit INTEGER NOT NULL,  -- From subscription tier
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (user_id, billing_period_start)
 );
 
-CREATE INDEX idx_credit_transactions_user ON credit_transactions(user_id);
-CREATE INDEX idx_credit_transactions_execution ON credit_transactions(execution_id);
-CREATE INDEX idx_credit_transactions_created ON credit_transactions(created_at DESC);
+CREATE INDEX idx_usage_records_user ON usage_records(user_id);
+CREATE INDEX idx_usage_records_period ON usage_records(billing_period_start, billing_period_end);
 ```
 
 #### Workflows Table
@@ -231,7 +245,7 @@ CREATE TABLE workflows (
     mcp_tool_description TEXT,
     mcp_input_schema JSONB NOT NULL,
     status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
-    base_credit_cost DECIMAL(10, 2) DEFAULT 5.00,
+    -- Removed: base_credit_cost (using subscription tiers instead)
     execution_count INTEGER DEFAULT 0,
     last_executed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -255,9 +269,6 @@ CREATE TABLE workflow_executions (
     input_params JSONB,
     result JSONB,
     error_message TEXT,
-    credit_hold_id UUID,
-    credits_held DECIMAL(10, 2),
-    credits_charged DECIMAL(10, 2),
     started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
     duration_ms INTEGER
@@ -283,7 +294,7 @@ CREATE TABLE workflow_templates (
     mcp_input_schema JSONB NOT NULL,
     preview_image_url TEXT,
     usage_count INTEGER DEFAULT 0,
-    tier_required VARCHAR(20) DEFAULT 'free' CHECK (tier_required IN ('free', 'starter', 'pro', 'enterprise')),
+    tier_required VARCHAR(20) DEFAULT 'free' CHECK (tier_required IN ('free', 'founder', 'founder_pro', 'enterprise')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -394,14 +405,14 @@ Authorization: Bearer {jwt_token}
   "created_at": "2025-01-15T10:30:00Z",
   "email_verified": true,
   "subscription": {
-    "tier": "starter",
+    "tier": "founder",
     "status": "active",
     "current_period_end": "2025-02-15T10:30:00Z"
   },
-  "credits": {
-    "available": 1250.00,
-    "held": 25.00,
-    "total": 1275.00
+  "usage": {
+    "executions_count": 847,
+    "executions_limit": 1000,
+    "executions_remaining": 153
   }
 }
 ```
@@ -450,10 +461,10 @@ Authorization: Bearer {jwt_token}
 
 ---
 
-### Credits & Billing
+### Usage
 
-#### GET /v1/credits/balance
-Get current credit balance.
+#### GET /v1/usage
+Get current usage for billing period.
 
 **Headers:**
 ```
@@ -463,43 +474,18 @@ Authorization: Bearer {api_key}
 **Response 200 OK:**
 ```json
 {
-  "available": 1250.00,
-  "held": 25.00,
-  "total": 1275.00,
-  "lifetime_earned": 5000.00,
-  "lifetime_spent": 3725.00
+  "billing_period_start": "2025-01-01T00:00:00Z",
+  "billing_period_end": "2025-01-31T23:59:59Z",
+  "executions_count": 847,
+  "executions_limit": 1000,
+  "executions_remaining": 153,
+  "usage_percentage": 84.7,
+  "tier": "founder"
 }
 ```
 
-#### POST /v1/credits/purchase
-Purchase credit pack via Stripe.
-
-**Headers:**
-```
-Authorization: Bearer {jwt_token}
-```
-
-**Request:**
-```json
-{
-  "amount_usd": 10.00,
-  "payment_method_id": "pm_abc123"
-}
-```
-
-**Response 201 Created:**
-```json
-{
-  "transaction_id": "txn_xyz789",
-  "credits_purchased": 1000,
-  "amount_paid_usd": 10.00,
-  "new_balance": 2250.00,
-  "stripe_payment_intent_id": "pi_abc123"
-}
-```
-
-#### GET /v1/credits/transactions
-List credit transaction history.
+#### GET /v1/usage/history
+Get usage history across billing periods.
 
 **Headers:**
 ```
@@ -507,39 +493,28 @@ Authorization: Bearer {jwt_token}
 ```
 
 **Query Parameters:**
-- `limit` (default: 50, max: 100)
-- `offset` (default: 0)
-- `type` (optional filter: purchase, hold, commit, release, refund)
+- `limit` (default: 12, max: 24)
 
 **Response 200 OK:**
 ```json
 {
-  "transactions": [
+  "periods": [
     {
-      "id": "txn_abc123",
-      "type": "commit",
-      "amount": -8.50,
-      "balance_before": 1258.50,
-      "balance_after": 1250.00,
-      "execution_id": "exec_xyz789",
-      "created_at": "2025-01-15T10:30:00Z"
+      "billing_period_start": "2025-01-01T00:00:00Z",
+      "billing_period_end": "2025-01-31T23:59:59Z",
+      "executions_count": 847,
+      "executions_limit": 1000,
+      "tier": "founder"
     },
     {
-      "id": "txn_def456",
-      "type": "purchase",
-      "amount": 1000.00,
-      "balance_before": 258.50,
-      "balance_after": 1258.50,
-      "metadata": {
-        "amount_usd": 10.00,
-        "stripe_payment_intent": "pi_abc123"
-      },
-      "created_at": "2025-01-15T09:00:00Z"
+      "billing_period_start": "2024-12-01T00:00:00Z",
+      "billing_period_end": "2024-12-31T23:59:59Z",
+      "executions_count": 923,
+      "executions_limit": 1000,
+      "tier": "founder"
     }
   ],
-  "total": 127,
-  "limit": 50,
-  "offset": 0
+  "total": 12
 }
 ```
 
@@ -558,7 +533,7 @@ Authorization: Bearer {jwt_token}
 **Request:**
 ```json
 {
-  "tier": "starter",
+  "tier": "founder",
   "payment_method_id": "pm_abc123"
 }
 ```
@@ -568,13 +543,16 @@ Authorization: Bearer {jwt_token}
 {
   "subscription": {
     "id": "sub_xyz789",
-    "tier": "starter",
+    "tier": "founder",
     "status": "active",
     "current_period_start": "2025-01-15T10:30:00Z",
     "current_period_end": "2025-02-15T10:30:00Z",
     "stripe_subscription_id": "sub_stripe123"
   },
-  "credits_granted": 2900
+  "usage_limits": {
+    "executions_per_month": 1000,
+    "max_functions": 25
+  }
 }
 ```
 
@@ -590,15 +568,14 @@ Authorization: Bearer {jwt_token}
 ```json
 {
   "id": "sub_xyz789",
-  "tier": "starter",
+  "tier": "founder",
   "status": "active",
   "current_period_start": "2025-01-15T10:30:00Z",
   "current_period_end": "2025-02-15T10:30:00Z",
   "cancel_at_period_end": false,
   "limits": {
-    "max_workflows": 25,
-    "max_executions_per_month": 1000,
-    "credits_per_month": 2900
+    "max_functions": 25,
+    "max_executions_per_month": 1000
   }
 }
 ```
@@ -614,7 +591,7 @@ Authorization: Bearer {jwt_token}
 **Request:**
 ```json
 {
-  "tier": "pro"
+  "tier": "founder_pro"
 }
 ```
 
@@ -623,13 +600,16 @@ Authorization: Bearer {jwt_token}
 {
   "subscription": {
     "id": "sub_xyz789",
-    "tier": "pro",
+    "tier": "founder_pro",
     "status": "active",
     "current_period_start": "2025-01-15T10:30:00Z",
     "current_period_end": "2025-02-15T10:30:00Z"
   },
-  "prorated_charge_usd": 70.00,
-  "credits_granted": 7000
+  "prorated_charge_usd": 30.00,
+  "new_limits": {
+    "executions_per_month": 10000,
+    "max_functions": 100
+  }
 }
 ```
 
@@ -646,7 +626,7 @@ Authorization: Bearer {jwt_token}
 {
   "subscription": {
     "id": "sub_xyz789",
-    "tier": "starter",
+    "tier": "founder",
     "status": "active",
     "cancel_at_period_end": true,
     "current_period_end": "2025-02-15T10:30:00Z"
@@ -682,7 +662,6 @@ Authorization: Bearer {api_key}
       "description": "Sends a welcome email to new users",
       "mcp_tool_name": "send_welcome_email",
       "status": "published",
-      "base_credit_cost": 5.00,
       "execution_count": 342,
       "last_executed_at": "2025-01-15T10:30:00Z",
       "created_at": "2025-01-10T08:00:00Z"
@@ -732,7 +711,6 @@ Authorization: Bearer {api_key}
   "mcp_tool_name": "send_welcome_email",
   "status": "draft",
   "activepieces_flow_id": "ap_flow_xyz789",
-  "base_credit_cost": 5.00,
   "created_at": "2025-01-15T10:30:00Z"
 }
 ```
@@ -755,7 +733,6 @@ Authorization: Bearer {api_key}
   "mcp_tool_description": "Send a personalized welcome email",
   "mcp_input_schema": {...},
   "status": "published",
-  "base_credit_cost": 5.00,
   "execution_count": 342,
   "last_executed_at": "2025-01-15T10:30:00Z",
   "created_at": "2025-01-10T08:00:00Z",
@@ -845,7 +822,7 @@ Authorization: Bearer {api_key}
 ### Workflow Execution
 
 #### POST /v1/execute/{workflow_id}
-Execute a workflow (hold credits, trigger execution).
+Execute a workflow (check usage limits, trigger execution).
 
 **Headers:**
 ```
@@ -858,8 +835,7 @@ Authorization: Bearer {api_key}
   "input_params": {
     "email": "user@example.com",
     "name": "John Doe"
-  },
-  "max_credits": 50
+  }
 }
 ```
 
@@ -869,21 +845,21 @@ Authorization: Bearer {api_key}
   "execution_id": "exec_abc123",
   "workflow_id": "wf_xyz789",
   "status": "pending",
-  "credits_held": 15.00,
   "estimated_completion_ms": 2000,
   "started_at": "2025-01-15T10:30:00Z"
 }
 ```
 
-**Error 400 Bad Request (Insufficient Credits):**
+**Error 400 Bad Request (Usage Limit Exceeded):**
 ```json
 {
   "error": {
-    "code": "INSUFFICIENT_CREDITS",
-    "message": "Insufficient credits for workflow execution",
+    "code": "USAGE_LIMIT_EXCEEDED",
+    "message": "Usage limit exceeded for current billing period",
     "details": {
-      "required": 15.00,
-      "available": 5.25
+      "executions_count": 1000,
+      "executions_limit": 1000,
+      "resets_at": "2025-02-01T00:00:00Z"
     }
   }
 }
@@ -911,8 +887,6 @@ Authorization: Bearer {api_key}
     "email_sent": true,
     "message_id": "msg_xyz789"
   },
-  "credits_held": 15.00,
-  "credits_charged": 8.50,
   "duration_ms": 1250,
   "started_at": "2025-01-15T10:30:00Z",
   "completed_at": "2025-01-15T10:30:01Z"
@@ -926,8 +900,6 @@ Authorization: Bearer {api_key}
   "workflow_id": "wf_xyz789",
   "status": "failed",
   "error_message": "Failed to connect to email service",
-  "credits_held": 15.00,
-  "credits_charged": 0,
   "duration_ms": 500,
   "started_at": "2025-01-15T10:30:00Z",
   "completed_at": "2025-01-15T10:30:00Z"
@@ -957,7 +929,6 @@ Authorization: Bearer {api_key}
       "workflow_id": "wf_xyz789",
       "workflow_name": "Send Welcome Email",
       "status": "completed",
-      "credits_charged": 8.50,
       "duration_ms": 1250,
       "started_at": "2025-01-15T10:30:00Z",
       "completed_at": "2025-01-15T10:30:01Z"
@@ -982,8 +953,7 @@ Authorization: Bearer {api_key}
 {
   "execution_id": "exec_abc123",
   "status": "cancelled",
-  "credits_charged": 0,
-  "message": "Execution cancelled, all held credits released"
+  "message": "Execution cancelled successfully"
 }
 ```
 
@@ -1007,7 +977,6 @@ Authorization: Bearer {api_key}
       "name": "math",
       "type": "first_party",
       "endpoint": "https://math.mcpworks.io",
-      "cost_per_call": 0,
       "tier_required": "free",
       "description": "Advanced mathematical calculations and verification"
     },
@@ -1015,8 +984,7 @@ Authorization: Bearer {api_key}
       "name": "text",
       "type": "first_party",
       "endpoint": "https://text.mcpworks.io",
-      "cost_per_call": 5,
-      "tier_required": "starter",
+      "tier_required": "founder",
       "description": "Document analysis and text processing"
     },
     {
@@ -1024,14 +992,13 @@ Authorization: Bearer {api_key}
       "type": "user_workflow",
       "workflow_id": "wf_abc123",
       "description": "Send a personalized welcome email",
-      "input_schema": {...},
-      "base_cost": 5
+      "input_schema": {...}
     }
   ],
   "user": {
     "id": "usr_123",
-    "tier": "starter",
-    "credits_available": 1250.00
+    "tier": "founder",
+    "executions_remaining": 153
   }
 }
 ```
@@ -1070,145 +1037,68 @@ X-Activepieces-Signature: sha256=...
 
 ---
 
-## Credit System
+## Usage Tracking
 
-### Hold/Commit/Release Pattern
+### Subscription-Based Billing
 
-The credit system implements a bank-grade transaction pattern to ensure fair billing and prevent double-charging.
+MCPWorks uses **monthly subscription billing** with usage limits per tier. No credits, no prepaid balance - just simple subscription tiers.
 
-#### Phase 1: Hold
+### How It Works
 
-When a workflow execution is requested:
+1. User subscribes to a tier (Free, Founder, Founder Pro, Enterprise)
+2. Each tier has monthly execution limits
+3. Usage is tracked per billing period
+4. Soft limits: warn at 80%, pause at 100% (or prompt upgrade)
+5. Usage resets at start of each billing period
 
-1. Estimate maximum cost (base cost + max step costs)
-2. Check if user has sufficient available balance
-3. Create HOLD transaction (deducts from available balance, adds to held balance)
-4. Return hold_id for tracking
-5. Reject immediately if insufficient balance
-
-```python
-async def hold_credits(user_id: UUID, amount: Decimal) -> UUID:
-    async with db.begin():
-        # Lock user's credit record
-        credit = await db.execute(
-            select(Credit).where(Credit.user_id == user_id).with_for_update()
-        )
-
-        if credit.available_balance < amount:
-            raise InsufficientCreditsError()
-
-        # Create HOLD transaction
-        hold_txn = CreditTransaction(
-            user_id=user_id,
-            type="hold",
-            amount=-amount,
-            balance_before=credit.available_balance,
-            balance_after=credit.available_balance - amount
-        )
-
-        # Update credit balance
-        credit.available_balance -= amount
-        credit.held_balance += amount
-
-        await db.commit()
-        return hold_txn.id
-```
-
-#### Phase 2: Commit
-
-When workflow completes successfully:
-
-1. Calculate actual cost based on steps executed
-2. If actual_cost <= held_amount:
-   - Create COMMIT transaction for actual_cost
-   - Create RELEASE transaction for (held_amount - actual_cost)
-3. If actual_cost > held_amount (shouldn't happen):
-   - Log warning
-   - Commit full held_amount
-   - Create additional CHARGE transaction for overage
+### Usage Tracking Schema
 
 ```python
-async def commit_credits(hold_id: UUID, actual_cost: Decimal) -> None:
-    async with db.begin():
-        hold_txn = await db.get(CreditTransaction, hold_id)
-        user_id = hold_txn.user_id
-        held_amount = abs(hold_txn.amount)
+class UsageRecord(Base):
+    __tablename__ = "usage_records"
 
-        credit = await db.execute(
-            select(Credit).where(Credit.user_id == user_id).with_for_update()
-        )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    billing_period_start: Mapped[datetime]
+    billing_period_end: Mapped[datetime]
+    executions_count: Mapped[int] = mapped_column(default=0)
+    executions_limit: Mapped[int]  # From subscription tier
 
-        # Commit actual cost
-        commit_txn = CreditTransaction(
-            user_id=user_id,
-            type="commit",
-            amount=-actual_cost,
-            hold_id=hold_id,
-            balance_before=credit.held_balance,
-            balance_after=credit.held_balance - actual_cost
-        )
-
-        credit.held_balance -= actual_cost
-        credit.lifetime_spent += actual_cost
-
-        # Release remainder
-        if actual_cost < held_amount:
-            release_amount = held_amount - actual_cost
-            release_txn = CreditTransaction(
-                user_id=user_id,
-                type="release",
-                amount=release_amount,
-                hold_id=hold_id,
-                balance_before=credit.held_balance,
-                balance_after=credit.held_balance - release_amount
-            )
-
-            credit.held_balance -= release_amount
-            credit.available_balance += release_amount
-
-        await db.commit()
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(onupdate=datetime.utcnow)
 ```
 
-#### Phase 3: Release
-
-When workflow fails or is cancelled:
-
-1. Create RELEASE transaction for full held_amount
-2. Return credits to available balance
-3. No charge for failed executions
+### Usage Check on Execution
 
 ```python
-async def release_credits(hold_id: UUID) -> None:
-    async with db.begin():
-        hold_txn = await db.get(CreditTransaction, hold_id)
-        user_id = hold_txn.user_id
-        held_amount = abs(hold_txn.amount)
+async def check_usage_limit(user_id: UUID) -> bool:
+    """Check if user is within their subscription limits."""
+    usage = await get_current_usage(user_id)
 
-        credit = await db.execute(
-            select(Credit).where(Credit.user_id == user_id).with_for_update()
+    if usage.executions_count >= usage.executions_limit:
+        raise UsageLimitExceededError(
+            current=usage.executions_count,
+            limit=usage.executions_limit,
+            resets_at=usage.billing_period_end
         )
 
-        release_txn = CreditTransaction(
-            user_id=user_id,
-            type="release",
-            amount=held_amount,
-            hold_id=hold_id,
-            balance_before=credit.held_balance,
-            balance_after=credit.held_balance - held_amount
-        )
+    return True
 
-        credit.held_balance -= held_amount
-        credit.available_balance += held_amount
-
-        await db.commit()
+async def increment_usage(user_id: UUID) -> None:
+    """Increment execution count for current billing period."""
+    usage = await get_current_usage(user_id)
+    usage.executions_count += 1
+    await db.commit()
 ```
 
-### Concurrency Safety
+### Tier Limits
 
-- Use PostgreSQL row-level locking (`SELECT ... FOR UPDATE`)
-- Wrap all credit operations in database transactions
-- CHECK constraints prevent negative balances
-- Atomic updates prevent race conditions
+| Tier | Executions/Month | Functions | Price |
+|------|------------------|-----------|-------|
+| Free | 100 | 5 | $0 |
+| Founder | 1,000 | 25 | $29/mo |
+| Founder Pro | 10,000 | 100 | $59/mo |
+| Enterprise | Unlimited | Unlimited | $129+/mo |
 
 ---
 
@@ -1267,26 +1157,21 @@ async def create_workflow(user_id: UUID, workflow_data: WorkflowCreate) -> Workf
 
 #### 2. Workflow Execution
 
-When gateway requests workflow execution:
+When AI assistant requests workflow execution via namespace endpoint:
 
 ```python
 async def execute_workflow(workflow_id: UUID, input_params: dict) -> WorkflowExecution:
     workflow = await db.get(Workflow, workflow_id)
 
-    # Hold credits
-    hold_id = await credit_service.hold_credits(
-        user_id=workflow.user_id,
-        amount=workflow.base_credit_cost
-    )
+    # Check usage limits
+    await usage_service.check_limit(user_id=workflow.user_id)
 
     # Create execution record
     execution = WorkflowExecution(
         workflow_id=workflow_id,
         user_id=workflow.user_id,
         input_params=input_params,
-        status="pending",
-        credit_hold_id=hold_id,
-        credits_held=workflow.base_credit_cost
+        status="pending"
     )
     await db.add(execution)
     await db.commit()
@@ -1305,6 +1190,9 @@ async def execute_workflow(workflow_id: UUID, input_params: dict) -> WorkflowExe
     execution.status = "running"
     await db.commit()
 
+    # Increment usage counter
+    await usage_service.increment(user_id=workflow.user_id)
+
     return execution
 ```
 
@@ -1321,28 +1209,13 @@ async def handle_activepieces_webhook(webhook_data: dict) -> None:
     execution = await db.get(WorkflowExecution, execution_id)
 
     if webhook_data["status"] == "completed":
-        # Calculate actual cost (could be dynamic based on steps)
-        actual_cost = calculate_execution_cost(webhook_data)
-
-        # Commit credits
-        await credit_service.commit_credits(
-            hold_id=execution.credit_hold_id,
-            actual_cost=actual_cost
-        )
-
         # Update execution
         execution.status = "completed"
         execution.result = webhook_data["result"]
-        execution.credits_charged = actual_cost
         execution.completed_at = datetime.utcnow()
         execution.duration_ms = webhook_data["duration_ms"]
 
     elif webhook_data["status"] == "failed":
-        # Release held credits
-        await credit_service.release_credits(
-            hold_id=execution.credit_hold_id
-        )
-
         # Update execution
         execution.status = "failed"
         execution.error_message = webhook_data["error"]
@@ -1373,9 +1246,9 @@ async def handle_activepieces_webhook(webhook_data: dict) -> None:
 
 ### Authentication Methods
 
-#### 1. API Key Authentication (Gateway → API)
+#### 1. API Key Authentication (MCP Client → API)
 
-Used for programmatic access from mcpworks-gateway.
+Used for programmatic access from AI assistants via namespace endpoints.
 
 **Key Format:**
 - Live: `mcp_live_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456`
@@ -1412,7 +1285,7 @@ Used for web interface access.
 {
   "sub": "usr_abc123",
   "email": "user@example.com",
-  "tier": "starter",
+  "tier": "founder",
   "exp": 1642252800,
   "iat": 1642252800
 }
@@ -1479,7 +1352,7 @@ X-RateLimit-Reset: 1642252800
 All security-relevant events logged:
 - Authentication attempts (success/failure)
 - API key creation/revocation
-- Credit transactions
+- Subscription changes
 - Workflow executions
 - Administrative actions
 
@@ -1495,53 +1368,47 @@ All security-relevant events logged:
 ### Subscription Tiers
 
 #### Free Tier ($0/month)
-- 5 workflows maximum
+- 5 functions maximum
 - 100 executions/month
-- 500 credits included
 - Community support (GitHub Discussions)
-- Free Math MCP included
+- Code Sandbox backend included
 
-#### Starter Tier ($29/month)
-- 25 workflows
+#### Founder Tier ($29/month)
+- 25 functions
 - 1,000 executions/month
-- 2,900 credits/month (100 credits per $1)
-- Text MCP included
 - Email support (48h response)
-- Workflow templates library
+- Function templates library
+- All backends included
 
-#### Pro Tier ($99/month)
-- 100 workflows
+#### Founder Pro Tier ($59/month)
+- 100 functions
 - 10,000 executions/month
-- 9,900 credits/month
-- All MCPs included
 - Priority email support (24h response)
-- Advanced workflow templates
+- Advanced function templates
 - Custom integrations
 
-#### Enterprise Tier ($299+/month, custom)
-- Unlimited workflows
+#### Enterprise Tier ($129+/month)
+- Unlimited functions
 - Unlimited executions
-- Custom credit allocation
-- All MCPs + priority routing
 - Dedicated support (4h response)
 - SOC 2 compliance reports
 - Custom SLA
 - White-label option
 
-### Credit Pricing
+### Pricing Model
 
-**Base Rate:** 100 credits = $1.00 CAD
+**Monthly Subscription Only** - No credits, no prepaid balance, no complexity.
 
-**Usage Costs:**
-- Workflow execution base: 5-10 credits
-- MCP tool calls: 1-50 credits (complexity-based)
-- Math MCP: Free (0 credits) - viral growth hook
-- Text MCP: 2-10 credits per analysis
+**How It Works:**
+- Subscribe to a tier
+- Use up to your execution limit
+- Upgrade anytime if you need more
+- Usage resets each billing period
 
-**Pay-as-you-go:**
-- Available for all tiers
-- Charged at 100 credits = $1.00
-- Auto-recharge option available
+**Overage Handling:**
+- Soft limit at 80% (warning email)
+- Hard limit at 100% (prompt to upgrade)
+- No automatic charges beyond subscription
 
 ### Stripe Integration
 
@@ -1586,12 +1453,12 @@ All security-relevant events logged:
 ```json
 {
   "error": {
-    "code": "INSUFFICIENT_CREDITS",
-    "message": "Insufficient credits for workflow execution",
+    "code": "USAGE_LIMIT_EXCEEDED",
+    "message": "Usage limit exceeded for current billing period",
     "details": {
-      "required": 10.50,
-      "available": 5.25,
-      "currency": "credits"
+      "executions_count": 1000,
+      "executions_limit": 1000,
+      "resets_at": "2025-02-01T00:00:00Z"
     },
     "request_id": "req_abc123"
   }
@@ -1603,7 +1470,7 @@ All security-relevant events logged:
 - `AUTHENTICATION_FAILED` - Invalid credentials
 - `INVALID_API_KEY` - API key invalid or revoked
 - `RATE_LIMIT_EXCEEDED` - Too many requests
-- `INSUFFICIENT_CREDITS` - Not enough credits
+- `USAGE_LIMIT_EXCEEDED` - Execution limit reached for billing period
 - `WORKFLOW_NOT_FOUND` - Workflow doesn't exist
 - `EXECUTION_FAILED` - Workflow execution error
 - `ACTIVEPIECES_ERROR` - External service error
@@ -1640,10 +1507,9 @@ All security-relevant events logged:
 - `http_request_duration_seconds{method, endpoint}` - Request latency
 
 **Business Metrics:**
-- `credit_transactions_total{type}` - Credit transaction count
-- `credit_transaction_amount{type}` - Credit transaction volume
 - `workflow_executions_total{status}` - Execution count by status
 - `workflow_execution_duration_seconds` - Execution duration
+- `usage_percentage{tier}` - Usage percentage by subscription tier
 - `active_users_total` - Active user count
 
 **System Metrics:**
@@ -1690,7 +1556,7 @@ All security-relevant events logged:
 - `INFO` - Request/response, execution lifecycle
 - `WARNING` - Rate limit approaching, retries
 - `ERROR` - Failed executions, external service errors
-- `CRITICAL` - Database connection loss, credit failures
+- `CRITICAL` - Database connection loss, service failures
 
 **Structured Format:**
 ```json
@@ -1704,7 +1570,6 @@ All security-relevant events logged:
     "workflow_id": "wf_456",
     "execution_id": "exec_789",
     "duration_ms": 1250,
-    "credits_charged": 8.50,
     "status": "completed"
   },
   "request_id": "req_abc123"
@@ -1917,7 +1782,7 @@ curl https://api.mcpworks.io/health
 - Mock external dependencies
 - Fast execution (<100ms per test)
 - Focus areas:
-  - Credit hold/commit/release logic
+  - Usage tracking and limit checking
   - Authentication and authorization
   - Input validation
   - Business logic calculations
@@ -1937,7 +1802,7 @@ curl https://api.mcpworks.io/health
 - Use staging environment
 - Critical paths:
   - User registration → workflow creation → execution
-  - Credit purchase → execution → billing
+  - Subscription → execution → usage tracking
   - Subscription upgrade → limit changes
 
 ### Test Organization
@@ -1970,35 +1835,43 @@ async def test_user(test_db):
 
     return user, api_key
 
-# tests/unit/test_credit_service.py
-async def test_hold_credits_success(test_db, test_user):
-    """Test successful credit hold"""
+# tests/unit/test_usage_service.py
+async def test_check_limit_within_limit(test_db, test_user):
+    """Test usage check within limit"""
     user, _ = test_user
 
-    # Give user 100 credits
-    credit = Credit(user_id=user.id, available_balance=100.00)
-    test_db.add(credit)
+    # Create usage record with room remaining
+    usage = UsageRecord(
+        user_id=user.id,
+        billing_period_start=datetime(2025, 1, 1),
+        billing_period_end=datetime(2025, 1, 31),
+        executions_count=500,
+        executions_limit=1000
+    )
+    test_db.add(usage)
     await test_db.commit()
 
-    # Hold 50 credits
-    hold_id = await credit_service.hold_credits(user.id, 50.00)
+    # Should pass
+    result = await usage_service.check_limit(user.id)
+    assert result is True
 
-    # Verify balances
-    credit = await test_db.get(Credit, user.id)
-    assert credit.available_balance == 50.00
-    assert credit.held_balance == 50.00
-
-async def test_hold_credits_insufficient(test_db, test_user):
-    """Test credit hold with insufficient balance"""
+async def test_check_limit_exceeded(test_db, test_user):
+    """Test usage check when limit exceeded"""
     user, _ = test_user
 
-    credit = Credit(user_id=user.id, available_balance=10.00)
-    test_db.add(credit)
+    usage = UsageRecord(
+        user_id=user.id,
+        billing_period_start=datetime(2025, 1, 1),
+        billing_period_end=datetime(2025, 1, 31),
+        executions_count=1000,
+        executions_limit=1000
+    )
+    test_db.add(usage)
     await test_db.commit()
 
-    # Attempt to hold 50 credits (should fail)
-    with pytest.raises(InsufficientCreditsError):
-        await credit_service.hold_credits(user.id, 50.00)
+    # Should fail
+    with pytest.raises(UsageLimitExceededError):
+        await usage_service.check_limit(user.id)
 
 # tests/integration/test_workflow_execution.py
 async def test_execute_workflow_success(test_client, test_user):
@@ -2024,7 +1897,6 @@ async def test_execute_workflow_success(test_client, test_user):
     # Verify execution completed
     execution = await db.get(WorkflowExecution, execution_id)
     assert execution.status == "completed"
-    assert execution.credits_charged > 0
 ```
 
 ### Continuous Integration
@@ -2101,7 +1973,7 @@ jobs:
 **Goals:**
 - Database schema and migrations
 - User authentication system
-- Basic credit management
+- Usage tracking system
 - Development environment
 
 **Tasks:**
@@ -2110,7 +1982,7 @@ jobs:
 3. Implement User and APIKey models
 4. Build authentication endpoints (register, login, logout)
 5. Implement API key generation and validation
-6. Create credit management service (hold/commit/release)
+6. Create usage tracking service (check/increment)
 7. Set up Docker Compose development environment
 8. Configure logging and error handling
 9. Add health check endpoint
@@ -2118,7 +1990,7 @@ jobs:
 
 **Deliverables:**
 - Working authentication system
-- Credit transaction system
+- Usage tracking system
 - Docker development environment
 - 70% unit test coverage
 
@@ -2127,7 +1999,7 @@ jobs:
 **Goals:**
 - Activepieces integration
 - Workflow CRUD operations
-- Workflow execution with credit management
+- Workflow execution with usage tracking
 - Webhook handling
 
 **Tasks:**
@@ -2135,9 +2007,9 @@ jobs:
 2. Implement workflow creation (API → Activepieces)
 3. Build workflow CRUD endpoints
 4. Create workflow execution endpoint
-5. Implement credit hold on execution start
+5. Implement usage limit check on execution start
 6. Set up webhook receiver for Activepieces callbacks
-7. Implement credit commit/release on execution complete
+7. Implement usage increment on execution complete
 8. Add workflow templates system
 9. Build service discovery endpoint
 10. Write integration tests for workflow lifecycle
@@ -2153,26 +2025,26 @@ jobs:
 **Goals:**
 - Stripe integration
 - Subscription management
-- Credit purchase flow
-- Usage tracking
+- Usage reporting
+- Tier enforcement
 
 **Tasks:**
 1. Integrate Stripe SDK
 2. Create subscription endpoints (create, upgrade, cancel)
 3. Implement Stripe webhook handling
-4. Build credit purchase flow
-5. Set up automatic subscription renewals
-6. Implement usage tracking and reporting
-7. Create invoice generation
-8. Add subscription tier enforcement
-9. Build admin dashboard endpoints (internal)
+4. Set up automatic subscription renewals
+5. Implement usage tracking and reporting
+6. Create usage reset on billing period change
+7. Add subscription tier enforcement
+8. Build admin dashboard endpoints (internal)
+9. Implement upgrade prompts at 80% usage
 10. Write tests for billing workflows
 
 **Deliverables:**
 - Working Stripe integration
 - Subscription management system
-- Credit purchase flow
-- Usage tracking and invoicing
+- Usage tracking and reporting
+- Tier-based limit enforcement
 
 ### Phase 4 - Polish & Production (Week 7-8)
 
@@ -2207,7 +2079,7 @@ jobs:
 - 3-5 workflow templates available
 - 99% uptime in first month
 - p95 latency <500ms
-- Zero credit transaction errors
+- Zero usage tracking errors
 - Complete API documentation
 - SOC 2 preparation started
 
@@ -2232,7 +2104,7 @@ mcpworks-api/
 │   │   │       ├── __init__.py
 │   │   │       ├── auth.py
 │   │   │       ├── users.py
-│   │   │       ├── credits.py
+│   │   │       ├── usage.py
 │   │   │       ├── workflows.py
 │   │   │       ├── executions.py
 │   │   │       ├── subscriptions.py
@@ -2243,7 +2115,7 @@ mcpworks-api/
 │   │   │   ├── user.py
 │   │   │   ├── api_key.py
 │   │   │   ├── subscription.py
-│   │   │   ├── credit.py
+│   │   │   ├── usage.py
 │   │   │   ├── workflow.py
 │   │   │   └── execution.py
 │   │   │
@@ -2251,14 +2123,14 @@ mcpworks-api/
 │   │   │   ├── __init__.py
 │   │   │   ├── user.py
 │   │   │   ├── auth.py
-│   │   │   ├── credit.py
+│   │   │   ├── usage.py
 │   │   │   ├── workflow.py
 │   │   │   └── execution.py
 │   │   │
 │   │   ├── services/
 │   │   │   ├── __init__.py
 │   │   │   ├── auth.py
-│   │   │   ├── credit.py
+│   │   │   ├── usage.py
 │   │   │   ├── workflow.py
 │   │   │   ├── execution.py
 │   │   │   ├── activepieces.py
@@ -2284,7 +2156,7 @@ mcpworks-api/
 ├── tests/
 │   ├── conftest.py
 │   ├── unit/
-│   │   ├── test_credit_service.py
+│   │   ├── test_usage_service.py
 │   │   ├── test_auth_service.py
 │   │   └── test_workflow_service.py
 │   └── integration/
@@ -2375,8 +2247,8 @@ class Settings(BaseSettings):
     # Rate Limiting
     api_rate_limit_per_hour: int = 1000
     execution_rate_limit_free: int = 100
-    execution_rate_limit_starter: int = 1000
-    execution_rate_limit_pro: int = 10000
+    execution_rate_limit_founder: int = 1000
+    execution_rate_limit_founder_pro: int = 10000
 
     # Observability
     sentry_dsn: str | None = None
@@ -2388,6 +2260,46 @@ class Settings(BaseSettings):
 
 settings = Settings()
 ```
+
+---
+
+## Related Documentation
+
+This specification is the **source of truth** for mcpworks-api implementation. The following supporting documents provide additional context and guidance:
+
+### Implementation Framework (`docs/implementation/`)
+
+| Directory | Purpose | Key Documents |
+|-----------|---------|---------------|
+| `specs/` | Development principles and requirements | [CONSTITUTION.md](docs/implementation/specs/CONSTITUTION.md) - Governing principles |
+| `plans/` | Technical architecture and implementation strategies | [technical-architecture.md](docs/implementation/plans/technical-architecture.md) - System design |
+| `guidance/` | Best practices and patterns | [mcp-token-optimization.md](docs/implementation/guidance/mcp-token-optimization.md) - Token efficiency |
+
+### Document Hierarchy
+
+```
+SPEC.md (this file)          ← Source of truth for implementation
+    │
+    └── docs/implementation/
+        ├── specs/           ← Development principles (CONSTITUTION.md)
+        │   ├── CONSTITUTION.md      - Quality standards, non-negotiables
+        │   ├── api-contract.md      - REST API contract details
+        │   └── TEMPLATE.md          - Template for new specs
+        │
+        ├── plans/           ← How we build (architecture decisions)
+        │   └── technical-architecture.md
+        │
+        └── guidance/        ← Best practices (patterns to follow)
+            └── mcp-token-optimization.md
+```
+
+### When to Reference Which Document
+
+- **"What should I build?"** → This SPEC.md
+- **"What are the quality standards?"** → `docs/implementation/specs/CONSTITUTION.md`
+- **"How should I architect this?"** → `docs/implementation/plans/technical-architecture.md`
+- **"How do I optimize token usage?"** → `docs/implementation/guidance/mcp-token-optimization.md`
+- **"What's the REST API contract?"** → `docs/implementation/specs/api-contract.md`
 
 ---
 

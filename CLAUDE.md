@@ -8,19 +8,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**mcpworks API** is the proprietary backend service that powers the mcpworks platform. It handles account management, credit transactions, infrastructure provisioning, and third-party integrations.
+**mcpworks API** is the proprietary backend service that powers the mcpworks platform. It handles account management, usage tracking, subscription billing, and workflow execution.
 
 **Architecture:** RESTful API service consumed by the open-source MCP server
 - **API Endpoints** (`https://api.mcpworks.io/v1/`) - Public HTTP/JSON API
-- **Provider Orchestration** - DigitalOcean, Cloudflare, Stripe, Shopify, etc.
-- **Credit System** - Transaction-safe credit management (hold/commit/release)
-- **Infrastructure Provisioning** - Actual hosting, domain, SSL provisioning
+- **Provider Orchestration** - Activepieces, Stripe, etc.
+- **Usage Tracking** - Subscription-based limits (executions per billing period)
+- **Workflow Execution** - Activepieces workflow orchestration
 
 **Relationship to MCP:**
 - `mcpworks-mcp` (open-source) - MCP protocol server that calls this API
 - `mcpworks-api` (proprietary, this repo) - Backend that does the actual work
 
 **Status:** Spec-driven development - specifications complete, ready for implementation
+
+## ⭐ Source of Truth
+
+**[SPEC.md](SPEC.md)** is the primary specification for this repository. Read it first before any implementation work.
+
+| Document | Purpose |
+|----------|---------|
+| **[SPEC.md](SPEC.md)** | Complete API specification - data models, endpoints, architecture |
+| [docs/implementation/specs/CONSTITUTION.md](docs/implementation/specs/CONSTITUTION.md) | Development principles and quality standards |
+| [docs/implementation/plans/](docs/implementation/plans/) | Technical architecture and implementation strategies |
+| [docs/implementation/guidance/](docs/implementation/guidance/) | Best practices and patterns |
 
 ## Technology Stack
 
@@ -68,11 +79,11 @@ Constitution → Specification → Plan → Tasks → Implementation
 
 - **Spec-first development:** No code without approved specification
 - **Token efficiency first:** Target 200-1000 tokens/operation (2-5x better than AWS/GCP)
-- **Streaming architecture:** Use SSE for long-running operations (deployments, provisioning)
-- **Transaction safety:** Implement hold/commit/release pattern for credits
-- **Provider abstraction:** Infrastructure layer must be swappable
-- **Security by default:** Port restrictions, rate limiting, input validation
-- **Transparent pricing:** All costs exposed to LLM for intelligent decisions
+- **Streaming architecture:** Use SSE for long-running operations (deployments, workflow execution)
+- **Usage limit safety:** Check subscription limits before execution, increment on success
+- **Provider abstraction:** Workflow execution layer must be swappable
+- **Security by default:** Rate limiting, input validation, subscription enforcement
+- **Transparent pricing:** Subscription tiers and usage exposed to LLM for intelligent decisions
 - **Observable by design:** Structured logging, metrics, tracing
 
 ## Common Development Commands
@@ -130,7 +141,7 @@ pytest tests/ -v --cov=src  # With coverage
 
 # Run specific test file
 pytest tests/test_api_endpoints.py -v
-pytest tests/test_credit_system.py -v
+pytest tests/test_usage_tracking.py -v
 ```
 
 ### Database Operations
@@ -167,7 +178,7 @@ cat docs/implementation/guidance/mcp-token-optimization.md
 - `POST /v1/auth/register` - Create new account
 - `POST /v1/auth/login` - Authenticate and get API key
 - `GET /v1/account` - Get account details
-- `GET /v1/account/credits` - Get credit balance
+- `GET /v1/account/usage` - Get current usage (executions_count, executions_limit, executions_remaining)
 
 **Services (Hosting):**
 - `POST /v1/services` - Provision hosting service
@@ -201,32 +212,49 @@ cat docs/implementation/guidance/mcp-token-optimization.md
 - `POST /v1/integrations/mailchimp` - Setup Mailchimp
 - `POST /v1/integrations/typeform` - Setup Typeform
 
-### Credit System
+### Usage Tracking (Subscription-Based)
 
-**Currency:** Credits (100 credits = $1 CAD)
+**Billing Model:** Monthly subscription with execution limits per billing period
 
-**Transaction Pattern (Hold/Commit/Release):**
+**Subscription Tiers:**
+| Tier | Price | Executions/Month |
+|------|-------|------------------|
+| Free | $0 | 100 |
+| Founder | $29/mo | 1,000 |
+| Founder Pro | $59/mo | 10,000 |
+| Founder Enterprise | $129+/mo | Unlimited |
+
+**Usage Check Pattern:**
 ```python
-# 1. Hold credits before operation
-credit_hold = hold_credits(account_id, estimated_cost)
+async def execute_workflow(user_id: UUID, workflow_id: UUID):
+    # 1. Check usage limit before execution
+    usage = await get_current_usage(user_id)
+    if usage.executions_count >= usage.executions_limit:
+        raise UsageLimitExceededError(
+            executions_count=usage.executions_count,
+            executions_limit=usage.executions_limit,
+            resets_at=usage.billing_period_end
+        )
 
-try:
-    # 2. Perform operation
-    result = provision_service(...)
+    # 2. Execute workflow
+    result = await activepieces.trigger_workflow(workflow_id, ...)
 
-    # 3. Commit actual cost
-    commit_credits(credit_hold, actual_cost)
+    # 3. Increment usage count on success
+    await increment_usage(user_id)
 
-except Exception as e:
-    # 4. Release hold on failure
-    release_credits(credit_hold)
-    raise
+    return result
 ```
 
-**Burn Rates:**
-- Hosting: 1.2-12.0 credits/hour ($8.64-$86.40/month)
-- Domains: 1500-2000 credits one-time ($15-$20 CAD)
-- SSL: 0 credits (free Let's Encrypt) or 500 credits/year (commercial)
+**UsageRecord Model:**
+```python
+class UsageRecord:
+    user_id: UUID
+    billing_period_start: datetime
+    billing_period_end: datetime
+    executions_count: int      # Current count this period
+    executions_limit: int      # Limit based on subscription tier
+    # Derived: executions_remaining = executions_limit - executions_count
+```
 
 ### Streaming Architecture
 
@@ -360,7 +388,7 @@ droplet = client.create_droplet(...)
 
 ### Test Coverage
 
-**Minimum coverage:** 80% overall, 95% for credit system
+**Minimum coverage:** 80% overall, 95% for usage tracking system
 
 **Required test types:**
 - Unit tests for all business logic
@@ -389,10 +417,10 @@ locust -f tests/load/locustfile.py
 ### Mock Data
 
 **Use fixtures for:**
-- Provider API responses (DigitalOcean, Stripe, etc.)
+- Provider API responses (Activepieces, Stripe, etc.)
 - Database state
-- Credit transactions
-- Service provisioning workflows
+- Usage records and subscription tiers
+- Workflow execution scenarios
 
 **Location:** `tests/fixtures/`
 
@@ -442,12 +470,11 @@ mcpworks-api/
 │       ├── models/             # SQLAlchemy models
 │       ├── schemas/            # Pydantic schemas (API contracts)
 │       ├── providers/          # Provider abstraction layer
-│       │   ├── compute.py      # DigitalOcean, AWS, etc.
-│       │   ├── dns.py          # Cloudflare
-│       │   └── integrations.py # Stripe, Shopify, etc.
-│       ├── credit/             # Credit system
-│       │   ├── transactions.py # Hold/commit/release
-│       │   └── ledger.py       # Credit ledger
+│       │   ├── activepieces.py # Workflow execution engine
+│       │   └── stripe.py       # Subscription billing
+│       ├── usage/              # Usage tracking system
+│       │   ├── tracking.py     # Check/increment usage
+│       │   └── records.py      # UsageRecord model
 │       └── streaming/          # SSE streaming
 │
 ├── tests/
@@ -470,7 +497,7 @@ mcpworks-api/
 
 ```
 feature/mcp-tool-provisioning   # New features
-fix/credit-rollback-bug         # Bug fixes
+fix/usage-tracking-bug          # Bug fixes
 refactor/provider-abstraction   # Refactoring
 docs/update-architecture        # Documentation
 ```
@@ -496,10 +523,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 - Writing code before specification exists
 - Returning verbose tool responses (>1000 tokens)
-- Directly coupling to provider APIs (DigitalOcean, Stripe)
-- Skipping credit hold/commit/release pattern
+- Directly coupling to provider APIs (Activepieces, Stripe)
+- Skipping usage limit checks before execution
 - Blocking operations instead of streaming progress
-- Hardcoding pricing or configuration
+- Hardcoding pricing or subscription tiers
 - Ignoring token efficiency requirements
 
 ### ✅ Do This
@@ -507,9 +534,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Read spec before implementing feature
 - Use progressive disclosure and references
 - Use provider abstraction layer
-- Implement proper credit transaction safety
+- Check usage limits before every execution
 - Stream long-running operations via SSE
-- Make pricing configurable and LLM-accessible
+- Make subscription tiers configurable and LLM-accessible
 - Optimize for token efficiency (200-1000 tokens)
 
 ## Acquisition Context
