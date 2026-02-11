@@ -4,242 +4,156 @@ This file tracks significant issues discovered during API testing that need reso
 
 ---
 
-## PROBLEM-001: Credit System Should Be Subscription-Based Execution Limits
+## PROBLEM-001: Usage Tracking Endpoint Not Implemented
 
-**Severity:** Critical - Billing model mismatch
+**Severity:** High - Core feature missing
 **Discovered:** 2026-02-11
 **Status:** Open
 
 ### Summary
 
-The API implements a **credit-based billing system** with hold/commit/release transactions. The business strategy specifies **flat-tiered subscription pricing** with monthly execution limits.
+The credit system has been correctly removed, but the replacement `/v1/account/usage` endpoint is not yet implemented.
 
-### What the API Currently Does
+### What Works
 
-```
-POST /v1/credits/hold          - Reserve credits before operation
-POST /v1/credits/hold/{id}/commit  - Charge actual amount used
-POST /v1/credits/hold/{id}/release - Return credits on failure
-GET  /v1/credits               - Returns credit balance
-```
+- `/v1/credits` returns 404 (correctly removed)
+- User profile no longer includes `available_credits` or `held_credits` fields
+- User profile correctly shows `tier: "free"`
 
-Response from `/v1/credits`:
-```json
-{
-  "available_credits": "500.00",
-  "held_credits": "0.00",
-  "lifetime_earned": "500.00",
-  "lifetime_spent": "0.00"
-}
-```
-
-New users receive 500 "free credits" and the system tracks credit transactions.
-
-### What the Strategy Requires
-
-From `mcpworks-internals/STRATEGY.md` line 726:
-> ✅ **Flat-tiered subscription pricing** (Free/Starter/Pro/Enterprise, not credit-only)
-
-From `mcpworks-internals/PRICING.md`:
-
-| Tier | Monthly Price | Executions/mo | Behavior at Limit |
-|------|---------------|---------------|-------------------|
-| Free | $0 | 100 | Pause |
-| Founder | $29 | 1,000 | Pause |
-| Founder Pro | $59 | 10,000 | Pause |
-| Founder Enterprise | $129 | Unlimited | N/A |
-
-Key quote from PRICING.md:
-> **Overages:** Workflows pause when limit reached (no surprise bills)
-
-### Required Changes
-
-1. **Remove credit endpoints:**
-   - DELETE: `/v1/credits/hold`
-   - DELETE: `/v1/credits/hold/{id}/commit`
-   - DELETE: `/v1/credits/hold/{id}/release`
-
-2. **Replace with execution tracking:**
-   - Track `executions_used` and `executions_limit` per billing cycle
-   - Reset counter monthly on subscription anniversary
-   - Return 429 or pause behavior when limit reached
-
-3. **Update `/v1/credits` or replace with `/v1/usage`:**
-   ```json
-   {
-     "tier": "free",
-     "billing_cycle_start": "2026-02-01T00:00:00Z",
-     "billing_cycle_end": "2026-03-01T00:00:00Z",
-     "executions_used": 42,
-     "executions_limit": 100,
-     "executions_remaining": 58
-   }
-   ```
-
-4. **Update user profile response:**
-   - Remove `available_credits` and `held_credits`
-   - Add `executions_used`, `executions_limit`
-
-5. **Update registration:**
-   - Remove "500 free credits" grant
-   - Assign `tier: "free"` with 100 executions/month limit
-
-### References
-
-- `mcpworks-internals/STRATEGY.md` - Lines 726, 950 (credit model removed)
-- `mcpworks-internals/PRICING.md` - Full tier/limit definitions
-- `mcpworks-internals/incoming/mcpworks-api-testing-manual.md` - Documents current (incorrect) implementation
-
----
-
-## PROBLEM-002: List Services Endpoint Returns INTERNAL_ERROR
-
-**Severity:** High - Endpoint broken
-**Discovered:** 2026-02-11
-**Status:** Open
-
-### Summary
-
-The `GET /v1/namespaces/{namespace}/services` endpoint returns an internal error instead of the service list.
-
-### Steps to Reproduce
+### What's Missing
 
 ```bash
-curl -s "https://api.mcpworks.io/v1/namespaces/{namespace}/services" \
+curl https://api.mcpworks.io/v1/account/usage \
   -H "Authorization: Bearer {token}"
 ```
 
-### Actual Response
+**Actual Response:**
+```json
+{"detail":"Not Found"}
+```
+HTTP Status: 404
 
+**Expected Response (per testing manual):**
 ```json
 {
-  "error": "INTERNAL_ERROR",
-  "message": "An unexpected error occurred",
-  "details": {}
+  "executions_count": 42,
+  "executions_limit": 100,
+  "executions_remaining": 58,
+  "billing_period_start": "2026-02-01T00:00:00Z",
+  "billing_period_end": "2026-03-01T00:00:00Z"
 }
 ```
 
-### Expected Response
+### Required Implementation
 
-```json
-{
-  "services": [...],
-  "total": 1
-}
-```
+1. Create `GET /v1/account/usage` endpoint
+2. Track executions via Redis-based BillingMiddleware
+3. Return execution counts and limits based on user tier:
+   - Free: 100/month
+   - Founder: 1,000/month
+   - Founder Pro: 10,000/month
+   - Enterprise: Unlimited
 
-### Notes
+### References
 
-- Creating services works (returns 201 or 409 if exists)
-- The endpoint fails even when services exist in the namespace
-- List functions endpoint works correctly
+- `mcpworks-internals/PRICING.md` - Tier limits
+- `mcpworks-internals/incoming/mcpworks-api-testing-manual.md` - Expected response format
 
 ---
 
-## PROBLEM-003: Create Service Returns Wrong Error on Success
+## Resolved Issues
 
-**Severity:** Medium - Misleading response
-**Discovered:** 2026-02-11
-**Status:** Open
+### ~~PROBLEM-002: List Services Endpoint Returns INTERNAL_ERROR~~
 
-### Summary
+**Status:** RESOLVED (2026-02-11)
 
-`POST /v1/namespaces/{namespace}/services` returns `INTERNAL_ERROR` but actually creates the service successfully.
-
-### Steps to Reproduce
-
-```bash
-curl -s -X POST "https://api.mcpworks.io/v1/namespaces/{namespace}/services" \
-  -H "Authorization: Bearer {token}" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-service", "description": "Test"}'
+The endpoint now works correctly:
+```json
+{"services":[...],"namespace":"test-ns-xxx"}
 ```
-
-### Actual Behavior
-
-1. First call returns: `{"error": "INTERNAL_ERROR", ...}`
-2. Second call returns: `{"error": "HTTP_ERROR", "message": "Service 'my-service' already exists..."}`
-
-This proves the service was created despite the error response.
-
-### Expected Behavior
-
-First call should return 201 with the created service object.
+HTTP Status: 200
 
 ---
 
-## PROBLEM-004: API Key Prefix Mismatch in Documentation
+### ~~PROBLEM-003: Create Service Returns Wrong Error on Success~~
 
-**Severity:** Low - Documentation issue
-**Discovered:** 2026-02-11
-**Status:** Open
+**Status:** RESOLVED (2026-02-11)
 
-### Summary
-
-The testing manual documents API key prefix as `mcpw_` but the API generates keys with prefix `mcp_`.
-
-### Actual API Response
-
+The endpoint now returns proper response:
 ```json
-{
-  "key": "mcp_b7c785bcbb2e094bcae44d7f5201e1d8b4969412917460daa39b0cbcb3b74990",
-  "key_prefix": "mcp_b7c785bc"
-}
+{"id":"...","name":"utils","description":"...","namespace_id":"...","function_count":0,"created_at":"..."}
 ```
-
-### Documentation Says
-
-```json
-{
-  "key": "mcpw_xxxxxxxxxxxxxxxxxxxxxx",
-  "key_prefix": "mcpw_xxxx"
-}
-```
-
-### Resolution
-
-Either update the API to use `mcpw_` prefix (preferred - more distinctive) or update documentation to match `mcp_`.
+HTTP Status: 201
 
 ---
 
-## Test Summary (2026-02-11)
+### ~~PROBLEM-004: API Key Prefix Mismatch~~
+
+**Status:** RESOLVED (2026-02-11)
+
+API now correctly uses `mcpw_` prefix:
+```json
+{"api_key":{"key_prefix":"mcpw_0d57f8b",...},"raw_key":"mcpw_..."}
+```
+
+---
+
+## Test Summary (2026-02-11, Run 2)
 
 ### Passing Endpoints
 
 | Endpoint | Method | Status |
 |----------|--------|--------|
-| `/v1/health` | GET | ✅ Pass |
-| `/v1/health/ready` | GET | ✅ Pass |
-| `/v1/auth/register` | POST | ✅ Pass |
-| `/v1/auth/login` | POST | ✅ Pass |
-| `/v1/auth/refresh` | POST | ✅ Pass |
-| `/v1/auth/token` | POST | ✅ Pass (API key exchange) |
-| `/v1/users/me` | GET | ✅ Pass |
-| `/v1/users/me/api-keys` | POST | ✅ Pass |
-| `/v1/namespaces` | POST | ✅ Pass |
-| `/v1/namespaces` | GET | ✅ Pass |
-| `/v1/namespaces/{ns}` | GET | ✅ Pass |
-| `/v1/namespaces/{ns}` | DELETE | ✅ Pass |
-| `/v1/namespaces/{ns}/services/{svc}/functions` | POST | ✅ Pass |
-| `/v1/namespaces/{ns}/services/{svc}/functions` | GET | ✅ Pass |
-| `/v1/namespaces/{ns}/services/{svc}/functions/{fn}` | GET | ✅ Pass |
+| `/v1/health` | GET | Pass |
+| `/v1/health/ready` | GET | Pass |
+| `/v1/auth/register` | POST | Pass |
+| `/v1/auth/login` | POST | Pass |
+| `/v1/auth/refresh` | POST | Pass |
+| `/v1/auth/token` | POST | Pass (API key exchange) |
+| `/v1/auth/api-keys` | POST | Pass (new endpoint) |
+| `/v1/users/me` | GET | Pass (no credits fields) |
+| `/v1/users/me/api-keys` | POST | Pass (legacy, still works) |
+| `/v1/namespaces` | POST | Pass |
+| `/v1/namespaces` | GET | Pass |
+| `/v1/namespaces/{ns}` | GET | Pass |
+| `/v1/namespaces/{ns}` | DELETE | Pass |
+| `/v1/namespaces/{ns}/services` | POST | Pass (FIXED) |
+| `/v1/namespaces/{ns}/services` | GET | Pass (FIXED) |
+| `/v1/namespaces/{ns}/services/{svc}/functions` | POST | Pass |
+| `/v1/namespaces/{ns}/services/{svc}/functions` | GET | Pass |
+| `/v1/namespaces/{ns}/services/{svc}/functions/{fn}` | GET | Pass |
+| `/v1/subscriptions/current` | GET | Pass (404 for free tier = expected) |
 
-### Failing Endpoints
+### Missing/Not Implemented
 
 | Endpoint | Method | Issue |
 |----------|--------|-------|
-| `/v1/namespaces/{ns}/services` | GET | PROBLEM-002 |
-| `/v1/namespaces/{ns}/services` | POST | PROBLEM-003 |
-| `/v1/credits/*` | ALL | PROBLEM-001 (wrong model) |
+| `/v1/account/usage` | GET | PROBLEM-001 - Not implemented |
+
+### Removed (Correctly)
+
+| Endpoint | Method | Status |
+|----------|--------|--------|
+| `/v1/credits` | GET | 404 (removed) |
+| `/v1/credits/hold` | POST | 404 (removed) |
 
 ### Error Handling
 
 | Scenario | Expected | Actual | Status |
 |----------|----------|--------|--------|
-| Missing auth | 401 | 401 MISSING_TOKEN | ✅ |
-| Invalid token | 401 | 401 INVALID_TOKEN | ✅ |
-| Wrong password | 401 | 401 INVALID_CREDENTIALS | ✅ |
-| Duplicate email | 409 | 409 EMAIL_EXISTS | ✅ |
-| Not found | 404 | 404 HTTP_ERROR | ✅ |
+| Missing auth | 401 | 401 MISSING_TOKEN | Pass |
+| Invalid token | 401 | 401 INVALID_TOKEN | Pass |
+| Wrong password | 401 | 401 INVALID_CREDENTIALS | Pass |
+| Duplicate email | 409 | 409 EMAIL_EXISTS | Pass |
+| Not found | 404 | 404 NOT_FOUND | Pass |
+
+---
+
+## Notes
+
+- API key prefix is now `mcpw_` (correct)
+- New API key endpoint at `/v1/auth/api-keys` with improved response format
+- Legacy endpoint `/v1/users/me/api-keys` still works for backward compatibility
+- Subscription endpoint returns 404 "No subscription found" for free tier users (expected)
 
 ---
