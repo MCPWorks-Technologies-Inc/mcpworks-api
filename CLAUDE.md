@@ -86,6 +86,76 @@ Constitution → Specification → Plan → Tasks → Implementation
 - **Transparent pricing:** Subscription tiers and usage exposed to LLM for intelligent decisions
 - **Observable by design:** Structured logging, metrics, tracing
 
+## Production Infrastructure
+
+### DigitalOcean Droplet
+
+| Property | Value |
+|----------|-------|
+| **Name** | mcpworks-prod |
+| **IP Address** | 159.203.30.199 |
+| **Region** | NYC1 |
+| **Size** | s-2vcpu-4gb |
+| **SSH User** | root |
+| **App Directory** | /opt/mcpworks |
+
+### Services
+
+| Service | Container | Port | Status |
+|---------|-----------|------|--------|
+| API | mcpworks-api | 8000 (internal) | Docker healthcheck |
+| Caddy | mcpworks-caddy | 80, 443 | Reverse proxy to API |
+| PostgreSQL | mcpworks-postgres | 5432 (internal) | Primary database |
+| Redis | mcpworks-redis | 6379 (internal) | Rate limiting, sessions |
+
+### Endpoints
+
+- **Production API:** https://api.mcpworks.io
+- **Health Check:** https://api.mcpworks.io/v1/health
+
+### Deployment
+
+```bash
+# 1. Push changes to branch
+git push origin 001-api-gateway-mvp
+
+# 2. Sync code to production server
+rsync -avz --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
+    --exclude='*.pyc' --exclude='.env' --exclude='.coverage' \
+    --exclude='keys' --exclude='logs' --exclude='data' --exclude='sandbox' \
+    src/ root@159.203.30.199:/opt/mcpworks/src/
+
+# 3. Copy docker-compose if changed
+scp docker-compose.prod.yml root@159.203.30.199:/opt/mcpworks/
+
+# 4. Rebuild and restart on server
+ssh root@159.203.30.199 "cd /opt/mcpworks && \
+    docker compose -f docker-compose.prod.yml build api && \
+    docker compose -f docker-compose.prod.yml up -d api"
+
+# 5. Verify deployment
+curl https://api.mcpworks.io/v1/health
+```
+
+### Quick Commands
+
+```bash
+# SSH to production
+ssh root@159.203.30.199
+
+# View container logs
+ssh root@159.203.30.199 "docker logs mcpworks-api --tail 100"
+
+# Check container status
+ssh root@159.203.30.199 "docker ps"
+
+# Restart API
+ssh root@159.203.30.199 "cd /opt/mcpworks && docker compose -f docker-compose.prod.yml restart api"
+
+# Database query
+ssh root@159.203.30.199 "docker exec mcpworks-postgres psql -U mcpworks -c 'SELECT * FROM users;'"
+```
+
 ## Common Development Commands
 
 ### Initial Setup
