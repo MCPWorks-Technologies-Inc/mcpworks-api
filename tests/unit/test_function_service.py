@@ -140,9 +140,7 @@ class TestFunctionServiceCreate:
         assert function.name == "myfunction"
 
     @pytest.mark.asyncio
-    async def test_create_function_duplicate_name_conflict(
-        self, db, test_service, test_function
-    ):
+    async def test_create_function_duplicate_name_conflict(self, db, test_service, test_function):
         """Test creating duplicate function name raises conflict."""
         service = FunctionService(db)
 
@@ -261,22 +259,16 @@ class TestFunctionServiceList:
             )
 
         # Get first page
-        page1, total = await service.list(
-            service_id=test_service.id, page=1, page_size=2
-        )
+        page1, total = await service.list(service_id=test_service.id, page=1, page_size=2)
         assert len(page1) == 2
         assert total == 5
 
         # Get second page
-        page2, _ = await service.list(
-            service_id=test_service.id, page=2, page_size=2
-        )
+        page2, _ = await service.list(service_id=test_service.id, page=2, page_size=2)
         assert len(page2) == 2
 
         # Get third page (partial)
-        page3, _ = await service.list(
-            service_id=test_service.id, page=3, page_size=2
-        )
+        page3, _ = await service.list(service_id=test_service.id, page=3, page_size=2)
         assert len(page3) == 1
 
     @pytest.mark.asyncio
@@ -304,9 +296,7 @@ class TestFunctionServiceList:
         )
 
         # Filter by security tag
-        functions, total = await service.list(
-            service_id=test_service.id, tags=["security"]
-        )
+        functions, total = await service.list(service_id=test_service.id, tags=["security"])
         assert total == 2
         assert {f.name for f in functions} == {"auth-func", "secure-payment"}
 
@@ -483,9 +473,7 @@ class TestFunctionServiceNamespaceMethods:
         return service
 
     @pytest.mark.asyncio
-    async def test_list_all_for_namespace(
-        self, db, test_namespace, test_service, second_service
-    ):
+    async def test_list_all_for_namespace(self, db, test_namespace, test_service, second_service):
         """Test listing all functions across namespace."""
         service = FunctionService(db)
 
@@ -512,9 +500,7 @@ class TestFunctionServiceNamespaceMethods:
             assert version.version == fn.active_version
 
     @pytest.mark.asyncio
-    async def test_get_for_execution(
-        self, db, test_namespace, test_service
-    ):
+    async def test_get_for_execution(self, db, test_namespace, test_service):
         """Test getting function for execution by names."""
         service = FunctionService(db)
 
@@ -535,9 +521,7 @@ class TestFunctionServiceNamespaceMethods:
         assert version.code == "result = 42"
 
     @pytest.mark.asyncio
-    async def test_get_for_execution_not_found(
-        self, db, test_namespace
-    ):
+    async def test_get_for_execution_not_found(self, db, test_namespace):
         """Test getting non-existent function for execution raises error."""
         service = FunctionService(db)
 

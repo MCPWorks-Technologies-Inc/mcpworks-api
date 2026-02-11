@@ -279,22 +279,16 @@ class TestNamespaceServiceManagerList:
             )
 
         # Get first page
-        page1, total = await manager.list(
-            account_id=test_account.id, page=1, page_size=2
-        )
+        page1, total = await manager.list(account_id=test_account.id, page=1, page_size=2)
         assert len(page1) == 2
         assert total == 5
 
         # Get second page
-        page2, _ = await manager.list(
-            account_id=test_account.id, page=2, page_size=2
-        )
+        page2, _ = await manager.list(account_id=test_account.id, page=2, page_size=2)
         assert len(page2) == 2
 
         # Get third page (partial)
-        page3, _ = await manager.list(
-            account_id=test_account.id, page=3, page_size=2
-        )
+        page3, _ = await manager.list(account_id=test_account.id, page=3, page_size=2)
         assert len(page3) == 1
 
     @pytest.mark.asyncio

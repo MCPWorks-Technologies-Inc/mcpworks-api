@@ -378,9 +378,7 @@ class TestExecutionServiceHandleCallback:
         assert amount == Decimal("50.00")
 
     @pytest.mark.asyncio
-    async def test_handle_callback_releases_credits_on_failure(
-        self, db, test_user_with_credits
-    ):
+    async def test_handle_callback_releases_credits_on_failure(self, db, test_user_with_credits):
         """Test failed callback releases held credits."""
         from mcpworks_api.services.credit import CreditService
 

@@ -1,6 +1,5 @@
 """Unit tests for backend base classes and utilities."""
 
-
 import pytest
 
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult

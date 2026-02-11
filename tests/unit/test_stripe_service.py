@@ -1,7 +1,6 @@
 """Unit tests for StripeService."""
 
 import uuid
-from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -443,12 +442,14 @@ class TestHandleSubscriptionUpdated:
             service.db = mock_db
 
             # Should not raise
-            await service._handle_subscription_updated({
-                "id": "sub_unknown",
-                "status": "active",
-                "current_period_start": 1704067200,
-                "current_period_end": 1706745600,
-            })
+            await service._handle_subscription_updated(
+                {
+                    "id": "sub_unknown",
+                    "status": "active",
+                    "current_period_start": 1704067200,
+                    "current_period_end": 1706745600,
+                }
+            )
 
     @pytest.mark.asyncio
     async def test_status_mapping_active(self):
@@ -465,13 +466,15 @@ class TestHandleSubscriptionUpdated:
             service = StripeService.__new__(StripeService)
             service.db = mock_db
 
-            await service._handle_subscription_updated({
-                "id": "sub_123",
-                "status": "active",
-                "cancel_at_period_end": False,
-                "current_period_start": 1704067200,
-                "current_period_end": 1706745600,
-            })
+            await service._handle_subscription_updated(
+                {
+                    "id": "sub_123",
+                    "status": "active",
+                    "cancel_at_period_end": False,
+                    "current_period_start": 1704067200,
+                    "current_period_end": 1706745600,
+                }
+            )
 
             assert mock_subscription.status == SubscriptionStatus.ACTIVE.value
 
@@ -529,10 +532,12 @@ class TestHandlePaymentSucceeded:
             service.db = mock_db
 
             # Should not raise
-            await service._handle_payment_succeeded({
-                "subscription": None,
-                "billing_reason": "subscription_cycle",
-            })
+            await service._handle_payment_succeeded(
+                {
+                    "subscription": None,
+                    "billing_reason": "subscription_cycle",
+                }
+            )
 
     @pytest.mark.asyncio
     async def test_non_renewal_skipped(self):
@@ -544,10 +549,12 @@ class TestHandlePaymentSucceeded:
             service.db = mock_db
 
             with patch.object(service, "_grant_monthly_credits") as mock_grant:
-                await service._handle_payment_succeeded({
-                    "subscription": "sub_123",
-                    "billing_reason": "subscription_create",  # Not renewal
-                })
+                await service._handle_payment_succeeded(
+                    {
+                        "subscription": "sub_123",
+                        "billing_reason": "subscription_create",  # Not renewal
+                    }
+                )
 
                 mock_grant.assert_not_called()
 
@@ -564,10 +571,12 @@ class TestHandlePaymentSucceeded:
             service.db = mock_db
 
             # Should not raise
-            await service._handle_payment_succeeded({
-                "subscription": "sub_unknown",
-                "billing_reason": "subscription_cycle",
-            })
+            await service._handle_payment_succeeded(
+                {
+                    "subscription": "sub_unknown",
+                    "billing_reason": "subscription_cycle",
+                }
+            )
 
 
 class TestHandlePaymentFailed:

@@ -126,7 +126,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "E402"]
-"tests/*" = ["ARG001"]
+"tests/*" = ["ARG001", "ARG002"]  # Test fixtures may be unused directly
 "*/backends/*.py" = ["ARG002"]  # Interface method signatures require unused args
 "*/models/*.py" = ["ARG002"]    # SQLAlchemy validators have required key arg
 

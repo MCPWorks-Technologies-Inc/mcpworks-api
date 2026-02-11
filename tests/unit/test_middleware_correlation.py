@@ -87,9 +87,7 @@ class TestCorrelationIdMiddlewareDispatch:
         assert result.headers[CORRELATION_ID_HEADER] == existing_id
 
     @pytest.mark.asyncio
-    async def test_dispatch_generates_correlation_id_when_missing(
-        self, correlation_middleware
-    ):
+    async def test_dispatch_generates_correlation_id_when_missing(self, correlation_middleware):
         """Test that correlation ID is generated when missing."""
         request = MockRequest(correlation_id=None)
         response = MockResponse()
@@ -162,11 +160,9 @@ class TestCorrelationIdContextVar:
         # Create a new context to test default
         import contextvars
 
-        ctx = contextvars.copy_context()
+        contextvars.copy_context()
         # In a fresh context, the default should be None
-        assert correlation_id_var.get() is None or isinstance(
-            correlation_id_var.get(), str
-        )
+        assert correlation_id_var.get() is None or isinstance(correlation_id_var.get(), str)
 
     def test_context_var_can_be_set(self):
         """Test context variable can be set."""
