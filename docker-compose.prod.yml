@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: mcpworks-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - mcpworks-net
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcpworks-api
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mcpworks:${POSTGRES_PASSWORD}@postgres:5432/mcpworks
+      - REDIS_URL=redis://redis:6379/0
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_PORT=8000
+      - SECRET_KEY=${SECRET_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
+      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - sandbox-tmp:/tmp/sandbox
+      - ./keys/jwt_private.pem:/app/keys/private.pem:ro
+      - ./keys/jwt_public.pem:/app/keys/public.pem:ro
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+      - NET_ADMIN
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: mcpworks-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=mcpworks
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=mcpworks
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcpworks -d mcpworks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mcpworks-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:
+  sandbox-tmp:
+  caddy-data:
+  caddy-config:
+
+networks:
+  mcpworks-net:
+    driver: bridge

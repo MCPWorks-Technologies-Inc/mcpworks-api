@@ -2,7 +2,6 @@
 
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_fastapi_instrumentator.metrics import Info
 
 
 def setup_metrics(app: FastAPI) -> Instrumentator:
@@ -29,31 +28,10 @@ def setup_metrics(app: FastAPI) -> Instrumentator:
         inprogress_labels=True,
     )
 
-    # Add default metrics
-    instrumentator.add(
-        default_http_metrics(),
-    )
-
-    # Instrument and expose
-    instrumentator.instrument(app)
-    instrumentator.expose(app, endpoint="/metrics", include_in_schema=False)
+    # Instrument and expose with default metrics
+    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
     return instrumentator
-
-
-def default_http_metrics() -> Info:
-    """Configure default HTTP metrics.
-
-    Returns:
-        Info object with metric configuration
-    """
-    return Info(
-        "http",
-        "HTTP request metrics",
-        prefix="http",
-        subsystem="requests",
-        label_names=("method", "handler", "status"),
-    )
 
 
 # Custom metrics for business logic (can be expanded)
