@@ -113,27 +113,50 @@ Constitution → Specification → Plan → Tasks → Implementation
 - **Production API:** https://api.mcpworks.io
 - **Health Check:** https://api.mcpworks.io/v1/health
 
-### Deployment
+### CI/CD (Automated Deployment)
+
+Pushing to `main` triggers automatic deployment via GitHub Actions:
+
+1. **CI runs** - Lint, test, build, security scan
+2. **Deploy runs** - SSH to server, pull code, rebuild, restart
+3. **Verify** - Health check confirms deployment
 
 ```bash
-# 1. Push changes to branch
-git push origin 001-api-gateway-mvp
+# Merge feature branch and deploy
+git checkout main
+git merge 001-api-gateway-mvp
+git push origin main  # Triggers CI/CD
+```
 
-# 2. Sync code to production server
+**GitHub Secrets Required:**
+- `DEPLOY_SSH_KEY` - SSH private key for server access
+- `DEPLOY_HOST` - Server IP (159.203.30.199)
+- `DEPLOY_USER` - SSH user (root)
+
+**Workflows:**
+- `.github/workflows/ci.yml` - Lint, test, build, security
+- `.github/workflows/deploy.yml` - Production deployment
+
+### Manual Deployment
+
+For quick deployments bypassing CI:
+
+```bash
+# 1. Sync code to production server
 rsync -avz --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
     --exclude='*.pyc' --exclude='.env' --exclude='.coverage' \
     --exclude='keys' --exclude='logs' --exclude='data' --exclude='sandbox' \
     src/ root@159.203.30.199:/opt/mcpworks/src/
 
-# 3. Copy docker-compose if changed
+# 2. Copy docker-compose if changed
 scp docker-compose.prod.yml root@159.203.30.199:/opt/mcpworks/
 
-# 4. Rebuild and restart on server
+# 3. Rebuild and restart on server
 ssh root@159.203.30.199 "cd /opt/mcpworks && \
     docker compose -f docker-compose.prod.yml build api && \
     docker compose -f docker-compose.prod.yml up -d api"
 
-# 5. Verify deployment
+# 4. Verify deployment
 curl https://api.mcpworks.io/v1/health
 ```
 
