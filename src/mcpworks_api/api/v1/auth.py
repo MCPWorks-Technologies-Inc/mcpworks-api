@@ -14,6 +14,9 @@ from mcpworks_api.core.exceptions import (
 )
 from mcpworks_api.middleware.rate_limit import check_auth_rate_limit
 from mcpworks_api.schemas.auth import (
+    ApiKeyInfo,
+    CreateApiKeyRequest,
+    CreateApiKeyResponse,
     LoginRequest,
     LoginResponse,
     RefreshRequest,
@@ -24,6 +27,7 @@ from mcpworks_api.schemas.auth import (
     TokenResponse,
     UserInfo,
 )
+from mcpworks_api.dependencies import get_current_user_id
 from mcpworks_api.services.auth import AuthService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -222,6 +226,56 @@ async def refresh_token(
         access_token=access_token,
         token_type="bearer",
         expires_in=expires_in,
+    )
+
+
+@router.post(
+    "/api-keys",
+    response_model=CreateApiKeyResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {"description": "API key created successfully"},
+        401: {"description": "Not authenticated"},
+    },
+)
+async def create_api_key(
+    request: Request,
+    body: CreateApiKeyRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+) -> CreateApiKeyResponse:
+    """Create a new API key for the authenticated user.
+
+    The raw API key is only returned once. Store it securely.
+    """
+    import uuid as uuid_module
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent")
+
+    auth_service = AuthService(db)
+
+    api_key, raw_key = await auth_service.create_api_key(
+        user_id=uuid_module.UUID(user_id),
+        name=body.name,
+        scopes=body.scopes,
+        expires_in_days=body.expires_in_days,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    await db.commit()
+
+    return CreateApiKeyResponse(
+        api_key=ApiKeyInfo(
+            id=api_key.id,
+            name=api_key.name,
+            key_prefix=api_key.key_prefix,
+            scopes=api_key.scopes or ["read", "write", "execute"],
+            created_at=api_key.created_at,
+            expires_at=api_key.expires_at,
+            last_used_at=api_key.last_used_at,
+        ),
+        raw_key=raw_key,
     )
 
 
