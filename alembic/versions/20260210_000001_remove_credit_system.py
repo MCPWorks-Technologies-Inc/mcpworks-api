@@ -21,33 +21,34 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Remove credit system - executions are now tracked via Redis/BillingMiddleware."""
-    # 1. Drop FK constraint from executions table
-    op.drop_constraint(
-        "executions_hold_transaction_id_fkey",
-        "executions",
-        type_="foreignkey",
-    )
+    """Remove credit system - executions are now tracked via Redis/BillingMiddleware.
 
-    # 2. Drop hold_transaction_id column from executions
-    op.drop_column("executions", "hold_transaction_id")
+    Uses IF EXISTS to be idempotent (credit tables may not exist in all environments).
+    """
+    conn = op.get_bind()
 
-    # 3. Drop credit_transactions table (has FK to credits)
-    op.drop_index("idx_credit_txn_type", table_name="credit_transactions")
-    op.drop_index(
-        "idx_credit_txn_status_holds",
-        table_name="credit_transactions",
-    )
-    op.drop_index(
-        "idx_credit_txn_related",
-        table_name="credit_transactions",
-    )
-    op.drop_index("idx_credit_txn_user", table_name="credit_transactions")
-    op.drop_table("credit_transactions")
+    # 1. Drop FK constraint from executions table (if exists)
+    conn.execute(sa.text("""
+        ALTER TABLE executions
+        DROP CONSTRAINT IF EXISTS executions_hold_transaction_id_fkey
+    """))
 
-    # 4. Drop credits table
-    op.drop_index("idx_credits_user_id", table_name="credits")
-    op.drop_table("credits")
+    # 2. Drop hold_transaction_id column from executions (if exists)
+    conn.execute(sa.text("""
+        ALTER TABLE executions
+        DROP COLUMN IF EXISTS hold_transaction_id
+    """))
+
+    # 3. Drop credit_transactions indexes and table (if exist)
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_credit_txn_type"))
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_credit_txn_status_holds"))
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_credit_txn_related"))
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_credit_txn_user"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS credit_transactions CASCADE"))
+
+    # 4. Drop credits table (if exists)
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_credits_user_id"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS credits CASCADE"))
 
 
 def downgrade() -> None:
