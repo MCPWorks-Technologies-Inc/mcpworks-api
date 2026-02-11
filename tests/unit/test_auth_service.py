@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 
 import pytest
 
@@ -14,7 +13,7 @@ from mcpworks_api.core.exceptions import (
     UserNotFoundError,
 )
 from mcpworks_api.core.security import hash_password
-from mcpworks_api.models import APIKey, Credit, User
+from mcpworks_api.models import APIKey, User
 from mcpworks_api.services.auth import AuthService
 
 
@@ -31,21 +30,6 @@ async def test_user(db):
     db.add(user)
     await db.flush()
     return user
-
-
-@pytest.fixture
-async def test_user_with_credits(db, test_user):
-    """Create a test user with credits."""
-    credit = Credit(
-        user_id=test_user.id,
-        available_balance=Decimal("1000.00"),
-        held_balance=Decimal("0.00"),
-        lifetime_earned=Decimal("1000.00"),
-        lifetime_spent=Decimal("0.00"),
-    )
-    db.add(credit)
-    await db.flush()
-    return test_user
 
 
 @pytest.fixture
@@ -109,22 +93,6 @@ class TestAuthServiceRegister:
         )
 
         assert user.email == f"uppercase-{unique_suffix}@example.com"
-
-    @pytest.mark.asyncio
-    async def test_register_user_creates_credits(self, db):
-        """Test registration creates credit record with free tier bonus."""
-        auth_service = AuthService(db)
-        unique_email = f"credituser-{uuid.uuid4().hex[:8]}@example.com"
-
-        user, _, _, _ = await auth_service.register_user(
-            email=unique_email,
-            password="securepassword123",
-        )
-        await db.commit()
-        await db.refresh(user, ["credit"])
-
-        assert user.credit is not None
-        assert user.credit.available_balance == Decimal("500.00")
 
     @pytest.mark.asyncio
     async def test_register_user_duplicate_email(self, db, test_user):

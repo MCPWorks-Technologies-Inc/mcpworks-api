@@ -1,7 +1,9 @@
-"""Service endpoints - service catalog and routing to backend services."""
+"""Service endpoints - service catalog and routing to backend services.
+
+Usage tracking is handled by BillingMiddleware via Redis.
+"""
 
 import uuid
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -9,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import (
-    InsufficientCreditsError,
     InsufficientTierError,
     ServiceTimeoutError,
     ServiceUnavailableError,
@@ -86,7 +87,7 @@ async def list_services(
         200: {"description": "Math verification result"},
         400: {"description": "Invalid request"},
         401: {"description": "Not authenticated"},
-        402: {"description": "Insufficient credits"},
+        402: {"description": "Execution limit exceeded"},
         403: {"description": "Tier not permitted"},
         503: {"description": "Math service unavailable"},
         504: {"description": "Request timed out"},
@@ -100,7 +101,6 @@ async def verify_math(
     """Verify a mathematical statement or calculation.
 
     FR-ROUTE-001: Route request to mcpworks-math service.
-    This is a FREE service (0 credits).
     """
     user_tier = await get_user_tier(user_id, db)
     router_service = ServiceRouter(db)
@@ -139,11 +139,6 @@ async def verify_math(
             model_used=response_data.get("model_used", "unknown"),
         )
 
-    except InsufficientCreditsError as e:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=e.to_dict(),
-        )
     except InsufficientTierError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -169,7 +164,7 @@ async def verify_math(
         200: {"description": "Math tutoring response"},
         400: {"description": "Invalid request"},
         401: {"description": "Not authenticated"},
-        402: {"description": "Insufficient credits"},
+        402: {"description": "Execution limit exceeded"},
         403: {"description": "Tier not permitted"},
         503: {"description": "Math service unavailable"},
         504: {"description": "Request timed out"},
@@ -183,7 +178,6 @@ async def get_math_help(
     """Get math tutoring and guidance.
 
     FR-ROUTE-001: Route request to mcpworks-math service.
-    This is a FREE service (0 credits).
     """
     user_tier = await get_user_tier(user_id, db)
     router_service = ServiceRouter(db)
@@ -219,11 +213,6 @@ async def get_math_help(
             related_topics=response_data.get("related_topics", []),
         )
 
-    except InsufficientCreditsError as e:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=e.to_dict(),
-        )
     except InsufficientTierError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -299,7 +288,7 @@ async def check_service_health(
         200: {"description": "Execution started"},
         400: {"description": "Invalid request"},
         401: {"description": "Not authenticated"},
-        402: {"description": "Insufficient credits"},
+        402: {"description": "Execution limit exceeded"},
         403: {"description": "Tier not permitted"},
         503: {"description": "Agent service unavailable"},
     },
@@ -313,13 +302,13 @@ async def execute_workflow(
     """Execute a workflow via mcpworks-agent.
 
     FR-ROUTE-002: Route requests to mcpworks-agent.
-    Credits are held before execution and committed/released on callback.
+    Usage tracking is handled by BillingMiddleware via Redis.
     """
     user_tier = await get_user_tier(user_id, db)
     execution_service = ExecutionService(db)
 
     try:
-        execution, hold_txn = await execution_service.start_execution(
+        execution = await execution_service.start_execution(
             workflow_id=workflow_id,
             user_id=uuid.UUID(user_id),
             user_tier=user_tier,
@@ -330,15 +319,9 @@ async def execute_workflow(
             execution_id=str(execution.id),
             workflow_id=workflow_id,
             status=execution.status,
-            credits_held=hold_txn.amount if hold_txn else Decimal("0.00"),
             message="Execution started",
         )
 
-    except InsufficientCreditsError as e:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=e.to_dict(),
-        )
     except InsufficientTierError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -467,8 +450,7 @@ async def execution_callback(
     """Handle callback from mcpworks-agent.
 
     This endpoint is called by mcpworks-agent when workflow execution
-    completes (success or failure). It commits or releases held credits
-    based on the result.
+    completes (success or failure).
 
     Requires X-Agent-Secret header with valid shared secret.
     """
@@ -483,7 +465,7 @@ async def execution_callback(
         )
 
     try:
-        execution, credits_action, credits_amount = await execution_service.handle_callback(
+        execution = await execution_service.handle_callback(
             execution_id=execution_uuid,
             status=body.status,
             result_data=body.result_data,
@@ -493,8 +475,7 @@ async def execution_callback(
 
         return AgentCallbackResponse(
             execution_id=str(execution.id),
-            credits_action=credits_action,
-            credits_amount=credits_amount,
+            status=execution.status,
         )
 
     except ValueError as e:

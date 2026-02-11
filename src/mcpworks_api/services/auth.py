@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +26,7 @@ from mcpworks_api.core.security import (
     verify_password,
     verify_refresh_token,
 )
-from mcpworks_api.models import Account, APIKey, AuditAction, AuditLog, Credit, User
+from mcpworks_api.models import Account, APIKey, AuditAction, AuditLog, User
 
 
 class AuthService:
@@ -273,16 +272,6 @@ class AuthService:
         )
         self.db.add(user)
         await self.db.flush()  # Get user ID
-
-        # Create credit row with free tier bonus (500 credits)
-        credit = Credit(
-            user_id=user.id,
-            available_balance=Decimal("500.00"),
-            held_balance=Decimal("0.00"),
-            lifetime_earned=Decimal("500.00"),
-            lifetime_spent=Decimal("0.00"),
-        )
-        self.db.add(credit)
 
         # Create account for the user (1:1 relationship)
         account = Account(

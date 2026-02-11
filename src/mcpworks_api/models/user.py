@@ -11,7 +11,6 @@ from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
-    from mcpworks_api.models.credit import Credit
     from mcpworks_api.models.execution import Execution
     from mcpworks_api.models.subscription import Subscription
 
@@ -87,12 +86,6 @@ class User(Base, UUIDMixin, TimestampMixin):
     api_keys: Mapped[list["APIKey"]] = relationship(
         "APIKey",
         back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    credit: Mapped["Credit"] = relationship(
-        "Credit",
-        back_populates="user",
-        uselist=False,
         cascade="all, delete-orphan",
     )
     subscription: Mapped["Subscription"] = relationship(

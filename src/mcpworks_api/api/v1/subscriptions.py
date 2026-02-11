@@ -13,7 +13,6 @@ from mcpworks_api.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutSessionResponse,
     CreateSubscriptionRequest,
-    PurchaseCreditsRequest,
     SubscriptionInfo,
     WebhookResponse,
 )
@@ -141,47 +140,6 @@ async def cancel_subscription(
         )
 
 
-@router.post(
-    "/credits",
-    response_model=CheckoutSessionResponse,
-    responses={
-        200: {"description": "Credit purchase checkout session created"},
-        400: {"description": "Invalid credit amount"},
-        401: {"description": "Not authenticated"},
-    },
-)
-async def purchase_credits(
-    body: PurchaseCreditsRequest,
-    user_id: CurrentUserId,
-    db: AsyncSession = Depends(get_db),
-) -> CheckoutSessionResponse:
-    """Create checkout session for one-time credit purchase.
-
-    FR-BILL-005: Support one-time credit purchases via Stripe.
-    Minimum purchase is 100 credits ($1).
-    """
-    stripe_service = StripeService(db)
-
-    try:
-        result = await stripe_service.create_credit_purchase_session(
-            user_id=uuid.UUID(user_id),
-            credits=body.credits,
-            success_url=body.success_url,
-            cancel_url=body.cancel_url,
-        )
-
-        return CheckoutSessionResponse(
-            checkout_url=result["checkout_url"],
-            session_id=result["session_id"],
-        )
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_REQUEST", "message": str(e)},
-        )
-
-
 # Webhook endpoint (separate router for no auth)
 webhook_router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -202,7 +160,6 @@ async def stripe_webhook(
 ) -> WebhookResponse:
     """Handle Stripe webhook events.
 
-    FR-BILL-003: Grant monthly credits on subscription creation and renewal.
     FR-BILL-004: Handle Stripe webhooks for subscription lifecycle events.
 
     Note: This endpoint uses Stripe signature verification for authentication

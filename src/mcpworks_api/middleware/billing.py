@@ -29,16 +29,16 @@ class BillingMiddleware(BaseHTTPMiddleware):
     - Credit balance (future)
     """
 
-    # Tier limits (executions per month) - per A0-SYSTEM-SPECIFICATION.md
+    # Tier limits (executions per month) - per PRICING.md
     TIER_LIMITS: dict[str, int] = {
-        "free": 500,  # Free tier: 500 executions/month
-        "founder": 10_000,  # Founder ($29/mo): 10,000 executions/month
-        "founder_pro": 50_000,  # Founder Pro ($59/mo): 50,000 executions/month
+        "free": 100,  # Free tier: 100 executions/month
+        "founder": 1_000,  # Founder ($29/mo): 1,000 executions/month
+        "founder_pro": 10_000,  # Founder Pro ($59/mo): 10,000 executions/month
         "enterprise": -1,  # Enterprise ($129+/mo): Unlimited (-1 = no limit)
     }
 
     # Default limit for unknown tiers
-    DEFAULT_LIMIT = 500
+    DEFAULT_LIMIT = 100
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request and track usage.

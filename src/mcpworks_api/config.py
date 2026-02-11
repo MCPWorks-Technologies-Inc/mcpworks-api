@@ -90,14 +90,10 @@ class Settings(BaseSettings):
     rate_limit_auth_failures_per_minute: int = Field(default=5, ge=1, le=60)
     rate_limit_requests_per_hour: int = Field(default=1000, ge=100, le=10000)
 
-    # Credit System
-    credit_hold_timeout_hours: int = Field(default=1, ge=1, le=24)
-    credit_cleanup_interval_minutes: int = Field(default=5, ge=1, le=60)
-
-    # Tier Execution Limits (monthly) - per A0-SYSTEM-SPECIFICATION.md
-    tier_executions_free: int = Field(default=500)
-    tier_executions_founder: int = Field(default=10_000)
-    tier_executions_founder_pro: int = Field(default=50_000)
+    # Tier Execution Limits (monthly) - per PRICING.md
+    tier_executions_free: int = Field(default=100)
+    tier_executions_founder: int = Field(default=1_000)
+    tier_executions_founder_pro: int = Field(default=10_000)
     # Enterprise: -1 = unlimited (not configurable, hardcoded)
 
     @field_validator("cors_origins", mode="before")

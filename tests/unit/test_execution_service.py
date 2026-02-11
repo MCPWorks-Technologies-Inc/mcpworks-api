@@ -1,12 +1,10 @@
 """Unit tests for ExecutionService."""
 
 import uuid
-from decimal import Decimal
 
 import pytest
 
 from mcpworks_api.models import (
-    Credit,
     Execution,
     ExecutionStatus,
     User,
@@ -27,21 +25,6 @@ async def test_user(db):
     db.add(user)
     await db.flush()
     return user
-
-
-@pytest.fixture
-async def test_user_with_credits(db, test_user):
-    """Create a test user with credits."""
-    credit = Credit(
-        user_id=test_user.id,
-        available_balance=Decimal("1000.00"),
-        held_balance=Decimal("0.00"),
-        lifetime_earned=Decimal("1000.00"),
-        lifetime_spent=Decimal("0.00"),
-    )
-    db.add(credit)
-    await db.flush()
-    return test_user
 
 
 @pytest.fixture
@@ -251,37 +234,6 @@ class TestExecutionServiceCancelExecution:
 
         assert "not found" in str(exc_info.value)
 
-    @pytest.mark.asyncio
-    async def test_cancel_execution_with_credit_hold(self, db, test_user_with_credits):
-        """Test cancelling execution releases held credits."""
-        from mcpworks_api.services.credit import CreditService
-
-        credit_service = CreditService(db)
-
-        # Create a credit hold
-        hold = await credit_service.hold(
-            user_id=test_user_with_credits.id,
-            amount=Decimal("50.00"),
-            metadata={"test": True},
-        )
-        await db.flush()
-
-        # Create execution with hold
-        execution = Execution(
-            user_id=test_user_with_credits.id,
-            workflow_id="test-workflow",
-            status=ExecutionStatus.RUNNING.value,
-            hold_transaction_id=hold.id,
-        )
-        db.add(execution)
-        await db.flush()
-
-        # Cancel execution
-        service = ExecutionService(db)
-        cancelled = await service.cancel_execution(execution.id)
-
-        assert cancelled.status == ExecutionStatus.CANCELLED.value
-
 
 class TestExecutionServiceHandleCallback:
     """Tests for ExecutionService.handle_callback()."""
@@ -291,7 +243,7 @@ class TestExecutionServiceHandleCallback:
         """Test handling a successful completion callback."""
         service = ExecutionService(db)
 
-        execution, action, amount = await service.handle_callback(
+        execution = await service.handle_callback(
             execution_id=running_execution.id,
             status="completed",
             result_data={"output": "success"},
@@ -305,7 +257,7 @@ class TestExecutionServiceHandleCallback:
         """Test handling a failure callback."""
         service = ExecutionService(db)
 
-        execution, action, amount = await service.handle_callback(
+        execution = await service.handle_callback(
             execution_id=running_execution.id,
             status="failed",
             error_message="Something went wrong",
@@ -341,73 +293,3 @@ class TestExecutionServiceHandleCallback:
             )
 
         assert "terminal state" in str(exc_info.value)
-
-    @pytest.mark.asyncio
-    async def test_handle_callback_commits_credits(self, db, test_user_with_credits):
-        """Test successful callback commits held credits."""
-        from mcpworks_api.services.credit import CreditService
-
-        credit_service = CreditService(db)
-
-        # Create a credit hold
-        hold = await credit_service.hold(
-            user_id=test_user_with_credits.id,
-            amount=Decimal("50.00"),
-            metadata={"test": True},
-        )
-        await db.flush()
-
-        # Create execution with hold
-        execution = Execution(
-            user_id=test_user_with_credits.id,
-            workflow_id="test-workflow",
-            status=ExecutionStatus.RUNNING.value,
-            hold_transaction_id=hold.id,
-        )
-        db.add(execution)
-        await db.flush()
-
-        service = ExecutionService(db)
-        result_exec, action, amount = await service.handle_callback(
-            execution_id=execution.id,
-            status="completed",
-            result_data={"output": "done"},
-        )
-
-        assert action == "committed"
-        assert amount == Decimal("50.00")
-
-    @pytest.mark.asyncio
-    async def test_handle_callback_releases_credits_on_failure(self, db, test_user_with_credits):
-        """Test failed callback releases held credits."""
-        from mcpworks_api.services.credit import CreditService
-
-        credit_service = CreditService(db)
-
-        # Create a credit hold
-        hold = await credit_service.hold(
-            user_id=test_user_with_credits.id,
-            amount=Decimal("50.00"),
-            metadata={"test": True},
-        )
-        await db.flush()
-
-        # Create execution with hold
-        execution = Execution(
-            user_id=test_user_with_credits.id,
-            workflow_id="test-workflow",
-            status=ExecutionStatus.RUNNING.value,
-            hold_transaction_id=hold.id,
-        )
-        db.add(execution)
-        await db.flush()
-
-        service = ExecutionService(db)
-        result_exec, action, amount = await service.handle_callback(
-            execution_id=execution.id,
-            status="failed",
-            error_message="Test failure",
-        )
-
-        assert action == "released"
-        assert amount == Decimal("50.00")

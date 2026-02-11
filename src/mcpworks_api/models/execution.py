@@ -5,14 +5,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
-    from mcpworks_api.models.credit_transaction import CreditTransaction
     from mcpworks_api.models.function import Function
     from mcpworks_api.models.user import User
 
@@ -32,7 +31,7 @@ class Execution(Base, UUIDMixin, TimestampMixin):
     """Workflow execution record.
 
     Tracks the lifecycle of a workflow execution from creation to completion.
-    Stores execution results and integrates with credit hold/commit/release.
+    Stores execution results. Usage is tracked via Redis-based billing middleware.
     """
 
     __tablename__ = "executions"
@@ -79,13 +78,6 @@ class Execution(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    # Credit hold transaction ID (for commit/release on completion)
-    hold_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("credit_transactions.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-
     # Input parameters for the workflow
     input_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
@@ -120,12 +112,6 @@ class Execution(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
-    # A0 Extension: Credit cost for this execution
-    credit_cost: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-    )
-
     # A0 Extension: Backend-specific metadata
     backend_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
@@ -135,10 +121,6 @@ class Execution(Base, UUIDMixin, TimestampMixin):
     # Relationships
     user: Mapped["User"] = relationship(  # noqa: F821
         back_populates="executions",
-        lazy="selectin",
-    )
-
-    hold_transaction: Mapped["CreditTransaction"] = relationship(  # noqa: F821
         lazy="selectin",
     )
 

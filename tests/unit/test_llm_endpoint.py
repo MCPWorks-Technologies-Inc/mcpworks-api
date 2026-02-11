@@ -42,7 +42,6 @@ async def test_llm_instructions_endpoints_section(client: AsyncClient):
 
     endpoints = data["endpoints"]
     assert "account" in endpoints
-    assert "credits" in endpoints
     assert "namespaces" in endpoints
     assert "functions" in endpoints
 

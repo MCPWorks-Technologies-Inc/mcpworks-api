@@ -53,7 +53,7 @@ async def register(
 
     Creates a new user with the provided email and password.
     Returns JWT tokens for immediate authentication.
-    New users receive 500 free credits.
+    New users start with free tier (100 executions/month).
     """
     ip_address = _get_client_ip(request)
     user_agent = request.headers.get("User-Agent")

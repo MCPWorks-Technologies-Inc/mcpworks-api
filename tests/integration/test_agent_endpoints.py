@@ -1,4 +1,7 @@
-"""Integration tests for agent execution endpoints."""
+"""Integration tests for agent execution endpoints.
+
+Usage tracking is handled by BillingMiddleware via Redis, not tested here.
+"""
 
 import uuid
 from decimal import Decimal
@@ -10,7 +13,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.security import create_access_token
-from mcpworks_api.models import Credit, Execution, ExecutionStatus, Service, ServiceStatus, User
+from mcpworks_api.models import Execution, ExecutionStatus, Service, ServiceStatus, User
 
 
 @pytest.fixture
@@ -34,7 +37,7 @@ class TestExecuteWorkflow:
         """Test successful workflow execution."""
         headers, user_id = auth_headers
 
-        # Create user with credits
+        # Create user
         user = User(
             id=uuid.UUID(user_id),
             email="agent_exec@example.com",
@@ -44,15 +47,6 @@ class TestExecuteWorkflow:
             status="active",
         )
         db.add(user)
-
-        credit = Credit(
-            user_id=uuid.UUID(user_id),
-            available_balance=Decimal("100.00"),
-            held_balance=Decimal("0.00"),
-            lifetime_earned=Decimal("100.00"),
-            lifetime_spent=Decimal("0.00"),
-        )
-        db.add(credit)
 
         # Delete any existing agent service
         await db.execute(delete(Service).where(Service.name == "agent"))
@@ -94,58 +88,6 @@ class TestExecuteWorkflow:
             assert "execution_id" in data
             assert data["workflow_id"] == "wf_test123"
             assert data["status"] == "running"
-            assert Decimal(str(data["credits_held"])) == Decimal("1.00")
-
-    @pytest.mark.asyncio
-    async def test_execute_workflow_insufficient_credits(
-        self, client: AsyncClient, db: AsyncSession, auth_headers
-    ):
-        """Test workflow execution with insufficient credits."""
-        headers, user_id = auth_headers
-
-        # Create user with insufficient credits
-        user = User(
-            id=uuid.UUID(user_id),
-            email="agent_nocredit@example.com",
-            password_hash="test_hash",
-            name="No Credit User",
-            tier="free",
-            status="active",
-        )
-        db.add(user)
-
-        credit = Credit(
-            user_id=uuid.UUID(user_id),
-            available_balance=Decimal("0.00"),
-            held_balance=Decimal("0.00"),
-            lifetime_earned=Decimal("0.00"),
-            lifetime_spent=Decimal("0.00"),
-        )
-        db.add(credit)
-
-        # Delete and create agent service
-        await db.execute(delete(Service).where(Service.name == "agent"))
-
-        agent_service = Service(
-            name="agent",
-            display_name="Workflow Agent",
-            url="http://agent:8002",
-            credit_cost=Decimal("1.00"),
-            tier_required="free",
-            status=ServiceStatus.ACTIVE.value,
-        )
-        db.add(agent_service)
-        await db.commit()
-
-        response = await client.post(
-            "/v1/services/agent/execute/wf_test123",
-            headers=headers,
-            json={},
-        )
-
-        assert response.status_code == 402
-        data = response.json()
-        assert data["error"] == "INSUFFICIENT_CREDITS"
 
     @pytest.mark.asyncio
     async def test_execute_workflow_service_unavailable(
@@ -204,13 +146,13 @@ class TestExecutionCallback:
     """Tests for POST /v1/services/agent/executions/{execution_id}/callback endpoint."""
 
     @pytest.mark.asyncio
-    async def test_callback_success_commits_credits(
+    async def test_callback_success(
         self, client: AsyncClient, db: AsyncSession, auth_headers
     ):
-        """Test that successful callback commits credits."""
+        """Test that successful callback updates execution status."""
         headers, user_id = auth_headers
 
-        # Create user with credits
+        # Create user
         user = User(
             id=uuid.UUID(user_id),
             email="callback_test@example.com",
@@ -221,16 +163,7 @@ class TestExecutionCallback:
         )
         db.add(user)
 
-        credit = Credit(
-            user_id=uuid.UUID(user_id),
-            available_balance=Decimal("100.00"),
-            held_balance=Decimal("0.00"),
-            lifetime_earned=Decimal("100.00"),
-            lifetime_spent=Decimal("0.00"),
-        )
-        db.add(credit)
-
-        # Create execution in running state (no hold for simplicity)
+        # Create execution in running state
         execution = Execution(
             user_id=uuid.UUID(user_id),
             workflow_id="wf_callback_test",
@@ -254,14 +187,13 @@ class TestExecutionCallback:
         assert response.status_code == 200
         data = response.json()
         assert data["execution_id"] == str(execution.id)
-        # No credits held, so action is "none"
-        assert data["credits_action"] == "none"
+        assert data["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_callback_failure_releases_credits(
+    async def test_callback_failure(
         self, client: AsyncClient, db: AsyncSession, auth_headers
     ):
-        """Test that failed callback releases credits."""
+        """Test that failed callback updates execution status."""
         headers, user_id = auth_headers
 
         # Create user
@@ -300,6 +232,7 @@ class TestExecutionCallback:
         assert response.status_code == 200
         data = response.json()
         assert data["execution_id"] == str(execution.id)
+        assert data["status"] == "failed"
 
     @pytest.mark.asyncio
     async def test_callback_invalid_execution(self, client: AsyncClient):

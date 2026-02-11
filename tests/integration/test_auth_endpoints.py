@@ -362,31 +362,6 @@ class TestUserRegistration:
         data = response.json()
         assert data["user"]["name"] is None
 
-    async def test_register_creates_credits(self, client: AsyncClient, db):
-        """Registration should create credit record with free tier bonus."""
-        from sqlalchemy import select
-
-        from mcpworks_api.models import Credit
-
-        response = await client.post(
-            "/v1/auth/register",
-            json={
-                "email": "credituser@example.com",
-                "password": "SecurePass123",
-            },
-        )
-
-        assert response.status_code == 201
-        user_id = response.json()["user"]["id"]
-
-        # Verify credit record was created
-        result = await db.execute(select(Credit).where(Credit.user_id == user_id))
-        credit = result.scalar_one_or_none()
-
-        assert credit is not None
-        assert credit.available_balance == 500.00
-
-
 @pytest.mark.asyncio
 class TestUserLogin:
     """Tests for POST /v1/auth/login endpoint."""

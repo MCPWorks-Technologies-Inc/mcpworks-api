@@ -28,10 +28,7 @@ async def llm_instructions() -> dict:
                 "register": "POST /v1/auth/register {email, password, name}",
                 "login": "POST /v1/auth/login {email, password}",
                 "api_keys": "POST /v1/auth/api-keys {name} → key (save, shown once)",
-            },
-            "credits": {
-                "balance": "GET /v1/credits/balance",
-                "history": "GET /v1/credits/history",
+                "usage": "GET /v1/account/usage → executions_count, executions_limit",
             },
             "namespaces": {
                 "list": "GET /v1/namespaces",
@@ -52,7 +49,7 @@ async def llm_instructions() -> dict:
         },
         "errors": {
             "401": "Invalid/missing auth. Get token first.",
-            "402": "Insufficient credits. Check balance.",
+            "402": "Execution limit exceeded. Check usage or upgrade tier.",
             "403": "No access to resource. Check namespace ownership.",
             "404": "Resource not found.",
             "429": "Rate limited. Wait and retry.",

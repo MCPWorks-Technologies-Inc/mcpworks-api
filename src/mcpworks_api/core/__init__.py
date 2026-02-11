@@ -2,7 +2,6 @@
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import (
-    InsufficientCreditsError,
     InvalidApiKeyError,
     MCPWorksException,
     ServiceUnavailableError,
@@ -12,7 +11,6 @@ from mcpworks_api.core.exceptions import (
 __all__ = [
     "get_db",
     "MCPWorksException",
-    "InsufficientCreditsError",
     "InvalidApiKeyError",
     "TokenExpiredError",
     "ServiceUnavailableError",
