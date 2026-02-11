@@ -10,7 +10,6 @@
   .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
   .btn { background: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-family: inherit; }
   .btn:hover { background: #2563eb; }
-  .btn-sm { padding: 4px 10px; font-size: 13px; }
   input { background: #0f172a; border: 1px solid #475569; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-family: inherit; }
   input:focus { outline: none; border-color: #3b82f6; }
   table { width: 100%; border-collapse: collapse; }
@@ -22,16 +21,24 @@
   .breadcrumb { color: #64748b; font-size: 14px; }
   .breadcrumb a { color: #60a5fa; text-decoration: none; }
   .breadcrumb a:hover { text-decoration: underline; }
-  .tag { background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; }
+  .tag { background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; display: inline-block; }
+  .stat-card { cursor: pointer; transition: border-color 0.15s; }
+  .stat-card:hover { border-color: #3b82f6; }
   .stat-num { font-size: 28px; font-weight: 700; color: #f8fafc; }
   .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
   pre.code-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
-  .schema-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; font-size: 12px; overflow-x: auto; }
+  .schema-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; }
   .hidden { display: none; }
   .fade-in { animation: fadeIn 0.15s ease-in; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #475569; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .status-active { color: #4ade80; }
+  .status-suspended { color: #f87171; }
+  .status-completed { color: #4ade80; }
+  .status-failed { color: #f87171; }
+  .status-running { color: #facc15; }
+  .status-pending { color: #94a3b8; }
 </style>
 </head>
 <body>
@@ -58,11 +65,11 @@
 
     <!-- Stats bar -->
     <div id="stats-bar" class="grid grid-cols-5 gap-4 mb-6">
-      <div class="card p-4 text-center"><div class="stat-num" id="stat-users">-</div><div class="stat-label">Users</div></div>
-      <div class="card p-4 text-center"><div class="stat-num" id="stat-namespaces">-</div><div class="stat-label">Namespaces</div></div>
-      <div class="card p-4 text-center"><div class="stat-num" id="stat-services">-</div><div class="stat-label">Services</div></div>
-      <div class="card p-4 text-center"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
-      <div class="card p-4 text-center"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
+      <div class="card stat-card p-4 text-center" onclick="loadUsers()"><div class="stat-num" id="stat-users">-</div><div class="stat-label">Users</div></div>
+      <div class="card stat-card p-4 text-center" onclick="loadNamespaces()"><div class="stat-num" id="stat-namespaces">-</div><div class="stat-label">Namespaces</div></div>
+      <div class="card stat-card p-4 text-center" onclick="loadAllServices()"><div class="stat-num" id="stat-services">-</div><div class="stat-label">Services</div></div>
+      <div class="card stat-card p-4 text-center" onclick="loadAllFunctions()"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
+      <div class="card stat-card p-4 text-center" onclick="loadExecutions()"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
     </div>
 
     <!-- Breadcrumb -->
@@ -114,7 +121,6 @@ async function doLogin() {
   }
 }
 
-// Enter key to login
 document.getElementById('login-password').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') doLogin();
 });
@@ -156,7 +162,6 @@ async function loadStats() {
 // --- Breadcrumb ---
 
 function setBreadcrumb(parts) {
-  // parts: [{label, onclick?}]
   const el = document.getElementById('breadcrumb');
   el.innerHTML = parts.map((p, i) => {
     if (i < parts.length - 1 && p.onclick) {
@@ -164,6 +169,53 @@ function setBreadcrumb(parts) {
     }
     return `<span class="text-gray-300">${p.label}</span>`;
   }).join(' <span class="text-gray-600">/</span> ');
+}
+
+// --- Users list ---
+
+async function loadUsers() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading users...</div>';
+  setBreadcrumb([{ label: 'Users' }]);
+
+  try {
+    const users = await apiFetch('/v1/admin/users');
+    if (users.length === 0) {
+      content.innerHTML = '<div class="p-6 text-gray-400">No users found.</div>';
+      return;
+    }
+
+    content.innerHTML = `
+      <table class="fade-in">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Tier</th>
+            <th>Status</th>
+            <th>Namespaces</th>
+            <th>Subscription</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => `
+            <tr>
+              <td class="text-blue-400 font-medium">${esc(u.email)}</td>
+              <td class="text-gray-400">${esc(u.name || '-')}</td>
+              <td><span class="tag">${esc(u.tier)}</span></td>
+              <td><span class="status-${u.status}">${esc(u.status)}</span></td>
+              <td>${u.namespace_count}</td>
+              <td class="text-gray-400">${esc(u.subscription_status || '-')}</td>
+              <td class="text-gray-500 text-sm">${fmtDate(u.created_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
 }
 
 // --- Namespaces list ---
@@ -181,7 +233,7 @@ async function loadNamespaces() {
     }
 
     content.innerHTML = `
-      <table>
+      <table class="fade-in">
         <thead>
           <tr>
             <th>Namespace</th>
@@ -260,7 +312,140 @@ async function loadNamespace(nsName) {
   }
 }
 
-// --- Functions list ---
+// --- All services list ---
+
+async function loadAllServices() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading services...</div>';
+  setBreadcrumb([{ label: 'Services' }]);
+
+  try {
+    const services = await apiFetch('/v1/admin/services');
+    if (services.length === 0) {
+      content.innerHTML = '<div class="p-6 text-gray-400">No services found.</div>';
+      return;
+    }
+
+    content.innerHTML = `
+      <table class="fade-in">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Namespace</th>
+            <th>Owner</th>
+            <th>Functions</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${services.map(svc => `
+            <tr class="clickable" onclick="loadFunctions('${esc(svc.namespace)}', '${esc(svc.name)}')">
+              <td class="text-blue-400 font-medium">${esc(svc.name)}</td>
+              <td class="text-gray-400">${esc(svc.namespace || '-')}</td>
+              <td class="text-gray-400">${esc(svc.owner_email || '-')}</td>
+              <td>${svc.function_count}</td>
+              <td class="text-gray-500 text-sm">${fmtDate(svc.created_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- All functions list ---
+
+async function loadAllFunctions() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading functions...</div>';
+  setBreadcrumb([{ label: 'Functions' }]);
+
+  try {
+    const functions = await apiFetch('/v1/admin/functions');
+    if (functions.length === 0) {
+      content.innerHTML = '<div class="p-6 text-gray-400">No functions found.</div>';
+      return;
+    }
+
+    content.innerHTML = `
+      <table class="fade-in">
+        <thead>
+          <tr>
+            <th>Function</th>
+            <th>Service</th>
+            <th>Namespace</th>
+            <th>Tags</th>
+            <th>Version</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${functions.map(fn => `
+            <tr class="clickable" onclick="loadFunction('${esc(fn.namespace)}', '${esc(fn.service)}', '${esc(fn.name)}')">
+              <td class="text-blue-400 font-medium">${esc(fn.name)}</td>
+              <td class="text-gray-400">${esc(fn.service || '-')}</td>
+              <td class="text-gray-400">${esc(fn.namespace || '-')}</td>
+              <td>${(fn.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
+              <td>v${fn.active_version}</td>
+              <td class="text-gray-500 text-sm">${fmtDate(fn.created_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Executions list ---
+
+async function loadExecutions() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading executions...</div>';
+  setBreadcrumb([{ label: 'Executions' }]);
+
+  try {
+    const executions = await apiFetch('/v1/admin/executions');
+    if (executions.length === 0) {
+      content.innerHTML = '<div class="p-6 text-gray-400">No executions found.</div>';
+      return;
+    }
+
+    content.innerHTML = `
+      <table class="fade-in">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>Function</th>
+            <th>Status</th>
+            <th>Duration</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${executions.map(ex => `
+            <tr>
+              <td class="text-gray-400 text-sm">${esc(ex.id.substring(0, 8))}...</td>
+              <td class="text-gray-400">${esc(ex.user_email || '-')}</td>
+              <td class="text-blue-400">${esc(ex.function_name || ex.workflow_id || '-')}</td>
+              <td><span class="status-${ex.status}">${esc(ex.status)}</span></td>
+              <td class="text-gray-400">${ex.duration_seconds != null ? ex.duration_seconds.toFixed(1) + 's' : '-'}</td>
+              <td class="text-gray-500 text-sm">${fmtDate(ex.created_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Functions in a service ---
 
 async function loadFunctions(nsName, svcName) {
   const content = document.getElementById('content');
@@ -280,7 +465,7 @@ async function loadFunctions(nsName, svcName) {
     }
 
     content.innerHTML = `
-      <table>
+      <table class="fade-in">
         <thead>
           <tr><th>Function</th><th>Description</th><th>Tags</th><th>Version</th><th>Created</th></tr>
         </thead>
