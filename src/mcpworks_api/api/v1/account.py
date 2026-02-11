@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,10 +108,7 @@ async def get_usage(
         usage = 0
 
     # Calculate remaining (-1 means unlimited)
-    if limit == -1:
-        remaining = -1
-    else:
-        remaining = max(0, limit - usage)
+    remaining = -1 if limit == -1 else max(0, limit - usage)
 
     # Get billing period
     period_start, period_end = _get_billing_period()

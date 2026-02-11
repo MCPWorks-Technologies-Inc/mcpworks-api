@@ -89,7 +89,7 @@ class ServiceRouter:
         service_name: str,
         method: str,
         path: str,
-        user_id: uuid.UUID,
+        user_id: uuid.UUID,  # noqa: ARG002
         user_tier: str,
         body: dict | None = None,
         headers: dict | None = None,
