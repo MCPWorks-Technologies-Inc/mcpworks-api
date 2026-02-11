@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 
 
 class UserTier(str, Enum):
-    """User subscription tier."""
+    """User subscription tier per A0-SYSTEM-SPECIFICATION.md."""
 
     FREE = "free"
-    STARTER = "starter"
-    PRO = "pro"
+    FOUNDER = "founder"
+    FOUNDER_PRO = "founder_pro"
     ENTERPRISE = "enterprise"
 
 

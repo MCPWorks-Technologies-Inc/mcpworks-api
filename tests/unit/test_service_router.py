@@ -16,13 +16,13 @@ from mcpworks_api.services.router import TIER_HIERARCHY, ServiceRouter
 
 
 class TestTierHierarchy:
-    """Tests for tier hierarchy."""
+    """Tests for tier hierarchy per A0-SYSTEM-SPECIFICATION.md."""
 
     def test_tier_hierarchy_order(self):
         """Test that tier hierarchy has correct order."""
-        assert TIER_HIERARCHY["free"] < TIER_HIERARCHY["starter"]
-        assert TIER_HIERARCHY["starter"] < TIER_HIERARCHY["pro"]
-        assert TIER_HIERARCHY["pro"] < TIER_HIERARCHY["enterprise"]
+        assert TIER_HIERARCHY["free"] < TIER_HIERARCHY["founder"]
+        assert TIER_HIERARCHY["founder"] < TIER_HIERARCHY["founder_pro"]
+        assert TIER_HIERARCHY["founder_pro"] < TIER_HIERARCHY["enterprise"]
 
 
 class TestCanAccessService:
@@ -41,23 +41,23 @@ class TestCanAccessService:
 
         assert router.can_access_service("free", service) is True
 
-    def test_free_user_cannot_access_starter_service(self, router):
-        """Test free tier cannot access starter services."""
+    def test_free_user_cannot_access_founder_service(self, router):
+        """Test free tier cannot access founder services."""
         service = MagicMock(spec=Service)
-        service.tier_required = "starter"
+        service.tier_required = "founder"
 
         assert router.can_access_service("free", service) is False
 
-    def test_pro_user_can_access_starter_service(self, router):
+    def test_founder_pro_user_can_access_founder_service(self, router):
         """Test higher tier can access lower tier services."""
         service = MagicMock(spec=Service)
-        service.tier_required = "starter"
+        service.tier_required = "founder"
 
-        assert router.can_access_service("pro", service) is True
+        assert router.can_access_service("founder_pro", service) is True
 
     def test_enterprise_user_can_access_all_services(self, router):
         """Test enterprise can access all services."""
-        for tier in ["free", "starter", "pro", "enterprise"]:
+        for tier in ["free", "founder", "founder_pro", "enterprise"]:
             service = MagicMock(spec=Service)
             service.tier_required = tier
             assert router.can_access_service("enterprise", service) is True
@@ -196,7 +196,7 @@ class TestRouteRequest:
             name="premium",
             url="http://premium:8003",
             credit_cost=Decimal("0.00"),
-            tier_required="pro",  # Requires pro tier
+            tier_required="founder_pro",  # Requires founder_pro tier
             status=ServiceStatus.ACTIVE.value,
         )
 

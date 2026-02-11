@@ -62,7 +62,7 @@ Draft → Logic Check → Review → Approved → Plan Phase
 ### Always Create a Spec For:
 
 - **New MCP tools** (e.g., provision_service, deploy_application)
-- **Core system components** (e.g., credit system, billing engine)
+- **Core system components** (e.g., usage tracking, billing engine)
 - **Third-party integrations** (e.g., Stripe, DigitalOcean API)
 - **Security-critical features** (e.g., authentication, authorization)
 - **User-facing workflows** (e.g., onboarding, dashboard)
@@ -169,20 +169,20 @@ Plan addresses HOW:
 - Requirements: Create droplet, configure firewall, install Node.js, setup monitoring
 - Token efficiency: Return service_id + stream_url (not full logs)
 - Security: Port restrictions (25, 445 blocked; 22 requires approval)
-- Error handling: Rollback on failure, refund credits
+- Error handling: Rollback on failure, no usage counted
 
 **Status:** Ready to write after A0 completion
 
-### Example 2: Credit Hold/Commit/Release System
+### Example 2: Usage Tracking System
 
-**File:** `credit-transaction-spec.md`
+**File:** `usage-tracking-spec.md`
 
 **Covers:**
-- User scenario: Multi-step deployment holds credits, commits on success
-- Requirements: Atomic transactions, automatic rollback
-- Token efficiency: Simple status responses ("held", "committed", "released")
-- Security: Prevent double-charging, audit logging
-- Error handling: Timeout policies, partial failure compensation
+- User scenario: Track execution count against subscription tier limits
+- Requirements: Check limit before execution, increment on success
+- Token efficiency: Simple status responses ("within_limit", "limit_exceeded")
+- Security: Prevent abuse, audit logging
+- Error handling: Graceful handling when limit reached
 
 **Status:** Critical for MVP
 
@@ -212,7 +212,7 @@ Plan addresses HOW:
 ### Examples:
 
 - `mcp-service-provisioning-spec.md` - MCP tool for provisioning services
-- `billing-credit-system-spec.md` - Credit hold/commit/release system
+- `billing-usage-tracking-spec.md` - Usage tracking and limits system
 - `api-deployment-streaming-spec.md` - SSE streaming for deployments
 - `integration-stripe-connect-spec.md` - Stripe Connect integration
 - `security-rate-limiting-spec.md` - Rate limiting implementation
@@ -370,7 +370,7 @@ Technology choices go in Plan, not Spec.
 ### 4. Missing Error Scenarios
 
 **Bad:** Only documenting happy path
-**Good:** Document what happens when DigitalOcean API is down, credits insufficient, invalid configuration, timeout occurs, etc.
+**Good:** Document what happens when DigitalOcean API is down, usage limit exceeded, invalid configuration, timeout occurs, etc.
 
 Errors are not edge cases—they're normal operation.
 

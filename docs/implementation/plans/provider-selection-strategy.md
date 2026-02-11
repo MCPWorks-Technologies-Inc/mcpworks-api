@@ -2,7 +2,9 @@
 
 **Version:** 1.0
 **Last Updated:** 2025-10-16
-**Status:** Active
+**Status:** DEPRECATED (Pricing Model Changed)
+
+> **⚠️ NOTE:** This document references a credit-based pricing model that has been replaced with subscription-based billing. The provider selection analysis remains valid, but all "credit" pricing references should be ignored. See SPEC.md for current subscription tiers.
 **Related Documents:** [mcpworks-mcp-spec.md](../specs/mcpworks-mcp-server-spec.md), [strategic-analysis-2025-10.md](../../../../mcpworks-internals/docs/business/strategic-analysis-2025-10.md)
 
 ---

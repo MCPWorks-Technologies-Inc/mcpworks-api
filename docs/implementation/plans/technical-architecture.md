@@ -10,7 +10,7 @@
 - Updated from 8 tools to 19 tools (added deployment, Zendesk)
 - Added Streaming Architecture (SSE) for real-time progress
 - Added State Management & Sessions (stateful transactions)
-- Added Credit Hold/Commit/Release patterns (bank-grade)
+- Added subscription-based billing with usage tracking
 - Enhanced Provider Abstraction with transaction safety
 - Updated scalability considerations for streaming
 
@@ -24,10 +24,10 @@ mcpworks Infrastructure MCP is a production-grade AI-native infrastructure platf
 - **AI-First:** MCP protocol integration with 19 tools for complete application lifecycle
 - **Streaming Architecture:** Real-time progress updates via SSE (not batch/polling like competitors)
 - **State Management:** Stateful sessions with transaction safety and automatic rollback
-- **Bank-Grade Credits:** Hold/commit/release patterns prevent race conditions and double-charging
+- **Subscription Billing:** Monthly subscription tiers with usage limits (no credits complexity)
 - **Provider Abstraction:** Backend-agnostic (DigitalOcean Phase 1, multi-provider Phase 2+)
 - **Security by Default:** Port restrictions, monitoring, guardrails without limiting AI creativity
-- **Transparent Pricing:** Credit burn rates disclosed in real-time for AI optimization
+- **Transparent Pricing:** Usage limits and tier info disclosed in real-time for AI
 
 ---
 
@@ -43,8 +43,8 @@ mcpworks Infrastructure MCP is a production-grade AI-native infrastructure platf
 ┌─────────────────────────────────────────────────────────────┐
 │                   mcpworks Infrastructure MCP Server                     │
 │  ┌────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │  MCP API   │  │ Credit System│  │ Auth & Security  │   │
-│  │ (19 Tools) │  │(Hold/Commit) │  │  (JWT, API Keys) │   │
+│  │  MCP API   │  │Usage Tracking│  │ Auth & Security  │   │
+│  │ (19 Tools) │  │(Subscription)│  │  (JWT, API Keys) │   │
 │  └────────────┘  └──────────────┘  └──────────────────┘   │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │         Provider Abstraction Layer                  │   │
@@ -97,7 +97,7 @@ mcpworks Infrastructure MCP is a production-grade AI-native infrastructure platf
 16. `setup_sendgrid_email` - Transactional email
 17. `setup_twilio_sms` - SMS notifications
 18. `setup_zendesk_support` - Customer support/ticketing
-19. `get_account_status` - Credits, usage, billing
+19. `get_account_status` - Subscription tier, usage, billing
 
 **Scalability:**
 - Stateful session design with persistent state (database-backed)
@@ -106,21 +106,21 @@ mcpworks Infrastructure MCP is a production-grade AI-native infrastructure platf
 - Rate limiting per customer (prevents abuse)
 - Horizontal scaling with session affinity (sticky sessions)
 
-### 2. Credit System
+### 2. Usage Tracking System
 
 **Database:** PostgreSQL (transactional integrity)
 **Features:**
-- Prepaid credit purchase (Stripe integration)
-- Real-time credit consumption tracking
-- 30-day expiration (Phase 1)
-- Credit burn rate API (AI-readable pricing)
+- Monthly subscription billing (Stripe integration)
+- Real-time execution count tracking
+- Usage resets each billing period
+- Usage limits API (AI-readable tier info)
 
 **Schema (Simplified):**
 ```sql
 customers (id, email, created_at)
-credit_ledger (id, customer_id, amount, type, timestamp, description)
-credit_balance (customer_id, balance, last_updated)
-services (id, customer_id, type, config, credits_per_hour, created_at)
+subscriptions (id, customer_id, tier, status, current_period_start, current_period_end)
+usage_records (id, customer_id, billing_period_start, billing_period_end, executions_count, executions_limit)
+services (id, customer_id, type, config, created_at)
 ```
 
 ### 3. Provider Abstraction Layer
@@ -170,7 +170,7 @@ class HostingProvider(ABC):
 ### 5. Data Storage
 
 **Primary Database:** PostgreSQL 14+
-- Customer accounts, credit ledger, service configs
+- Customer accounts, usage records, service configs
 - Hosted on DigitalOcean Managed Database (Phase 1)
 - Daily automated backups (7-day retention)
 
@@ -180,7 +180,7 @@ class HostingProvider(ABC):
 
 **Redis:** Caching layer
 - Session management, rate limiting
-- Credit balance caching (invalidated on transaction)
+- Usage count caching (invalidated on execution)
 
 ---
 
@@ -201,7 +201,7 @@ class HostingProvider(ABC):
    ```
 
 2. **MCP Server Processing:**
-   - Validate customer credits (requires 30-39 credits/hour × estimated usage)
+   - Check subscription tier and usage limits
    - Check account standing (not suspended, valid payment method)
    - Call Provider Abstraction Layer
 
@@ -216,15 +216,15 @@ class HostingProvider(ABC):
      "server_id": "droplet-12345",
      "ip_address": "192.0.2.1",
      "ssh_key": "[key data]",
-     "credit_burn_rate": "36 credits/hour",
-     "estimated_monthly_cost": "$86.40 (2880 credits)"
+     "tier": "founder_pro",
+     "executions_remaining": 8500
    }
    ```
 
-5. **Credit Consumption:**
-   - Hourly background job debits credits
-   - Customer notified when balance <10% of monthly burn rate
-   - Service suspended if balance reaches zero (72-hour grace period)
+5. **Usage Tracking:**
+   - Increment execution count on each operation
+   - Customer notified when usage at 80% of tier limit
+   - Prompt to upgrade when limit reached
 
 ---
 
@@ -324,7 +324,7 @@ class HostingProvider(ABC):
 |-------|------------|-----------|
 | **Backend** | Python 3.11+, FastAPI | Fast development, MCP SDK availability, async support |
 | **Database** | PostgreSQL 14+ | Transactional integrity, JSON support, proven scale |
-| **Caching** | Redis 7+ | Session management, rate limiting, credit balance caching |
+| **Caching** | Redis 7+ | Session management, rate limiting, usage count caching |
 | **Infrastructure** | DigitalOcean (Phase 1) | Cost-effective, good API, Canadian presence |
 | **DNS** | Cloudflare | Free tier, excellent API, DDoS protection |
 | **Payments** | Stripe | Industry standard, excellent API, fraud detection |
@@ -349,8 +349,8 @@ class HostingProvider(ABC):
 **Endpoints:**
 - `POST /customers` - Create account
 - `GET /customers/{id}` - Get account details
-- `POST /credits/purchase` - Buy credits (Stripe integration)
-- `GET /credits/balance` - Check credit balance
+- `GET /usage` - Get current usage and limits
+- `POST /subscriptions` - Manage subscription tier
 - `GET /services` - List customer services
 - `POST /services/hosting` - Provision hosting
 - `DELETE /services/{id}` - Deprovision service
@@ -406,7 +406,7 @@ class HostingProvider(ABC):
 **Anthropic:**
 - ✅ MCP protocol compliance (first-class integration)
 - ✅ Python stack (familiar to Anthropic engineering)
-- ✅ Credit system (transparent pricing for AI optimization)
+- ✅ Usage tracking (subscription tiers for AI optimization)
 - **Integration effort:** Low (2-4 weeks to migrate to Anthropic infrastructure)
 
 **Cloudflare:**
@@ -432,7 +432,7 @@ class HostingProvider(ABC):
 ### Phase 1: MVP (Month 1-3)
 - Single-provider backend (DigitalOcean)
 - 8 MCP tools functional
-- Credit system operational
+- Usage tracking operational
 - Basic security (auth, encryption, monitoring)
 
 ### Phase 2: Market Validation (Month 4-12)

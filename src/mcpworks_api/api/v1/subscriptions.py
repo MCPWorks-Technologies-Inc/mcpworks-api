@@ -39,7 +39,7 @@ async def create_subscription(
     """Create a Stripe Checkout session for subscription upgrade.
 
     FR-BILL-001: Integrate with Stripe for subscription management.
-    FR-BILL-002: Support starter, pro, enterprise tiers.
+    FR-BILL-002: Support founder, founder_pro, enterprise tiers.
     """
     stripe_service = StripeService(db)
 
@@ -93,7 +93,7 @@ async def get_current_subscription(
         current_period_start=subscription.current_period_start,
         current_period_end=subscription.current_period_end,
         cancel_at_period_end=subscription.cancel_at_period_end,
-        monthly_credits=subscription.monthly_credits,
+        monthly_executions=subscription.monthly_executions,
     )
 
 

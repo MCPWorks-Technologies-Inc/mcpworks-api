@@ -142,7 +142,7 @@ Don't create guidance for:
 
 | Document | Version | Status | Topics Covered |
 |----------|---------|--------|----------------|
-| `mcp-token-optimization.md` | 1.0 | Active | **CRITICAL** Production MCP token efficiency patterns: smart tool definitions (progressive disclosure, <20 tokens per description), response compression (references not full data, abbreviated keys), caching & state management (conversation-aware, incremental updates), semantic compression (flatten structures, limit arrays), zoom levels (summary/standard/detailed/full), batch operations (single call vs multiple round trips), two-tier architecture (lightweight + heavy MCP), streaming patterns (SSE, credit transparency), specialized compression models. Target: 200-1000 tokens/operation (2-5x more efficient than AWS/GCP MCPs). Includes mcpworks-specific examples: deployment streaming, credit burn summaries, integration status compression. |
+| `mcp-token-optimization.md` | 1.0 | Active | **CRITICAL** Production MCP token efficiency patterns: smart tool definitions (progressive disclosure, <20 tokens per description), response compression (references not full data, abbreviated keys), caching & state management (conversation-aware, incremental updates), semantic compression (flatten structures, limit arrays), zoom levels (summary/standard/detailed/full), batch operations (single call vs multiple round trips), two-tier architecture (lightweight + heavy MCP), streaming patterns (SSE, usage transparency), specialized compression models. Target: 200-1000 tokens/operation (2-5x more efficient than AWS/GCP MCPs). Includes mcpworks-specific examples: deployment streaming, usage summaries, integration status compression. |
 
 ---
 

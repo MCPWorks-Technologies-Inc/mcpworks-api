@@ -22,20 +22,20 @@ from mcpworks_api.services.router import (
 
 
 class TestTierHierarchy:
-    """Tests for tier hierarchy constants."""
+    """Tests for tier hierarchy constants per A0-SYSTEM-SPECIFICATION.md."""
 
     def test_tier_levels(self):
         """Test tier levels are correctly defined."""
         assert TIER_HIERARCHY["free"] == 0
-        assert TIER_HIERARCHY["starter"] == 1
-        assert TIER_HIERARCHY["pro"] == 2
+        assert TIER_HIERARCHY["founder"] == 1
+        assert TIER_HIERARCHY["founder_pro"] == 2
         assert TIER_HIERARCHY["enterprise"] == 3
 
     def test_tier_ordering(self):
         """Test tiers are ordered correctly."""
-        assert TIER_HIERARCHY["free"] < TIER_HIERARCHY["starter"]
-        assert TIER_HIERARCHY["starter"] < TIER_HIERARCHY["pro"]
-        assert TIER_HIERARCHY["pro"] < TIER_HIERARCHY["enterprise"]
+        assert TIER_HIERARCHY["free"] < TIER_HIERARCHY["founder"]
+        assert TIER_HIERARCHY["founder"] < TIER_HIERARCHY["founder_pro"]
+        assert TIER_HIERARCHY["founder_pro"] < TIER_HIERARCHY["enterprise"]
 
 
 class TestServiceRouterInit:
@@ -146,27 +146,27 @@ class TestCanAccessService:
         assert router.can_access_service("free", service) is True
 
     @pytest.mark.asyncio
-    async def test_free_user_cannot_access_pro_service(self, db: AsyncSession):
-        """Test free user cannot access pro service."""
+    async def test_free_user_cannot_access_founder_pro_service(self, db: AsyncSession):
+        """Test free user cannot access founder_pro service."""
         router = ServiceRouter(db)
-        service = MagicMock(tier_required="pro")
+        service = MagicMock(tier_required="founder_pro")
 
         assert router.can_access_service("free", service) is False
 
     @pytest.mark.asyncio
-    async def test_pro_user_accesses_starter_service(self, db: AsyncSession):
-        """Test pro user can access starter service."""
+    async def test_founder_pro_user_accesses_founder_service(self, db: AsyncSession):
+        """Test founder_pro user can access founder service."""
         router = ServiceRouter(db)
-        service = MagicMock(tier_required="starter")
+        service = MagicMock(tier_required="founder")
 
-        assert router.can_access_service("pro", service) is True
+        assert router.can_access_service("founder_pro", service) is True
 
     @pytest.mark.asyncio
     async def test_enterprise_user_accesses_all_services(self, db: AsyncSession):
         """Test enterprise user can access all services."""
         router = ServiceRouter(db)
 
-        for required_tier in ["free", "starter", "pro", "enterprise"]:
+        for required_tier in ["free", "founder", "founder_pro", "enterprise"]:
             service = MagicMock(tier_required=required_tier)
             assert router.can_access_service("enterprise", service) is True
 
@@ -174,7 +174,7 @@ class TestCanAccessService:
     async def test_unknown_tier_defaults_to_zero(self, db: AsyncSession):
         """Test unknown tier defaults to level 0 (free)."""
         router = ServiceRouter(db)
-        service = MagicMock(tier_required="starter")
+        service = MagicMock(tier_required="founder")
 
         # Unknown tier should be treated as free (level 0)
         assert router.can_access_service("unknown_tier", service) is False
@@ -231,12 +231,12 @@ class TestRouteRequest:
     async def test_route_request_insufficient_tier(self, db: AsyncSession):
         """Test routing when tier is insufficient."""
         service = Service(
-            name="pro-service",
-            display_name="Pro Service",
-            description="Pro only",
+            name="founder-pro-service",
+            display_name="Founder Pro Service",
+            description="Founder Pro only",
             url="http://localhost:8080",
             credit_cost=Decimal("0.00"),
-            tier_required="pro",
+            tier_required="founder_pro",
             status=ServiceStatus.ACTIVE.value,
         )
         db.add(service)
@@ -247,14 +247,14 @@ class TestRouteRequest:
 
         with pytest.raises(InsufficientTierError) as exc_info:
             await router.route_request(
-                service_name="pro-service",
+                service_name="founder-pro-service",
                 method="GET",
                 path="/test",
                 user_id=user_id,
                 user_tier="free",
             )
 
-        assert "pro" in str(exc_info.value)
+        assert "founder_pro" in str(exc_info.value)
 
 
 class TestMakeRequest:

@@ -10,8 +10,8 @@ class CreateSubscriptionRequest(BaseModel):
 
     tier: str = Field(
         ...,
-        description="Target subscription tier: starter, pro, or enterprise",
-        pattern="^(starter|pro|enterprise)$",
+        description="Target subscription tier: founder, founder_pro, or enterprise",
+        pattern="^(founder|founder_pro|enterprise)$",
     )
     success_url: str = Field(
         ...,
@@ -59,9 +59,9 @@ class SubscriptionInfo(BaseModel):
         ...,
         description="Whether subscription will cancel at period end",
     )
-    monthly_credits: int = Field(
+    monthly_executions: int = Field(
         ...,
-        description="Monthly credit grant for this tier",
+        description="Monthly execution limit for this tier (-1 = unlimited)",
     )
 
     model_config = ConfigDict(from_attributes=True)

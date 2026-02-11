@@ -142,7 +142,7 @@ Account (existing)
 │   └── network_whitelist[]
 ├── APIKey[]
 ├── Subscription
-└── Credit
+└── UsageRecord (per billing period)
 
 Supporting Tables:
 ├── Execution (partitioned by month)

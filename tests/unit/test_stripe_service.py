@@ -7,27 +7,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mcpworks_api.models import Subscription, SubscriptionStatus
-from mcpworks_api.services.stripe import TIER_CREDITS, StripeService
+from mcpworks_api.services.stripe import TIER_EXECUTIONS, StripeService
 
 
-class TestTierCredits:
-    """Tests for tier credit configuration."""
+class TestTierExecutions:
+    """Tests for tier execution limit configuration per A0-SYSTEM-SPECIFICATION.md."""
 
-    def test_free_tier_credits(self):
-        """Test free tier has 500 credits."""
-        assert TIER_CREDITS["free"] == 500
+    def test_free_tier_executions(self):
+        """Test free tier has 500 executions/month."""
+        assert TIER_EXECUTIONS["free"] == 500
 
-    def test_starter_tier_credits(self):
-        """Test starter tier has 2900 credits."""
-        assert TIER_CREDITS["starter"] == 2900
+    def test_founder_tier_executions(self):
+        """Test founder tier has 10,000 executions/month."""
+        assert TIER_EXECUTIONS["founder"] == 10_000
 
-    def test_pro_tier_credits(self):
-        """Test pro tier has 9900 credits."""
-        assert TIER_CREDITS["pro"] == 9900
+    def test_founder_pro_tier_executions(self):
+        """Test founder_pro tier has 50,000 executions/month."""
+        assert TIER_EXECUTIONS["founder_pro"] == 50_000
 
-    def test_enterprise_tier_credits(self):
-        """Test enterprise tier has custom credits."""
-        assert TIER_CREDITS["enterprise"] == 99999
+    def test_enterprise_tier_executions(self):
+        """Test enterprise tier is unlimited (-1)."""
+        assert TIER_EXECUTIONS["enterprise"] == -1
 
 
 class TestCreateCheckoutSession:
@@ -66,12 +66,12 @@ class TestCreateCheckoutSession:
 
             # Mock get_tier_price_map to return valid price ID so we can test user lookup
             with patch("mcpworks_api.services.stripe.get_tier_price_map") as mock_price_map:
-                mock_price_map.return_value = {"starter": "price_valid123"}
+                mock_price_map.return_value = {"founder": "price_valid123"}
 
                 with pytest.raises(ValueError, match="not found"):
                     await service.create_checkout_session(
                         user_id=uuid.uuid4(),
-                        tier="starter",
+                        tier="founder",
                         success_url="https://example.com/success",
                         cancel_url="https://example.com/cancel",
                     )
@@ -88,7 +88,7 @@ class TestGetSubscription:
 
         mock_subscription = MagicMock(spec=Subscription)
         mock_subscription.user_id = user_id
-        mock_subscription.tier = "starter"
+        mock_subscription.tier = "founder"
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_subscription
@@ -102,7 +102,7 @@ class TestGetSubscription:
             result = await service.get_subscription(user_id)
 
             assert result is not None
-            assert result.tier == "starter"
+            assert result.tier == "founder"
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_subscription(self):
@@ -231,11 +231,15 @@ class TestHandleWebhookEvent:
 
 
 class TestGrantMonthlyCredits:
-    """Tests for _grant_monthly_credits method."""
+    """Tests for _grant_monthly_credits method.
+
+    NOTE: As of A0-SYSTEM-SPECIFICATION.md, billing is execution-based,
+    not credit-based. This method is deprecated and now does nothing.
+    """
 
     @pytest.mark.asyncio
-    async def test_grants_correct_credits(self):
-        """Test that correct credit amounts are granted."""
+    async def test_deprecated_method_does_nothing(self):
+        """Test that deprecated method does nothing (no-op)."""
         mock_db = AsyncMock()
 
         with patch.object(StripeService, "__init__", return_value=None):
@@ -249,33 +253,11 @@ class TestGrantMonthlyCredits:
                 mock_credit_service.return_value = mock_instance
 
                 user_id = uuid.uuid4()
-                await service._grant_monthly_credits(user_id, "starter")
+                # Should not raise and should not call CreditService
+                await service._grant_monthly_credits(user_id, "founder")
 
-                mock_instance.add_credits.assert_called_once()
-                call_args = mock_instance.add_credits.call_args
-                assert call_args.kwargs["amount"] == Decimal("2900")
-                # Uses TransactionType.GRANT enum
-                assert str(call_args.kwargs["transaction_type"]) == "TransactionType.GRANT"
-
-    @pytest.mark.asyncio
-    async def test_no_credits_for_unknown_tier(self):
-        """Test that unknown tier grants no credits."""
-        mock_db = AsyncMock()
-
-        with patch.object(StripeService, "__init__", return_value=None):
-            service = StripeService.__new__(StripeService)
-            service.db = mock_db
-            service.settings = MagicMock()
-
-            with patch("mcpworks_api.services.stripe.CreditService") as mock_credit_service:
-                mock_instance = MagicMock()
-                mock_instance.add_credits = AsyncMock()
-                mock_credit_service.return_value = mock_instance
-
-                await service._grant_monthly_credits(uuid.uuid4(), "unknown")
-
-                # Should not call add_credits for unknown tier
-                mock_instance.add_credits.assert_not_called()
+                # Method is deprecated - CreditService should not be instantiated
+                mock_credit_service.assert_not_called()
 
 
 class TestSubscriptionStatus:

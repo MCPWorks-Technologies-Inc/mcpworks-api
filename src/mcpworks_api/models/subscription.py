@@ -25,30 +25,30 @@ class SubscriptionStatus(str, Enum):
 
 
 class SubscriptionTier(str, Enum):
-    """Subscription tier with monthly credits.
+    """Subscription tier with monthly execution limits.
 
-    Credits per month:
-    - free: 500
-    - starter: 2,900
-    - pro: 9,900
-    - enterprise: Custom
+    Per A0-SYSTEM-SPECIFICATION.md:
+    - free ($0): 500 executions/month
+    - founder ($29/mo): 10,000 executions/month
+    - founder_pro ($59/mo): 50,000 executions/month
+    - enterprise ($129+/mo): Unlimited
     """
 
     FREE = "free"
-    STARTER = "starter"
-    PRO = "pro"
+    FOUNDER = "founder"
+    FOUNDER_PRO = "founder_pro"
     ENTERPRISE = "enterprise"
 
     @property
-    def monthly_credits(self) -> int:
-        """Get monthly credit grant for this tier."""
-        credits = {
+    def monthly_executions(self) -> int:
+        """Get monthly execution limit for this tier. -1 means unlimited."""
+        limits = {
             SubscriptionTier.FREE: 500,
-            SubscriptionTier.STARTER: 2900,
-            SubscriptionTier.PRO: 9900,
-            SubscriptionTier.ENTERPRISE: 99999,  # Custom, handled separately
+            SubscriptionTier.FOUNDER: 10_000,
+            SubscriptionTier.FOUNDER_PRO: 50_000,
+            SubscriptionTier.ENTERPRISE: -1,  # Unlimited
         }
-        return credits.get(self, 0)
+        return limits.get(self, 500)
 
 
 class Subscription(Base, UUIDMixin, TimestampMixin):
@@ -139,6 +139,6 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
         return SubscriptionStatus(self.status)
 
     @property
-    def monthly_credits(self) -> int:
-        """Get monthly credit grant for current tier."""
-        return self.tier_enum.monthly_credits
+    def monthly_executions(self) -> int:
+        """Get monthly execution limit for current tier. -1 means unlimited."""
+        return self.tier_enum.monthly_executions

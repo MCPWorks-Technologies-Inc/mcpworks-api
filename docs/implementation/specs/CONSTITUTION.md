@@ -53,12 +53,12 @@ Build a production-grade AI-native workflow automation platform that enables AI 
 
 **Multi-step operations must be atomic with automatic rollback.**
 
-- Hold credits before operation starts
-- Commit credits only on success
-- Release/refund credits on failure
+- Check usage limits before operation starts
+- Increment usage only on success
 - Implement compensation logic for partial failures
+- No orphaned resources on failure
 
-**Rationale:** Bank-grade transaction safety = enterprise trust. No double-charging, no orphaned resources.
+**Rationale:** Bank-grade transaction safety = enterprise trust. No orphaned resources, clean rollback on failure.
 
 ### 5. Provider Abstraction
 
@@ -84,14 +84,14 @@ Build a production-grade AI-native workflow automation platform that enables AI 
 
 ### 7. Transparent Pricing
 
-**Credit burn rates must be real-time accessible to AI.**
+**Usage limits and subscription tiers must be real-time accessible to AI.**
 
-- Expose pricing via MCP resources
-- Allow AI to optimize cost vs performance
-- Show cumulative spend during operations
-- Warn before expensive operations
+- Expose tier limits via MCP resources
+- Allow AI to check remaining executions
+- Show usage percentage during operations
+- Warn when approaching tier limits
 
-**Rationale:** AI-native pricing transparency = unique value proposition. LLMs can reason about cost-benefit in real-time.
+**Rationale:** AI-native usage transparency = unique value proposition. LLMs can reason about usage limits in real-time.
 
 ### 8. Observable by Design
 

@@ -377,7 +377,7 @@ def compress_logs(logs, max_tokens=500):
 
 ## 8. mcpworks-Specific Optimizations
 
-### Credit Burn Rate Optimization
+### Usage Tracking Optimization
 
 **Instead of:**
 ```python
@@ -394,9 +394,10 @@ def compress_logs(logs, max_tokens=500):
     "ipv6": "Yes",
     "backups": "Weekly automated backups",
     "monitoring": "Basic monitoring included",
-    "credit_burn_rate": "36 credits per hour",
-    "estimated_monthly_cost": "25,920 credits (36 × 24 × 30)",
-    "estimated_monthly_cost_usd": "$86.40 ($0.03 per credit)"
+    "tier": "founder_pro",
+    "executions_count": 1500,
+    "executions_limit": 10000,
+    "executions_remaining": 8500
 }
 ```
 
@@ -405,8 +406,8 @@ def compress_logs(logs, max_tokens=500):
 {
     "svc": "srv_abc123",
     "plan": "std-4gb",
-    "burn": 36,  # credits/hour
-    "est_mo": "$86.40 (2592cr)",
+    "exec_left": 8500,  # executions remaining
+    "tier": "pro",
     "region": "tor1"
     # Full details available via get_service_details(id)
 }

@@ -19,11 +19,11 @@ from mcpworks_api.core.exceptions import (
 from mcpworks_api.models import Service, ServiceStatus
 from mcpworks_api.services.credit import CreditService
 
-# Tier hierarchy for access control
+# Tier hierarchy for access control - per A0-SYSTEM-SPECIFICATION.md
 TIER_HIERARCHY = {
     "free": 0,
-    "starter": 1,
-    "pro": 2,
+    "founder": 1,
+    "founder_pro": 2,
     "enterprise": 3,
 }
 

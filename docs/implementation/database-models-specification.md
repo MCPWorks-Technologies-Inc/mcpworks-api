@@ -39,7 +39,7 @@ This specification defines the database models and schemas for the MCPWorks A0 p
 - `Account` - Billing entity (assumed to exist based on namespace FK)
 - `APIKey` - Authentication tokens
 - `AuditLog` - Action tracking
-- `Credit`, `CreditTransaction` - Usage accounting
+- `UsageRecord` - Usage accounting per billing period
 - `Execution` - Function execution records
 - `Subscription` - Billing tiers
 
@@ -1074,12 +1074,8 @@ class Execution(Base, UUIDMixin):
         doc="Backend-specific execution metadata"
     )
 
-    # Cost Tracking
-    credit_cost: Mapped[Optional[float]] = mapped_column(
-        Float,
-        nullable=True,
-        doc="Credits charged for this execution"
-    )
+    # Execution is counted against user's usage limit
+    # No per-execution cost tracking needed with subscription model
 
     # Relationships
     function: Mapped["Function"] = relationship(
@@ -1505,9 +1501,6 @@ class ExecutionResponse(BaseModel):
     result_data: Optional[Dict[str, Any]] = None
     backend_metadata: Optional[Dict[str, Any]] = None
 
-    # Cost
-    credit_cost: Optional[float] = None
-
 
 class ExecutionList(BaseModel):
     """Schema for execution list."""
@@ -1818,7 +1811,6 @@ def upgrade() -> None:
     op.add_column('executions', sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True))
     op.add_column('executions', sa.Column('duration_ms', sa.Integer(), nullable=True))
     op.add_column('executions', sa.Column('backend_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
-    op.add_column('executions', sa.Column('credit_cost', sa.Float(), nullable=True))
 
     op.create_foreign_key(
         'fk_executions_function_id',
@@ -1842,7 +1834,6 @@ def downgrade() -> None:
     op.drop_constraint('fk_executions_function_id', 'executions', type_='foreignkey')
 
     # Drop columns from executions
-    op.drop_column('executions', 'credit_cost')
     op.drop_column('executions', 'backend_metadata')
     op.drop_column('executions', 'duration_ms')
     op.drop_column('executions', 'completed_at')
@@ -1970,7 +1961,7 @@ class APIKey(Base, UUIDMixin, TimestampMixin):
 ```
 Account
   ├── Subscription (existing)
-  ├── Credit / CreditTransaction (existing)
+  ├── UsageRecord (usage per billing period)
   ├── Namespace (A0 new)
   │     ├── APIKey (scoped to namespace)
   │     └── Service (A0 new)
@@ -2444,7 +2435,6 @@ async def execute_function(
             (execution.completed_at - execution.started_at).total_seconds() * 1000
         )
         execution.result_data = result
-        execution.credit_cost = calculate_credit_cost(execution.duration_ms)
 
     except Exception as e:
         # Mark as failed

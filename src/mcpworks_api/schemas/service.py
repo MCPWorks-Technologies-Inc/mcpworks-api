@@ -32,7 +32,7 @@ class ServiceInfo(BaseModel):
     tier_required: str = Field(
         ...,
         description="Minimum tier required to access",
-        examples=["free", "starter", "pro"],
+        examples=["free", "founder", "founder_pro"],
     )
     status: str = Field(
         ...,

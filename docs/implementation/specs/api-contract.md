@@ -90,7 +90,7 @@ POST /v1/auth/login
 
 ### 2.3 Token Exchange (Gateway Authentication)
 
-Exchange an API key for short-lived access and refresh tokens. This is the primary authentication method for the mcpworks-gateway.
+Exchange an API key for short-lived access and refresh tokens. This is the primary authentication method for AI assistants connecting via namespace endpoints.
 
 ```
 POST /v1/auth/token
@@ -123,8 +123,8 @@ POST /v1/auth/token
   "user": {
     "user_id": "usr_abc123def456",
     "email": "user@example.com",
-    "tier": "pro",
-    "credits_balance": 1850
+    "tier": "founder_pro",
+    "executions_remaining": 8500
   },
   "key_info": {
     "key_id": "k1",
@@ -292,27 +292,22 @@ GET /v1/account
 }
 ```
 
-### 3.2 Get Credit Balance
+### 3.2 Get Usage
 
 ```
-GET /v1/account/credits
+GET /v1/account/usage
 ```
 
 **Response:** `200 OK`
 ```json
 {
-  "balance": 10000,
-  "currency": "credits",
-  "burn_rate_per_hour": 12.5,
-  "estimated_hours_remaining": 800,
-  "holds": [
-    {
-      "hold_id": "hold_xyz123",
-      "amount": 100,
-      "reason": "Provisioning service svc_abc123",
-      "created_at": "2025-11-02T19:45:00Z"
-    }
-  ]
+  "billing_period_start": "2025-11-01T00:00:00Z",
+  "billing_period_end": "2025-11-30T23:59:59Z",
+  "executions_count": 1500,
+  "executions_limit": 10000,
+  "executions_remaining": 8500,
+  "usage_percentage": 15.0,
+  "tier": "founder_pro"
 }
 ```
 
@@ -347,8 +342,6 @@ POST /v1/services
   "status": "provisioning",
   "type": "web_hosting",
   "region": "tor1",
-  "credit_cost": 100,
-  "burn_rate_per_hour": 1.2,
   "estimated_ready_at": "2025-11-02T20:02:00Z",
   "stream_url": "https://api.mcpworks.io/v1/services/svc_abc123/logs"
 }
@@ -369,8 +362,6 @@ GET /v1/services/{service_id}
   "region": "tor1",
   "created_at": "2025-11-02T20:00:00Z",
   "ready_at": "2025-11-02T20:02:30Z",
-  "burn_rate_per_hour": 1.2,
-  "total_credits_burned": 125.5,
   "endpoints": {
     "public_ip": "142.93.123.45",
     "ssh": "ssh://root@142.93.123.45"
@@ -415,8 +406,7 @@ DELETE /v1/services/{service_id}
 {
   "service_id": "svc_abc123",
   "status": "deprovisioning",
-  "total_credits_burned": 1234.5,
-  "final_bill": "Account credited remaining time"
+  "message": "Service will be terminated"
 }
 ```
 
@@ -540,11 +530,10 @@ POST /v1/domains
   "domain_id": "dom_abc123",
   "domain_name": "example.com",
   "status": "registering",
-  "credit_cost": 1500,
   "expires_at": "2026-11-02T20:00:00Z",
   "nameservers": [
-    "ns1.multisphere.ca",
-    "ns2.multisphere.ca"
+    "ns1.mcpworks.io",
+    "ns2.mcpworks.io"
   ]
 }
 ```
@@ -595,7 +584,7 @@ GET /v1/domains/check?domain=example.com
 {
   "domain": "example.com",
   "available": false,
-  "price_credits": 1500,
+  "price_usd": 15.00,
   "suggestions": ["example-app.com", "example-io.com"]
 }
 ```
@@ -626,7 +615,6 @@ POST /v1/ssl
   "domain_name": "example.com",
   "status": "issuing",
   "type": "letsencrypt",
-  "credit_cost": 0,
   "expires_at": "2026-02-02T20:00:00Z"
 }
 ```
@@ -673,8 +661,7 @@ POST /v1/integrations/stripe
   "provider": "stripe",
   "status": "active",
   "account_id": "acct_1234567890",
-  "publishable_key": "pk_test_...",
-  "credit_cost": 0
+  "publishable_key": "pk_test_..."
 }
 ```
 
@@ -699,8 +686,7 @@ POST /v1/integrations/shopify
   "provider": "shopify",
   "status": "active",
   "store_url": "https://my-store.myshopify.com",
-  "admin_url": "https://my-store.myshopify.com/admin",
-  "credit_cost": 0
+  "admin_url": "https://my-store.myshopify.com/admin"
 }
 ```
 
@@ -729,7 +715,7 @@ All errors follow this format:
 | 401 | `unauthorized` | Missing or invalid API key/access token |
 | 401 | `token_expired` | Access token has expired (use refresh) |
 | 401 | `refresh_token_invalid` | Refresh token expired, revoked, or already used |
-| 402 | `insufficient_credits` | Account has insufficient credits |
+| 402 | `usage_limit_exceeded` | Execution limit reached for billing period |
 | 404 | `not_found` | Resource not found |
 | 409 | `conflict` | Resource already exists or in invalid state |
 | 410 | `key_rotated` | API key has been rotated, use new key |
@@ -740,12 +726,12 @@ All errors follow this format:
 **Example Error Response:**
 ```json
 {
-  "error": "insufficient_credits",
-  "message": "Account has insufficient credits for this operation",
+  "error": "usage_limit_exceeded",
+  "message": "Execution limit reached for current billing period",
   "details": {
-    "current_balance": 500,
-    "required": 1000,
-    "shortfall": 500
+    "executions_count": 10000,
+    "executions_limit": 10000,
+    "resets_at": "2025-12-01T00:00:00Z"
   },
   "request_id": "req_xyz789"
 }

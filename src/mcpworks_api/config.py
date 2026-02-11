@@ -57,12 +57,12 @@ class Settings(BaseSettings):
             return None
         return v.replace("\\n", "\n")
 
-    # Stripe
+    # Stripe - A0-SYSTEM-SPECIFICATION.md tier pricing
     stripe_secret_key: str = Field(default="sk_test_placeholder")
     stripe_webhook_secret: str = Field(default="whsec_placeholder")
-    stripe_price_starter: str = Field(default="price_starter_placeholder")
-    stripe_price_pro: str = Field(default="price_pro_placeholder")
-    stripe_price_enterprise: str = Field(default="price_enterprise_placeholder")
+    stripe_price_founder: str = Field(default="price_founder_placeholder")  # $29/mo
+    stripe_price_founder_pro: str = Field(default="price_founder_pro_placeholder")  # $59/mo
+    stripe_price_enterprise: str = Field(default="price_enterprise_placeholder")  # $129+/mo
 
     # Backend Services
     math_service_url: str = Field(
@@ -94,10 +94,11 @@ class Settings(BaseSettings):
     credit_hold_timeout_hours: int = Field(default=1, ge=1, le=24)
     credit_cleanup_interval_minutes: int = Field(default=5, ge=1, le=60)
 
-    # Tier Credits (monthly)
-    tier_credits_free: int = Field(default=500)
-    tier_credits_starter: int = Field(default=2900)
-    tier_credits_pro: int = Field(default=9900)
+    # Tier Execution Limits (monthly) - per A0-SYSTEM-SPECIFICATION.md
+    tier_executions_free: int = Field(default=500)
+    tier_executions_founder: int = Field(default=10_000)
+    tier_executions_founder_pro: int = Field(default=50_000)
+    # Enterprise: -1 = unlimited (not configurable, hardcoded)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
