@@ -27,7 +27,7 @@ from mcpworks_api.core.security import (
     verify_password,
     verify_refresh_token,
 )
-from mcpworks_api.models import APIKey, AuditAction, AuditLog, Credit, User
+from mcpworks_api.models import Account, APIKey, AuditAction, AuditLog, Credit, User
 
 
 class AuthService:
@@ -283,6 +283,13 @@ class AuthService:
             lifetime_spent=Decimal("0.00"),
         )
         self.db.add(credit)
+
+        # Create account for the user (1:1 relationship)
+        account = Account(
+            user_id=user.id,
+            name=name or email.split("@")[0],
+        )
+        self.db.add(account)
 
         # Log registration
         audit_log = AuditLog(
