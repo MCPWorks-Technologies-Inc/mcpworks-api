@@ -3,8 +3,15 @@
 
 {
     email admin@mcpworks.io
+
+    # On-demand TLS for namespace subdomains
+    # Individual certs are issued as subdomains are accessed
+    on_demand_tls {
+        ask http://api:8000/internal/verify-domain
+    }
 }
 
+# Main API endpoint
 api.mcpworks.io {
     reverse_proxy api:8000
 
@@ -17,6 +24,50 @@ api.mcpworks.io {
     }
 
     # Logging
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Namespace Management Interface (*.create.mcpworks.io)
+*.create.mcpworks.io {
+    tls {
+        on_demand
+    }
+
+    reverse_proxy api:8000
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Namespace Execution Interface (*.run.mcpworks.io)
+*.run.mcpworks.io {
+    tls {
+        on_demand
+    }
+
+    reverse_proxy api:8000
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
     log {
         output stdout
         format json
