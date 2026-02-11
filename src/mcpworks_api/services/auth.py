@@ -46,7 +46,7 @@ class AuthService:
         """Validate an API key and return the associated user.
 
         Args:
-            raw_key: The raw API key string (e.g., "mcp_a1b2c3...")
+            raw_key: The raw API key string (e.g., "mcpw_a1b2c3...")
             ip_address: Client IP address for audit logging
             user_agent: Client user agent for audit logging
 
@@ -417,7 +417,7 @@ class AuthService:
             raise UserNotFoundError()
 
         # Generate API key
-        raw_key = generate_api_key(prefix="mcp")
+        raw_key = generate_api_key(prefix="mcpw")
         key_prefix = raw_key[:12]
         key_hash = hash_api_key(raw_key)
 

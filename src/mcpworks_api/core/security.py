@@ -64,11 +64,11 @@ def check_needs_rehash(hashed: str) -> bool:
     return _hasher.check_needs_rehash(hashed)
 
 
-def generate_api_key(prefix: str = "mcp") -> str:
+def generate_api_key(prefix: str = "mcpw") -> str:
     """Generate a secure random API key.
 
     Format: {prefix}_{random_32_bytes_hex}
-    Example: mcp_a1b2c3d4e5f6...
+    Example: mcpw_a1b2c3d4e5f6...
 
     Args:
         prefix: The prefix for the API key.

@@ -113,9 +113,9 @@ class TokenRequest(BaseModel):
 
     api_key: str = Field(
         ...,
-        description="API key in format mcp_{random}",
+        description="API key in format mcpw_{random}",
         min_length=10,
-        examples=["mcp_a1b2c3d4e5f6..."],
+        examples=["mcpw_a1b2c3d4e5f6..."],
     )
 
 

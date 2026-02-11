@@ -278,9 +278,14 @@ class NamespaceServiceService:
         )
         self.db.add(service)
         await self.db.flush()
-        await self.db.refresh(service)
 
-        return service
+        # Re-fetch with functions relationship loaded to avoid lazy loading issues
+        result = await self.db.execute(
+            select(NamespaceService)
+            .where(NamespaceService.id == service.id)
+            .options(selectinload(NamespaceService.functions))
+        )
+        return result.scalar_one()
 
     async def get_by_id(
         self,
@@ -356,6 +361,7 @@ class NamespaceServiceService:
         result = await self.db.execute(
             select(NamespaceService)
             .where(NamespaceService.namespace_id == namespace_id)
+            .options(selectinload(NamespaceService.functions))
             .order_by(NamespaceService.name)
         )
         return list(result.scalars().all())
