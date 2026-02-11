@@ -170,3 +170,70 @@ class LogoutAllRequest(BaseModel):
     """Request body for POST /auth/logout-all (optional)."""
 
     pass  # No body needed, user identified by JWT
+
+
+class CreateApiKeyRequest(BaseModel):
+    """Request body for POST /auth/api-keys."""
+
+    name: str | None = Field(
+        default=None,
+        description="Human-readable label for the API key",
+        max_length=255,
+    )
+    scopes: list[str] | None = Field(
+        default=None,
+        description="Permissions granted to this key",
+        examples=[["read", "write", "execute"]],
+    )
+    expires_in_days: int | None = Field(
+        default=None,
+        description="Days until expiration (None = never)",
+        ge=1,
+        le=365,
+    )
+
+
+class ApiKeyInfo(BaseModel):
+    """API key information returned in responses."""
+
+    id: uuid.UUID = Field(
+        ...,
+        description="API key unique identifier",
+    )
+    name: str | None = Field(
+        default=None,
+        description="Human-readable label",
+    )
+    key_prefix: str = Field(
+        ...,
+        description="First 12 characters of the key (for identification)",
+    )
+    scopes: list[str] = Field(
+        ...,
+        description="Permissions granted to this key",
+    )
+    created_at: datetime = Field(
+        ...,
+        description="Key creation timestamp",
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        description="Key expiration timestamp",
+    )
+    last_used_at: datetime | None = Field(
+        default=None,
+        description="Last time the key was used",
+    )
+
+
+class CreateApiKeyResponse(BaseModel):
+    """Response body for POST /auth/api-keys."""
+
+    api_key: ApiKeyInfo = Field(
+        ...,
+        description="API key information",
+    )
+    raw_key: str = Field(
+        ...,
+        description="Full API key (only shown once, save it securely)",
+    )

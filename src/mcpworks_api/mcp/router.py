@@ -20,7 +20,7 @@ from mcpworks_api.mcp.protocol import (
     make_error_response,
 )
 from mcpworks_api.mcp.run_handler import RunMCPHandler
-from mcpworks_api.models import Account, APIKey, Namespace
+from mcpworks_api.models import Account, APIKey, Namespace, User
 from mcpworks_api.services.namespace import NamespaceServiceManager
 
 router = APIRouter(tags=["mcp"])
@@ -45,6 +45,8 @@ async def get_account_from_api_key(
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
+    from mcpworks_api.core.security import verify_api_key
+
     # Get API key from Authorization header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -53,30 +55,44 @@ async def get_account_from_api_key(
             detail="Missing or invalid Authorization header",
         )
 
-    api_key_value = auth_header[7:]  # Remove "Bearer " prefix
+    raw_key = auth_header[7:]  # Remove "Bearer " prefix
 
-    # Look up API key
+    # Extract prefix for lookup (first 12 chars)
+    if len(raw_key) < 12:
+        raise HTTPException(status_code=401, detail="Invalid API key format")
+
+    key_prefix = raw_key[:12]
+
+    # Look up API keys with matching prefix
     result = await db.execute(
         select(APIKey)
-        .where(APIKey.key_hash == api_key_value)  # TODO: Hash comparison
-        .options(selectinload(APIKey.user).selectinload("account"))
+        .where(APIKey.key_prefix == key_prefix)
+        .where(APIKey.revoked_at.is_(None))  # Not revoked
+        .options(selectinload(APIKey.user).selectinload(User.account))
     )
-    api_key = result.scalar_one_or_none()
+    api_keys = result.scalars().all()
 
-    if not api_key:
+    if not api_keys:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    if api_key.revoked:
-        raise HTTPException(status_code=401, detail="API key has been revoked")
+    # Verify against each matching key's hash
+    valid_key: APIKey | None = None
+    for api_key in api_keys:
+        if verify_api_key(raw_key, api_key.key_hash):
+            valid_key = api_key
+            break
+
+    if not valid_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Get account from user
-    if not api_key.user or not api_key.user.account:
+    if not valid_key.user or not valid_key.user.account:
         raise HTTPException(
             status_code=403,
             detail="API key not associated with an account",
         )
 
-    return api_key.user.account
+    return valid_key.user.account
 
 
 async def validate_namespace_access(
