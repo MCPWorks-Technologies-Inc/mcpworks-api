@@ -87,7 +87,7 @@ class TestListServices:
             description="Test agent service",
             url="http://agent:8002",
             credit_cost=Decimal("1.00"),
-            tier_required="starter",
+            tier_required="founder",
             status=ServiceStatus.DEGRADED.value,
         )
         db.add(agent_service)

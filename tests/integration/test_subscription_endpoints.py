@@ -65,7 +65,7 @@ class TestCreateSubscription:
         response = await client.post(
             "/v1/subscriptions",
             json={
-                "tier": "starter",
+                "tier": "founder",
                 "success_url": "https://example.com/success",
                 "cancel_url": "https://example.com/cancel",
             },
@@ -96,7 +96,7 @@ class TestCreateSubscription:
             "/v1/subscriptions",
             headers=headers,
             json={
-                "tier": "starter",
+                "tier": "founder",
                 "success_url": "https://example.com/success",
                 "cancel_url": "https://example.com/cancel",
             },
@@ -154,7 +154,7 @@ class TestGetCurrentSubscription:
             email=f"sub_found_{user_id}@example.com",
             password_hash="test_hash",
             name="Sub Test User",
-            tier="starter",
+            tier="founder",
             status="active",
         )
         db.add(user)
@@ -163,7 +163,7 @@ class TestGetCurrentSubscription:
         now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
-            tier="starter",
+            tier="founder",
             status=SubscriptionStatus.ACTIVE.value,
             stripe_subscription_id="sub_test123",
             stripe_customer_id="cus_test123",
@@ -180,7 +180,7 @@ class TestGetCurrentSubscription:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["tier"] == "starter"
+        assert data["tier"] == "founder"
         assert data["status"] == "active"
         assert data["cancel_at_period_end"] is False
         assert data["monthly_credits"] == 2900
@@ -234,7 +234,7 @@ class TestCancelSubscription:
             email=f"cancel_done_{user_id}@example.com",
             password_hash="test_hash",
             name="Cancel Test User",
-            tier="starter",
+            tier="founder",
             status="active",
         )
         db.add(user)
@@ -243,7 +243,7 @@ class TestCancelSubscription:
         now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
-            tier="starter",
+            tier="founder",
             status=SubscriptionStatus.CANCELLED.value,
             stripe_subscription_id="sub_cancelled",
             stripe_customer_id="cus_test123",
@@ -393,7 +393,7 @@ class TestStripeWebhook:
                     "object": {
                         "metadata": {
                             "user_id": str(user_id),
-                            "tier": "starter",
+                            "tier": "founder",
                         },
                         "subscription": "sub_new123",
                         "customer": "cus_new123",
