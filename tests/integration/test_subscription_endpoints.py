@@ -183,7 +183,7 @@ class TestGetCurrentSubscription:
         assert data["tier"] == "founder"
         assert data["status"] == "active"
         assert data["cancel_at_period_end"] is False
-        assert data["monthly_credits"] == 2900
+        assert data["monthly_executions"] == 10_000  # founder tier limit
 
     @pytest.mark.asyncio
     async def test_get_subscription_no_auth(self, client: AsyncClient):
