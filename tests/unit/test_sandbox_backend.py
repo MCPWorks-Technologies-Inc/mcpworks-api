@@ -118,13 +118,21 @@ class TestSandboxBackend:
         backend = SandboxBackend(dev_mode=True)
         assert "python" in backend.supported_languages
 
-    def test_dev_mode_from_env(self):
-        """Test dev mode detection from environment."""
-        with patch.dict("os.environ", {"SANDBOX_DEV_MODE": "false"}):
+    def test_dev_mode_from_settings(self):
+        """Test dev mode detection from Settings."""
+        from pathlib import Path
+
+        mock_settings = MagicMock()
+        mock_settings.sandbox_config_path = Path("/etc/mcpworks/sandbox.cfg")
+        mock_settings.sandbox_spawn_script = Path("/opt/mcpworks/bin/spawn-sandbox.sh")
+
+        mock_settings.sandbox_dev_mode = False
+        with patch("mcpworks_api.backends.sandbox.get_settings", return_value=mock_settings):
             backend = SandboxBackend()
             assert backend._dev_mode is False
 
-        with patch.dict("os.environ", {"SANDBOX_DEV_MODE": "true"}):
+        mock_settings.sandbox_dev_mode = True
+        with patch("mcpworks_api.backends.sandbox.get_settings", return_value=mock_settings):
             backend = SandboxBackend()
             assert backend._dev_mode is True
 
