@@ -90,9 +90,10 @@ class CreateMCPHandler:
             request_id,
         )
 
-    async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
-        """Return list of available management tools."""
-        tools = [
+    @classmethod
+    def get_tools(cls) -> list[MCPTool]:
+        """Return static list of management tools."""
+        return [
             MCPTool(
                 name="make_namespace",
                 description="Create a new namespace for organizing services and functions",
@@ -247,7 +248,42 @@ class CreateMCPHandler:
             ),
         ]
 
-        result = MCPToolsListResult(tools=tools)
+    async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
+        """Dispatch tool call directly without JSON-RPC wrapping.
+
+        Args:
+            name: Tool name.
+            arguments: Tool arguments dict.
+
+        Returns:
+            MCPToolResult with tool output.
+
+        Raises:
+            ValueError: If tool name is unknown.
+            NotFoundError, ConflictError, ForbiddenError: From tool logic.
+        """
+        handlers = {
+            "make_namespace": self._make_namespace,
+            "list_namespaces": self._list_namespaces,
+            "make_service": self._make_service,
+            "list_services": self._list_services,
+            "delete_service": self._delete_service,
+            "make_function": self._make_function,
+            "update_function": self._update_function,
+            "delete_function": self._delete_function,
+            "list_functions": self._list_functions,
+            "describe_function": self._describe_function,
+        }
+
+        handler = handlers.get(name)
+        if not handler:
+            raise ValueError(f"Unknown tool: {name}")
+
+        return await handler(**arguments)
+
+    async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
+        """Return list of available management tools."""
+        result = MCPToolsListResult(tools=self.get_tools())
         return make_success_response(result.model_dump(), request_id)
 
     async def _handle_tools_call(
@@ -265,33 +301,15 @@ class CreateMCPHandler:
                 request_id=request_id,
             )
 
-        tool_name = call_params.name
-        args = call_params.arguments
-
-        handlers = {
-            "make_namespace": self._make_namespace,
-            "list_namespaces": self._list_namespaces,
-            "make_service": self._make_service,
-            "list_services": self._list_services,
-            "delete_service": self._delete_service,
-            "make_function": self._make_function,
-            "update_function": self._update_function,
-            "delete_function": self._delete_function,
-            "list_functions": self._list_functions,
-            "describe_function": self._describe_function,
-        }
-
-        handler = handlers.get(tool_name)
-        if not handler:
+        try:
+            result = await self.dispatch_tool(call_params.name, call_params.arguments)
+            return make_success_response(result.model_dump(), request_id)
+        except ValueError as e:
             return make_error_response(
                 MCPErrorCodes.METHOD_NOT_FOUND,
-                f"Unknown tool: {tool_name}",
+                str(e),
                 request_id=request_id,
             )
-
-        try:
-            result = await handler(**args)
-            return make_success_response(result.model_dump(), request_id)
         except NotFoundError as e:
             return make_error_response(
                 MCPErrorCodes.NOT_FOUND,

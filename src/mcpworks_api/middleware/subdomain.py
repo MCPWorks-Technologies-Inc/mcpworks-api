@@ -84,6 +84,10 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.exempt_paths:
             return await call_next(request)
 
+        # Skip .well-known paths (OAuth discovery, etc.)
+        if request.url.path.startswith("/.well-known/"):
+            return await call_next(request)
+
         # Also skip paths starting with /v1/ (existing REST API)
         if request.url.path.startswith("/v1/"):
             return await call_next(request)
