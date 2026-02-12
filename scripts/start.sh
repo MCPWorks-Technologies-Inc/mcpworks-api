@@ -66,6 +66,29 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
         echo "WARNING: Sandbox packages not found"
     fi
 
+    # Block sandbox processes from reaching internal Docker services.
+    # Sandbox shares the container network (clone_newnet: false) so it
+    # can reach the internet, but we block access to postgres and redis.
+    if command -v iptables >/dev/null 2>&1; then
+        # Resolve internal service IPs from Docker DNS
+        POSTGRES_IP=$(getent hosts postgres 2>/dev/null | awk '{print $1}')
+        REDIS_IP=$(getent hosts redis 2>/dev/null | awk '{print $1}')
+
+        if [ -n "${POSTGRES_IP}" ]; then
+            iptables -C OUTPUT -d "${POSTGRES_IP}" -p tcp --dport 5432 -m owner --uid-owner 65534 -j REJECT 2>/dev/null || \
+            iptables -A OUTPUT -d "${POSTGRES_IP}" -p tcp --dport 5432 -m owner --uid-owner 65534 -j REJECT
+            echo "Blocked sandbox (uid 65534) → postgres (${POSTGRES_IP}:5432)"
+        fi
+
+        if [ -n "${REDIS_IP}" ]; then
+            iptables -C OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65534 -j REJECT 2>/dev/null || \
+            iptables -A OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65534 -j REJECT
+            echo "Blocked sandbox (uid 65534) → redis (${REDIS_IP}:6379)"
+        fi
+    else
+        echo "Warning: iptables not available, sandbox can reach internal services"
+    fi
+
     echo "Sandbox initialization complete"
 fi
 
