@@ -555,9 +555,7 @@ if __name__ == "__main__":
         sandbox_packages = Path("/opt/mcpworks/sandbox-root/site-packages")
 
         nsjail_available = (
-            nsjail_binary.exists()
-            and self.spawn_script.exists()
-            and self.sandbox_config.exists()
+            nsjail_binary.exists() and self.spawn_script.exists() and self.sandbox_config.exists()
         )
         packages_available = sandbox_packages.is_dir()
 
