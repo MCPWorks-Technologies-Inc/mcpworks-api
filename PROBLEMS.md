@@ -4,13 +4,29 @@ This file tracks significant issues discovered during API testing that need reso
 
 ---
 
-## No Open Issues
+## Open Issues
 
-All known issues have been resolved. 🎉
+None! 🎉
+
+---
 
 ---
 
 ## Resolved Issues
+
+### ~~PROBLEM-005: MCP Run Server Tools Not Discoverable / Returning Null~~
+
+**Status:** RESOLVED (2026-02-12)
+
+Two root causes found and fixed:
+
+1. **`str(EndpointType.CREATE)` != `"create"` in Python 3.11+** — The `transport.py` endpoint routing used `str(endpoint_type) == "create"` which always evaluated to `False` (returns `"EndpointType.CREATE"`). Both create and run endpoints fell through to RunMCPHandler. Fixed with direct enum comparison: `endpoint_type == EndpointType.CREATE`.
+
+2. **Sandbox wrapper never called `main(input_data)`** — The code_sandbox execution harness only checked for explicit `result` or `output` variables after `exec()`. Functions defining `main(input_data)` (the platform convention) returned `None`. Fixed by adding a `callable(exec_globals.get('main'))` check.
+
+Verified end-to-end: `tools.hello` returns `{"greeting": "Hello, Simon! Welcome to MCPWorks."}` via both curl and Claude Code MCP client.
+
+---
 
 ### ~~PROBLEM-001: Usage Tracking Endpoint Not Implemented~~
 

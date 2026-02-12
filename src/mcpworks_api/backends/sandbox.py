@@ -155,6 +155,7 @@ class SandboxBackend(Backend):
         account: Account,
         execution_id: str,
         timeout_ms: int = 30000,
+        extra_files: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute Python code in sandbox.
 
@@ -165,6 +166,9 @@ class SandboxBackend(Backend):
             account: The account executing the function.
             execution_id: Unique execution identifier.
             timeout_ms: Maximum execution time in milliseconds.
+            extra_files: Optional mapping of relative paths to file contents
+                to write into the execution directory before running code.
+                Used by code-mode to inject the ``functions/`` package.
 
         Returns:
             ExecutionResult with output or error details.
@@ -186,6 +190,7 @@ class SandboxBackend(Backend):
                 input_data=input_data,
                 execution_id=execution_id,
                 timeout_sec=timeout_sec,
+                extra_files=extra_files,
             )
         else:
             return await self._execute_nsjail(
@@ -195,6 +200,7 @@ class SandboxBackend(Backend):
                 execution_id=execution_id,
                 timeout_sec=timeout_sec,
                 tier_config=tier_config,
+                extra_files=extra_files,
             )
 
     async def _execute_dev_mode(
@@ -203,6 +209,7 @@ class SandboxBackend(Backend):
         input_data: dict[str, Any],
         execution_id: str,
         timeout_sec: float,
+        extra_files: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute code in development mode (subprocess, no isolation).
 
@@ -213,6 +220,13 @@ class SandboxBackend(Backend):
 
         try:
             exec_dir.mkdir(mode=0o700, exist_ok=True)
+
+            # Write extra files (code-mode functions/ package, etc.)
+            if extra_files:
+                for rel_path, content in extra_files.items():
+                    file_path = exec_dir / rel_path
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_path.write_text(content)
 
             # Write input and code files
             input_file = exec_dir / "input.json"
@@ -296,6 +310,7 @@ class SandboxBackend(Backend):
         execution_id: str,
         timeout_sec: float,
         tier_config: dict[str, Any],
+        extra_files: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute code in nsjail sandbox.
 
@@ -306,6 +321,13 @@ class SandboxBackend(Backend):
 
         try:
             exec_dir.mkdir(mode=0o700, exist_ok=True)
+
+            # Write extra files (code-mode functions/ package, etc.)
+            if extra_files:
+                for rel_path, content in extra_files.items():
+                    file_path = exec_dir / rel_path
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_path.write_text(content)
 
             # Write input and code files
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))

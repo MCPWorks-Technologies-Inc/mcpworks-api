@@ -43,6 +43,7 @@ class RunMCPHandler:
         namespace: str,
         account: Account,
         db: AsyncSession,
+        mode: str = "tools",
     ):
         """Initialize handler.
 
@@ -50,10 +51,13 @@ class RunMCPHandler:
             namespace: The namespace name from subdomain.
             account: The authenticated account.
             db: Database session.
+            mode: Run mode — ``"tools"`` (default, one tool per function)
+                or ``"code"`` (single execute tool with sandbox).
         """
         self.namespace_name = namespace
         self.account = account
         self.db = db
+        self.mode = mode
         self.namespace_service = NamespaceServiceManager(db)
         self.function_service = FunctionService(db)
         self._namespace: Namespace | None = None
@@ -101,6 +105,9 @@ class RunMCPHandler:
 
     async def get_tools(self) -> list[MCPTool]:
         """Generate tools list from database functions."""
+        if self.mode == "code":
+            return self._get_code_mode_tools()
+
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
@@ -116,11 +123,38 @@ class RunMCPHandler:
             )
         return tools
 
+    @staticmethod
+    def _get_code_mode_tools() -> list[MCPTool]:
+        """Return single execute tool for code-mode."""
+        return [
+            MCPTool(
+                name="execute",
+                description=(
+                    "Execute Python code in a sandbox with access to all namespace functions.\n"
+                    "Discover available functions: import functions; print(functions.__doc__)\n"
+                    "Call a function: from functions import hello; result = hello(name='World')\n"
+                    "Set `result = ...` to return data to the conversation."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "Python code to execute. "
+                            "Available functions are importable from the `functions` package.",
+                        }
+                    },
+                    "required": ["code"],
+                },
+            )
+        ]
+
     async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
         """Execute a function via its backend without JSON-RPC wrapping.
 
         Args:
-            name: Tool name in service.function format.
+            name: Tool name — ``service.function`` for tools mode,
+                or ``"execute"`` for code mode.
             arguments: Tool arguments dict.
 
         Returns:
@@ -130,6 +164,9 @@ class RunMCPHandler:
             ValueError: If tool name format is invalid or backend unavailable.
             NotFoundError: If namespace/function not found.
         """
+        if name == "execute" and self.mode == "code":
+            return await self._execute_code_mode(arguments.get("code", ""))
+
         if "." not in name:
             raise ValueError(f"Invalid tool name format. Expected service.function, got: {name}")
 
@@ -181,6 +218,63 @@ class RunMCPHandler:
                 "backend": version.backend,
                 "execution_time_ms": execution_time_ms,
                 "executed_at": datetime.now(UTC).isoformat(),
+                "execution_id": execution_id,
+            },
+        )
+
+    async def _execute_code_mode(self, code: str) -> MCPToolResult:
+        """Execute agent-written code in a sandbox with function wrappers.
+
+        Generates a ``functions/`` package from the namespace's DB functions,
+        writes it into the sandbox directory, and runs the agent's code.
+        """
+        from mcpworks_api.mcp.code_mode import generate_functions_package
+
+        if not code:
+            raise ValueError("No code provided")
+
+        namespace = await self._get_namespace()
+        functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
+
+        extra_files = generate_functions_package(functions, self.namespace_name)
+
+        backend = get_backend("code_sandbox")
+        if not backend:
+            raise ValueError("Code sandbox backend not available")
+
+        execution_id = str(uuid.uuid4())
+        start_time = datetime.now(UTC)
+
+        result = await backend.execute(
+            code=code,
+            config=None,
+            input_data={},
+            account=self.account,
+            execution_id=execution_id,
+            extra_files=extra_files,
+        )
+
+        execution_time_ms = result.execution_time_ms or int(
+            (datetime.now(UTC) - start_time).total_seconds() * 1000
+        )
+
+        if result.success:
+            content_text = json.dumps(result.output)
+        else:
+            content_text = json.dumps(
+                {
+                    "error": result.error,
+                    "error_type": result.error_type,
+                    "stderr": result.stderr,
+                }
+            )
+
+        return MCPToolResult(
+            content=[MCPContent(text=content_text)],
+            isError=not result.success,
+            metadata={
+                "mode": "code",
+                "execution_time_ms": execution_time_ms,
                 "execution_id": execution_id,
             },
         )
