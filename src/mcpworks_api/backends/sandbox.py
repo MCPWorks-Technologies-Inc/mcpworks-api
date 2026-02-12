@@ -429,11 +429,13 @@ def main():
 {code}
 """, exec_globals)
 
-        # Get result if defined
+        # Get result: check explicit variable, then callable main()
         if 'result' in exec_globals:
             result = exec_globals['result']
         elif 'output' in exec_globals:
             result = exec_globals['output']
+        elif callable(exec_globals.get('main')):
+            result = exec_globals['main'](input_data)
 
     except Exception as e:
         success = False
