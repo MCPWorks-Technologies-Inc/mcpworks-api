@@ -131,9 +131,7 @@ class RunMCPHandler:
             NotFoundError: If namespace/function not found.
         """
         if "." not in name:
-            raise ValueError(
-                f"Invalid tool name format. Expected service.function, got: {name}"
-            )
+            raise ValueError(f"Invalid tool name format. Expected service.function, got: {name}")
 
         service_name, function_name = name.split(".", 1)
         namespace = await self._get_namespace()
