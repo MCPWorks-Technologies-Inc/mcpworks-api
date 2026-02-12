@@ -23,6 +23,7 @@ from mcpworks_api.core.database import get_db_context
 from mcpworks_api.mcp.create_handler import CreateMCPHandler
 from mcpworks_api.mcp.protocol import MCPTool
 from mcpworks_api.mcp.run_handler import RunMCPHandler
+from mcpworks_api.middleware.subdomain import EndpointType
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ async def list_tools() -> list[Tool]:
         async with get_db_context() as db:
             account = await _authenticate(request, db)
 
-            if str(endpoint_type) == "create":
+            if endpoint_type == EndpointType.CREATE:
                 return _to_sdk_tools(CreateMCPHandler.get_tools())
             else:
                 handler = RunMCPHandler(namespace=namespace, account=account, db=db)
@@ -115,7 +116,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
     async with get_db_context() as db:
         account = await _authenticate(request, db)
 
-        if str(endpoint_type) == "create":
+        if endpoint_type == EndpointType.CREATE:
             handler = CreateMCPHandler(namespace=namespace, account=account, db=db)
         else:
             handler = RunMCPHandler(namespace=namespace, account=account, db=db)
