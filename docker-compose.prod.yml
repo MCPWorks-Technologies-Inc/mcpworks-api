@@ -36,6 +36,7 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
       - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+      - SANDBOX_DEV_MODE=false
     depends_on:
       postgres:
         condition: service_healthy

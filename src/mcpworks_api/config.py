@@ -99,6 +99,15 @@ class Settings(BaseSettings):
     tier_executions_founder_pro: int = Field(default=10_000)
     # Enterprise: -1 = unlimited (not configurable, hardcoded)
 
+    # Sandbox
+    sandbox_dev_mode: bool = Field(
+        default=True,
+        description="Use subprocess fallback instead of nsjail (dev only)",
+    )
+    sandbox_config_path: Path = Field(default=Path("/etc/mcpworks/sandbox.cfg"))
+    sandbox_spawn_script: Path = Field(default=Path("/opt/mcpworks/bin/spawn-sandbox.sh"))
+    sandbox_rootfs_path: Path = Field(default=Path("/opt/mcpworks/rootfs"))
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:

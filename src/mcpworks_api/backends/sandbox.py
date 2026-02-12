@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
+from mcpworks_api.config import get_settings
 from mcpworks_api.models import Account
 
 
@@ -98,10 +99,11 @@ class SandboxBackend(Backend):
         Args:
             sandbox_config: Path to nsjail config file.
             spawn_script: Path to spawn-sandbox.sh script.
-            dev_mode: Override for development mode. Defaults to SANDBOX_DEV_MODE env.
+            dev_mode: Override for development mode. Defaults to Settings.sandbox_dev_mode.
         """
-        self.sandbox_config = sandbox_config or Path("/etc/mcpworks/sandbox.cfg")
-        self.spawn_script = spawn_script or Path("/opt/mcpworks/bin/spawn-sandbox.sh")
+        settings = get_settings()
+        self.sandbox_config = sandbox_config or settings.sandbox_config_path
+        self.spawn_script = spawn_script or settings.sandbox_spawn_script
         self.exec_dir = Path(tempfile.gettempdir()) / "mcpworks-sandbox"
         self.exec_dir.mkdir(exist_ok=True)
 
@@ -109,7 +111,7 @@ class SandboxBackend(Backend):
         if dev_mode is not None:
             self._dev_mode = dev_mode
         else:
-            self._dev_mode = os.environ.get("SANDBOX_DEV_MODE", "true").lower() == "true"
+            self._dev_mode = settings.sandbox_dev_mode
 
     @property
     def name(self) -> str:
@@ -219,7 +221,7 @@ class SandboxBackend(Backend):
         exec_dir = self.exec_dir / f"exec-{execution_id}"
 
         try:
-            exec_dir.mkdir(mode=0o700, exist_ok=True)
+            exec_dir.mkdir(mode=0o755, exist_ok=True)
 
             # Write extra files (code-mode functions/ package, etc.)
             if extra_files:
@@ -320,7 +322,7 @@ class SandboxBackend(Backend):
         exec_dir = self.exec_dir / f"exec-{execution_id}"
 
         try:
-            exec_dir.mkdir(mode=0o700, exist_ok=True)
+            exec_dir.mkdir(mode=0o755, exist_ok=True)
 
             # Write extra files (code-mode functions/ package, etc.)
             if extra_files:
@@ -550,13 +552,23 @@ if __name__ == "__main__":
 
     async def health_check(self) -> dict[str, Any]:
         """Check sandbox health and availability."""
-        nsjail_available = self.spawn_script.exists() and self.sandbox_config.exists()
+        nsjail_binary = Path("/usr/local/bin/nsjail")
+        sandbox_packages = Path("/opt/mcpworks/sandbox-root/site-packages")
+
+        nsjail_available = (
+            nsjail_binary.exists()
+            and self.spawn_script.exists()
+            and self.sandbox_config.exists()
+        )
+        packages_available = sandbox_packages.is_dir()
 
         return {
             "backend": self.name,
             "healthy": True,
             "mode": "development" if self._dev_mode else "production",
             "nsjail_available": nsjail_available,
+            "nsjail_binary": nsjail_binary.exists(),
+            "sandbox_packages": packages_available,
             "exec_dir": str(self.exec_dir),
             "checked_at": datetime.now(UTC).isoformat(),
         }
