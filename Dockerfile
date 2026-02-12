@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir --target=/sandbox-packages \
     pytz \
     typing-extensions \
     pydantic \
-    beautifulsoup4
+    beautifulsoup4 \
+    boto3
 
 # =============================================================================
 # Stage 2: nsjail — compile from source
@@ -80,6 +81,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libprotobuf32 \
     libnl-3-200 \
     libnl-route-3-200 \
+    iptables \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy API virtual environment from builder
