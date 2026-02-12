@@ -99,16 +99,14 @@ class RunMCPHandler:
             request_id,
         )
 
-    async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
+    async def get_tools(self) -> list[MCPTool]:
         """Generate tools list from database functions."""
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
         tools = []
         for func, version in functions:
-            # Tool name uses dot notation: service.function
             tool_name = f"{func.service.name}.{func.name}"
-
             tools.append(
                 MCPTool(
                     name=tool_name,
@@ -116,7 +114,82 @@ class RunMCPHandler:
                     inputSchema=version.input_schema or {"type": "object", "properties": {}},
                 )
             )
+        return tools
 
+    async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
+        """Execute a function via its backend without JSON-RPC wrapping.
+
+        Args:
+            name: Tool name in service.function format.
+            arguments: Tool arguments dict.
+
+        Returns:
+            MCPToolResult with execution output.
+
+        Raises:
+            ValueError: If tool name format is invalid or backend unavailable.
+            NotFoundError: If namespace/function not found.
+        """
+        if "." not in name:
+            raise ValueError(
+                f"Invalid tool name format. Expected service.function, got: {name}"
+            )
+
+        service_name, function_name = name.split(".", 1)
+        namespace = await self._get_namespace()
+
+        function, version = await self.function_service.get_for_execution(
+            namespace_id=namespace.id,
+            service_name=service_name,
+            function_name=function_name,
+        )
+
+        backend = get_backend(version.backend)
+        if not backend:
+            raise ValueError(f"Backend not available: {version.backend}")
+
+        execution_id = str(uuid.uuid4())
+        start_time = datetime.now(UTC)
+
+        result = await backend.execute(
+            code=version.code,
+            config=version.config,
+            input_data=arguments,
+            account=self.account,
+            execution_id=execution_id,
+        )
+
+        execution_time_ms = result.execution_time_ms or int(
+            (datetime.now(UTC) - start_time).total_seconds() * 1000
+        )
+
+        if result.success:
+            content_text = json.dumps(result.output)
+        else:
+            content_text = json.dumps(
+                {
+                    "error": result.error,
+                    "error_type": result.error_type,
+                    "stderr": result.stderr,
+                }
+            )
+
+        return MCPToolResult(
+            content=[MCPContent(text=content_text)],
+            isError=not result.success,
+            metadata={
+                "function": name,
+                "version": version.version,
+                "backend": version.backend,
+                "execution_time_ms": execution_time_ms,
+                "executed_at": datetime.now(UTC).isoformat(),
+                "execution_id": execution_id,
+            },
+        )
+
+    async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
+        """Generate tools list from database functions."""
+        tools = await self.get_tools()
         result = MCPToolsListResult(tools=tools)
         return make_success_response(result.model_dump(), request_id)
 
@@ -135,35 +208,14 @@ class RunMCPHandler:
                 request_id=request_id,
             )
 
-        tool_name = call_params.name
-        args = call_params.arguments
-
-        # Parse tool name (service.function)
-        if "." not in tool_name:
+        try:
+            result = await self.dispatch_tool(call_params.name, call_params.arguments)
+            return make_success_response(result.model_dump(), request_id)
+        except ValueError as e:
             return make_error_response(
                 MCPErrorCodes.INVALID_PARAMS,
-                f"Invalid tool name format. Expected service.function, got: {tool_name}",
+                str(e),
                 request_id=request_id,
-            )
-
-        service_name, function_name = tool_name.split(".", 1)
-
-        # Get namespace
-        try:
-            namespace = await self._get_namespace()
-        except NotFoundError:
-            return make_error_response(
-                MCPErrorCodes.NOT_FOUND,
-                f"Namespace '{self.namespace_name}' not found",
-                request_id=request_id,
-            )
-
-        # Get function and active version
-        try:
-            function, version = await self.function_service.get_for_execution(
-                namespace_id=namespace.id,
-                service_name=service_name,
-                function_name=function_name,
             )
         except NotFoundError as e:
             return make_error_response(
@@ -171,65 +223,9 @@ class RunMCPHandler:
                 str(e),
                 request_id=request_id,
             )
-
-        # Get backend from registry
-        backend = get_backend(version.backend)
-        if not backend:
-            return make_error_response(
-                MCPErrorCodes.INTERNAL_ERROR,
-                f"Backend not available: {version.backend}",
-                request_id=request_id,
-            )
-
-        execution_id = str(uuid.uuid4())
-        start_time = datetime.now(UTC)
-
-        try:
-            # Execute via backend
-            result = await backend.execute(
-                code=version.code,
-                config=version.config,
-                input_data=args,
-                account=self.account,
-                execution_id=execution_id,
-            )
-
-            execution_time_ms = result.execution_time_ms or int(
-                (datetime.now(UTC) - start_time).total_seconds() * 1000
-            )
-
-            # Build response content
-            if result.success:
-                content_text = json.dumps(result.output)
-            else:
-                content_text = json.dumps(
-                    {
-                        "error": result.error,
-                        "error_type": result.error_type,
-                        "stderr": result.stderr,
-                    }
-                )
-
-            # Return result with metadata
-            tool_result = MCPToolResult(
-                content=[MCPContent(text=content_text)],
-                isError=not result.success,
-                metadata={
-                    "function": tool_name,
-                    "version": version.version,
-                    "backend": version.backend,
-                    "execution_time_ms": execution_time_ms,
-                    "executed_at": datetime.now(UTC).isoformat(),
-                    "execution_id": execution_id,
-                },
-            )
-
-            return make_success_response(tool_result.model_dump(), request_id)
-
         except Exception as e:
             return make_error_response(
                 MCPErrorCodes.EXECUTION_ERROR,
                 str(e),
-                data={"execution_id": execution_id},
                 request_id=request_id,
             )

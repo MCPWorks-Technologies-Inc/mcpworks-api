@@ -12,7 +12,7 @@ from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
 from mcpworks_api.core.database import close_db, init_db
 from mcpworks_api.core.redis import close_redis, init_redis
-from mcpworks_api.mcp import mcp_router
+from mcpworks_api.mcp.transport import mcp_asgi_app, session_manager
 from mcpworks_api.middleware import (
     BillingMiddleware,
     CorrelationIdMiddleware,
@@ -28,14 +28,15 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager.
 
     Handles startup and shutdown events:
-    - Startup: Initialize database and Redis connections
+    - Startup: Initialize database, Redis, and MCP session manager
     - Shutdown: Close all connections gracefully
     """
     # Startup
     await init_db()
     await init_redis()
 
-    yield
+    async with session_manager.run():
+        yield
 
     # Shutdown
     await close_db()
@@ -90,7 +91,9 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(v1_router)
-    app.include_router(mcp_router)  # MCP Protocol endpoints for namespace create/run
+
+    # Mount MCP Streamable HTTP transport at /mcp
+    app.mount("/mcp", mcp_asgi_app)
 
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:
@@ -105,6 +108,14 @@ def create_app() -> FastAPI:
             "version": "0.1.0",
             "docs": "/docs" if settings.app_debug else "disabled",
         }
+
+    # OAuth Protected Resource metadata (RFC 9728)
+    # Claude Code probes this before connecting via MCP HTTP transport.
+    # Minimal response: no authorization_servers = use Bearer token directly.
+    @app.get("/.well-known/oauth-protected-resource")
+    async def oauth_protected_resource() -> dict[str, str]:
+        """Return minimal OAuth protected resource metadata."""
+        return {"resource": "https://mcpworks.io"}
 
     # Admin HTML page
     _admin_html_path = Path(__file__).parent / "static" / "admin.html"

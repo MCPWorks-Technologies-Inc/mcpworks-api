@@ -37,6 +37,8 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=6.1.0",
     "python-multipart>=0.0.6",
     "structlog>=24.1.0",
+    "mcp[http]>=1.9.0",
+    "jsonschema>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -145,6 +147,8 @@ module = [
     "argon2.*",
     "stripe.*",
     "prometheus_fastapi_instrumentator.*",
+    "mcp.*",
+    "jsonschema.*",
 ]
 ignore_missing_imports = true
 
