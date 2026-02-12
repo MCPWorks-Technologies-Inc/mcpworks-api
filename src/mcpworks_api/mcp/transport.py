@@ -45,10 +45,7 @@ session_manager = StreamableHTTPSessionManager(mcp_server, stateless=True)
 # ---------------------------------------------------------------------------
 def _to_sdk_tools(tools: list[MCPTool]) -> list[Tool]:
     """Convert internal MCPTool Pydantic models to MCP SDK Tool objects."""
-    return [
-        Tool(name=t.name, description=t.description, inputSchema=t.inputSchema)
-        for t in tools
-    ]
+    return [Tool(name=t.name, description=t.description, inputSchema=t.inputSchema) for t in tools]
 
 
 async def _authenticate(request: Request, db: Any) -> Any:
@@ -110,8 +107,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
     endpoint_type = getattr(request.state, "endpoint_type", None)
     if not namespace or not endpoint_type:
         raise ValueError(
-            "Missing namespace or endpoint type. "
-            "Use {namespace}.{create|run}.mcpworks.io"
+            "Missing namespace or endpoint type. Use {namespace}.{create|run}.mcpworks.io"
         )
 
     args = arguments or {}
