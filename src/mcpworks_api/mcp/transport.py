@@ -87,7 +87,7 @@ async def list_tools() -> list[Tool]:
             if endpoint_type == EndpointType.CREATE:
                 return _to_sdk_tools(CreateMCPHandler.get_tools())
             else:
-                run_mode = request.query_params.get("mode", "tools")
+                run_mode = request.query_params.get("mode", "code")
                 handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
                 return _to_sdk_tools(await handler.get_tools())
     except Exception as e:
@@ -120,7 +120,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
         if endpoint_type == EndpointType.CREATE:
             handler = CreateMCPHandler(namespace=namespace, account=account, db=db)
         else:
-            run_mode = request.query_params.get("mode", "tools")
+            run_mode = request.query_params.get("mode", "code")
             handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
 
         result = await handler.dispatch_tool(name, args)
