@@ -84,6 +84,7 @@ class Backend(ABC):
         account: Account,
         execution_id: str,
         timeout_ms: int = 30000,
+        extra_files: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute function code/config with input data.
 
@@ -94,6 +95,8 @@ class Backend(ABC):
             account: The account executing the function (for quotas/billing).
             execution_id: Unique execution identifier for tracing.
             timeout_ms: Maximum execution time in milliseconds.
+            extra_files: Optional mapping of relative paths to file contents
+                to write into the execution directory before running code.
 
         Returns:
             ExecutionResult with output or error details.
