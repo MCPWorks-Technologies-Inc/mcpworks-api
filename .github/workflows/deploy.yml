@@ -67,8 +67,6 @@ jobs:
             --exclude='keys' \
             --exclude='logs' \
             --exclude='data' \
-            --exclude='sandbox' \
-            --exclude='nsjail' \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ ${DEPLOY_USER}@${DEPLOY_HOST}:/opt/mcpworks/
 
