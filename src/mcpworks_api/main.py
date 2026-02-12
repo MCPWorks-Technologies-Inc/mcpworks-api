@@ -12,7 +12,7 @@ from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
 from mcpworks_api.core.database import close_db, init_db
 from mcpworks_api.core.redis import close_redis, init_redis
-from mcpworks_api.mcp.transport import mcp_asgi_app, session_manager
+from mcpworks_api.mcp.transport import MCPTransportMiddleware, session_manager
 from mcpworks_api.middleware import (
     BillingMiddleware,
     CorrelationIdMiddleware,
@@ -64,7 +64,10 @@ def create_app() -> FastAPI:
     # So add in reverse order of desired execution:
     # 1. Subdomain Parsing → 2. Rate Limiting → 3. Billing (innermost)
 
-    # Billing middleware (innermost - runs last on request, first on response)
+    # MCP transport middleware (innermost - intercepts /mcp before routing)
+    app.add_middleware(MCPTransportMiddleware)
+
+    # Billing middleware
     # Tracks usage and enforces quotas for run endpoints
     app.add_middleware(BillingMiddleware)
 
@@ -91,9 +94,6 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(v1_router)
-
-    # Mount MCP Streamable HTTP transport at /mcp
-    app.mount("/mcp", mcp_asgi_app)
 
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:

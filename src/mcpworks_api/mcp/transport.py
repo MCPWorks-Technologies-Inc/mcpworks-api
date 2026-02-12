@@ -125,19 +125,30 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
 
 
 # ---------------------------------------------------------------------------
-# ASGI wrapper – injects Request into the ContextVar before the SDK sees it
+# ASGI middleware – intercepts /mcp before Starlette routing (avoids 307 redirect)
 # ---------------------------------------------------------------------------
-async def mcp_asgi_app(scope: dict, receive: Any, send: Any) -> None:
-    """ASGI application that wraps ``session_manager.handle_request``.
+class MCPTransportMiddleware:
+    """ASGI middleware that intercepts ``/mcp`` requests for MCP transport.
 
-    Sets the ``_current_request`` ContextVar so that ``list_tools`` and
-    ``call_tool`` handlers can access middleware-populated request state
-    (namespace, endpoint_type, Authorization header, etc.).
+    Added as the innermost middleware so that SubdomainMiddleware, RateLimit,
+    and Billing have already run.  Handles POST/GET/DELETE at ``/mcp``
+    directly via the SDK session manager, bypassing Starlette's ``Mount``
+    redirect from ``/mcp`` → ``/mcp/``.
     """
-    if scope["type"] == "http":
-        request = Request(scope, receive, send)
-        token = _current_request.set(request)
-        try:
-            await session_manager.handle_request(scope, receive, send)
-        finally:
-            _current_request.reset(token)
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope.get("path", "") in ("/mcp", "/mcp/"):
+            request = Request(scope, receive, send)
+            token = _current_request.set(request)
+            try:
+                # Session manager expects root-relative path
+                inner_scope = dict(scope)
+                inner_scope["path"] = "/"
+                await session_manager.handle_request(inner_scope, receive, send)
+            finally:
+                _current_request.reset(token)
+        else:
+            await self.app(scope, receive, send)
