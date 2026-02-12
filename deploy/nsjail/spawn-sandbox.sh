@@ -60,4 +60,4 @@ exec "${NSJAIL}" \
     --rlimit_as "${MEMORY}" \
     --rlimit_nproc "${PIDS}" \
     -- \
-    /usr/bin/python3 -S /opt/mcpworks/bin/execute.py
+    /usr/local/bin/python3 -S /opt/mcpworks/bin/execute.py
