@@ -15,7 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mcpworks_api.models.base import Base, UUIDMixin
@@ -82,6 +82,12 @@ class FunctionVersion(Base, UUIDMixin):
 
     output_schema: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
+        nullable=True,
+    )
+
+    # Package requirements (validated against allow-list at creation time)
+    requirements: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
         nullable=True,
     )
 

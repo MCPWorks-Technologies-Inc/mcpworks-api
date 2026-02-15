@@ -1,9 +1,10 @@
 """Create MCP Handler - Management interface for namespaces, services, functions.
 
-Exposes 10 tools:
+Exposes 11 tools:
 - make_namespace, list_namespaces
 - make_service, list_services, delete_service
 - make_function, update_function, delete_function, list_functions, describe_function
+- list_packages
 """
 
 import json
@@ -183,6 +184,11 @@ class CreateMCPHandler:
                         },
                         "description": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}},
+                        "requirements": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Python packages required (from allowed list). Use list_packages to see available.",
+                        },
                     },
                     "required": ["service", "name", "backend"],
                 },
@@ -202,6 +208,11 @@ class CreateMCPHandler:
                         "output_schema": {"type": "object"},
                         "description": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}},
+                        "requirements": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Python packages required (from allowed list). Use list_packages to see available.",
+                        },
                         "restore_version": {
                             "type": "integer",
                             "description": "Restore from a previous version number",
@@ -246,6 +257,14 @@ class CreateMCPHandler:
                     "required": ["service", "name"],
                 },
             ),
+            MCPTool(
+                name="list_packages",
+                description="List available Python packages for sandbox functions, grouped by category",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                },
+            ),
         ]
 
     async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
@@ -273,6 +292,7 @@ class CreateMCPHandler:
             "delete_function": self._delete_function,
             "list_functions": self._list_functions,
             "describe_function": self._describe_function,
+            "list_packages": self._list_packages,
         }
 
         handler = handlers.get(name)
@@ -462,8 +482,21 @@ class CreateMCPHandler:
         output_schema: dict[str, Any] | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        requirements: list[str] | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
+        # Validate requirements against allow-list
+        validated_reqs = None
+        if requirements:
+            from mcpworks_api.sandbox.packages import validate_requirements
+
+            validated_reqs, errors = validate_requirements(requirements)
+            if errors:
+                return MCPToolResult(
+                    content=[MCPContent(text=json.dumps({"errors": errors}))],
+                    isError=True,
+                )
+
         namespace = await self._get_current_namespace()
         svc = await self.service_service.get_by_name(namespace.id, service)
 
@@ -477,20 +510,18 @@ class CreateMCPHandler:
             output_schema=output_schema,
             description=description,
             tags=tags,
+            requirements=validated_reqs,
         )
+        result: dict[str, Any] = {
+            "name": f"{service}.{name}",
+            "version": 1,
+            "backend": backend,
+            "created_at": function.created_at.isoformat(),
+        }
+        if validated_reqs:
+            result["requirements"] = validated_reqs
         return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "name": f"{service}.{name}",
-                            "version": 1,
-                            "backend": backend,
-                            "created_at": function.created_at.isoformat(),
-                        }
-                    )
-                )
-            ]
+            content=[MCPContent(text=json.dumps(result))]
         )
 
     async def _update_function(
@@ -504,9 +535,22 @@ class CreateMCPHandler:
         output_schema: dict[str, Any] | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        requirements: list[str] | None = None,
         restore_version: int | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
+        # Validate requirements against allow-list
+        validated_reqs = None
+        if requirements is not None:
+            from mcpworks_api.sandbox.packages import validate_requirements
+
+            validated_reqs, errors = validate_requirements(requirements)
+            if errors:
+                return MCPToolResult(
+                    content=[MCPContent(text=json.dumps({"errors": errors}))],
+                    isError=True,
+                )
+
         namespace = await self._get_current_namespace()
         svc = await self.service_service.get_by_name(namespace.id, service)
         function = await self.function_service.get_by_name(svc.id, name)
@@ -519,7 +563,7 @@ class CreateMCPHandler:
                 tags=tags,
             )
 
-        # Create new version if code/config changes or restoring
+        # Create new version if code/config/requirements changes or restoring
         if restore_version:
             old_version = await self.function_service.get_version(function.id, restore_version)
             await self.function_service.create_version(
@@ -529,9 +573,10 @@ class CreateMCPHandler:
                 config=old_version.config,
                 input_schema=old_version.input_schema,
                 output_schema=old_version.output_schema,
+                requirements=old_version.requirements,
             )
             message = f"Restored from v{restore_version}"
-        elif any([backend, code, config, input_schema, output_schema]):
+        elif any([backend, code, config, input_schema, output_schema, requirements is not None]):
             active = await self.function_service.get_active_version(function.id)
             await self.function_service.create_version(
                 function_id=function.id,
@@ -540,6 +585,7 @@ class CreateMCPHandler:
                 config=config if config is not None else active.config,
                 input_schema=input_schema if input_schema is not None else active.input_schema,
                 output_schema=output_schema if output_schema is not None else active.output_schema,
+                requirements=validated_reqs if requirements is not None else active.requirements,
             )
             message = "Created new version"
         else:
@@ -610,3 +656,23 @@ class CreateMCPHandler:
         function = await self.function_service.get_by_name(svc.id, name)
         details = await self.function_service.describe(function.id)
         return MCPToolResult(content=[MCPContent(text=json.dumps(details))])
+
+    async def _list_packages(self) -> MCPToolResult:
+        """List available Python packages for sandbox functions."""
+        from mcpworks_api.sandbox.packages import (
+            PACKAGE_REGISTRY,
+            get_registry_by_category,
+        )
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "packages": get_registry_by_category(),
+                            "total": len(PACKAGE_REGISTRY),
+                        }
+                    )
+                )
+            ]
+        )
