@@ -85,6 +85,32 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
             iptables -A OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65534 -j REJECT
             echo "Blocked sandbox (uid 65534) → redis (${REDIS_IP}:6379)"
         fi
+
+        # Block cloud metadata endpoint (DO/AWS/GCP SSRF vector)
+        iptables -C OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j REJECT 2>/dev/null || \
+        iptables -A OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j REJECT
+        echo "Blocked sandbox (uid 65534) → metadata (169.254.169.254)"
+
+        # Block localhost (prevents SSRF to API on :8000)
+        iptables -C OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65534 -j REJECT 2>/dev/null || \
+        iptables -A OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65534 -j REJECT
+        echo "Blocked sandbox (uid 65534) → localhost (127.0.0.0/8)"
+
+        # Rate limit outbound TCP connections (20/sec burst 50)
+        iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+            -m hashlimit --hashlimit-above 20/sec --hashlimit-burst 50 \
+            --hashlimit-name sandbox_rate --hashlimit-mode srcip -j REJECT 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+            -m hashlimit --hashlimit-above 20/sec --hashlimit-burst 50 \
+            --hashlimit-name sandbox_rate --hashlimit-mode srcip -j REJECT
+        echo "Rate limited sandbox (uid 65534) outbound TCP (20/sec burst 50)"
+
+        # Allow DNS (UDP 53) but block other UDP
+        iptables -C OUTPUT -m owner --uid-owner 65534 -p udp --dport 53 -j ACCEPT 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65534 -p udp --dport 53 -j ACCEPT
+        iptables -C OUTPUT -m owner --uid-owner 65534 -p udp -j REJECT 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65534 -p udp -j REJECT
+        echo "Allowed sandbox (uid 65534) DNS, blocked other UDP"
     else
         echo "Warning: iptables not available, sandbox can reach internal services"
     fi
