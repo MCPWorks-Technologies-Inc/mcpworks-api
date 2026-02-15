@@ -520,9 +520,7 @@ class CreateMCPHandler:
         }
         if validated_reqs:
             result["requirements"] = validated_reqs
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps(result))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _update_function(
         self,
