@@ -334,8 +334,9 @@ class SandboxBackend(Backend):
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))
             (exec_dir / "user_code.py").write_text(code)
 
-            # Get tier from account
+            # Get tier and namespace from account
             tier = getattr(account, "tier", DEFAULT_TIER.value)
+            namespace = getattr(account, "namespace", "sandbox") or "sandbox"
 
             # Spawn sandbox process
             process = await asyncio.create_subprocess_exec(
@@ -344,6 +345,7 @@ class SandboxBackend(Backend):
                 tier,
                 str(exec_dir / "user_code.py"),
                 str(exec_dir / "input.json"),
+                namespace,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

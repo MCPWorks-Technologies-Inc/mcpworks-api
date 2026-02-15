@@ -21,6 +21,11 @@ INPUT_PATH = f"{SANDBOX_DIR}/input.json"
 OUTPUT_PATH = f"{SANDBOX_DIR}/output.json"
 CODE_PATH = f"{SANDBOX_DIR}/user_code.py"
 
+# Output size limits (defense-in-depth against json-bomb / stdout-flood)
+MAX_STDOUT_BYTES = 64 * 1024       # 64 KB per stream
+MAX_STDERR_BYTES = 64 * 1024       # 64 KB per stream
+MAX_OUTPUT_JSON_BYTES = 1024 * 1024 # 1 MB total output
+
 
 def run():
     # Read input data
@@ -75,11 +80,18 @@ def run():
     _write_output(
         success=success,
         result=result,
-        stdout=captured_stdout.getvalue(),
-        stderr=captured_stderr.getvalue(),
+        stdout=_truncate(captured_stdout.getvalue(), MAX_STDOUT_BYTES, "stdout"),
+        stderr=_truncate(captured_stderr.getvalue(), MAX_STDERR_BYTES, "stderr"),
         error=error,
         error_type=error_type,
     )
+
+
+def _truncate(text, max_bytes, label):
+    """Truncate text to max_bytes, appending a notice if truncated."""
+    if len(text) <= max_bytes:
+        return text
+    return text[:max_bytes] + f"\n\n... [{label} truncated at {max_bytes} bytes]"
 
 
 def _write_output(
@@ -99,8 +111,22 @@ def _write_output(
         "error_type": error_type,
     }
     try:
+        serialized = json.dumps(output, default=str)
+
+        # If total output exceeds 1MB, replace result with error
+        if len(serialized) > MAX_OUTPUT_JSON_BYTES:
+            output = {
+                "success": False,
+                "result": None,
+                "stdout": _truncate(stdout, MAX_STDOUT_BYTES, "stdout"),
+                "stderr": _truncate(stderr, MAX_STDERR_BYTES, "stderr"),
+                "error": f"Output too large ({len(serialized)} bytes, limit {MAX_OUTPUT_JSON_BYTES})",
+                "error_type": "OutputSizeError",
+            }
+            serialized = json.dumps(output, default=str)
+
         with open(OUTPUT_PATH, "w") as f:
-            json.dump(output, f, default=str)
+            f.write(serialized)
     except Exception:
         # Last resort: write minimal error to stderr
         sys.stderr.write(f"Failed to write output: {output}\n")
