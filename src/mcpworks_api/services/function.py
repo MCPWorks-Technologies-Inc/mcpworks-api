@@ -239,7 +239,7 @@ class FunctionService:
         config: dict[str, Any] | None = None,
         input_schema: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
-        requirements: list[str] | None = None,
+        requirements: builtins.list[str] | None = None,
         activate: bool = True,
     ) -> FunctionVersion:
         """Create a new version of a function.
