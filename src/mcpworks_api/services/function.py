@@ -37,6 +37,7 @@ class FunctionService:
         config: dict[str, Any] | None = None,
         input_schema: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
+        requirements: list[str] | None = None,
     ) -> Function:
         """Create a new function with initial version.
 
@@ -50,6 +51,7 @@ class FunctionService:
             config: Optional backend-specific configuration.
             input_schema: Optional JSON Schema for input validation.
             output_schema: Optional JSON Schema for output validation.
+            requirements: Optional list of allowed Python packages.
 
         Returns:
             The created function with initial version.
@@ -88,6 +90,7 @@ class FunctionService:
             config=config,
             input_schema=input_schema,
             output_schema=output_schema,
+            requirements=requirements,
         )
         self.db.add(version)
         await self.db.flush()
@@ -236,6 +239,7 @@ class FunctionService:
         config: dict[str, Any] | None = None,
         input_schema: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
+        requirements: list[str] | None = None,
         activate: bool = True,
     ) -> FunctionVersion:
         """Create a new version of a function.
@@ -249,6 +253,7 @@ class FunctionService:
             config: Optional backend-specific configuration.
             input_schema: Optional JSON Schema for input validation.
             output_schema: Optional JSON Schema for output validation.
+            requirements: Optional list of allowed Python packages.
             activate: Whether to set this as the active version.
 
         Returns:
@@ -273,6 +278,7 @@ class FunctionService:
             config=config,
             input_schema=input_schema,
             output_schema=output_schema,
+            requirements=requirements,
         )
         self.db.add(version)
 
@@ -491,6 +497,7 @@ class FunctionService:
                 "backend": active_version.backend if active_version else None,
                 "input_schema": active_version.input_schema if active_version else None,
                 "output_schema": active_version.output_schema if active_version else None,
+                "requirements": active_version.requirements if active_version else None,
                 "created_at": active_version.created_at.isoformat() if active_version else None,
             }
             if active_version

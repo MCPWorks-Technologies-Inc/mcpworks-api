@@ -1,21 +1,93 @@
 # =============================================================================
-# Stage 1: Sandbox packages — curated Python packages for user code
+# Stage 1: Sandbox packages — allow-listed Python packages for user code
+#
+# All packages from the package registry (src/mcpworks_api/sandbox/packages.py)
+# are pre-installed here. Keep this list in sync with PACKAGE_REGISTRY.
 # =============================================================================
 FROM python:3.11-slim AS sandbox-builder
 
+# Install build deps for packages with C extensions (lxml, cryptography, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libxml2-dev \
+    libxslt1-dev \
+    libffi-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir --target=/sandbox-packages \
+    # ── HTTP & Networking ──
     requests \
     httpx \
-    pandas \
-    numpy \
+    urllib3 \
+    aiohttp \
+    websockets \
+    # ── Data Formats ──
     pyyaml \
     orjson \
+    tomli \
+    tomli-w \
+    xmltodict \
+    msgpack \
+    # ── Data Validation ──
+    pydantic \
+    attrs \
+    jsonschema \
+    # ── Text & Content Processing ──
+    beautifulsoup4 \
+    lxml \
+    markdownify \
+    markdown \
+    html2text \
+    chardet \
+    python-slugify \
+    jinja2 \
+    regex \
+    # ── Date & Time ──
     python-dateutil \
     pytz \
-    typing-extensions \
-    pydantic \
-    beautifulsoup4 \
-    boto3
+    arrow \
+    # ── Data Science ──
+    numpy \
+    pandas \
+    scipy \
+    scikit-learn \
+    sympy \
+    statsmodels \
+    # ── Visualization ──
+    matplotlib \
+    pillow \
+    # ── AI & LLM ──
+    openai \
+    anthropic \
+    tiktoken \
+    cohere \
+    # ── Cloud & SaaS APIs ──
+    boto3 \
+    stripe \
+    sendgrid \
+    twilio \
+    google-cloud-storage \
+    # ── File Formats ──
+    tabulate \
+    feedparser \
+    openpyxl \
+    xlsxwriter \
+    python-docx \
+    pypdf \
+    # ── Crypto & Security ──
+    cryptography \
+    pyjwt \
+    bcrypt \
+    # ── Database Clients ──
+    psycopg2-binary \
+    pymongo \
+    redis \
+    # ── Utilities ──
+    humanize \
+    tqdm \
+    rich \
+    typing-extensions
 
 # =============================================================================
 # Stage 2: nsjail — compile from source
