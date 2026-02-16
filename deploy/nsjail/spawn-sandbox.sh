@@ -19,10 +19,16 @@ TIER="${2:?tier required}"
 CODE_PATH="${3:?code_path required}"
 INPUT_PATH="${4:?input_path required}"
 NAMESPACE="${5:-sandbox}"
+# ORDER-003: Optional execution token passed via file descriptor (not env var).
+# Token file is read by execute.py via stdin, then deleted.
+EXEC_TOKEN_FILE="${6:-}"
 
 CONFIG="/etc/mcpworks/sandbox.cfg"
 NSJAIL="/usr/local/bin/nsjail"
 WORKSPACE_BASE="/tmp/mcpworks-sandbox"
+
+# ORDER-002: Aggregate cgroup parent — all sandboxes run under this
+CGROUP_PARENT="/sys/fs/cgroup/mcpworks"
 
 # Derive exec_dir from code_path (parent directory)
 EXEC_DIR="$(dirname "${CODE_PATH}")"
@@ -83,17 +89,36 @@ if [ -d "${EXEC_DIR}/functions" ]; then
     cp -r "${EXEC_DIR}/functions" "${WORKSPACE}/functions"
 fi
 
+# ORDER-003: If execution token provided, write to workspace for stdin piping.
+# Token is passed as a file path, read once by execute.py, never in env vars.
+if [ -n "${EXEC_TOKEN_FILE}" ] && [ -f "${EXEC_TOKEN_FILE}" ]; then
+    cp "${EXEC_TOKEN_FILE}" "${WORKSPACE}/.exec_token"
+    rm -f "${EXEC_TOKEN_FILE}"
+fi
+
 # Chown workspace to UID 65534 (required for outside_id: 65534 mapping)
 chown -R 65534:65534 "${WORKSPACE}"
 
+# Build nsjail arguments
+NSJAIL_ARGS=(
+    --config "${CONFIG}"
+    --bindmount "${WORKSPACE}:/sandbox"
+    --time_limit "${TIMEOUT}"
+    --rlimit_as "${MEMORY}"
+    --rlimit_nproc "${PIDS}"
+    --hostname "${NAMESPACE}"
+)
+
+# ORDER-002: Run under aggregate cgroup if available
+if [ -d "${CGROUP_PARENT}" ]; then
+    NSJAIL_ARGS+=(--cgroup_mem_parent "${CGROUP_PARENT}")
+    NSJAIL_ARGS+=(--cgroup_pids_parent "${CGROUP_PARENT}")
+    NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
+fi
+
 # Execute nsjail with tier-specific overrides
 "${NSJAIL}" \
-    --config "${CONFIG}" \
-    --bindmount "${WORKSPACE}:/sandbox" \
-    --time_limit "${TIMEOUT}" \
-    --rlimit_as "${MEMORY}" \
-    --rlimit_nproc "${PIDS}" \
-    --hostname "${NAMESPACE}" \
+    "${NSJAIL_ARGS[@]}" \
     -- \
     /usr/local/bin/python3 -S /opt/mcpworks/bin/execute.py
 

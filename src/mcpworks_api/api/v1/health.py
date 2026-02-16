@@ -1,5 +1,9 @@
-"""Health check endpoints."""
+"""Health check endpoints.
 
+ORDER-015: Readiness check verifies DB, Redis, and sandbox binary.
+"""
+
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -48,6 +52,16 @@ async def readiness_check(
         components["redis"] = "healthy"
     except Exception as e:
         components["redis"] = f"unhealthy: {str(e)}"
+
+    # ORDER-015: Check sandbox binary (production only)
+    nsjail_path = Path("/usr/local/bin/nsjail")
+    spawn_script = Path("/opt/mcpworks/bin/spawn-sandbox.sh")
+    sandbox_packages = Path("/opt/mcpworks/sandbox-root/site-packages")
+
+    if nsjail_path.exists() or spawn_script.exists():
+        # We're in a production-like environment, check sandbox
+        sandbox_ok = nsjail_path.exists() and spawn_script.exists() and sandbox_packages.is_dir()
+        components["sandbox"] = "healthy" if sandbox_ok else "unhealthy: missing binary or packages"
 
     # Overall status
     all_healthy = all(v == "healthy" for v in components.values())

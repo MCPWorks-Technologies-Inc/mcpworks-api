@@ -30,11 +30,12 @@ class BillingMiddleware(BaseHTTPMiddleware):
     """
 
     # Tier limits (executions per month) - per PRICING.md
+    # ORDER-019: Enterprise capped at 100K (was unlimited, financial liability)
     TIER_LIMITS: dict[str, int] = {
         "free": 100,  # Free tier: 100 executions/month
         "founder": 1_000,  # Founder ($29/mo): 1,000 executions/month
         "founder_pro": 10_000,  # Founder Pro ($59/mo): 10,000 executions/month
-        "enterprise": -1,  # Enterprise ($129+/mo): Unlimited (-1 = no limit)
+        "enterprise": 100_000,  # Founder Enterprise ($129/mo): 100,000 executions/month
     }
 
     # Default limit for unknown tiers
@@ -61,8 +62,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
         # Check quota before execution
         try:
             usage, limit = await self._check_quota(account)
-            # -1 means unlimited (enterprise tier)
-            if limit != -1 and usage >= limit:
+            if usage >= limit:
                 raise HTTPException(
                     status_code=429,
                     detail={

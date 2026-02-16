@@ -25,6 +25,10 @@ class RegisterRequest(BaseModel):
         description="User's display name",
         max_length=255,
     )
+    accept_tos: bool = Field(
+        default=False,
+        description="Must be true to accept Terms of Service and Privacy Policy",
+    )
 
 
 class RegisterResponse(BaseModel):
@@ -49,6 +53,14 @@ class RegisterResponse(BaseModel):
     expires_in: int = Field(
         ...,
         description="Access token expiration time in seconds",
+    )
+    legal_urls: dict[str, str] = Field(
+        default={
+            "terms": "https://api.mcpworks.io/v1/legal/terms",
+            "privacy": "https://api.mcpworks.io/v1/legal/privacy",
+            "aup": "https://api.mcpworks.io/v1/legal/aup",
+        },
+        description="URLs for legal documents",
     )
 
 

@@ -169,10 +169,11 @@ COPY --from=sandbox-builder /sandbox-packages /opt/mcpworks/sandbox-root/site-pa
 # Copy sandbox scripts and rootfs
 COPY deploy/nsjail/execute.py /opt/mcpworks/bin/execute.py
 COPY deploy/nsjail/spawn-sandbox.sh /opt/mcpworks/bin/spawn-sandbox.sh
+COPY deploy/nsjail/setup-cgroups.sh /opt/mcpworks/bin/setup-cgroups.sh
 COPY deploy/nsjail/rootfs/ /opt/mcpworks/rootfs/
 COPY deploy/nsjail/python.cfg /etc/mcpworks/sandbox.cfg
 
-RUN chmod +x /opt/mcpworks/bin/spawn-sandbox.sh
+RUN chmod +x /opt/mcpworks/bin/spawn-sandbox.sh /opt/mcpworks/bin/setup-cgroups.sh
 
 # Copy application code
 COPY src/ ./src/

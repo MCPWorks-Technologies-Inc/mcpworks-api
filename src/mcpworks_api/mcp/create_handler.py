@@ -1,10 +1,11 @@
 """Create MCP Handler - Management interface for namespaces, services, functions.
 
-Exposes 11 tools:
+Exposes 13 tools:
 - make_namespace, list_namespaces
 - make_service, list_services, delete_service
 - make_function, update_function, delete_function, list_functions, describe_function
 - list_packages
+- list_templates, describe_template
 """
 
 import json
@@ -189,6 +190,10 @@ class CreateMCPHandler:
                             "items": {"type": "string"},
                             "description": "Python packages required (from allowed list). Use list_packages to see available.",
                         },
+                        "template": {
+                            "type": "string",
+                            "description": "Clone from a template (e.g. hello-world). Overrides code/schemas/requirements. Use list_templates to see available.",
+                        },
                     },
                     "required": ["service", "name", "backend"],
                 },
@@ -265,6 +270,28 @@ class CreateMCPHandler:
                     "properties": {},
                 },
             ),
+            MCPTool(
+                name="list_templates",
+                description="List available function templates for quick-start",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                },
+            ),
+            MCPTool(
+                name="describe_template",
+                description="Get full template details including code and schemas",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Template name (e.g. hello-world, csv-analyzer)",
+                        },
+                    },
+                    "required": ["name"],
+                },
+            ),
         ]
 
     async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
@@ -293,6 +320,8 @@ class CreateMCPHandler:
             "list_functions": self._list_functions,
             "describe_function": self._describe_function,
             "list_packages": self._list_packages,
+            "list_templates": self._list_templates,
+            "describe_template": self._describe_template,
         }
 
         handler = handlers.get(name)
@@ -483,8 +512,33 @@ class CreateMCPHandler:
         description: str | None = None,
         tags: list[str] | None = None,
         requirements: list[str] | None = None,
+        template: str | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
+        # ORDER-011: Apply template defaults if specified
+        if template:
+            from mcpworks_api.templates import get_template
+
+            tmpl = get_template(template)
+            if not tmpl:
+                return MCPToolResult(
+                    content=[MCPContent(text=json.dumps({"error": f"Unknown template: {template}"}))],
+                    isError=True,
+                )
+            # Template provides defaults; explicit args override
+            if code is None:
+                code = tmpl.code
+            if input_schema is None:
+                input_schema = tmpl.input_schema
+            if output_schema is None:
+                output_schema = tmpl.output_schema
+            if description is None:
+                description = tmpl.description
+            if tags is None:
+                tags = tmpl.tags
+            if requirements is None and tmpl.requirements:
+                requirements = tmpl.requirements
+
         # Validate requirements against allow-list
         validated_reqs = None
         if requirements:
@@ -673,4 +727,26 @@ class CreateMCPHandler:
                     )
                 )
             ]
+        )
+
+    async def _list_templates(self) -> MCPToolResult:
+        """List available function templates."""
+        from mcpworks_api.templates import list_templates
+
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"templates": list_templates()}))]
+        )
+
+    async def _describe_template(self, name: str) -> MCPToolResult:
+        """Get full template details including code and schemas."""
+        from mcpworks_api.templates import get_template
+
+        tmpl = get_template(name)
+        if not tmpl:
+            return MCPToolResult(
+                content=[MCPContent(text=json.dumps({"error": f"Unknown template: {name}"}))],
+                isError=True,
+            )
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps(tmpl.to_full_dict()))]
         )

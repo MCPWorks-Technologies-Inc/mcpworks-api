@@ -45,10 +45,9 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
         mknod -m 444 "${DEVDIR}/urandom" c 1 9
     fi
 
-    # Create cgroup directory for nsjail
-    CGDIR="/sys/fs/cgroup/mcpworks"
-    if [ -d /sys/fs/cgroup ] && [ ! -d "${CGDIR}" ]; then
-        mkdir -p "${CGDIR}" 2>/dev/null || echo "Warning: Could not create cgroup dir (cgroups v2 may not be available)"
+    # ORDER-002: Set up aggregate cgroup limits for sandbox
+    if [ -x /opt/mcpworks/bin/setup-cgroups.sh ]; then
+        /opt/mcpworks/bin/setup-cgroups.sh || echo "Warning: cgroup setup failed (non-fatal)"
     fi
 
     # Verify nsjail binary

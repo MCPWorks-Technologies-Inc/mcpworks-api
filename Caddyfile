@@ -13,7 +13,12 @@
 
 # Main API endpoint
 api.mcpworks.io {
-    reverse_proxy api:8000
+    # ORDER-015: Use readiness check for upstream health
+    reverse_proxy api:8000 {
+        health_uri /v1/health/ready
+        health_interval 15s
+        health_timeout 5s
+    }
 
     # Security headers
     header {

@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     # Observability
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     prometheus_enabled: bool = True
+    sentry_dsn: str | None = Field(default=None, description="ORDER-013: Sentry DSN for error tracking")
 
     # Security
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
@@ -97,7 +98,7 @@ class Settings(BaseSettings):
     tier_executions_free: int = Field(default=100)
     tier_executions_founder: int = Field(default=1_000)
     tier_executions_founder_pro: int = Field(default=10_000)
-    # Enterprise: -1 = unlimited (not configurable, hardcoded)
+    tier_executions_enterprise: int = Field(default=100_000)  # ORDER-019: was unlimited
 
     # Sandbox
     sandbox_dev_mode: bool = Field(
