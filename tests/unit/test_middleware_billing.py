@@ -67,8 +67,8 @@ class TestBillingMiddlewareTierLimits:
         assert billing_middleware.TIER_LIMITS["founder_pro"] == 10_000
 
     def test_enterprise_tier_limit(self, billing_middleware):
-        """Test enterprise tier is unlimited (-1) per PRICING.md."""
-        assert billing_middleware.TIER_LIMITS["enterprise"] == -1
+        """Test enterprise tier is capped at 100,000 per ORDER-019."""
+        assert billing_middleware.TIER_LIMITS["enterprise"] == 100_000
 
     def test_default_limit(self, billing_middleware):
         """Test default limit for unknown tiers (matches free tier)."""
@@ -150,19 +150,18 @@ class TestBillingMiddlewareDispatch:
             call_next.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_dispatch_allows_unlimited_enterprise(self, billing_middleware):
-        """Test that enterprise tier with -1 limit is unlimited."""
+    async def test_dispatch_allows_enterprise_under_cap(self, billing_middleware):
+        """Test that enterprise tier allows usage under 100K cap (ORDER-019)."""
         account = MockAccount(tier="enterprise")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
         with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = (1_000_000, -1)  # High usage, unlimited
+            mock_check.return_value = (50_000, 100_000)  # Under cap
 
             with patch.object(billing_middleware, "_increment_usage", new_callable=AsyncMock):
                 response = await billing_middleware.dispatch(request, call_next)
 
-                # Should not raise, -1 means unlimited
                 assert response.status_code == 200
                 call_next.assert_called_once()
 
