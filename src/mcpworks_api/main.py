@@ -50,6 +50,18 @@ def create_app() -> FastAPI:
         Configured FastAPI application instance.
     """
     settings = get_settings()
+
+    # ORDER-013: Initialize Sentry error tracking
+    if settings.sentry_dsn:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.app_env,
+            traces_sample_rate=0.1,
+            profiles_sample_rate=0.1,
+            send_default_pii=False,
+        )
     app = FastAPI(
         title="mcpworks API",
         description="API Gateway for mcpworks platform - authentication, credit accounting, and service routing",
@@ -124,6 +136,27 @@ def create_app() -> FastAPI:
     async def admin_page() -> HTMLResponse:
         """Serve the admin dashboard HTML page."""
         return HTMLResponse(content=_admin_html_path.read_text())
+
+    # ORDER-009/010: Onboarding page (register, login, .mcp.json config generator)
+    _onboarding_html_path = Path(__file__).parent / "static" / "onboarding.html"
+
+    @app.get("/register", response_class=HTMLResponse, include_in_schema=False)
+    async def register_page() -> HTMLResponse:
+        """Serve the registration/onboarding page."""
+        return HTMLResponse(content=_onboarding_html_path.read_text())
+
+    @app.get("/login", response_class=HTMLResponse, include_in_schema=False)
+    async def login_page() -> HTMLResponse:
+        """Serve the login page (same SPA, different initial screen)."""
+        return HTMLResponse(content=_onboarding_html_path.read_text())
+
+    # ORDER-016: Usage dashboard
+    _dashboard_html_path = Path(__file__).parent / "static" / "dashboard.html"
+
+    @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+    async def dashboard_page() -> HTMLResponse:
+        """Serve the usage dashboard page."""
+        return HTMLResponse(content=_dashboard_html_path.read_text())
 
     return app
 

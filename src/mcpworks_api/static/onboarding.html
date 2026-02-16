@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCPWorks - Get Started</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        /* Loading spinner */
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-gray-800 py-4">
+        <div class="container mx-auto px-4">
+            <h1 class="text-2xl font-bold text-blue-500">MCPWorks</h1>
+            <p class="text-gray-400 text-sm">Code Sandbox for AI Assistants</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Screen 1: Register -->
+        <div id="screen-register" class="hidden fade-in">
+            <div class="bg-gray-800 rounded-lg p-8 max-w-md mx-auto">
+                <h2 class="text-3xl font-bold mb-6">Create Account</h2>
+                <form id="register-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Name</label>
+                        <input type="text" name="name" required
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Email</label>
+                        <input type="email" name="email" required
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Password</label>
+                        <input type="password" name="password" required minlength="8"
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="flex items-start">
+                        <input type="checkbox" name="accept_tos" required id="tos-checkbox"
+                            class="mt-1 bg-gray-700 border-gray-600 rounded">
+                        <label for="tos-checkbox" class="ml-2 text-sm text-gray-300">
+                            I accept the <a href="/v1/legal/terms" target="_blank" class="text-blue-400 hover:underline">Terms of Service</a>
+                            and <a href="/v1/legal/privacy" target="_blank" class="text-blue-400 hover:underline">Privacy Policy</a>
+                        </label>
+                    </div>
+                    <div id="register-error" class="hidden text-red-400 text-sm"></div>
+                    <button type="submit"
+                        class="w-full bg-blue-600 hover:bg-blue-700 rounded px-4 py-2 font-medium flex items-center justify-center">
+                        <span id="register-text">Create Account</span>
+                        <div id="register-spinner" class="spinner ml-2 hidden"></div>
+                    </button>
+                </form>
+                <p class="mt-6 text-center text-gray-400">
+                    Already have an account?
+                    <a href="#" onclick="showScreen('login'); return false;" class="text-blue-400 hover:underline">Log in</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Screen 2: Login -->
+        <div id="screen-login" class="hidden fade-in">
+            <div class="bg-gray-800 rounded-lg p-8 max-w-md mx-auto">
+                <h2 class="text-3xl font-bold mb-6">Welcome Back</h2>
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Email</label>
+                        <input type="email" name="email" required
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Password</label>
+                        <input type="password" name="password" required
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div id="login-error" class="hidden text-red-400 text-sm"></div>
+                    <button type="submit"
+                        class="w-full bg-blue-600 hover:bg-blue-700 rounded px-4 py-2 font-medium flex items-center justify-center">
+                        <span id="login-text">Log In</span>
+                        <div id="login-spinner" class="spinner ml-2 hidden"></div>
+                    </button>
+                </form>
+                <p class="mt-6 text-center text-gray-400">
+                    Don't have an account?
+                    <a href="#" onclick="showScreen('register'); return false;" class="text-blue-400 hover:underline">Register</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Screen 3: Dashboard -->
+        <div id="screen-dashboard" class="hidden fade-in">
+            <div class="space-y-8">
+                <!-- User Info -->
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <h2 class="text-2xl font-bold mb-4">Welcome, <span id="user-name"></span>!</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-400">Email:</span>
+                            <span id="user-email" class="ml-2"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">Tier:</span>
+                            <span id="user-tier" class="ml-2 font-medium text-blue-400"></span>
+                        </div>
+                    </div>
+                    <button onclick="logout()" class="mt-4 text-sm text-gray-400 hover:text-white">
+                        Log out
+                    </button>
+                </div>
+
+                <!-- Create Namespace -->
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <h3 class="text-xl font-bold mb-4">Create Your Namespace</h3>
+                    <p class="text-gray-400 text-sm mb-4">
+                        A namespace is your isolated workspace for functions and services.
+                    </p>
+                    <form id="namespace-form" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Namespace Name</label>
+                            <input type="text" name="name" required pattern="[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+                                placeholder="my-namespace"
+                                class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Lowercase letters, numbers, and hyphens only (1-63 characters)</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Description (optional)</label>
+                            <input type="text" name="description"
+                                placeholder="My awesome functions"
+                                class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div id="namespace-error" class="hidden text-red-400 text-sm"></div>
+                        <button type="submit"
+                            class="bg-blue-600 hover:bg-blue-700 rounded px-6 py-2 font-medium flex items-center">
+                            <span id="namespace-text">Create Namespace</span>
+                            <div id="namespace-spinner" class="spinner ml-2 hidden"></div>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Existing Namespaces -->
+                <div id="namespaces-list" class="bg-gray-800 rounded-lg p-6 hidden">
+                    <h3 class="text-xl font-bold mb-4">Your Namespaces</h3>
+                    <div id="namespaces-container" class="space-y-2"></div>
+                </div>
+
+                <!-- Generate API Key -->
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <h3 class="text-xl font-bold mb-4">Generate API Key</h3>
+                    <p class="text-gray-400 text-sm mb-4">
+                        You need an API key to authenticate with the MCPWorks service.
+                    </p>
+                    <button id="generate-key-btn" onclick="generateApiKey()"
+                        class="bg-green-600 hover:bg-green-700 rounded px-6 py-2 font-medium flex items-center">
+                        <span id="generate-key-text">Generate API Key</span>
+                        <div id="generate-key-spinner" class="spinner ml-2 hidden"></div>
+                    </button>
+                    <div id="api-key-display" class="hidden mt-4 p-4 bg-gray-700 rounded">
+                        <p class="text-sm text-gray-400 mb-2">Your API Key:</p>
+                        <code id="api-key-value" class="text-green-400 text-sm break-all"></code>
+                        <p class="text-xs text-yellow-400 mt-2">Save this key securely - it won't be shown again!</p>
+                    </div>
+                    <div id="generate-key-error" class="hidden text-red-400 text-sm mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 4: MCP Config (ORDER-010) -->
+        <div id="screen-config" class="hidden fade-in">
+            <div class="bg-gray-800 rounded-lg p-8">
+                <h2 class="text-3xl font-bold mb-6">Your MCP Configuration</h2>
+                <p class="text-gray-400 mb-6">
+                    Copy this configuration into your project's <code class="bg-gray-700 px-2 py-1 rounded">.mcp.json</code> file to connect AI assistants to your MCPWorks namespace.
+                </p>
+
+                <!-- Config Display -->
+                <div class="relative">
+                    <pre id="mcp-config" class="bg-gray-900 border border-gray-700 rounded p-4 overflow-x-auto text-sm">
+<code id="mcp-config-code"></code></pre>
+                    <button onclick="copyConfig()"
+                        class="absolute top-4 right-4 bg-blue-600 hover:bg-blue-700 rounded px-4 py-2 text-sm font-medium flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                        <span id="copy-btn-text">Copy to Clipboard</span>
+                    </button>
+                </div>
+
+                <!-- Instructions -->
+                <div class="mt-8 space-y-4">
+                    <h3 class="text-xl font-bold">Next Steps</h3>
+                    <ol class="list-decimal list-inside space-y-2 text-gray-300">
+                        <li>Copy the configuration above</li>
+                        <li>Create or edit <code class="bg-gray-700 px-2 py-1 rounded">.mcp.json</code> in your project root</li>
+                        <li>Paste the configuration into the file</li>
+                        <li>Restart your AI assistant (Claude Code, etc.)</li>
+                        <li>Start creating and running Python functions!</li>
+                    </ol>
+
+                    <div class="mt-6 p-4 bg-blue-900/30 border border-blue-700 rounded">
+                        <h4 class="font-bold mb-2">What can you do now?</h4>
+                        <ul class="space-y-1 text-sm text-gray-300">
+                            <li>• <strong>{namespace}-create:</strong> Create services, functions, and manage your infrastructure</li>
+                            <li>• <strong>{namespace}-run:</strong> Execute your Python functions and get results</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-6 flex gap-4">
+                        <a href="/docs" class="bg-gray-700 hover:bg-gray-600 rounded px-6 py-2 font-medium inline-block">
+                            View Documentation
+                        </a>
+                        <button onclick="showScreen('dashboard')" class="text-blue-400 hover:underline">
+                            Back to Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="screen-loading" class="hidden text-center py-20">
+            <div class="spinner mx-auto mb-4" style="width: 40px; height: 40px; border-width: 4px;"></div>
+            <p class="text-gray-400">Loading...</p>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 py-6 mt-12">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>&copy; 2026 MCPWorks. Built for AI assistants.</p>
+        </div>
+    </footer>
+
+    <script>
+        // State management
+        const state = {
+            user: null,
+            namespaces: [],
+            apiKey: null,
+            tokens: {
+                access: localStorage.getItem('access_token'),
+                refresh: localStorage.getItem('refresh_token')
+            }
+        };
+
+        // Utility functions
+        function showScreen(screenName) {
+            document.querySelectorAll('[id^="screen-"]').forEach(el => el.classList.add('hidden'));
+            const screen = document.getElementById(`screen-${screenName}`);
+            if (screen) {
+                screen.classList.remove('hidden');
+                screen.classList.add('fade-in');
+            }
+        }
+
+        function showError(elementId, message) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.textContent = message;
+                el.classList.remove('hidden');
+            }
+        }
+
+        function hideError(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) el.classList.add('hidden');
+        }
+
+        function setLoading(btnTextId, spinnerId, isLoading) {
+            const text = document.getElementById(btnTextId);
+            const spinner = document.getElementById(spinnerId);
+            if (isLoading) {
+                if (text) text.style.opacity = '0.5';
+                if (spinner) spinner.classList.remove('hidden');
+            } else {
+                if (text) text.style.opacity = '1';
+                if (spinner) spinner.classList.add('hidden');
+            }
+        }
+
+        async function apiCall(method, endpoint, body = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            if (state.tokens.access) {
+                options.headers['Authorization'] = `Bearer ${state.tokens.access}`;
+            }
+
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(endpoint, options);
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || data.message || 'Request failed');
+            }
+
+            return data;
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            state.tokens = { access: null, refresh: null };
+            state.user = null;
+            showScreen('login');
+        }
+
+        // Register
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError('register-error');
+            setLoading('register-text', 'register-spinner', true);
+
+            const formData = new FormData(e.target);
+            const data = {
+                email: formData.get('email'),
+                password: formData.get('password'),
+                name: formData.get('name'),
+                accept_tos: formData.get('accept_tos') === 'on'
+            };
+
+            try {
+                const result = await apiCall('POST', '/v1/auth/register', data);
+
+                // Store tokens
+                localStorage.setItem('access_token', result.access_token);
+                localStorage.setItem('refresh_token', result.refresh_token);
+                state.tokens = {
+                    access: result.access_token,
+                    refresh: result.refresh_token
+                };
+
+                // Go to dashboard
+                await loadDashboard();
+            } catch (error) {
+                showError('register-error', error.message);
+            } finally {
+                setLoading('register-text', 'register-spinner', false);
+            }
+        });
+
+        // Login
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError('login-error');
+            setLoading('login-text', 'login-spinner', true);
+
+            const formData = new FormData(e.target);
+            const data = {
+                email: formData.get('email'),
+                password: formData.get('password')
+            };
+
+            try {
+                const result = await apiCall('POST', '/v1/auth/login', data);
+
+                // Store tokens
+                localStorage.setItem('access_token', result.access_token);
+                localStorage.setItem('refresh_token', result.refresh_token);
+                state.tokens = {
+                    access: result.access_token,
+                    refresh: result.refresh_token
+                };
+
+                // Go to dashboard
+                await loadDashboard();
+            } catch (error) {
+                showError('login-error', error.message);
+            } finally {
+                setLoading('login-text', 'login-spinner', false);
+            }
+        });
+
+        // Dashboard
+        async function loadDashboard() {
+            showScreen('loading');
+
+            try {
+                // Get user info
+                const user = await apiCall('GET', '/v1/users/me');
+                state.user = user;
+
+                document.getElementById('user-name').textContent = user.name;
+                document.getElementById('user-email').textContent = user.email;
+                document.getElementById('user-tier').textContent = user.tier || 'free';
+
+                // Get namespaces
+                await loadNamespaces();
+
+                showScreen('dashboard');
+
+                // Check if ready for config screen
+                checkConfigReady();
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                logout();
+            }
+        }
+
+        async function loadNamespaces() {
+            try {
+                const namespaces = await apiCall('GET', '/v1/namespaces');
+                state.namespaces = namespaces;
+
+                if (namespaces.length > 0) {
+                    const container = document.getElementById('namespaces-container');
+                    container.innerHTML = namespaces.map(ns => `
+                        <div class="p-3 bg-gray-700 rounded">
+                            <span class="font-medium">${ns.name}</span>
+                            ${ns.description ? `<span class="text-gray-400 text-sm ml-2">- ${ns.description}</span>` : ''}
+                        </div>
+                    `).join('');
+                    document.getElementById('namespaces-list').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Failed to load namespaces:', error);
+            }
+        }
+
+        // Create namespace
+        document.getElementById('namespace-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError('namespace-error');
+            setLoading('namespace-text', 'namespace-spinner', true);
+
+            const formData = new FormData(e.target);
+            const data = {
+                name: formData.get('name'),
+                description: formData.get('description') || undefined
+            };
+
+            try {
+                await apiCall('POST', '/v1/namespaces', data);
+                await loadNamespaces();
+                e.target.reset();
+                checkConfigReady();
+            } catch (error) {
+                showError('namespace-error', error.message);
+            } finally {
+                setLoading('namespace-text', 'namespace-spinner', false);
+            }
+        });
+
+        // Generate API key
+        async function generateApiKey() {
+            hideError('generate-key-error');
+            setLoading('generate-key-text', 'generate-key-spinner', true);
+
+            try {
+                const result = await apiCall('POST', '/v1/auth/api-keys', {
+                    name: 'onboarding-key'
+                });
+
+                state.apiKey = result.key;
+                document.getElementById('api-key-value').textContent = result.key;
+                document.getElementById('api-key-display').classList.remove('hidden');
+                document.getElementById('generate-key-btn').disabled = true;
+                document.getElementById('generate-key-btn').classList.add('opacity-50', 'cursor-not-allowed');
+
+                checkConfigReady();
+            } catch (error) {
+                showError('generate-key-error', error.message);
+            } finally {
+                setLoading('generate-key-text', 'generate-key-spinner', false);
+            }
+        }
+
+        // Check if ready for config screen
+        function checkConfigReady() {
+            if (state.namespaces.length > 0 && state.apiKey) {
+                // Generate and show config
+                const namespace = state.namespaces[0].name;
+                const config = {
+                    mcpServers: {
+                        [`${namespace}-create`]: {
+                            type: "http",
+                            url: `https://${namespace}.create.mcpworks.io/mcp`,
+                            headers: {
+                                Authorization: `Bearer ${state.apiKey}`
+                            }
+                        },
+                        [`${namespace}-run`]: {
+                            type: "http",
+                            url: `https://${namespace}.run.mcpworks.io/mcp`,
+                            headers: {
+                                Authorization: `Bearer ${state.apiKey}`
+                            }
+                        }
+                    }
+                };
+
+                document.getElementById('mcp-config-code').textContent = JSON.stringify(config, null, 2);
+                showScreen('config');
+            }
+        }
+
+        // Copy config to clipboard
+        async function copyConfig() {
+            const code = document.getElementById('mcp-config-code').textContent;
+            try {
+                await navigator.clipboard.writeText(code);
+                const btn = document.getElementById('copy-btn-text');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            } catch (error) {
+                alert('Failed to copy to clipboard. Please copy manually.');
+            }
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            if (state.tokens.access) {
+                loadDashboard();
+            } else {
+                showScreen('register');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -39,6 +39,7 @@ dependencies = [
     "structlog>=24.1.0",
     "mcp[http]>=1.9.0",
     "jsonschema>=4.0.0",
+    "sentry-sdk[fastapi]>=2.0.0",
 ]
 
 [project.optional-dependencies]

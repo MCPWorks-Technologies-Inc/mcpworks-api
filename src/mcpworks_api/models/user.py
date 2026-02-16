@@ -1,9 +1,10 @@
 """User model - account holder who can authenticate and use platform services."""
 
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Index, String
+from sqlalchemy import Boolean, DateTime, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -79,6 +80,12 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     verification_token: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    # ORDER-008: ToS consent tracking
+    tos_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
 

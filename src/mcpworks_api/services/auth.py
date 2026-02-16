@@ -238,6 +238,7 @@ class AuthService:
         name: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        accept_tos: bool = False,
     ) -> tuple[User, str, str, int]:
         """Register a new user.
 
@@ -269,6 +270,7 @@ class AuthService:
             tier="free",
             status="active",
             email_verified=False,
+            tos_accepted_at=datetime.now(UTC) if accept_tos else None,
         )
         self.db.add(user)
         await self.db.flush()  # Get user ID

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCPWorks — Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 2px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.6s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .masked { font-family: monospace; letter-spacing: 1px; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <header class="border-b border-gray-800 py-4">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-500">MCPWorks</h1>
+                <p class="text-gray-400 text-sm">Dashboard</p>
+            </div>
+            <div id="header-actions" class="flex items-center gap-4">
+                <a href="/v1/docs/quickstart" class="text-gray-400 hover:text-white text-sm">Quick Start</a>
+                <button id="btn-logout" onclick="logout()" class="text-gray-400 hover:text-white text-sm hidden">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- Login Screen -->
+        <div id="screen-login" class="hidden fade-in">
+            <div class="bg-gray-800 rounded-lg p-8 max-w-md mx-auto">
+                <h2 class="text-2xl font-bold mb-6">Login to Dashboard</h2>
+                <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Email</label>
+                        <input type="email" name="email" required class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Password</label>
+                        <input type="password" name="password" required class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div id="login-error" class="text-red-400 text-sm hidden"></div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded font-medium">Login</button>
+                    <p class="text-center text-gray-400 text-sm">Don't have an account? <a href="/register" class="text-blue-400 hover:text-blue-300">Register</a></p>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="screen-dashboard" class="hidden fade-in">
+            <!-- Usage Banner -->
+            <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold mb-1">Usage This Period</h2>
+                        <p class="text-gray-400 text-sm">Resets <span id="usage-resets"></span></p>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold"><span id="usage-count">-</span> <span class="text-gray-500 text-lg">/ <span id="usage-limit">-</span></span></div>
+                        <p class="text-gray-400 text-sm">executions</p>
+                    </div>
+                </div>
+                <div class="mt-4 bg-gray-700 rounded-full h-2">
+                    <div id="usage-bar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-3">
+                    <span id="tier-badge" class="bg-gray-700 text-gray-300 px-3 py-1 rounded-full text-sm"></span>
+                    <a id="billing-link" href="#" class="text-blue-400 hover:text-blue-300 text-sm py-1" target="_blank">Manage Billing →</a>
+                </div>
+            </div>
+
+            <!-- API Keys Section -->
+            <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">API Keys</h3>
+                    <button onclick="createApiKey()" class="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded text-sm">New Key</button>
+                </div>
+                <div id="api-keys-list" class="space-y-3">
+                    <p class="text-gray-500">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Namespaces & Services -->
+            <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Namespaces & Services</h3>
+                <div id="namespaces-list" class="space-y-4">
+                    <p class="text-gray-500">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<script>
+const API = '/v1';
+let token = localStorage.getItem('mcpworks_token');
+
+function show(id) {
+    document.querySelectorAll('[id^="screen-"]').forEach(el => el.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+}
+
+async function api(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(API + path, { ...opts, headers });
+    if (res.status === 401) { logout(); throw new Error('Unauthorized'); }
+    return res;
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const form = e.target;
+    const errEl = document.getElementById('login-error');
+    errEl.classList.add('hidden');
+    try {
+        const res = await fetch(API + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: form.email.value,
+                password: form.password.value,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) { errEl.textContent = data.detail || 'Login failed'; errEl.classList.remove('hidden'); return; }
+        token = data.access_token;
+        localStorage.setItem('mcpworks_token', token);
+        loadDashboard();
+    } catch (err) { errEl.textContent = 'Network error'; errEl.classList.remove('hidden'); }
+}
+
+function logout() {
+    token = null;
+    localStorage.removeItem('mcpworks_token');
+    document.getElementById('btn-logout').classList.add('hidden');
+    show('screen-login');
+}
+
+async function loadDashboard() {
+    show('screen-dashboard');
+    document.getElementById('btn-logout').classList.remove('hidden');
+
+    // Load usage
+    try {
+        const res = await api('/account/usage');
+        if (res.ok) {
+            const u = await res.json();
+            document.getElementById('usage-count').textContent = u.executions_used ?? u.executions_count ?? 0;
+            document.getElementById('usage-limit').textContent = u.executions_limit ?? '-';
+            const count = u.executions_used ?? u.executions_count ?? 0;
+            const limit = u.executions_limit ?? 100;
+            const pct = limit > 0 ? Math.min(100, (count / limit) * 100) : 0;
+            document.getElementById('usage-bar').style.width = pct + '%';
+            if (pct > 90) document.getElementById('usage-bar').classList.replace('bg-blue-500', 'bg-red-500');
+            else if (pct > 70) document.getElementById('usage-bar').classList.replace('bg-blue-500', 'bg-yellow-500');
+            document.getElementById('usage-resets').textContent = u.billing_period_end ? new Date(u.billing_period_end).toLocaleDateString() : '-';
+            document.getElementById('tier-badge').textContent = (u.tier || 'free').replace('_', ' ');
+        }
+    } catch {}
+
+    // Load API keys
+    try {
+        const res = await api('/account/api-keys');
+        if (res.ok) {
+            const data = await res.json();
+            const keys = data.api_keys || data || [];
+            const container = document.getElementById('api-keys-list');
+            if (keys.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">No API keys yet. Create one to get started.</p>';
+            } else {
+                container.innerHTML = keys.map(k => `
+                    <div class="flex items-center justify-between bg-gray-700 rounded px-4 py-3">
+                        <div>
+                            <span class="text-sm font-medium">${k.name || 'API Key'}</span>
+                            <span class="masked text-gray-400 text-sm ml-3">${k.key_prefix || k.key?.slice(0, 12) || ''}${'•'.repeat(20)}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="revokeApiKey('${k.id}')" class="text-red-400 hover:text-red-300 text-sm">Revoke</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch { document.getElementById('api-keys-list').innerHTML = '<p class="text-gray-500">Could not load API keys.</p>'; }
+
+    // Load namespaces
+    try {
+        const res = await api('/namespaces');
+        if (res.ok) {
+            const data = await res.json();
+            const nss = data.namespaces || data || [];
+            const container = document.getElementById('namespaces-list');
+            if (nss.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">No namespaces yet. Use your AI assistant to create one.</p>';
+            } else {
+                container.innerHTML = nss.map(ns => `
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-semibold text-blue-400">${ns.name}</h4>
+                            <span class="text-gray-500 text-xs">${ns.service_count ?? '?'} services</span>
+                        </div>
+                        <p class="text-gray-400 text-sm mb-2">${ns.description || ''}</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div>Create: <code class="text-gray-400">${ns.name}.create.mcpworks.io</code></div>
+                            <div>Run: <code class="text-gray-400">${ns.name}.run.mcpworks.io</code></div>
+                        </div>
+                        <div id="ns-${ns.name}-services" class="mt-3 space-y-2"></div>
+                    </div>
+                `).join('');
+
+                // Load services for each namespace
+                for (const ns of nss) {
+                    loadServices(ns.name);
+                }
+            }
+        }
+    } catch { document.getElementById('namespaces-list').innerHTML = '<p class="text-gray-500">Could not load namespaces.</p>'; }
+}
+
+async function loadServices(nsName) {
+    try {
+        const res = await api(`/namespaces/${nsName}/services`);
+        if (res.ok) {
+            const data = await res.json();
+            const svcs = data.services || data || [];
+            const container = document.getElementById(`ns-${nsName}-services`);
+            if (container && svcs.length > 0) {
+                container.innerHTML = svcs.map(s => `
+                    <div class="bg-gray-600/50 rounded px-3 py-2 text-sm">
+                        <span class="font-medium">${s.name}</span>
+                        <span class="text-gray-400 ml-2">${s.function_count ?? '?'} functions</span>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch {}
+}
+
+async function createApiKey() {
+    const name = prompt('API key name (optional):') || 'default';
+    try {
+        const res = await api('/account/api-keys', {
+            method: 'POST',
+            body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const key = data.key || data.api_key;
+            if (key) {
+                alert('Your new API key (copy now — it won\'t be shown again):\n\n' + key);
+            }
+            loadDashboard();
+        } else {
+            const err = await res.json();
+            alert('Error: ' + (err.detail || 'Could not create API key'));
+        }
+    } catch { alert('Network error'); }
+}
+
+async function revokeApiKey(keyId) {
+    if (!confirm('Revoke this API key? This cannot be undone.')) return;
+    try {
+        await api(`/account/api-keys/${keyId}`, { method: 'DELETE' });
+        loadDashboard();
+    } catch { alert('Error revoking key'); }
+}
+
+// Init
+if (token) { loadDashboard(); } else { show('screen-login'); }
+</script>
+</body>
+</html>

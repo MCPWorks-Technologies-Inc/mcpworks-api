@@ -20,6 +20,7 @@ SANDBOX_DIR = "/sandbox"
 INPUT_PATH = f"{SANDBOX_DIR}/input.json"
 OUTPUT_PATH = f"{SANDBOX_DIR}/output.json"
 CODE_PATH = f"{SANDBOX_DIR}/user_code.py"
+TOKEN_PATH = f"{SANDBOX_DIR}/.exec_token"
 
 # Output size limits (defense-in-depth against json-bomb / stdout-flood)
 MAX_STDOUT_BYTES = 64 * 1024       # 64 KB per stream
@@ -28,6 +29,17 @@ MAX_OUTPUT_JSON_BYTES = 1024 * 1024 # 1 MB total output
 
 
 def run():
+    # ORDER-003: Read execution token if present, then delete the file.
+    # Token is never in env vars, only available momentarily via file.
+    exec_token = None
+    try:
+        with open(TOKEN_PATH) as f:
+            exec_token = f.read().strip()
+        import os
+        os.unlink(TOKEN_PATH)
+    except FileNotFoundError:
+        pass
+
     # Read input data
     try:
         with open(INPUT_PATH) as f:
@@ -56,7 +68,7 @@ def run():
     success = True
 
     try:
-        exec_globals = {"input_data": input_data, "__name__": "__main__"}
+        exec_globals = {"input_data": input_data, "__name__": "__main__", "_exec_token": exec_token}
         exec(code, exec_globals)
 
         # Get result: check explicit variable, then callable main()

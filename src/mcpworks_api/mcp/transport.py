@@ -28,6 +28,27 @@ from mcpworks_api.middleware.subdomain import EndpointType
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# ORDER-017: Token savings measurement — Prometheus instrumentation
+# ---------------------------------------------------------------------------
+try:
+    from prometheus_client import Counter, Histogram
+
+    mcp_tool_calls_total = Counter(
+        "mcpworks_mcp_tool_calls_total",
+        "Total MCP tool calls",
+        ["endpoint_type", "tool_name"],
+    )
+    mcp_response_bytes = Histogram(
+        "mcpworks_mcp_response_bytes",
+        "MCP tool response size in bytes (proxy for token usage)",
+        ["endpoint_type", "tool_name"],
+        buckets=[100, 250, 500, 1000, 2500, 5000, 10000, 50000],
+    )
+except ImportError:
+    mcp_tool_calls_total = None  # type: ignore[assignment]
+    mcp_response_bytes = None  # type: ignore[assignment]
+
+# ---------------------------------------------------------------------------
 # ContextVar – set by the ASGI wrapper, read by MCP handlers
 # ---------------------------------------------------------------------------
 _current_request: contextvars.ContextVar[Request | None] = contextvars.ContextVar(
@@ -124,7 +145,16 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
             handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
 
         result = await handler.dispatch_tool(name, args)
-        return [TextContent(type="text", text=c.text) for c in result.content]
+        contents = [TextContent(type="text", text=c.text) for c in result.content]
+
+        # ORDER-017: Record token metrics
+        if mcp_tool_calls_total is not None:
+            ep = endpoint_type.value if hasattr(endpoint_type, "value") else str(endpoint_type)
+            mcp_tool_calls_total.labels(endpoint_type=ep, tool_name=name).inc()
+            total_bytes = sum(len(c.text.encode()) for c in contents)
+            mcp_response_bytes.labels(endpoint_type=ep, tool_name=name).observe(total_bytes)
+
+        return contents
 
 
 # ---------------------------------------------------------------------------
