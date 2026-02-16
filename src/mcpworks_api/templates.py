@@ -54,11 +54,11 @@ TEMPLATES: dict[str, FunctionTemplate] = {
     "hello-world": FunctionTemplate(
         name="hello-world",
         description="Simple input/output function — proves the system works",
-        code='''\
+        code="""\
 def main(input_data):
     name = input_data.get("name", "World")
     return {"greeting": f"Hello, {name}!", "message": "Your sandbox is working."}
-''',
+""",
         input_schema={
             "type": "object",
             "properties": {
@@ -77,7 +77,7 @@ def main(input_data):
     "csv-analyzer": FunctionTemplate(
         name="csv-analyzer",
         description="Parse CSV data and return summary statistics",
-        code='''\
+        code="""\
 import csv
 import io
 import statistics
@@ -114,7 +114,7 @@ def main(input_data):
             }
 
     return summary
-''',
+""",
         input_schema={
             "type": "object",
             "properties": {
@@ -138,7 +138,7 @@ def main(input_data):
     "api-connector": FunctionTemplate(
         name="api-connector",
         description="Call an external API and transform the response",
-        code='''\
+        code="""\
 import httpx
 
 
@@ -160,7 +160,7 @@ def main(input_data):
         "body": response.text[:10000],
         "ok": response.is_success,
     }
-''',
+""",
         input_schema={
             "type": "object",
             "properties": {
@@ -190,7 +190,7 @@ def main(input_data):
     "slack-notifier": FunctionTemplate(
         name="slack-notifier",
         description="Send a formatted message to a Slack webhook",
-        code='''\
+        code="""\
 import httpx
 
 
@@ -214,7 +214,7 @@ def main(input_data):
         "status_code": response.status_code,
         "response": response.text[:500],
     }
-''',
+""",
         input_schema={
             "type": "object",
             "properties": {
@@ -238,7 +238,7 @@ def main(input_data):
     "scheduled-report": FunctionTemplate(
         name="scheduled-report",
         description="Generate and format a structured report from data",
-        code='''\
+        code="""\
 from datetime import datetime, timezone
 
 
@@ -266,7 +266,7 @@ def main(input_data):
         report = json.dumps(report_data, indent=2)
 
     return {"report": report, "format": output_format, "generated_at": now}
-''',
+""",
         input_schema={
             "type": "object",
             "properties": {

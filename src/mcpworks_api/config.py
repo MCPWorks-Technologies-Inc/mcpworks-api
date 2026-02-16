@@ -82,7 +82,9 @@ class Settings(BaseSettings):
     # Observability
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     prometheus_enabled: bool = True
-    sentry_dsn: str | None = Field(default=None, description="ORDER-013: Sentry DSN for error tracking")
+    sentry_dsn: str | None = Field(
+        default=None, description="ORDER-013: Sentry DSN for error tracking"
+    )
 
     # Security
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
