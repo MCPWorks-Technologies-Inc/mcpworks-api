@@ -522,7 +522,9 @@ class CreateMCPHandler:
             tmpl = get_template(template)
             if not tmpl:
                 return MCPToolResult(
-                    content=[MCPContent(text=json.dumps({"error": f"Unknown template: {template}"}))],
+                    content=[
+                        MCPContent(text=json.dumps({"error": f"Unknown template: {template}"}))
+                    ],
                     isError=True,
                 )
             # Template provides defaults; explicit args override
@@ -733,9 +735,7 @@ class CreateMCPHandler:
         """List available function templates."""
         from mcpworks_api.templates import list_templates
 
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps({"templates": list_templates()}))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"templates": list_templates()}))])
 
     async def _describe_template(self, name: str) -> MCPToolResult:
         """Get full template details including code and schemas."""
@@ -747,6 +747,4 @@ class CreateMCPHandler:
                 content=[MCPContent(text=json.dumps({"error": f"Unknown template: {name}"}))],
                 isError=True,
             )
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps(tmpl.to_full_dict()))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(tmpl.to_full_dict()))])
