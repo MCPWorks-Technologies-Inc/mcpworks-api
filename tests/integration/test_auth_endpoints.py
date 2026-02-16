@@ -292,6 +292,7 @@ class TestUserRegistration:
                 "email": "newuser@example.com",
                 "password": "SecurePass123",
                 "name": "New User",
+                "accept_tos": True,
             },
         )
 
@@ -317,6 +318,7 @@ class TestUserRegistration:
             json={
                 "email": "existing@example.com",
                 "password": "SecurePass123",
+                "accept_tos": True,
             },
         )
 
@@ -355,6 +357,7 @@ class TestUserRegistration:
             json={
                 "email": "noname@example.com",
                 "password": "SecurePass123",
+                "accept_tos": True,
             },
         )
 
