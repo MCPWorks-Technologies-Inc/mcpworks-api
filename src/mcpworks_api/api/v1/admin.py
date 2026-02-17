@@ -34,7 +34,9 @@ async def get_stats(
     functions_count = (await db.execute(select(func.count(Function.id)))).scalar() or 0
     executions_count = (await db.execute(select(func.count(Execution.id)))).scalar() or 0
 
-    total_calls = (await db.execute(select(func.coalesce(func.sum(Namespace.call_count), 0)))).scalar() or 0
+    total_calls = (
+        await db.execute(select(func.coalesce(func.sum(Namespace.call_count), 0)))
+    ).scalar() or 0
 
     return {
         "users": users_count,
