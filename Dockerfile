@@ -172,6 +172,7 @@ COPY deploy/nsjail/spawn-sandbox.sh /opt/mcpworks/bin/spawn-sandbox.sh
 COPY deploy/nsjail/setup-cgroups.sh /opt/mcpworks/bin/setup-cgroups.sh
 COPY deploy/nsjail/rootfs/ /opt/mcpworks/rootfs/
 COPY deploy/nsjail/python.cfg /etc/mcpworks/sandbox.cfg
+COPY deploy/nsjail/seccomp.policy /etc/mcpworks/seccomp.policy
 
 RUN chmod +x /opt/mcpworks/bin/spawn-sandbox.sh /opt/mcpworks/bin/setup-cgroups.sh
 
