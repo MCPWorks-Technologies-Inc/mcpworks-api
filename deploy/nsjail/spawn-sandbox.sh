@@ -24,6 +24,7 @@ NAMESPACE="${5:-sandbox}"
 EXEC_TOKEN_FILE="${6:-}"
 
 CONFIG="/etc/mcpworks/sandbox.cfg"
+SECCOMP_POLICY="/etc/mcpworks/seccomp.policy"
 NSJAIL="/usr/local/bin/nsjail"
 WORKSPACE_BASE="/tmp/mcpworks-sandbox"
 
@@ -102,6 +103,7 @@ chown -R 65534:65534 "${WORKSPACE}"
 # Build nsjail arguments
 NSJAIL_ARGS=(
     --config "${CONFIG}"
+    --seccomp_policy "${SECCOMP_POLICY}"
     --bindmount "${WORKSPACE}:/sandbox"
     --time_limit "${TIMEOUT}"
     --rlimit_as "${MEMORY}"

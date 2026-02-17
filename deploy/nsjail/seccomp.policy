@@ -1,0 +1,114 @@
+/* Seccomp allowlist for Python 3.11 sandbox (glibc 2.41 / Debian Trixie)
+ *
+ * Only explicitly listed syscalls are allowed.  Everything else is killed.
+ *
+ * NOTE: This is a kafel policy file loaded via nsjail's seccomp_policy
+ * directive.  It MUST be a single file — nsjail compiles each seccomp_string
+ * independently, so splitting across multiple seccomp_string lines does NOT
+ * produce a single unified filter.
+ *
+ * Legacy syscall names (stat, fstat, lstat, sendfile, uname) are not
+ * recognized by the kafel bundled with this nsjail build.  Use their
+ * modern equivalents (newfstatat, statx, sendfile64, newuname) plus raw
+ * SYSCALL[nr] for any the dynamic linker still calls by number.
+ */
+
+ALLOW {
+  /* ── File I/O ── */
+  read, write, open, openat, close,
+  pread64, pwrite64, readv, writev,
+  lseek, ftruncate, truncate,
+  /* stat/fstat/lstat are gone from kafel; use modern names + raw numbers */
+  newfstatat, statx, statfs, fstatfs,
+  SYSCALL[4],   /* stat  — ld-linux still calls this */
+  SYSCALL[5],   /* fstat — ld-linux still calls this */
+  SYSCALL[6],   /* lstat — ld-linux still calls this */
+  access, faccessat, faccessat2,
+  readlink, readlinkat, getcwd,
+  dup, dup2, dup3,
+  fcntl, ioctl,
+  flock, fallocate,
+  sendfile64, copy_file_range,
+  rename, renameat, renameat2,
+  unlink, unlinkat, rmdir,
+  mkdir, mkdirat,
+  symlink, symlinkat, link, linkat,
+  chmod, fchmod, fchmodat,
+  chown, fchown, fchownat, lchown,
+  umask,
+  getdents, getdents64,
+  utime, utimes, utimensat, futimesat,
+
+  /* ── Memory management ── */
+  mmap, munmap, mprotect, mremap, brk,
+  madvise, mincore, msync, mlock, munlock,
+
+  /* ── Process lifecycle ── */
+  exit, exit_group,
+  getpid, getppid, gettid,
+  set_tid_address, set_robust_list,
+  wait4, waitid,
+  execve, execveat,
+
+  /* ── Signals ── */
+  rt_sigaction, rt_sigprocmask, rt_sigreturn,
+  sigaltstack, kill, tgkill, tkill,
+  rt_sigpending, rt_sigsuspend, rt_sigtimedwait,
+
+  /* ── Time ── */
+  clock_gettime, clock_getres, clock_nanosleep,
+  nanosleep, gettimeofday,
+  timer_create, timer_delete, timer_settime, timer_gettime, timer_getoverrun,
+  timerfd_create, timerfd_settime, timerfd_gettime,
+
+  /* ── Threading ── */
+  /* clone allowed unconditionally — nsjail already restricts namespace
+     creation via its own CLONE_NEW* flags.  The kafel arg-filter syntax
+     (arg0) is not supported in this build. */
+  clone, clone3,
+  futex,
+  sched_yield, sched_getaffinity, sched_setaffinity,
+  sched_getparam, sched_getscheduler,
+
+  /* ── Network (httpx, requests, aiohttp, etc.) ── */
+  socket, connect, bind, listen, accept, accept4,
+  sendto, recvfrom, sendmsg, recvmsg, sendmmsg, recvmmsg,
+  setsockopt, getsockopt,
+  getpeername, getsockname,
+  shutdown, socketpair,
+
+  /* ── I/O multiplexing ── */
+  poll, ppoll, select, pselect6,
+  epoll_create, epoll_create1, epoll_ctl, epoll_wait, epoll_pwait,
+
+  /* ── Pipes and FDs ── */
+  pipe, pipe2, eventfd, eventfd2,
+
+  /* ── User/Group info ── */
+  getuid, geteuid, getgid, getegid,
+  getgroups, getresuid, getresgid,
+
+  /* ── System info ── */
+  newuname, sysinfo,
+
+  /* ── Architecture-specific (Python runtime) ── */
+  arch_prctl, prctl,
+
+  /* ── Random ── */
+  getrandom,
+
+  /* ── Resource limits (read-only) ── */
+  getrlimit, prlimit64, getrusage,
+
+  /* ── Misc (Python/glibc runtime needs) ── */
+  rseq, membarrier,
+  close_range,
+  inotify_init, inotify_init1, inotify_add_watch, inotify_rm_watch,
+
+  /* ── Memory Protection Keys (glibc 2.35+ probes at startup) ── */
+  pkey_alloc, pkey_mprotect, pkey_free,
+
+  /* ── Modern syscall variants (glibc 2.41+) ── */
+  futex_waitv, epoll_pwait2, memfd_create
+}
+DEFAULT KILL
