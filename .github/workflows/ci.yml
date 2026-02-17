@@ -179,6 +179,52 @@ jobs:
           extra_args: --only-verified
         continue-on-error: true
 
+  # Sandbox smoke test — validate all 57 packages work inside nsjail
+  sandbox-smoketest:
+    name: Sandbox Smoke Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: mcpworks-api:smoketest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run sandbox smoke test
+        run: |
+          # nsjail writes logs to stderr; capture stdout (JSON) and stderr separately
+          docker run --rm --privileged \
+            -e JSON_OUTPUT=1 \
+            mcpworks-api:smoketest \
+            /opt/mcpworks/bin/run-smoketest.sh \
+            > smoketest-output.json 2>smoketest-stderr.log || true
+          # Show nsjail logs for debugging
+          echo "=== nsjail stderr ==="
+          cat smoketest-stderr.log
+          echo "=== smoketest JSON ==="
+          cat smoketest-output.json
+          # Validate all passed
+          jq -e '.failed == 0' smoketest-output.json
+
+      - name: Upload smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoketest-results
+          path: |
+            smoketest-output.json
+            smoketest-stderr.log
+
   # ORDER-005: Weekly sandbox package audit
   sandbox-audit:
     name: Sandbox Package Audit
