@@ -1,117 +1,84 @@
-/* Seccomp allowlist for Python 3.11 sandbox (glibc 2.41 / Debian Trixie)
+/* Seccomp DENYLIST for Python 3.11 sandbox (glibc 2.41 / Debian Trixie)
  *
- * Only explicitly listed syscalls are allowed.  Everything else is killed.
+ * Strategy: DEFAULT ALLOW with explicit DENY of dangerous syscalls.
  *
- * NOTE: This is a kafel policy file loaded via nsjail's seccomp_policy
- * directive.  It MUST be a single file — nsjail compiles each seccomp_string
- * independently, so splitting across multiple seccomp_string lines does NOT
- * produce a single unified filter.
+ * nsjail already provides primary isolation via namespaces, cgroups, UID
+ * mapping, and chroot.  Seccomp is defense-in-depth — it blocks the ~34
+ * syscalls that could escalate privileges or escape containment, while
+ * allowing everything else through.  This eliminates the compatibility
+ * hell of an allowlist (where every glibc update or new native package
+ * can introduce unknown syscalls that SIGSYS-kill the process).
  *
- * Legacy syscall names (stat, fstat, lstat, sendfile, uname) are not
- * recognized by the kafel bundled with this nsjail build.  Use their
- * modern equivalents (newfstatat, statx, sendfile64, newuname) plus raw
- * SYSCALL[nr] for any the dynamic linker still calls by number.
+ * NOTE: This is a kafel policy file loaded via nsjail's --seccomp_policy.
+ * nsjail compiles each seccomp_string independently, so this MUST be a
+ * single file.
+ *
+ * Categories of denied syscalls:
+ *   - Kernel manipulation (loading modules, rebooting, swapping)
+ *   - Container/namespace escape (setns, unshare, mount, pivot_root)
+ *   - Process injection (ptrace, cross-process memory access)
+ *   - Hardware/privileged access (ioperm, iopl, modify_ldt)
+ *   - Exploit primitives (bpf, userfaultfd, perf_event_open)
+ *   - Kernel keyring (add_key, request_key, keyctl)
+ *   - Clock manipulation (settimeofday, adjtimex, clock_settime)
+ *
+ * NOT denied (and why):
+ *   - clone/clone3: Python threading needs them; nsjail restricts CLONE_NEW*
+ *   - socket/connect: Network control is via iptables (existing architecture)
+ *   - prctl: Python signal handling needs it; dangerous ops need CAP_SYS_ADMIN
+ *   - execve: nsjail chroot restricts what can be executed
  */
 
-ALLOW {
-  /* ── File I/O ── */
-  read, write, open, openat, close,
-  pread64, pwrite64, readv, writev,
-  lseek, ftruncate, truncate,
-  /* stat/fstat/lstat are gone from kafel; use modern names + raw numbers */
-  newfstatat, statx, statfs, fstatfs,
-  SYSCALL[4],   /* stat  — ld-linux still calls this */
-  SYSCALL[5],   /* fstat — ld-linux still calls this */
-  SYSCALL[6],   /* lstat — ld-linux still calls this */
-  access, faccessat, faccessat2,
-  readlink, readlinkat, getcwd,
-  dup, dup2, dup3,
-  fcntl, ioctl,
-  flock, fallocate,
-  sendfile64, copy_file_range,
-  rename, renameat, renameat2,
-  unlink, unlinkat, rmdir,
-  mkdir, mkdirat,
-  symlink, symlinkat, link, linkat,
-  chmod, fchmod, fchmodat,
-  chown, fchown, fchownat, lchown,
-  umask,
-  getdents, getdents64,
-  utime, utimes, utimensat, futimesat,
+DENY {
+  /* ── Kernel manipulation ── */
+  kexec_load,         /* Load a new kernel for later execution */
+  kexec_file_load,    /* Load a new kernel (file-descriptor variant) */
+  reboot,             /* Reboot or enable/disable Ctrl-Alt-Del */
+  init_module,        /* Load a kernel module */
+  finit_module,       /* Load a kernel module (fd variant) */
+  delete_module,      /* Unload a kernel module */
+  acct,               /* Toggle process accounting */
+  swapon,             /* Start swapping to file/device */
+  swapoff,            /* Stop swapping to file/device */
+  nfsservctl,         /* NFS server control (obsolete but still a syscall) */
 
-  /* ── Memory management ── */
-  mmap, munmap, mprotect, mremap, brk,
-  madvise, mincore, msync, mlock, munlock,
+  /* ── Container/namespace escape ── */
+  setns,              /* Reassociate thread with a namespace */
+  unshare,            /* Disassociate parts of the execution context */
+  pivot_root,         /* Change the root mount */
+  mount,              /* Mount filesystem */
+  umount,             /* Unmount filesystem */
+  umount2,            /* Unmount filesystem (flags variant) */
+  open_by_handle_at,  /* Open file by handle (container escape vector) */
 
-  /* ── Process lifecycle ── */
-  exit, exit_group,
-  getpid, getppid, gettid,
-  set_tid_address, set_robust_list,
-  wait4, waitid,
-  execve, execveat,
+  /* ── Process injection ── */
+  ptrace,             /* Trace/debug another process */
+  process_vm_readv,   /* Read from another process's address space */
+  process_vm_writev,  /* Write to another process's address space */
+  kcmp,               /* Compare two processes (info leak) */
 
-  /* ── Signals ── */
-  rt_sigaction, rt_sigprocmask, rt_sigreturn,
-  sigaltstack, kill, tgkill, tkill,
-  rt_sigpending, rt_sigsuspend, rt_sigtimedwait,
+  /* ── Hardware/privileged access ── */
+  ioperm,             /* Set port I/O permissions */
+  iopl,               /* Change I/O privilege level */
+  modify_ldt,         /* Modify local descriptor table */
+  lookup_dcookie,     /* Return a directory entry's path (profiling) */
 
-  /* ── Time ── */
-  clock_gettime, clock_getres, clock_nanosleep,
-  nanosleep, gettimeofday,
-  timer_create, timer_delete, timer_settime, timer_gettime, timer_getoverrun,
-  timerfd_create, timerfd_settime, timerfd_gettime,
+  /* ── Exploit primitives ── */
+  bpf,                /* eBPF operations (kernel code execution) */
+  userfaultfd,        /* Create userfaultfd (use-after-free primitive) */
+  perf_event_open,    /* Performance monitoring (info leak + exploit) */
+  personality,        /* Set process execution domain */
 
-  /* ── Threading ── */
-  /* clone allowed unconditionally — nsjail already restricts namespace
-     creation via its own CLONE_NEW* flags.  The kafel arg-filter syntax
-     (arg0) is not supported in this build. */
-  clone, clone3,
-  futex,
-  sched_yield, sched_getaffinity, sched_setaffinity,
-  sched_getparam, sched_getscheduler,
+  /* ── Kernel keyring ── */
+  add_key,            /* Add a key to the kernel keyring */
+  request_key,        /* Request a key from the kernel keyring */
+  keyctl,             /* Manipulate the kernel keyring */
 
-  /* ── Network (httpx, requests, aiohttp, etc.) ── */
-  socket, connect, bind, listen, accept, accept4,
-  sendto, recvfrom, sendmsg, recvmsg, sendmmsg, recvmmsg,
-  setsockopt, getsockopt,
-  getpeername, getsockname,
-  shutdown, socketpair,
-
-  /* ── I/O multiplexing ── */
-  poll, ppoll, select, pselect6,
-  epoll_create, epoll_create1, epoll_ctl, epoll_wait, epoll_pwait,
-
-  /* ── Pipes and FDs ── */
-  pipe, pipe2, eventfd, eventfd2,
-
-  /* ── User/Group info ── */
-  getuid, geteuid, getgid, getegid,
-  getgroups, getresuid, getresgid,
-
-  /* ── System info ── */
-  newuname, sysinfo,
-
-  /* ── Architecture-specific (Python runtime) ── */
-  arch_prctl, prctl,
-
-  /* ── Random ── */
-  getrandom,
-
-  /* ── Resource limits (read-only) ── */
-  getrlimit, prlimit64, getrusage,
-
-  /* ── Misc (Python/glibc runtime needs) ── */
-  rseq, membarrier,
-  close_range,
-  inotify_init, inotify_init1, inotify_add_watch, inotify_rm_watch,
-
-  /* ── Memory Protection Keys (glibc 2.35+ probes at startup) ── */
-  pkey_alloc, pkey_mprotect, pkey_free,
-
-  /* ── NUMA memory policy (numpy BLAS/LAPACK) ── */
-  mbind,
-
-  /* ── Modern syscall variants (glibc 2.41+) ── */
-  futex_waitv, epoll_pwait2, memfd_create
+  /* ── Clock manipulation ── */
+  clock_settime,      /* Set a clock (requires CAP_SYS_TIME) */
+  settimeofday,       /* Set system time */
+  adjtimex,           /* Tune kernel clock */
+  clock_adjtime       /* Tune a POSIX clock */
 }
-DEFAULT KILL
+
+DEFAULT ALLOW
