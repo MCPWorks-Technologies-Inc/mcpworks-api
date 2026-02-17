@@ -227,6 +227,8 @@ class RunMCPHandler:
 
         Generates a ``functions/`` package from the namespace's DB functions,
         writes it into the sandbox directory, and runs the agent's code.
+        The call log from ``functions._registry`` is captured so that
+        service/function call_counts can be incremented by the transport layer.
         """
         from mcpworks_api.mcp.code_mode import generate_functions_package
 
@@ -242,11 +244,15 @@ class RunMCPHandler:
         if not backend:
             raise ValueError("Code sandbox backend not available")
 
+        # Append call-log capture: writes a JSON marker to stderr so we can
+        # read back which functions the agent's code actually called.
+        augmented_code = code + _CALL_LOG_CAPTURE_SNIPPET
+
         execution_id = str(uuid.uuid4())
         start_time = datetime.now(UTC)
 
         result = await backend.execute(
-            code=code,
+            code=augmented_code,
             config=None,
             input_data={},
             account=self.account,
@@ -257,6 +263,9 @@ class RunMCPHandler:
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
         )
+
+        # Extract call log from stderr marker
+        called_functions = _parse_call_log(result.stderr)
 
         if result.success:
             content_text = json.dumps(result.output)
@@ -276,6 +285,7 @@ class RunMCPHandler:
                 "mode": "code",
                 "execution_time_ms": execution_time_ms,
                 "execution_id": execution_id,
+                "called_functions": called_functions,
             },
         )
 
@@ -321,3 +331,41 @@ class RunMCPHandler:
                 str(e),
                 request_id=request_id,
             )
+
+
+# ---------------------------------------------------------------------------
+# Code-mode call-log helpers
+# ---------------------------------------------------------------------------
+
+_CALL_LOG_MARKER = "__MCPWORKS_CALL_LOG__:"
+
+_CALL_LOG_CAPTURE_SNIPPET = """
+
+# --- MCPWorks: capture call log for billing ---
+try:
+    import sys as _sys, json as _json
+    from functions._registry import _get_call_log as _gcl
+    _log = _gcl()
+    if _log:
+        _sys.stderr.write("\\n__MCPWORKS_CALL_LOG__:" + _json.dumps(_log) + "\\n")
+except Exception:
+    pass
+"""
+
+
+def _parse_call_log(stderr: str | None) -> list[str]:
+    """Extract the list of called functions from sandbox stderr.
+
+    The capture snippet writes a JSON-encoded list to stderr with a known
+    marker prefix.  Returns an empty list if not found or unparseable.
+    """
+    if not stderr:
+        return []
+    for line in stderr.splitlines():
+        line = line.strip()
+        if line.startswith(_CALL_LOG_MARKER):
+            try:
+                return json.loads(line[len(_CALL_LOG_MARKER) :])
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return []

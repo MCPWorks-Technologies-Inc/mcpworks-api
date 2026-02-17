@@ -124,6 +124,52 @@ async def _increment_call_counts(
         logger.exception("Failed to increment call counts for tool=%s", tool_name)
 
 
+async def _increment_function_counts(
+    namespace_name: str,
+    called_functions: list[str],
+) -> None:
+    """Increment service and function call_counts for code-mode sandbox calls.
+
+    ``called_functions`` is a list of ``"service.function"`` strings captured
+    from the sandbox's ``_call_log``.  Uses a single DB session for the batch.
+    """
+    if not called_functions:
+        return
+    try:
+        async with get_db_context() as db:
+            for tool_name in called_functions:
+                if "." not in tool_name:
+                    continue
+                service_name, function_name = tool_name.split(".", 1)
+
+                await db.execute(
+                    sa_update(NamespaceService)
+                    .where(
+                        NamespaceService.namespace_id == Namespace.id,
+                        Namespace.name == namespace_name,
+                        NamespaceService.name == service_name,
+                    )
+                    .values(call_count=NamespaceService.call_count + 1)
+                )
+
+                await db.execute(
+                    sa_update(Function)
+                    .where(
+                        Function.service_id == NamespaceService.id,
+                        NamespaceService.namespace_id == Namespace.id,
+                        Namespace.name == namespace_name,
+                        NamespaceService.name == service_name,
+                        Function.name == function_name,
+                    )
+                    .values(call_count=Function.call_count + 1)
+                )
+    except Exception:
+        logger.exception(
+            "Failed to increment function counts for code-mode calls: %s",
+            called_functions,
+        )
+
+
 async def _authenticate(request: Request, db: Any) -> Any:
     """Authenticate request via API key, returning the Account.
 
@@ -203,6 +249,11 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
 
         # Increment call counts (fail-open — errors logged, not raised)
         await _increment_call_counts(namespace, endpoint_type, name)
+
+        # Code-mode: also increment per-function counts from sandbox call log
+        called_functions = (result.metadata or {}).get("called_functions", [])
+        if called_functions:
+            await _increment_function_counts(namespace, called_functions)
 
         # ORDER-017: Record token metrics
         if mcp_tool_calls_total is not None:
