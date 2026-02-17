@@ -108,6 +108,9 @@ ALLOW {
   /* ── Memory Protection Keys (glibc 2.35+ probes at startup) ── */
   pkey_alloc, pkey_mprotect, pkey_free,
 
+  /* ── NUMA memory policy (numpy BLAS/LAPACK) ── */
+  mbind,
+
   /* ── Modern syscall variants (glibc 2.41+) ── */
   futex_waitv, epoll_pwait2, memfd_create
 }
