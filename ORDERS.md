@@ -119,28 +119,71 @@ The spec warns: "Database credentials should NEVER be on the execution host."
 
 **Priority:** CRITICAL
 **Effort:** 0.5 days
-**Location:** `src/mcpworks_api/api/`, static files
+**Location:** `src/mcpworks_api/api/`, static files, `../www.mcpworks.io/`
+**Status:** LEGAL DOCS DRAFTED — Ready for implementation
 
-The Privacy Policy, Terms of Service, and Acceptable Use Policy will be drafted in `mcpworks-internals`. The API needs to serve them.
+The Privacy Policy, Terms of Service, and Acceptable Use Policy have been drafted and approved in `mcpworks-internals`:
+- `../mcpworks-internals/docs/legal/privacy-policy.md` (v1.0.0, 402 lines)
+- `../mcpworks-internals/docs/legal/terms-of-service.md` (v1.0.0, 430 lines)
+- `../mcpworks-internals/docs/legal/acceptable-use-policy.md` (v1.0.0, 234 lines)
+
+**Authority:** Board Meeting 2026-02-16 Legal Docs Session (`../mcpworks-internals/docs/governance/board-meeting-2026-02-16-legal-docs.md`)
 
 **Requirements:**
-- `GET /legal/privacy` — serves Privacy Policy (HTML or redirect to www.mcpworks.io/privacy)
-- `GET /legal/terms` — serves Terms of Service
-- `GET /legal/aup` — serves Acceptable Use Policy
-- Links in registration response and API key generation response
+
+**Step 1: Publish on www.mcpworks.io (Eleventy static site)**
+- Create `content/privacy.md` with layout `layout.njk`, content from privacy-policy.md
+- Create `content/terms.md` with layout `layout.njk`, content from terms-of-service.md
+- Create `content/aup.md` with layout `layout.njk`, content from acceptable-use-policy.md
+- Each page accessible at:
+  - `https://www.mcpworks.io/privacy`
+  - `https://www.mcpworks.io/terms`
+  - `https://www.mcpworks.io/aup`
+- Add footer links to all three documents on every page
+- Push to main → auto-deploys to DigitalOcean (~2 min)
+
+**Step 2: API endpoints (redirect to www)**
+- `GET /legal/privacy` → 302 redirect to `https://www.mcpworks.io/privacy`
+- `GET /legal/terms` → 302 redirect to `https://www.mcpworks.io/terms`
+- `GET /legal/aup` → 302 redirect to `https://www.mcpworks.io/aup`
+- Alternatively: serve rendered HTML directly from the API if preferred for API-only users
+
+**Step 3: Registration response links**
+- Include `legal.privacy_policy`, `legal.terms_of_service`, `legal.acceptable_use_policy` URLs in:
+  - `POST /v1/auth/register` response body
+  - `POST /v1/auth/api-keys` response body
+  - Any onboarding-related endpoint responses
+
+**Email aliases to configure (Google Workspace):**
+- `privacy@mcpworks.io` → simon.carr@mcpworks.io
+- `legal@mcpworks.io` → simon.carr@mcpworks.io
+- `abuse@mcpworks.io` → simon.carr@mcpworks.io
+- `security@mcpworks.io` → simon.carr@mcpworks.io
+- `support@mcpworks.io` → simon.carr@mcpworks.io
 
 ### ORDER-008: Add ToS consent to registration
 
 **Priority:** CRITICAL
 **Effort:** 0.5 days
 **Location:** `src/mcpworks_api/api/` (auth routes), `src/mcpworks_api/models/`
+**Status:** LEGAL DOCS DRAFTED — Ready for implementation
+**Depends on:** ORDER-007 (legal docs must be published first)
 
 **Requirements:**
 - Add `tos_accepted_at: datetime | None` field to User model
+- Add `tos_version: str | None` field to User model (track which version was accepted, e.g. "1.0.0")
 - Registration endpoint requires `accept_tos: bool = True` parameter
 - Reject registration if `accept_tos` is not True
-- Alembic migration for new field
+- Store the ToS version accepted at registration time
+- Alembic migration for new fields
+- Registration response must include links to all 3 legal documents (see ORDER-007 Step 3)
+- Single checkbox consent covers ToS + Privacy Policy + AUP (per board decision)
 - Existing users: plan for retroactive consent notification (email)
+
+**Web registration flow (ORDER-009):**
+- Single checkbox: "I agree to the [Terms of Service](link) and [Privacy Policy](link)"
+- AUP acceptance is implicit via ToS Section 1 (ToS references AUP)
+- No forced-scroll, no separate checkboxes per document
 
 ---
 
