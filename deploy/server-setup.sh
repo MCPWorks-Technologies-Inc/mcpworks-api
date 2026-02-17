@@ -1,0 +1,203 @@
+#!/bin/bash
+# deploy/server-setup.sh — Bootstrap a fresh Ubuntu server for mcpworks-api.
+#
+# Usage:
+#   scp deploy/server-setup.sh root@<IP>:/root/server-setup.sh
+#   ssh root@<IP> "bash /root/server-setup.sh"
+#
+# Tested on: Ubuntu 22.04 LTS (DigitalOcean droplet, s-2vcpu-4gb)
+#
+# What this script does:
+#   1. System updates + swap (4 GB)
+#   2. Docker + Docker Compose (official repo)
+#   3. UFW firewall (deny all, allow 80/443, restrict SSH)
+#   4. fail2ban (SSH brute-force protection)
+#   5. /opt/mcpworks directory structure
+#   6. JWT keypair generation (ES256)
+#   7. .env template
+#   8. cgroup v2 setup for nsjail sandboxes
+#
+# After running this script:
+#   1. Edit /opt/mcpworks/.env with real secrets
+#   2. Copy Caddyfile, docker-compose.prod.yml, src/ to /opt/mcpworks
+#   3. docker compose -f docker-compose.prod.yml up -d
+#
+# NOTE: This script is idempotent — safe to run multiple times.
+
+set -euo pipefail
+
+# ── Configuration ──────────────────────────────────────────────────────────
+APP_DIR="/opt/mcpworks"
+SWAP_SIZE="4G"
+# Set ADMIN_IP to restrict SSH access. Leave empty to allow SSH from anywhere.
+ADMIN_IP="${ADMIN_IP:-}"
+
+echo "=== mcpworks server setup ==="
+echo "App directory: ${APP_DIR}"
+echo ""
+
+# ── 1. System updates ─────────────────────────────────────────────────────
+echo ">>> Updating system packages..."
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+
+# ── 2. Swap ────────────────────────────────────────────────────────────────
+if [ ! -f /swapfile ]; then
+    echo ">>> Creating ${SWAP_SIZE} swap..."
+    fallocate -l "${SWAP_SIZE}" /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo "/swapfile none swap sw 0 0" >> /etc/fstab
+    # Tune swappiness for a server workload
+    sysctl vm.swappiness=10
+    echo "vm.swappiness=10" >> /etc/sysctl.conf
+else
+    echo ">>> Swap already exists, skipping."
+fi
+
+# ── 3. Docker ──────────────────────────────────────────────────────────────
+if ! command -v docker &>/dev/null; then
+    echo ">>> Installing Docker..."
+    apt-get install -y -qq ca-certificates curl gnupg
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+        https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+        tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update -qq
+    apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    systemctl enable docker
+    systemctl start docker
+else
+    echo ">>> Docker already installed ($(docker --version)), skipping."
+fi
+
+# ── 4. UFW Firewall ───────────────────────────────────────────────────────
+echo ">>> Configuring UFW firewall..."
+apt-get install -y -qq ufw
+
+# Reset to clean state (idempotent)
+ufw --force reset
+
+ufw default deny incoming
+ufw default allow outgoing
+
+# HTTP + HTTPS (public)
+ufw allow 80/tcp
+ufw allow 443/tcp
+
+# SSH — restrict to admin IP if provided
+if [ -n "${ADMIN_IP}" ]; then
+    ufw allow from "${ADMIN_IP}" to any port 22 proto tcp
+    echo "    SSH restricted to ${ADMIN_IP}"
+else
+    ufw allow 22/tcp
+    echo "    WARNING: SSH open to all. Set ADMIN_IP to restrict."
+fi
+
+ufw --force enable
+
+# ── 5. fail2ban ────────────────────────────────────────────────────────────
+echo ">>> Installing fail2ban..."
+apt-get install -y -qq fail2ban
+
+# Create jail.local for SSH protection
+cat > /etc/fail2ban/jail.local <<'JAIL'
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 5
+bantime = 3600
+findtime = 600
+JAIL
+
+systemctl enable fail2ban
+systemctl restart fail2ban
+
+# ── 6. Application directory structure ─────────────────────────────────────
+echo ">>> Creating ${APP_DIR} directory structure..."
+mkdir -p "${APP_DIR}"/{keys,logs,data,src,deploy,alembic,scripts}
+
+# ── 7. JWT keypair (ES256) ─────────────────────────────────────────────────
+if [ ! -f "${APP_DIR}/keys/jwt_private.pem" ]; then
+    echo ">>> Generating JWT ES256 keypair..."
+    openssl ecparam -genkey -name prime256v1 -noout \
+        -out "${APP_DIR}/keys/jwt_private.pem"
+    openssl ec -in "${APP_DIR}/keys/jwt_private.pem" \
+        -pubout -out "${APP_DIR}/keys/jwt_public.pem"
+    chmod 600 "${APP_DIR}/keys/jwt_private.pem"
+    chmod 644 "${APP_DIR}/keys/jwt_public.pem"
+else
+    echo ">>> JWT keypair already exists, skipping."
+fi
+
+# ── 8. .env template ──────────────────────────────────────────────────────
+if [ ! -f "${APP_DIR}/.env" ]; then
+    echo ">>> Creating .env template..."
+    cat > "${APP_DIR}/.env" <<'ENV'
+# mcpworks-api environment — FILL IN ALL VALUES BEFORE STARTING
+# Generated by deploy/server-setup.sh
+
+# Database
+POSTGRES_PASSWORD=CHANGE_ME_$(openssl rand -hex 16)
+
+# Application
+SECRET_KEY=CHANGE_ME_$(openssl rand -hex 32)
+APP_ENV=production
+
+# Stripe (optional until billing is live)
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+ENV
+    chmod 600 "${APP_DIR}/.env"
+    echo "    IMPORTANT: Edit ${APP_DIR}/.env with real secrets!"
+else
+    echo ">>> .env already exists, skipping."
+fi
+
+# ── 9. cgroup v2 setup for nsjail sandboxes ────────────────────────────────
+echo ">>> Setting up cgroup v2 for sandbox..."
+CGROUP_DIR="/sys/fs/cgroup/mcpworks"
+if [ -d /sys/fs/cgroup/cgroup.controllers ]; then
+    # cgroup v2 unified hierarchy
+    if [ ! -d "${CGROUP_DIR}" ]; then
+        mkdir -p "${CGROUP_DIR}"
+        # Enable memory and pids controllers
+        echo "+memory +pids +cpu" > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
+        echo "+memory +pids +cpu" > "${CGROUP_DIR}/cgroup.subtree_control" 2>/dev/null || true
+    fi
+    echo "    cgroup v2 sandbox group ready at ${CGROUP_DIR}"
+else
+    echo "    WARNING: cgroup v2 not detected. nsjail cgroup limits may not work."
+fi
+
+# ── 10. Kernel parameters for sandbox ──────────────────────────────────────
+echo ">>> Tuning kernel parameters..."
+
+# Allow unprivileged user namespaces (needed by nsjail inside Docker)
+if [ -f /proc/sys/kernel/unprivileged_userns_clone ]; then
+    sysctl -w kernel.unprivileged_userns_clone=1
+    grep -q "kernel.unprivileged_userns_clone" /etc/sysctl.conf || \
+        echo "kernel.unprivileged_userns_clone=1" >> /etc/sysctl.conf
+fi
+
+# ── Done ───────────────────────────────────────────────────────────────────
+echo ""
+echo "=== Server setup complete ==="
+echo ""
+echo "Next steps:"
+echo "  1. Edit ${APP_DIR}/.env with real secrets"
+echo "  2. Copy project files to ${APP_DIR}:"
+echo "     rsync -avz --exclude='.git' --exclude='.venv' --exclude='__pycache__' \\"
+echo "         . root@<IP>:${APP_DIR}/"
+echo "  3. Start services:"
+echo "     cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d"
+echo "  4. Run migrations:"
+echo "     docker exec mcpworks-api alembic upgrade head"
+echo "  5. Verify:"
+echo "     curl https://api.mcpworks.io/v1/health"
