@@ -17,6 +17,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
+from sqlalchemy import update as sa_update
 from starlette.requests import Request
 
 from mcpworks_api.core.database import get_db_context
@@ -24,6 +25,9 @@ from mcpworks_api.mcp.create_handler import CreateMCPHandler
 from mcpworks_api.mcp.protocol import MCPTool
 from mcpworks_api.mcp.run_handler import RunMCPHandler
 from mcpworks_api.middleware.subdomain import EndpointType
+from mcpworks_api.models.function import Function
+from mcpworks_api.models.namespace import Namespace
+from mcpworks_api.models.namespace_service import NamespaceService
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +72,56 @@ session_manager = StreamableHTTPSessionManager(mcp_server, stateless=True)
 def _to_sdk_tools(tools: list[MCPTool]) -> list[Tool]:
     """Convert internal MCPTool Pydantic models to MCP SDK Tool objects."""
     return [Tool(name=t.name, description=t.description, inputSchema=t.inputSchema) for t in tools]
+
+
+async def _increment_call_counts(
+    namespace_name: str,
+    endpoint_type: EndpointType,
+    tool_name: str,
+) -> None:
+    """Atomically increment call_count on namespace (and service/function for run endpoints).
+
+    Uses a separate DB session so failures never roll back the tool response (fail-open).
+    """
+    try:
+        async with get_db_context() as db:
+            # Always increment namespace
+            await db.execute(
+                sa_update(Namespace)
+                .where(Namespace.name == namespace_name)
+                .values(call_count=Namespace.call_count + 1)
+            )
+
+            # For run endpoint, tool_name is "service_name.function_name"
+            if endpoint_type == EndpointType.RUN and "." in tool_name:
+                service_name, function_name = tool_name.split(".", 1)
+
+                # Increment service (PostgreSQL UPDATE ... FROM ... WHERE ...)
+                await db.execute(
+                    sa_update(NamespaceService)
+                    .where(
+                        NamespaceService.namespace_id == Namespace.id,
+                        Namespace.name == namespace_name,
+                        NamespaceService.name == service_name,
+                    )
+                    .values(call_count=NamespaceService.call_count + 1)
+                )
+
+                # Increment function
+                await db.execute(
+                    sa_update(Function)
+                    .where(
+                        Function.service_id == NamespaceService.id,
+                        NamespaceService.namespace_id == Namespace.id,
+                        Namespace.name == namespace_name,
+                        NamespaceService.name == service_name,
+                        Function.name == function_name,
+                    )
+                    .values(call_count=Function.call_count + 1)
+                )
+            # Session auto-commits via get_db_context()
+    except Exception:
+        logger.exception("Failed to increment call counts for tool=%s", tool_name)
 
 
 async def _authenticate(request: Request, db: Any) -> Any:
@@ -146,6 +200,9 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
 
         result = await handler.dispatch_tool(name, args)
         contents = [TextContent(type="text", text=c.text) for c in result.content]
+
+        # Increment call counts (fail-open — errors logged, not raised)
+        await _increment_call_counts(namespace, endpoint_type, name)
 
         # ORDER-017: Record token metrics
         if mcp_tool_calls_total is not None:

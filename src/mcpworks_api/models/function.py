@@ -69,6 +69,13 @@ class Function(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
+    call_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
     # Relationships
     service: Mapped["NamespaceService"] = relationship(
         "NamespaceService",

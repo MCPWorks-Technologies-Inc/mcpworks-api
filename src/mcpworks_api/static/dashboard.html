@@ -199,7 +199,11 @@ async function loadDashboard() {
                     <div class="bg-gray-700 rounded-lg p-4">
                         <div class="flex justify-between items-start mb-2">
                             <h4 class="font-semibold text-blue-400">${ns.name}</h4>
-                            <span class="text-gray-500 text-xs">${ns.service_count ?? '?'} services</span>
+                            <div class="text-right text-xs">
+                                <span class="text-gray-500">${ns.service_count ?? '?'} services</span>
+                                <span class="text-gray-600 mx-1">·</span>
+                                <span class="text-gray-500">${ns.call_count ?? 0} calls</span>
+                            </div>
                         </div>
                         <p class="text-gray-400 text-sm mb-2">${ns.description || ''}</p>
                         <div class="text-xs text-gray-500 space-y-1">
@@ -228,9 +232,9 @@ async function loadServices(nsName) {
             const container = document.getElementById(`ns-${nsName}-services`);
             if (container && svcs.length > 0) {
                 container.innerHTML = svcs.map(s => `
-                    <div class="bg-gray-600/50 rounded px-3 py-2 text-sm">
-                        <span class="font-medium">${s.name}</span>
-                        <span class="text-gray-400 ml-2">${s.function_count ?? '?'} functions</span>
+                    <div class="bg-gray-600/50 rounded px-3 py-2 text-sm flex justify-between">
+                        <span><span class="font-medium">${s.name}</span> <span class="text-gray-400 ml-2">${s.function_count ?? '?'} functions</span></span>
+                        <span class="text-gray-500">${s.call_count ?? 0} calls</span>
                     </div>
                 `).join('');
             }

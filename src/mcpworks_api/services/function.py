@@ -490,6 +490,7 @@ class FunctionService:
             "name": function.name,
             "description": function.description,
             "tags": function.tags or [],
+            "call_count": function.call_count,
             "active_version": function.active_version,
             "active_version_details": {
                 "id": str(active_version.id) if active_version else None,

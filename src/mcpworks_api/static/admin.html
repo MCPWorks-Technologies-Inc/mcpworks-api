@@ -64,12 +64,13 @@
   <div id="dashboard" class="hidden">
 
     <!-- Stats bar -->
-    <div id="stats-bar" class="grid grid-cols-5 gap-4 mb-6">
+    <div id="stats-bar" class="grid grid-cols-6 gap-4 mb-6">
       <div class="card stat-card p-4 text-center" onclick="loadUsers()"><div class="stat-num" id="stat-users">-</div><div class="stat-label">Users</div></div>
       <div class="card stat-card p-4 text-center" onclick="loadNamespaces()"><div class="stat-num" id="stat-namespaces">-</div><div class="stat-label">Namespaces</div></div>
       <div class="card stat-card p-4 text-center" onclick="loadAllServices()"><div class="stat-num" id="stat-services">-</div><div class="stat-label">Services</div></div>
       <div class="card stat-card p-4 text-center" onclick="loadAllFunctions()"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
       <div class="card stat-card p-4 text-center" onclick="loadExecutions()"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
+      <div class="card stat-card p-4 text-center"><div class="stat-num" id="stat-calls">-</div><div class="stat-label">Tool Calls</div></div>
     </div>
 
     <!-- Breadcrumb -->
@@ -154,6 +155,7 @@ async function loadStats() {
     document.getElementById('stat-services').textContent = stats.services;
     document.getElementById('stat-functions').textContent = stats.functions;
     document.getElementById('stat-executions').textContent = stats.executions;
+    document.getElementById('stat-calls').textContent = stats.total_calls ?? '-';
   } catch (e) {
     console.error('Failed to load stats', e);
   }
@@ -240,6 +242,7 @@ async function loadNamespaces() {
             <th>Owner</th>
             <th>Account</th>
             <th>Services</th>
+            <th>Calls</th>
             <th>Created</th>
           </tr>
         </thead>
@@ -250,6 +253,7 @@ async function loadNamespaces() {
               <td class="text-gray-400">${esc(ns.owner_email || '-')}</td>
               <td class="text-gray-400">${esc(ns.account_name || '-')}</td>
               <td>${ns.service_count}</td>
+              <td>${ns.call_count ?? 0}</td>
               <td class="text-gray-500 text-sm">${fmtDate(ns.created_at)}</td>
             </tr>
           `).join('')}
@@ -279,7 +283,7 @@ async function loadNamespace(nsName) {
       servicesHtml = `
         <table>
           <thead>
-            <tr><th>Service</th><th>Description</th><th>Functions</th><th>Created</th></tr>
+            <tr><th>Service</th><th>Description</th><th>Functions</th><th>Calls</th><th>Created</th></tr>
           </thead>
           <tbody>
             ${ns.services.map(svc => `
@@ -287,6 +291,7 @@ async function loadNamespace(nsName) {
                 <td class="text-blue-400 font-medium">${esc(svc.name)}</td>
                 <td class="text-gray-400">${esc(svc.description || '-')}</td>
                 <td>${svc.function_count}</td>
+                <td>${svc.call_count ?? 0}</td>
                 <td class="text-gray-500 text-sm">${fmtDate(svc.created_at)}</td>
               </tr>
             `).join('')}
@@ -302,6 +307,7 @@ async function loadNamespace(nsName) {
           <span class="text-gray-500 text-sm">${esc(ns.owner_email || '')}</span>
         </div>
         ${ns.description ? `<p class="text-gray-400 mb-4">${esc(ns.description)}</p>` : ''}
+        <p class="text-gray-500 text-sm mb-4">Total calls: <span class="text-gray-300 font-medium">${ns.call_count ?? 0}</span></p>
         ${ns.network_whitelist && ns.network_whitelist.length ? `<p class="text-gray-500 text-sm mb-4">Whitelist: ${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</p>` : ''}
         <h3 class="text-gray-300 font-medium mb-2">Services</h3>
         ${servicesHtml}
@@ -334,6 +340,7 @@ async function loadAllServices() {
             <th>Namespace</th>
             <th>Owner</th>
             <th>Functions</th>
+            <th>Calls</th>
             <th>Created</th>
           </tr>
         </thead>
@@ -344,6 +351,7 @@ async function loadAllServices() {
               <td class="text-gray-400">${esc(svc.namespace || '-')}</td>
               <td class="text-gray-400">${esc(svc.owner_email || '-')}</td>
               <td>${svc.function_count}</td>
+              <td>${svc.call_count ?? 0}</td>
               <td class="text-gray-500 text-sm">${fmtDate(svc.created_at)}</td>
             </tr>
           `).join('')}
@@ -378,6 +386,7 @@ async function loadAllFunctions() {
             <th>Namespace</th>
             <th>Tags</th>
             <th>Version</th>
+            <th>Calls</th>
             <th>Created</th>
           </tr>
         </thead>
@@ -389,6 +398,7 @@ async function loadAllFunctions() {
               <td class="text-gray-400">${esc(fn.namespace || '-')}</td>
               <td>${(fn.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
               <td>v${fn.active_version}</td>
+              <td>${fn.call_count ?? 0}</td>
               <td class="text-gray-500 text-sm">${fmtDate(fn.created_at)}</td>
             </tr>
           `).join('')}
@@ -467,7 +477,7 @@ async function loadFunctions(nsName, svcName) {
     content.innerHTML = `
       <table class="fade-in">
         <thead>
-          <tr><th>Function</th><th>Description</th><th>Tags</th><th>Version</th><th>Created</th></tr>
+          <tr><th>Function</th><th>Description</th><th>Tags</th><th>Version</th><th>Calls</th><th>Created</th></tr>
         </thead>
         <tbody>
           ${functions.map(fn => `
@@ -476,6 +486,7 @@ async function loadFunctions(nsName, svcName) {
               <td class="text-gray-400">${esc(fn.description || '-')}</td>
               <td>${(fn.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
               <td>v${fn.active_version}</td>
+              <td>${fn.call_count ?? 0}</td>
               <td class="text-gray-500 text-sm">${fmtDate(fn.created_at)}</td>
             </tr>
           `).join('')}
@@ -511,6 +522,7 @@ async function loadFunction(nsName, svcName, fnName) {
           <span class="text-gray-500 text-sm">v${fn.active_version}</span>
         </div>
         ${fn.description ? `<p class="text-gray-400 mb-3">${esc(fn.description)}</p>` : ''}
+        <p class="text-gray-500 text-sm mb-3">Calls: <span class="text-gray-300 font-medium">${fn.call_count ?? 0}</span></p>
         ${(fn.tags || []).length ? `<div class="mb-4">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
 
         ${av ? `

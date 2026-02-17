@@ -431,6 +431,7 @@ class CreateMCPHandler:
                                 {
                                     "name": ns.name,
                                     "description": ns.description,
+                                    "call_count": ns.call_count,
                                     "create_endpoint": ns.create_endpoint,
                                     "run_endpoint": ns.run_endpoint,
                                 }
@@ -483,6 +484,7 @@ class CreateMCPHandler:
                                     "name": s.name,
                                     "description": s.description,
                                     "function_count": s.function_count,
+                                    "call_count": s.call_count,
                                 }
                                 for s in services
                             ],
@@ -693,6 +695,7 @@ class CreateMCPHandler:
                                     "description": f.description,
                                     "version": f.active_version,
                                     "tags": f.tags or [],
+                                    "call_count": f.call_count,
                                 }
                                 for f in functions
                             ],

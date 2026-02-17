@@ -129,6 +129,8 @@ class FunctionResponse(FunctionBase):
     created_at: datetime
     updated_at: datetime | None = None
 
+    call_count: int = Field(default=0, description="Total tool invocations for this function")
+
     # Optional expanded fields
     active_version_details: FunctionVersionResponse | None = None
     execution_count: int = Field(
