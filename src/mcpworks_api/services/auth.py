@@ -271,6 +271,7 @@ class AuthService:
             status="active",
             email_verified=False,
             tos_accepted_at=datetime.now(UTC) if accept_tos else None,
+            tos_version="1.0.0" if accept_tos else None,
         )
         self.db.add(user)
         await self.db.flush()  # Get user ID
