@@ -63,6 +63,7 @@ class NamespaceResponse(NamespaceBase):
     network_whitelist: list[str] | None = None
     whitelist_updated_at: datetime | None = None
     whitelist_changes_today: int
+    call_count: int = Field(default=0, description="Total tool invocations in this namespace")
     created_at: datetime
     updated_at: datetime | None = None
     create_endpoint: str = Field(

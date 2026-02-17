@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -55,6 +56,13 @@ class NamespaceService(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    call_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
     )
 
     # Relationships

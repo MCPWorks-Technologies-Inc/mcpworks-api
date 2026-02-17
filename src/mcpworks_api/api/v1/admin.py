@@ -34,12 +34,15 @@ async def get_stats(
     functions_count = (await db.execute(select(func.count(Function.id)))).scalar() or 0
     executions_count = (await db.execute(select(func.count(Execution.id)))).scalar() or 0
 
+    total_calls = (await db.execute(select(func.coalesce(func.sum(Namespace.call_count), 0)))).scalar() or 0
+
     return {
         "users": users_count,
         "namespaces": namespaces_count,
         "services": services_count,
         "functions": functions_count,
         "executions": executions_count,
+        "total_calls": total_calls,
     }
 
 
@@ -66,6 +69,7 @@ async def list_namespaces(
             "owner_email": ns.account.user.email if ns.account and ns.account.user else None,
             "account_name": ns.account.name if ns.account else None,
             "service_count": len(ns.services) if ns.services else 0,
+            "call_count": ns.call_count,
             "created_at": ns.created_at.isoformat() if ns.created_at else None,
         }
         for ns in namespaces
@@ -98,12 +102,14 @@ async def get_namespace(
         "owner_email": ns.account.user.email if ns.account and ns.account.user else None,
         "account_name": ns.account.name if ns.account else None,
         "network_whitelist": ns.network_whitelist,
+        "call_count": ns.call_count,
         "created_at": ns.created_at.isoformat() if ns.created_at else None,
         "services": [
             {
                 "name": svc.name,
                 "description": svc.description,
                 "function_count": len(svc.functions) if svc.functions else 0,
+                "call_count": svc.call_count,
                 "created_at": svc.created_at.isoformat() if svc.created_at else None,
             }
             for svc in (ns.services or [])
@@ -134,6 +140,7 @@ async def list_functions(
             "description": fn.description,
             "tags": fn.tags,
             "active_version": fn.active_version,
+            "call_count": fn.call_count,
             "created_at": fn.created_at.isoformat() if fn.created_at else None,
         }
         for fn in functions
@@ -176,6 +183,7 @@ async def get_function(
         "description": fn.description,
         "tags": fn.tags,
         "active_version": fn.active_version,
+        "call_count": fn.call_count,
         "created_at": fn.created_at.isoformat() if fn.created_at else None,
         "updated_at": fn.updated_at.isoformat() if fn.updated_at else None,
         "active_version_details": _version_to_dict(active_ver) if active_ver else None,
@@ -260,6 +268,7 @@ async def list_all_services(
                 else None
             ),
             "function_count": len(svc.functions) if svc.functions else 0,
+            "call_count": svc.call_count,
             "created_at": svc.created_at.isoformat() if svc.created_at else None,
         }
         for svc in services
@@ -287,6 +296,7 @@ async def list_all_functions(
             "description": fn.description,
             "tags": fn.tags,
             "active_version": fn.active_version,
+            "call_count": fn.call_count,
             "service": fn.service.name if fn.service else None,
             "namespace": fn.service.namespace.name if fn.service and fn.service.namespace else None,
             "created_at": fn.created_at.isoformat() if fn.created_at else None,

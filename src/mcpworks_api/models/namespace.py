@@ -78,6 +78,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
+    call_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
     # Relationships
     account: Mapped["Account"] = relationship(
         "Account",

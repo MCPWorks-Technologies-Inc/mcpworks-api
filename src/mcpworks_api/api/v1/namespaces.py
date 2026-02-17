@@ -54,6 +54,7 @@ class NamespaceResponse(BaseModel):
     create_endpoint: str
     run_endpoint: str
     network_whitelist: list[str] | None
+    call_count: int = 0
     created_at: str
     updated_at: str | None
 
@@ -82,6 +83,7 @@ class ServiceResponse(BaseModel):
     description: str | None
     namespace_id: str
     function_count: int
+    call_count: int = 0
     created_at: str
 
 
@@ -186,6 +188,7 @@ async def create_namespace(
             create_endpoint=namespace.create_endpoint,
             run_endpoint=namespace.run_endpoint,
             network_whitelist=namespace.network_whitelist,
+            call_count=namespace.call_count,
             created_at=namespace.created_at.isoformat(),
             updated_at=namespace.updated_at.isoformat() if namespace.updated_at else None,
         )
@@ -217,6 +220,7 @@ async def list_namespaces(
                 create_endpoint=ns.create_endpoint,
                 run_endpoint=ns.run_endpoint,
                 network_whitelist=ns.network_whitelist,
+                call_count=ns.call_count,
                 created_at=ns.created_at.isoformat(),
                 updated_at=ns.updated_at.isoformat() if ns.updated_at else None,
             )
@@ -246,6 +250,7 @@ async def get_namespace(
             create_endpoint=namespace.create_endpoint,
             run_endpoint=namespace.run_endpoint,
             network_whitelist=namespace.network_whitelist,
+            call_count=namespace.call_count,
             created_at=namespace.created_at.isoformat(),
             updated_at=namespace.updated_at.isoformat() if namespace.updated_at else None,
         )
@@ -282,6 +287,7 @@ async def update_namespace(
             create_endpoint=namespace.create_endpoint,
             run_endpoint=namespace.run_endpoint,
             network_whitelist=namespace.network_whitelist,
+            call_count=namespace.call_count,
             created_at=namespace.created_at.isoformat(),
             updated_at=namespace.updated_at.isoformat() if namespace.updated_at else None,
         )
@@ -337,6 +343,7 @@ async def create_service(
             description=service.description,
             namespace_id=str(service.namespace_id),
             function_count=service.function_count,
+            call_count=service.call_count,
             created_at=service.created_at.isoformat(),
         )
     except NotFoundError:
@@ -367,6 +374,7 @@ async def list_services(
                     description=s.description,
                     namespace_id=str(s.namespace_id),
                     function_count=s.function_count,
+                    call_count=s.call_count,
                     created_at=s.created_at.isoformat(),
                 )
                 for s in services
