@@ -56,11 +56,15 @@ class RegisterResponse(BaseModel):
     )
     legal_urls: dict[str, str] = Field(
         default={
-            "terms": "https://api.mcpworks.io/v1/legal/terms",
-            "privacy": "https://api.mcpworks.io/v1/legal/privacy",
-            "aup": "https://api.mcpworks.io/v1/legal/aup",
+            "terms_of_service": "https://api.mcpworks.io/v1/legal/terms",
+            "privacy_policy": "https://api.mcpworks.io/v1/legal/privacy",
+            "acceptable_use_policy": "https://api.mcpworks.io/v1/legal/aup",
         },
-        description="URLs for legal documents",
+        description="URLs for legal documents (ToS, Privacy Policy, AUP)",
+    )
+    tos_version: str = Field(
+        default="1.0.0",
+        description="Version of Terms of Service accepted at registration",
     )
 
 

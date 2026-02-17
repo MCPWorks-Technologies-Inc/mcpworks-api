@@ -88,6 +88,10 @@ class User(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True),
         nullable=True,
     )
+    tos_version: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
 
     # Relationships
     api_keys: Mapped[list["APIKey"]] = relationship(
