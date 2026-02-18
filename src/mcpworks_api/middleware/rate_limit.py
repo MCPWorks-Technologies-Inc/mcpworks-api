@@ -62,9 +62,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/v1/auth/token" and response.status_code == 401:
             await self._record_auth_failure(client_ip)
             # ORDER-022: Log auth failure as security event
-            asyncio.create_task(self._log_security_event(
-                "auth.login_failed", "warning", client_ip,
-            ))
+            asyncio.create_task(
+                self._log_security_event(
+                    "auth.login_failed",
+                    "warning",
+                    client_ip,
+                )
+            )
 
         return response
 
@@ -136,8 +140,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     async def _log_security_event(
-        event_type: str, severity: str, actor_ip: str | None = None,
-        actor_id: str | None = None, details: dict | None = None,
+        event_type: str,
+        severity: str,
+        actor_ip: str | None = None,
+        actor_id: str | None = None,
+        details: dict | None = None,
     ) -> None:
         """ORDER-022: Fire-and-forget security event logging."""
         from mcpworks_api.core.database import get_db_context
@@ -145,8 +152,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         async with get_db_context() as db:
             await fire_security_event(
-                db, event_type, severity,
-                actor_ip=actor_ip, actor_id=actor_id, details=details,
+                db,
+                event_type,
+                severity,
+                actor_ip=actor_ip,
+                actor_id=actor_id,
+                details=details,
             )
 
     def _rate_limit_response(self, limit: int, window: str, retry_after: int) -> JSONResponse:

@@ -65,11 +65,18 @@ class BillingMiddleware(BaseHTTPMiddleware):
             usage, limit = await self._check_quota(account)
             if usage >= limit:
                 # ORDER-022: Log quota exceeded as security event
-                asyncio.create_task(self._log_security_event(
-                    "billing.quota_exceeded", "warning",
-                    actor_id=str(getattr(account, "id", "")),
-                    details={"usage": usage, "limit": limit, "tier": getattr(account, "tier", "free")},
-                ))
+                asyncio.create_task(
+                    self._log_security_event(
+                        "billing.quota_exceeded",
+                        "warning",
+                        actor_id=str(getattr(account, "id", "")),
+                        details={
+                            "usage": usage,
+                            "limit": limit,
+                            "tier": getattr(account, "tier", "free"),
+                        },
+                    )
+                )
                 raise HTTPException(
                     status_code=429,
                     detail={
@@ -146,8 +153,11 @@ class BillingMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     async def _log_security_event(
-        event_type: str, severity: str, actor_ip: str | None = None,
-        actor_id: str | None = None, details: dict | None = None,
+        event_type: str,
+        severity: str,
+        actor_ip: str | None = None,
+        actor_id: str | None = None,
+        details: dict | None = None,
     ) -> None:
         """ORDER-022: Fire-and-forget security event logging."""
         from mcpworks_api.core.database import get_db_context
@@ -155,8 +165,12 @@ class BillingMiddleware(BaseHTTPMiddleware):
 
         async with get_db_context() as db:
             await fire_security_event(
-                db, event_type, severity,
-                actor_ip=actor_ip, actor_id=actor_id, details=details,
+                db,
+                event_type,
+                severity,
+                actor_ip=actor_ip,
+                actor_id=actor_id,
+                details=details,
             )
 
     def _end_of_next_month(self) -> int:

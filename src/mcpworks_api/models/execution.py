@@ -28,8 +28,9 @@ def _scrub_error_message(msg: str) -> str:
     for pattern, replacement in _PII_PATTERNS:
         msg = pattern.sub(replacement, msg)
     if len(msg) > _ERROR_MESSAGE_MAX_LEN:
-        msg = msg[:_ERROR_MESSAGE_MAX_LEN - 3] + "..."
+        msg = msg[: _ERROR_MESSAGE_MAX_LEN - 3] + "..."
     return msg
+
 
 if TYPE_CHECKING:
     from mcpworks_api.models.function import Function
