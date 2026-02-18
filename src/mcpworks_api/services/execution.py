@@ -172,7 +172,7 @@ class ExecutionService:
         self,
         execution_id: uuid.UUID,
         status: str,
-        result_data: dict[str, Any] | None = None,
+        result_data: dict[str, Any] | None = None,  # noqa: ARG002
         error_message: str | None = None,
         error_code: str | None = None,
     ) -> Execution:
