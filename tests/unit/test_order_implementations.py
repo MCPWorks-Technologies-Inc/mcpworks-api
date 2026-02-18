@@ -1,15 +1,7 @@
 """Tests for board order implementations (ORDER-001 through ORDER-023)."""
 
-import re
-
-import pytest
-
-from mcpworks_api.models.execution import (
-    Execution,
-    ExecutionStatus,
-    _scrub_error_message,
-)
-from mcpworks_api.models.security_event import SecurityEvent, hash_ip
+from mcpworks_api.models.execution import _scrub_error_message
+from mcpworks_api.models.security_event import hash_ip
 
 
 class TestOrder020PIIInExecutionRecords:
