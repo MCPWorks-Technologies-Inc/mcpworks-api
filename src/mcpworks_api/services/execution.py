@@ -83,12 +83,12 @@ class ExecutionService:
                 },
             )
 
-        # Create execution record
+        # ORDER-020: Never persist raw input data (PII risk)
         execution = Execution(
             user_id=user_id,
             workflow_id=workflow_id,
             status=ExecutionStatus.PENDING.value,
-            input_data=input_data,
+            input_data=None,
         )
         self.db.add(execution)
         await self.db.commit()
@@ -206,9 +206,9 @@ class ExecutionService:
                 f"Execution {execution_id} already in terminal state: {execution.status}"
             )
 
-        # Update execution
+        # ORDER-020: Never persist raw result data (PII risk)
         if status == "completed":
-            execution.mark_completed(result_data)
+            execution.mark_completed(None)
         else:
             execution.mark_failed(
                 error_message=error_message or "Unknown error",

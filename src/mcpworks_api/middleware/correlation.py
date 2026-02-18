@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 
+import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -29,8 +30,9 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     1. Check for incoming X-Request-ID header
     2. If missing, generate UUID v4
     3. Store in context variable for logging
-    4. Add to response headers
-    5. Forward to downstream service calls
+    4. Bind to structlog contextvars (ORDER-021)
+    5. Add to response headers
+    6. Forward to downstream service calls
     """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -42,6 +44,11 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 
         # Store in context variable for use in logging/other code
         correlation_id_var.set(correlation_id)
+
+        # ORDER-021: Bind correlation_id into structlog context so every log
+        # line emitted during this request carries the request ID.
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
 
         # Process request
         response = await call_next(request)

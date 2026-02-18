@@ -4,17 +4,18 @@ Tracks executions per account per month and enforces tier-based quotas.
 Usage is stored in Redis for fast access.
 """
 
-import logging
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import structlog
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from mcpworks_api.core.redis import get_redis_context
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class BillingMiddleware(BaseHTTPMiddleware):
@@ -63,6 +64,12 @@ class BillingMiddleware(BaseHTTPMiddleware):
         try:
             usage, limit = await self._check_quota(account)
             if usage >= limit:
+                # ORDER-022: Log quota exceeded as security event
+                asyncio.create_task(self._log_security_event(
+                    "billing.quota_exceeded", "warning",
+                    actor_id=str(getattr(account, "id", "")),
+                    details={"usage": usage, "limit": limit, "tier": getattr(account, "tier", "free")},
+                ))
                 raise HTTPException(
                     status_code=429,
                     detail={
@@ -76,8 +83,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
         except HTTPException:
             raise
         except Exception as e:
-            # Redis error - log and allow request (fail-open)
-            logger.warning(f"Billing check failed: {e}")
+            logger.warning("billing_check_failed", error=str(e))
 
         # Execute request
         response = await call_next(request)
@@ -87,8 +93,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
             try:
                 await self._increment_usage(account)
             except Exception as e:
-                # Don't fail request due to billing error
-                logger.warning(f"Usage tracking failed: {e}")
+                logger.warning("usage_tracking_failed", error=str(e))
 
         return response
 
@@ -139,6 +144,21 @@ class BillingMiddleware(BaseHTTPMiddleware):
         now = datetime.now(UTC)
         return f"usage:{account_id}:{now.year}:{now.month}"
 
+    @staticmethod
+    async def _log_security_event(
+        event_type: str, severity: str, actor_ip: str | None = None,
+        actor_id: str | None = None, details: dict | None = None,
+    ) -> None:
+        """ORDER-022: Fire-and-forget security event logging."""
+        from mcpworks_api.core.database import get_db_context
+        from mcpworks_api.services.security_event import fire_security_event
+
+        async with get_db_context() as db:
+            await fire_security_event(
+                db, event_type, severity,
+                actor_ip=actor_ip, actor_id=actor_id, details=details,
+            )
+
     def _end_of_next_month(self) -> int:
         """Get Unix timestamp for end of next month.
 
@@ -173,7 +193,7 @@ async def get_account_usage(account_id: Any) -> dict[str, Any]:
                 "usage": usage,
             }
     except Exception as e:
-        logger.error(f"Failed to get usage: {e}")
+        logger.error("failed_to_get_usage", error=str(e))
         return {
             "account_id": str(account_id),
             "year": datetime.now(UTC).year,
@@ -199,5 +219,5 @@ async def reset_account_usage(account_id: Any) -> bool:
             await redis.delete(month_key)
             return True
     except Exception as e:
-        logger.error(f"Failed to reset usage: {e}")
+        logger.error("failed_to_reset_usage", error=str(e))
         return False

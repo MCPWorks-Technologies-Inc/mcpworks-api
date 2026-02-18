@@ -171,7 +171,6 @@ jobs:
 
       - name: Run pip-audit for vulnerabilities
         run: pip-audit --strict --desc on
-        continue-on-error: true
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main

@@ -176,7 +176,21 @@ else
     echo "    WARNING: cgroup v2 not detected. nsjail cgroup limits may not work."
 fi
 
-# ── 10. Kernel parameters for sandbox ──────────────────────────────────────
+# ── 10. ORDER-006: iptables — block sandbox UID from DB/Redis ─────────────
+echo ">>> Configuring iptables to isolate sandbox from DB/Redis..."
+# Block UID 65534 (sandbox user) from reaching PostgreSQL and Redis.
+# These rules are idempotent: -C checks if rule exists before -A adds it.
+for PORT in 5432 6379; do
+    iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --dport "${PORT}" -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --dport "${PORT}" -j DROP
+    echo "    Blocked UID 65534 -> port ${PORT}"
+done
+# Persist across reboots
+if command -v iptables-save &>/dev/null; then
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+fi
+
+# ── 11. Kernel parameters for sandbox ──────────────────────────────────────
 echo ">>> Tuning kernel parameters..."
 
 # Allow unprivileged user namespaces (needed by nsjail inside Docker)

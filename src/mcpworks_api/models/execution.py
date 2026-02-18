@@ -1,6 +1,7 @@
 """Execution model - tracks workflow executions."""
 
 import enum
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -10,6 +11,25 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
+
+# ORDER-023: Maximum length for persisted error messages
+_ERROR_MESSAGE_MAX_LEN = 255
+
+# ORDER-023: PII patterns to scrub from error messages
+_PII_PATTERNS = [
+    (re.compile(r"\S+@\S+\.\S+"), "[EMAIL]"),
+    (re.compile(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"), "[PHONE]"),
+    (re.compile(r"(sk-|mcpw_|bearer\s+)\S+", re.IGNORECASE), "[REDACTED_KEY]"),
+]
+
+
+def _scrub_error_message(msg: str) -> str:
+    """Truncate and scrub PII from error messages before persistence."""
+    for pattern, replacement in _PII_PATTERNS:
+        msg = pattern.sub(replacement, msg)
+    if len(msg) > _ERROR_MESSAGE_MAX_LEN:
+        msg = msg[:_ERROR_MESSAGE_MAX_LEN - 3] + "..."
+    return msg
 
 if TYPE_CHECKING:
     from mcpworks_api.models.function import Function
@@ -162,7 +182,7 @@ class Execution(Base, UUIDMixin, TimestampMixin):
         """Mark execution as failed."""
         self.status = ExecutionStatus.FAILED.value
         self.completed_at = datetime.now(UTC)
-        self.error_message = error_message
+        self.error_message = _scrub_error_message(error_message)
         self.error_code = error_code
 
     def mark_cancelled(self) -> None:
