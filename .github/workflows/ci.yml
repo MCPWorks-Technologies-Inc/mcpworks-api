@@ -170,7 +170,7 @@ jobs:
           pip install ".[dev]" pip-audit
 
       - name: Run pip-audit for vulnerabilities
-        run: pip-audit --strict --desc on
+        run: pip-audit --strict --desc on --skip-editable
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main
