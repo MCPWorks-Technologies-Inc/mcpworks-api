@@ -1,5 +1,7 @@
 """Rate limiting middleware using Redis sliding window."""
 
+import asyncio
+
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -59,6 +61,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Track auth failures for rate limiting
         if request.url.path == "/v1/auth/token" and response.status_code == 401:
             await self._record_auth_failure(client_ip)
+            # ORDER-022: Log auth failure as security event
+            asyncio.create_task(self._log_security_event(
+                "auth.login_failed", "warning", client_ip,
+            ))
 
         return response
 
@@ -127,6 +133,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             is_limited, _ = await limiter.check_rate_limited(key, config["limit"])
 
         return is_limited
+
+    @staticmethod
+    async def _log_security_event(
+        event_type: str, severity: str, actor_ip: str | None = None,
+        actor_id: str | None = None, details: dict | None = None,
+    ) -> None:
+        """ORDER-022: Fire-and-forget security event logging."""
+        from mcpworks_api.core.database import get_db_context
+        from mcpworks_api.services.security_event import fire_security_event
+
+        async with get_db_context() as db:
+            await fire_security_event(
+                db, event_type, severity,
+                actor_ip=actor_ip, actor_id=actor_id, details=details,
+            )
 
     def _rate_limit_response(self, limit: int, window: str, retry_after: int) -> JSONResponse:
         """Create rate limit exceeded response."""

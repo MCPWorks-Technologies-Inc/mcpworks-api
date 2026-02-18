@@ -15,6 +15,7 @@ In development (SANDBOX_DEV_MODE=true):
 import ast
 import asyncio
 import json
+import secrets
 import shutil
 import tempfile
 from datetime import UTC, datetime
@@ -22,9 +23,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
 from mcpworks_api.config import get_settings
 from mcpworks_api.models import Account
+
+logger = structlog.get_logger(__name__)
 
 
 class ExecutionTier(str, Enum):
@@ -338,6 +343,11 @@ class SandboxBackend(Backend):
             tier = getattr(account, "tier", DEFAULT_TIER.value)
             namespace = getattr(account, "namespace", "sandbox") or "sandbox"
 
+            # ORDER-003: Generate execution token via file (never env var or /proc)
+            exec_token = secrets.token_urlsafe(32)
+            token_file = exec_dir / ".exec_token"
+            token_file.write_text(exec_token)
+
             # Spawn sandbox process
             process = await asyncio.create_subprocess_exec(
                 str(self.spawn_script),
@@ -346,6 +356,7 @@ class SandboxBackend(Backend):
                 str(exec_dir / "user_code.py"),
                 str(exec_dir / "input.json"),
                 namespace,
+                str(token_file),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -385,6 +396,15 @@ class SandboxBackend(Backend):
                 except json.JSONDecodeError:
                     pass
 
+            # ORDER-022: Log sandbox violations (nsjail seccomp/resource kills)
+            if process.returncode and process.returncode not in (0, 1):
+                asyncio.create_task(self._log_sandbox_violation(
+                    execution_id=execution_id,
+                    account_id=str(getattr(account, "id", "")),
+                    exit_code=process.returncode,
+                    stderr_tail=(stderr.decode()[-500:] if stderr else ""),
+                ))
+
             # Fallback if no output file
             return ExecutionResult(
                 success=False,
@@ -400,6 +420,27 @@ class SandboxBackend(Backend):
             # Cleanup
             if exec_dir.exists():
                 shutil.rmtree(exec_dir, ignore_errors=True)
+
+    @staticmethod
+    async def _log_sandbox_violation(
+        execution_id: str, account_id: str, exit_code: int, stderr_tail: str,
+    ) -> None:
+        """ORDER-022: Fire-and-forget security event for sandbox violations."""
+        from mcpworks_api.core.database import get_db_context
+        from mcpworks_api.services.security_event import fire_security_event
+
+        async with get_db_context() as db:
+            await fire_security_event(
+                db,
+                event_type="sandbox.violation",
+                severity="error",
+                actor_id=account_id,
+                details={
+                    "execution_id": execution_id,
+                    "exit_code": exit_code,
+                    "stderr_tail": stderr_tail[:255],
+                },
+            )
 
     def _wrap_code(self, code: str) -> str:
         """Wrap user code with execution harness.

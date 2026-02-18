@@ -1,5 +1,6 @@
 """SecurityEvent model for tracking security-relevant events."""
 
+import hashlib
 from datetime import datetime
 from typing import Any
 
@@ -10,13 +11,20 @@ from sqlalchemy import (
     String,
     func,
 )
-from sqlalchemy.dialects.postgresql import INET, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from mcpworks_api.models.base import Base, UUIDMixin
 
 # Allowed severity levels
 ALLOWED_SEVERITIES = {"info", "warning", "error", "critical"}
+
+
+def hash_ip(ip: str | None) -> str | None:
+    """ORDER-022: One-way SHA-256 hash of IP address for privacy-safe logging."""
+    if not ip:
+        return None
+    return hashlib.sha256(ip.encode()).hexdigest()
 
 
 class SecurityEvent(Base, UUIDMixin):
@@ -34,6 +42,8 @@ class SecurityEvent(Base, UUIDMixin):
     - auth.api_key_revoked
     - namespace.whitelist_updated
     - function.execution_blocked
+    - billing.quota_exceeded
+    - sandbox.violation
     - admin.user_suspended
     - etc.
 
@@ -47,7 +57,6 @@ class SecurityEvent(Base, UUIDMixin):
     __tablename__ = "security_events"
 
     # Event Metadata
-    # Note: Indexes are defined in __table_args__ with explicit names
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -59,9 +68,9 @@ class SecurityEvent(Base, UUIDMixin):
         nullable=False,
     )
 
-    # Actor Information
-    actor_ip: Mapped[str | None] = mapped_column(
-        INET,
+    # ORDER-022: Store SHA-256 hash of IP, never raw IP
+    actor_ip_hash: Mapped[str | None] = mapped_column(
+        String(64),
         nullable=True,
     )
 

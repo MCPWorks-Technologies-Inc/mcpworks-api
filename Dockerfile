@@ -104,7 +104,7 @@ FROM debian:bookworm-slim AS nsjail-builder
 # kafel in this build does NOT recognise: stat, fstat, lstat, sendfile, uname.
 # kafel arg-filter syntax (arg0) is also broken.
 # Update this SHA only after verifying the seccomp policy still compiles.
-ARG NSJAIL_COMMIT=d20ea0a58ab5f7e9610ee89b84237a2dfee2a040
+ARG NSJAIL_COMMIT=d20ea0a58ab57e8b5d2d37418ebbc2a57ddb8c2a
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     autoconf \

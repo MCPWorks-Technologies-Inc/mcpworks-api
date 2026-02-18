@@ -1,84 +1,281 @@
-/* Seccomp DENYLIST for Python 3.11 sandbox (glibc 2.41 / Debian Trixie)
+/* ORDER-001: Seccomp ALLOWLIST for Python 3.11 sandbox (glibc 2.41 / Debian Trixie)
  *
- * Strategy: DEFAULT ALLOW with explicit DENY of dangerous syscalls.
+ * Strategy: DEFAULT DENY with explicit ALLOW of required syscalls.
  *
- * nsjail already provides primary isolation via namespaces, cgroups, UID
- * mapping, and chroot.  Seccomp is defense-in-depth — it blocks the ~34
- * syscalls that could escalate privileges or escape containment, while
- * allowing everything else through.  This eliminates the compatibility
- * hell of an allowlist (where every glibc update or new native package
- * can introduce unknown syscalls that SIGSYS-kill the process).
+ * This is defense-in-depth — nsjail already provides isolation via
+ * namespaces, cgroups, UID mapping, and chroot. Seccomp reduces the
+ * kernel attack surface to only the ~190 syscalls actually needed by
+ * Python + glibc + numpy/scipy/BLAS + 59 curated packages.
  *
  * NOTE: This is a kafel policy file loaded via nsjail's --seccomp_policy.
- * nsjail compiles each seccomp_string independently, so this MUST be a
- * single file.
+ * The pinned nsjail commit (d20ea0a58ab5) bundles a kafel that does NOT
+ * recognise: stat, fstat, lstat, sendfile, uname.  We use #define to
+ * map these to raw x86_64 syscall numbers (see below).  kafel arg-filter
+ * syntax is also broken in this build, so clone/clone3 flags cannot be
+ * filtered here — nsjail namespace config restricts CLONE_NEW* at the
+ * namespace level.
  *
- * Categories of denied syscalls:
- *   - Kernel manipulation (loading modules, rebooting, swapping)
- *   - Container/namespace escape (setns, unshare, mount, pivot_root)
- *   - Process injection (ptrace, cross-process memory access)
- *   - Hardware/privileged access (ioperm, iopl, modify_ldt)
- *   - Exploit primitives (bpf, userfaultfd, perf_event_open)
- *   - Kernel keyring (add_key, request_key, keyctl)
- *   - Clock manipulation (settimeofday, adjtimex, clock_settime)
+ * Explicitly denied (per ORDER-001):
+ *   - unshare, setns, open_by_handle_at, personality (container escape)
+ *   - shmget, shmat, msgget, semget (SysV IPC — blocked by clone_newipc)
  *
- * NOT denied (and why):
- *   - clone/clone3: Python threading needs them; nsjail restricts CLONE_NEW*
- *   - socket/connect: Network control is via iptables (existing architecture)
- *   - prctl: Python signal handling needs it; dangerous ops need CAP_SYS_ADMIN
- *   - execve: nsjail chroot restricts what can be executed
+ * Allowed but restricted by other layers:
+ *   - clone/clone3: Allowed (Python threading); nsjail blocks CLONE_NEW*
+ *   - socket/connect: Allowed; iptables restricts egress
+ *   - execve: Allowed; nsjail chroot limits what can be executed
+ *   - prctl: Allowed; dangerous ops need CAP_SYS_ADMIN (dropped)
+ *
+ * Maintenance:
+ *   1. If a package fails with SIGSYS, run smoketest to identify the syscall
+ *   2. Verify the syscall is safe, add to ALLOW with a comment
+ *   3. Run smoketest again to confirm fix
  */
 
-DENY {
-  /* ── Kernel manipulation ── */
-  kexec_load,         /* Load a new kernel for later execution */
-  kexec_file_load,    /* Load a new kernel (file-descriptor variant) */
-  reboot,             /* Reboot or enable/disable Ctrl-Alt-Del */
-  init_module,        /* Load a kernel module */
-  finit_module,       /* Load a kernel module (fd variant) */
-  delete_module,      /* Unload a kernel module */
-  acct,               /* Toggle process accounting */
-  swapon,             /* Start swapping to file/device */
-  swapoff,            /* Stop swapping to file/device */
-  nfsservctl,         /* NFS server control (obsolete but still a syscall) */
+/* ═══════════════════════════════════════════════════════════════════════
+ * Syscalls not recognised by this kafel build — defined by raw x86_64
+ * syscall number (from asm/unistd_64.h).  Verified via Docker smoketest.
+ * ═══════════════════════════════════════════════════════════════════════ */
+#define fstat 5
+#define uname 63
 
-  /* ── Container/namespace escape ── */
-  setns,              /* Reassociate thread with a namespace */
-  unshare,            /* Disassociate parts of the execution context */
-  pivot_root,         /* Change the root mount */
-  mount,              /* Mount filesystem */
-  umount,             /* Unmount filesystem */
-  umount2,            /* Unmount filesystem (flags variant) */
-  open_by_handle_at,  /* Open file by handle (container escape vector) */
+ALLOW {
+  /* ══════════════════════════════════════════════════════════════════════
+   * File I/O — reading/writing files, directory operations
+   * ══════════════════════════════════════════════════════════════════════ */
+  read,
+  write,
+  openat,              /* Open files (glibc uses openat, not open) */
+  close,
+  close_range,         /* Bulk close fds (glibc 2.34+, Linux 5.9+) */
+  fstat,               /* Stat open fd (CPython uses directly; #define above) */
+  newfstatat,          /* Stat files by path (glibc 2.41 prefers this) */
+  fstatfs,
+  statfs,
+  statx,               /* Extended stat — used by newer glibc */
+  lseek,
+  pread64,
+  pwrite64,
+  readv,
+  writev,
+  preadv,
+  pwritev,
+  preadv2,
+  pwritev2,
+  access,
+  faccessat,
+  faccessat2,
+  readlink,            /* Read symlink (Python os.readlink) */
+  readlinkat,
+  getcwd,
+  getdents64,          /* Read directory entries */
+  dup,
+  dup2,
+  dup3,
+  pipe,
+  pipe2,
+  fcntl,
+  flock,
+  fsync,
+  fdatasync,
+  ftruncate,
+  truncate,
+  rename,              /* Rename file (legacy, used by some packages) */
+  renameat,
+  renameat2,
+  mkdir,               /* Create directory (legacy, some packages use directly) */
+  mkdirat,
+  unlink,              /* Delete file (legacy, used by some packages) */
+  unlinkat,            /* Delete files/dirs */
+  symlinkat,
+  linkat,
+  fchmod,
+  fchmodat,
+  fchown,
+  fchownat,
+  utimensat,           /* Set file timestamps */
+  fallocate,
+  copy_file_range,
+  sendfile64,          /* sendfile — kafel knows sendfile64 */
+  splice,
+  tee,
+  sync_file_range,
+  name_to_handle_at,   /* Needed by glibc nsswitch */
 
-  /* ── Process injection ── */
-  ptrace,             /* Trace/debug another process */
-  process_vm_readv,   /* Read from another process's address space */
-  process_vm_writev,  /* Write to another process's address space */
-  kcmp,               /* Compare two processes (info leak) */
+  /* ══════════════════════════════════════════════════════════════════════
+   * Memory management
+   * ══════════════════════════════════════════════════════════════════════ */
+  brk,                 /* Heap allocation */
+  mmap,                /* Memory mapping (Python, numpy, BLAS) */
+  munmap,
+  mprotect,            /* Change memory protection (JIT, numpy) */
+  madvise,             /* Advisory hints (Python gc, numpy) */
+  mremap,              /* Resize mappings */
+  msync,
+  mincore,
+  mbind,               /* NUMA memory binding (numpy BLAS/LAPACK) */
+  set_mempolicy,       /* NUMA policy (numpy BLAS) */
+  get_mempolicy,       /* NUMA query */
+  membarrier,          /* Memory barrier (glibc 2.41) */
+  memfd_create,        /* Anonymous file descriptor */
 
-  /* ── Hardware/privileged access ── */
-  ioperm,             /* Set port I/O permissions */
-  iopl,               /* Change I/O privilege level */
-  modify_ldt,         /* Modify local descriptor table */
-  lookup_dcookie,     /* Return a directory entry's path (profiling) */
+  /* ══════════════════════════════════════════════════════════════════════
+   * Process management — fork, exec, wait, exit
+   * ══════════════════════════════════════════════════════════════════════ */
+  clone,               /* Fork/thread creation — nsjail restricts flags */
+  clone3,              /* Modern clone — nsjail restricts flags */
+  execve,              /* Execute programs — chroot limits available binaries */
+  execveat,
+  wait4,               /* Wait for child processes */
+  waitid,
+  exit,
+  exit_group,
+  getpid,
+  getppid,
+  gettid,
+  getuid,
+  geteuid,
+  getgid,
+  getegid,
+  getresuid,
+  getresgid,
+  getgroups,
+  set_tid_address,     /* Thread ID pointer (glibc) */
+  set_robust_list,     /* Robust futex list (glibc threading) */
+  get_robust_list,
+  sched_getaffinity,   /* CPU affinity queries */
+  sched_setaffinity,
+  sched_yield,
+  sched_getscheduler,
+  sched_getparam,
+  sched_setscheduler,
+  sched_get_priority_max,
+  sched_get_priority_min,
+  arch_prctl,          /* Set FS/GS base (x86_64 TLS, glibc required) */
+  prctl,               /* Process control — dangerous ops need CAP_SYS_ADMIN */
+  prlimit64,           /* Get/set resource limits */
+  getrlimit,
+  setrlimit,
+  getrusage,
 
-  /* ── Exploit primitives ── */
-  bpf,                /* eBPF operations (kernel code execution) */
-  userfaultfd,        /* Create userfaultfd (use-after-free primitive) */
-  perf_event_open,    /* Performance monitoring (info leak + exploit) */
-  personality,        /* Set process execution domain */
+  /* ══════════════════════════════════════════════════════════════════════
+   * Signals
+   * ══════════════════════════════════════════════════════════════════════ */
+  rt_sigaction,
+  rt_sigprocmask,
+  rt_sigreturn,
+  rt_sigpending,
+  rt_sigtimedwait,
+  rt_sigsuspend,
+  sigaltstack,
+  kill,
+  tgkill,
+  tkill,
 
-  /* ── Kernel keyring ── */
-  add_key,            /* Add a key to the kernel keyring */
-  request_key,        /* Request a key from the kernel keyring */
-  keyctl,             /* Manipulate the kernel keyring */
+  /* ══════════════════════════════════════════════════════════════════════
+   * Networking — sockets, connections (egress filtered by iptables)
+   * ══════════════════════════════════════════════════════════════════════ */
+  socket,
+  connect,
+  bind,
+  listen,
+  accept,
+  accept4,
+  sendto,
+  recvfrom,
+  sendmsg,
+  recvmsg,
+  shutdown,
+  getsockopt,
+  setsockopt,
+  getsockname,
+  getpeername,
+  socketpair,
+  sendmmsg,
+  recvmmsg,
 
-  /* ── Clock manipulation ── */
-  clock_settime,      /* Set a clock (requires CAP_SYS_TIME) */
-  settimeofday,       /* Set system time */
-  adjtimex,           /* Tune kernel clock */
-  clock_adjtime       /* Tune a POSIX clock */
+  /* ══════════════════════════════════════════════════════════════════════
+   * I/O multiplexing — select, poll, epoll (asyncio, aiohttp)
+   * ══════════════════════════════════════════════════════════════════════ */
+  select,
+  pselect6,
+  poll,
+  ppoll,
+  epoll_create,
+  epoll_create1,
+  epoll_ctl,
+  epoll_wait,
+  epoll_pwait,
+  epoll_pwait2,
+  eventfd,
+  eventfd2,
+  timerfd_create,
+  timerfd_settime,
+  timerfd_gettime,
+  signalfd,
+  signalfd4,
+  inotify_init,
+  inotify_init1,
+  inotify_add_watch,
+  inotify_rm_watch,
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * Time — clocks, timers, sleep
+   * ══════════════════════════════════════════════════════════════════════ */
+  clock_gettime,
+  clock_getres,
+  clock_nanosleep,
+  nanosleep,
+  gettimeofday,
+  time,
+  times,
+  timer_create,
+  timer_settime,
+  timer_gettime,
+  timer_getoverrun,
+  timer_delete,
+  alarm,
+  setitimer,
+  getitimer,
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * Threading — futex, thread-local storage
+   * ══════════════════════════════════════════════════════════════════════ */
+  futex,
+  futex_waitv,         /* Modern futex (glibc 2.41) */
+  rseq,                /* Restartable sequences (glibc 2.35+) */
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * POSIX IPC — shared memory, semaphores (numpy multiprocessing)
+   * Note: SysV IPC (shmget, shmat, msgget, semget) is NOT allowed
+   * ══════════════════════════════════════════════════════════════════════ */
+  /* POSIX IPC uses regular file operations on /dev/shm */
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * I/O control and misc
+   * ══════════════════════════════════════════════════════════════════════ */
+  ioctl,               /* Terminal/device control (tty, /dev/null) */
+  getrandom,           /* Kernel entropy (Python secrets, cryptography) */
+  mlock,               /* Lock memory pages (cryptography) */
+  mlock2,
+  munlock,
+  mlockall,
+  munlockall,
+  umask,
+  /* uname: NOT included — kafel in pinned nsjail doesn't recognise it.
+   * glibc uses arch_prctl for TLS setup instead. If needed, update
+   * the nsjail pin to a build with newer kafel. */
+  uname,               /* System info (Python platform module; #define above) */
+  sysinfo,
+  getcpu,
+  getdents,            /* Old readdir (some libraries) */
+  readahead,
+  fadvise64,
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * x86_64 specific
+   * ══════════════════════════════════════════════════════════════════════ */
+  vfork,               /* Used by subprocess in some cases */
+  restart_syscall      /* Required for signal restart */
 }
 
-DEFAULT ALLOW
+DEFAULT DENY
