@@ -109,6 +109,62 @@ The spec warns: "Database credentials should NEVER be on the execution host."
 - Verify: sandbox processes cannot reach PostgreSQL port (5432) even if they escape nsjail
 - Document the isolation boundary in a brief security note
 
+### ORDER-020: Stop logging PII in execution records
+
+**Priority:** CRITICAL
+**Effort:** 0.5 days
+**Location:** `src/mcpworks_api/models/execution.py`, `src/mcpworks_api/services/`
+**Spec:** `../mcpworks-internals/docs/implementation/logging-specification.md`
+
+The Execution model stores `input_data` and `result_data` as JSONB by default. These fields will contain user-supplied function arguments -- potentially PII, financial data, credentials, health data. This is over-logging and creates liability before pilot users.
+
+**Requirements:**
+- Stop writing `input_data` and `result_data` by default in `ExecutionService.start_execution()`
+- Pass `input_data=None` and `result_data=None` to the model unless a per-function debug flag is set
+- Keep the columns nullable for future opt-in debug logging (A1)
+- Alembic migration not needed if columns are already nullable; verify
+
+### ORDER-021: Add structured JSON logging
+
+**Priority:** HIGH
+**Effort:** 0.5 days
+**Location:** `src/mcpworks_api/`, dependencies
+
+Bare `logging.getLogger(__name__)` calls produce unstructured logs. Structured JSON enables log forwarding and operational debugging.
+
+**Requirements:**
+- Add `structlog` or `python-json-logger` to dependencies
+- Configure structured JSON output for all application logging
+- Per-request log entry: timestamp, endpoint (create/run), namespace, function, backend, HTTP status, duration_ms, account_id, request/response size bytes
+- Never log: request bodies, response bodies, IP addresses, API keys, user content
+
+### ORDER-022: Implement security events table
+
+**Priority:** HIGH
+**Effort:** 1 day
+**Location:** `src/mcpworks_api/models/`, `src/mcpworks_api/middleware/`
+
+The A0 plan schema includes `security_events` but it is not yet implemented. Needed for auth failure tracking, quota exceeded visibility, and sandbox violation logging.
+
+**Requirements:**
+- Create `security_events` table: id, timestamp, event_type, actor_id, actor_ip_hash (SHA-256, NOT raw IP), endpoint_type, namespace, details (JSONB, no PII), severity
+- Alembic migration
+- Wire into: auth middleware (log failures), billing middleware (log quota exceeded), sandbox executor (log nsjail violations)
+- `GET /v1/audit/logs` endpoint (read-only, account-scoped) -- can be basic for A0
+
+### ORDER-023: Truncate error messages and PII scrub
+
+**Priority:** HIGH
+**Effort:** 0.5 days
+**Location:** `src/mcpworks_api/models/execution.py`, `src/mcpworks_api/services/`
+
+Error messages from backend execution may contain user data (embedded in tracebacks, exception strings).
+
+**Requirements:**
+- Truncate `error_message` field to 255 characters before persisting
+- Apply basic PII scrub: strip email patterns (`\S+@\S+`), phone patterns, and anything resembling API keys (`sk-`, `mcpw_`, bearer tokens)
+- Log only `error_code` (machine-readable) in structured logs, not `error_message`
+
 ---
 
 ## Phase 2: Legal Infrastructure (BLOCKING — before any paying customer)
@@ -377,6 +433,10 @@ By March 16, 2026 (30-day review), the following should be true:
 - [ ] Sandbox mounts corrected (ORDER-004)
 - [ ] Package audit complete (ORDER-005)
 - [ ] DB credential isolation verified (ORDER-006)
+- [ ] Execution model stops logging PII by default (ORDER-020)
+- [ ] Structured JSON logging in place (ORDER-021)
+- [ ] Security events table capturing auth failures and quota hits (ORDER-022)
+- [ ] Error messages truncated and PII-scrubbed (ORDER-023)
 - [ ] Legal documents served and consent required (ORDER-007, ORDER-008)
 - [ ] Web registration live (ORDER-009)
 - [ ] .mcp.json config generator working (ORDER-010)
@@ -407,6 +467,8 @@ Do NOT work on any of these until the review date and board approval:
 - OAuth 2.1 for dashboard
 - TypeScript/Node.js sandbox support
 - Marketplace or third-party provider features
+- Human-In-The-Loop (HITL) for function execution (see `../mcpworks-internals/docs/implementation/hitl-function-execution.md`)
+- Opt-in debug logging (input/output capture per function)
 
 ---
 
