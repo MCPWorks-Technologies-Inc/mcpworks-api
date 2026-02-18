@@ -398,12 +398,14 @@ class SandboxBackend(Backend):
 
             # ORDER-022: Log sandbox violations (nsjail seccomp/resource kills)
             if process.returncode and process.returncode not in (0, 1):
-                asyncio.create_task(self._log_sandbox_violation(
-                    execution_id=execution_id,
-                    account_id=str(getattr(account, "id", "")),
-                    exit_code=process.returncode,
-                    stderr_tail=(stderr.decode()[-500:] if stderr else ""),
-                ))
+                asyncio.create_task(
+                    self._log_sandbox_violation(
+                        execution_id=execution_id,
+                        account_id=str(getattr(account, "id", "")),
+                        exit_code=process.returncode,
+                        stderr_tail=(stderr.decode()[-500:] if stderr else ""),
+                    )
+                )
 
             # Fallback if no output file
             return ExecutionResult(
@@ -423,7 +425,10 @@ class SandboxBackend(Backend):
 
     @staticmethod
     async def _log_sandbox_violation(
-        execution_id: str, account_id: str, exit_code: int, stderr_tail: str,
+        execution_id: str,
+        account_id: str,
+        exit_code: int,
+        stderr_tail: str,
     ) -> None:
         """ORDER-022: Fire-and-forget security event for sandbox violations."""
         from mcpworks_api.core.database import get_db_context
