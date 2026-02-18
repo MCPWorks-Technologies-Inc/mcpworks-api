@@ -21,13 +21,15 @@ def _sanitize(name: str) -> str:
     return re.sub(r"[^a-z0-9_]", "_", name.lower())
 
 
+_NO_DEFAULT = object()  # module-level sentinel for comparison
+
+
 def _params_from_schema(schema: dict[str, Any] | None) -> list[tuple[str, Any, str]]:
     """Extract (param_name, default_or_sentinel, description) from JSON Schema.
 
     Returns a list of ``(name, default, desc)`` tuples.  ``default`` is the
     sentinel ``_NO_DEFAULT`` when the property has no default value.
     """
-    _NO_DEFAULT = object()
     if not schema or "properties" not in schema:
         return []
     required = set(schema.get("required", []))
@@ -39,9 +41,6 @@ def _params_from_schema(schema: dict[str, Any] | None) -> list[tuple[str, Any, s
         desc = prop.get("description", "")
         params.append((_sanitize(key), default, desc))
     return params
-
-
-_NO_DEFAULT = object()  # module-level sentinel for comparison
 
 
 def _generate_wrapper(
