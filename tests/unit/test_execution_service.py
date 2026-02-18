@@ -250,7 +250,8 @@ class TestExecutionServiceHandleCallback:
         )
 
         assert execution.status == ExecutionStatus.COMPLETED.value
-        assert execution.result_data == {"output": "success"}
+        # ORDER-020: result_data is intentionally not persisted (PII risk)
+        assert execution.result_data is None
 
     @pytest.mark.asyncio
     async def test_handle_callback_failed(self, db, running_execution):
