@@ -117,6 +117,7 @@ class FunctionResponse(BaseModel):
     description: str | None
     tags: list[str] | None
     active_version: int
+    call_count: int
     service_id: str
     created_at: str
 
@@ -129,6 +130,7 @@ class FunctionDetailResponse(BaseModel):
     description: str | None
     tags: list[str] | None
     active_version: int
+    call_count: int
     active_version_details: dict[str, Any] | None
     versions: list[dict[str, Any]]
     created_at: str
@@ -446,6 +448,7 @@ async def create_function(
             description=function.description,
             tags=function.tags,
             active_version=function.active_version,
+            call_count=function.call_count,
             service_id=str(function.service_id),
             created_at=function.created_at.isoformat(),
         )
@@ -493,6 +496,7 @@ async def list_functions(
                     description=f.description,
                     tags=f.tags,
                     active_version=f.active_version,
+                    call_count=f.call_count,
                     service_id=str(f.service_id),
                     created_at=f.created_at.isoformat(),
                 )
@@ -533,6 +537,7 @@ async def get_function(
             description=details["description"],
             tags=details["tags"],
             active_version=details["active_version"],
+            call_count=details.get("call_count", 0),
             active_version_details=details["active_version_details"],
             versions=details["versions"],
             created_at=details["created_at"],

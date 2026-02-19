@@ -491,13 +491,14 @@ async function loadAllFunctions() {
         .catch(() => [])
     ))).flat();
     if (!fns.length) { c.innerHTML = emptyState('fn()', 'No functions found'); return; }
-    c.innerHTML = `<table><thead><tr><th>Function</th><th>Service</th><th>Namespace</th><th>Tags</th><th>Ver</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
+    c.innerHTML = `<table><thead><tr><th>Function</th><th>Service</th><th>Namespace</th><th>Tags</th><th>Ver</th><th>Calls</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
       <tr class="clickable stagger" style="--i:${i}" onclick="loadFunction('${esc(f.namespace)}','${esc(f.service)}','${esc(f.name)}')">
         <td class="cell-name">${esc(f.name)}</td>
         <td class="cell-dim">${esc(f.service)}</td>
         <td class="cell-dim">${esc(f.namespace)}</td>
         <td>${(f.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
         <td>v${f.active_version}</td>
+        <td class="cell-dim">${f.call_count ?? 0}</td>
         <td class="cell-muted">${fmtDate(f.created_at)}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
@@ -514,12 +515,13 @@ async function loadFunctions(nsName, svcName) {
   try {
     const fns = (await apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions`)).functions || [];
     if (!fns.length) { c.innerHTML = emptyState('fn()', 'No functions in this service'); return; }
-    c.innerHTML = `<table><thead><tr><th>Function</th><th>Description</th><th>Tags</th><th>Ver</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
+    c.innerHTML = `<table><thead><tr><th>Function</th><th>Description</th><th>Tags</th><th>Ver</th><th>Calls</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
       <tr class="clickable stagger" style="--i:${i}" onclick="loadFunction('${esc(nsName)}','${esc(svcName)}','${esc(f.name)}')">
         <td class="cell-name">${esc(f.name)}</td>
         <td class="cell-dim">${esc(f.description || '\u2014')}</td>
         <td>${(f.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
         <td>v${f.active_version}</td>
+        <td class="cell-dim">${f.call_count ?? 0}</td>
         <td class="cell-muted">${fmtDate(f.created_at)}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
@@ -542,7 +544,7 @@ async function loadFunction(nsName, svcName, fnName) {
       ${fn.description ? `<div class="detail-desc">${esc(fn.description)}</div>` : ''}
       ${(fn.tags || []).length ? `<div style="margin-bottom:14px">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
       ${av ? `
-        <div class="detail-meta">Backend: <span>${esc(av.backend)}</span></div>
+        <div class="detail-meta">Backend: <span>${esc(av.backend)}</span> &middot; Calls: <span>${fn.call_count ?? 0}</span></div>
         ${av.code ? `<div class="section-label">Code</div><pre class="code-block">${esc(av.code)}</pre>` : ''}
         ${av.config ? `<div class="section-label">Config</div><div class="schema-block">${esc(JSON.stringify(av.config, null, 2))}</div>` : ''}
         ${av.input_schema ? `<div class="section-label">Input Schema</div><div class="schema-block">${esc(JSON.stringify(av.input_schema, null, 2))}</div>` : ''}
