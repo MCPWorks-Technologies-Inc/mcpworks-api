@@ -4,41 +4,56 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mcpworks admin</title>
-<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['"DM Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      }
+    }
+  }
+}
+</script>
 <style>
-  body { background: #0f172a; color: #e2e8f0; font-family: ui-monospace, monospace; }
-  .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
-  .btn { background: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-family: inherit; }
-  .btn:hover { background: #2563eb; }
-  input { background: #0f172a; border: 1px solid #475569; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-family: inherit; }
-  input:focus { outline: none; border-color: #3b82f6; }
+  body { background: #111827; color: #e5e7eb; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; }
+  .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; }
+  .btn { background: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 500; transition: background 0.15s; }
+  .btn:hover { background: #1d4ed8; }
+  input { background: #030712; border: 1px solid #374151; color: #fff; padding: 8px 12px; border-radius: 6px; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; transition: border-color 0.15s; }
+  input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 8px 12px; color: #94a3b8; font-weight: 500; font-size: 13px; border-bottom: 1px solid #334155; }
-  td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 14px; }
-  tr:hover td { background: #1e293b; }
+  th { text-align: left; padding: 8px 12px; color: #6b7280; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #374151; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1f2937; font-size: 14px; }
+  tr:hover td { background: #1f2937; }
   .clickable { cursor: pointer; }
   .clickable:hover { color: #60a5fa; }
-  .breadcrumb { color: #64748b; font-size: 14px; }
+  .breadcrumb { color: #6b7280; font-size: 14px; }
   .breadcrumb a { color: #60a5fa; text-decoration: none; }
   .breadcrumb a:hover { text-decoration: underline; }
-  .tag { background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; display: inline-block; }
-  .stat-card { cursor: pointer; transition: border-color 0.15s; }
-  .stat-card:hover { border-color: #3b82f6; }
-  .stat-num { font-size: 28px; font-weight: 700; color: #f8fafc; }
-  .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-  pre.code-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
-  .schema-block { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; }
+  .tag { background: #374151; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px; display: inline-block; color: #9ca3af; }
+  .stat-card { cursor: pointer; transition: all 0.2s; }
+  .stat-card:hover { border-color: #2563eb; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .stat-num { font-size: 28px; font-weight: 700; color: #fff; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; }
+  .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
+  pre.code-block { background: #030712; border: 1px solid #374151; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; font-family: ui-monospace, monospace; }
+  .schema-block { background: #030712; border: 1px solid #374151; border-radius: 8px; padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; font-family: ui-monospace, monospace; }
   .hidden { display: none; }
-  .fade-in { animation: fadeIn 0.15s ease-in; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #475569; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  .fade-in { animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #374151; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .status-active { color: #4ade80; }
   .status-suspended { color: #f87171; }
   .status-completed { color: #4ade80; }
   .status-failed { color: #f87171; }
-  .status-running { color: #facc15; }
-  .status-pending { color: #94a3b8; }
+  .status-running { color: #fbbf24; }
+  .status-pending { color: #6b7280; }
 </style>
 </head>
 <body>
@@ -47,13 +62,13 @@
 
   <!-- Header -->
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-lg font-bold text-white">mcpworks <span class="text-blue-400">admin</span></h1>
+    <h1 class="text-lg font-bold text-white font-display">MCPWorks <span class="text-blue-500">admin</span></h1>
     <div id="user-info" class="text-sm text-gray-400 hidden"></div>
   </div>
 
   <!-- Login -->
   <div id="login-section" class="card p-8 max-w-sm mx-auto mt-20">
-    <h2 class="text-white font-semibold mb-4">Sign in</h2>
+    <h2 class="text-white font-bold mb-4 font-display text-xl">Sign in</h2>
     <div id="login-error" class="text-red-400 text-sm mb-3 hidden"></div>
     <input id="login-email" type="email" placeholder="Email" class="block w-full mb-3">
     <input id="login-password" type="password" placeholder="Password" class="block w-full mb-4">

@@ -26,21 +26,25 @@ _HTML_TEMPLATE = """\
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} — MCPWorks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
 <style>
-  body {{ font-family: system-ui, -apple-system, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #e4e4e7; background: #18181b; line-height: 1.7; }}
-  h1 {{ color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-bottom: 0.5rem; }}
-  h2 {{ color: #60a5fa; margin-top: 2rem; }}
-  h3 {{ color: #93c5fd; }}
-  a {{ color: #60a5fa; }}
-  code {{ background: #27272a; padding: 2px 6px; border-radius: 4px; }}
-  hr {{ border: none; border-top: 1px solid #3f3f46; margin: 2rem 0; }}
+  body {{ font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #d1d5db; background: #111827; line-height: 1.7; }}
+  h1 {{ font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-bottom: 0.5rem; font-weight: 700; }}
+  h2 {{ font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; color: #60a5fa; margin-top: 2rem; font-weight: 700; }}
+  h3 {{ font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; color: #93c5fd; font-weight: 600; }}
+  a {{ color: #60a5fa; transition: color 0.15s; }}
+  a:hover {{ color: #d1d5db; }}
+  code {{ background: #1f2937; padding: 2px 6px; border-radius: 4px; color: #60a5fa; }}
+  hr {{ border: none; border-top: 1px solid #374151; margin: 2rem 0; }}
   table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
-  th, td {{ border: 1px solid #3f3f46; padding: 0.5rem 0.75rem; text-align: left; }}
-  th {{ background: #27272a; }}
+  th, td {{ border: 1px solid #374151; padding: 0.5rem 0.75rem; text-align: left; }}
+  th {{ background: #1f2937; }}
   ul, ol {{ padding-left: 1.5rem; }}
-  li {{ margin-bottom: 0.3rem; }}
-  strong {{ color: #f4f4f5; }}
-  .footer {{ margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #3f3f46; color: #71717a; font-size: 0.85em; }}
+  li {{ margin-bottom: 0.3rem; color: #d1d5db; }}
+  strong {{ color: #ffffff; }}
+  .footer {{ margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #374151; color: #4b5563; font-size: 0.85em; }}
 </style>
 </head>
 <body>
