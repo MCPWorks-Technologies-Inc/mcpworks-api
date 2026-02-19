@@ -69,6 +69,7 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
         self.exempt_paths = exempt_paths or {
             "/",
             "/admin",
+            "/console",
             "/register",
             "/login",
             "/dashboard",
