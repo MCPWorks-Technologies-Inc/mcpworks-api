@@ -197,6 +197,14 @@ def create_app() -> FastAPI:
         """Serve the login page (same SPA, different initial screen)."""
         return HTMLResponse(content=_onboarding_html_path.read_text())
 
+    # Client console (account dashboard)
+    _console_html_path = Path(__file__).parent / "static" / "console.html"
+
+    @app.get("/console", response_class=HTMLResponse, include_in_schema=False)
+    async def console_page() -> HTMLResponse:
+        """Serve the client console page."""
+        return HTMLResponse(content=_console_html_path.read_text())
+
     # ORDER-016: Usage dashboard
     _dashboard_html_path = Path(__file__).parent / "static" / "dashboard.html"
 

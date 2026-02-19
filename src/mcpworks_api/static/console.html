@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mcpworks console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+@property --border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+:root {
+  --bg-0: #050a14;
+  --bg-1: #0c1222;
+  --bg-2: #131d30;
+  --bg-3: #1a2740;
+  --border-1: #1a2540;
+  --border-2: #26355a;
+  --text-1: #e8edf5;
+  --text-2: #8899b0;
+  --text-3: #4d6080;
+  --accent: #00dfa2;
+  --accent-sub: rgba(0, 223, 162, 0.10);
+  --accent-glow: rgba(0, 223, 162, 0.06);
+  --link: #5ebbff;
+  --danger: #ff6b6b;
+  --warn: #ffc857;
+  --green: #00dfa2;
+  --radius: 10px;
+  --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg-0);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+  color: var(--text-1);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--accent-sub); color: var(--accent); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+#app { max-width: 1080px; margin: 0 auto; padding: 24px 20px; }
+
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+
+.logo { font-family: var(--sans); font-size: 17px; font-weight: 700; color: var(--text-1); letter-spacing: -0.02em; }
+.logo-accent { color: var(--accent); }
+.logo-cursor { display: inline-block; width: 2px; height: 16px; background: var(--accent); margin-left: 3px; vertical-align: text-bottom; animation: blink 1.2s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.user-bar { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.user-email { color: var(--text-2); }
+.tier-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: var(--sans); text-transform: uppercase; letter-spacing: 0.04em; }
+.tier-free { background: var(--bg-3); color: var(--text-2); }
+.tier-founder { background: rgba(94, 187, 255, 0.15); color: var(--link); }
+.tier-founder_pro { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+.tier-enterprise { background: rgba(255, 200, 87, 0.15); color: var(--warn); }
+
+.card { background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); }
+.card:hover { border-color: var(--border-2); }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-family: var(--mono); font-size: 13px; font-weight: 500; transition: all 0.15s ease; }
+.btn-primary { background: var(--accent); color: var(--bg-0); }
+.btn-primary:hover { background: #00c990; box-shadow: 0 0 20px var(--accent-sub); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-danger { background: rgba(255, 107, 107, 0.12); color: var(--danger); border: 1px solid rgba(255, 107, 107, 0.2); }
+.btn-danger:hover { background: rgba(255, 107, 107, 0.2); }
+.btn-ghost { background: transparent; border: 1px solid var(--border-1); color: var(--text-2); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--text-1); }
+.btn-copy { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border-1); }
+.btn-copy:hover { color: var(--text-1); border-color: var(--border-2); }
+.btn-copy.copied { color: var(--accent); border-color: var(--accent); }
+.btn-block { width: 100%; justify-content: center; }
+
+input { display: block; width: 100%; background: var(--bg-0); border: 1px solid var(--border-1); color: var(--text-1); padding: 10px 14px; border-radius: 8px; font-family: var(--mono); font-size: 13px; outline: none; transition: border-color 0.15s ease; }
+input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-sub); }
+input::placeholder { color: var(--text-3); }
+
+.login-wrapper { display: flex; justify-content: center; padding-top: 80px; }
+.login-card { width: 380px; padding: 32px; border-radius: 14px; background: linear-gradient(var(--bg-1), var(--bg-1)) padding-box, conic-gradient(from var(--border-angle), var(--accent), var(--border-1) 40%, var(--accent)) border-box; border: 1px solid transparent; animation: cardEnter 0.5s ease-out, rotateBorder 8s linear infinite; }
+@keyframes cardEnter { from { opacity: 0; transform: scale(0.96) translateY(16px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes rotateBorder { to { --border-angle: 360deg; } }
+.login-card h2 { font-family: var(--sans); font-size: 20px; font-weight: 700; margin-bottom: 20px; color: var(--text-1); }
+.login-card input { margin-bottom: 12px; }
+.login-card .btn { margin-top: 4px; }
+.error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; padding: 8px 12px; background: rgba(255, 107, 107, 0.08); border-radius: 6px; border: 1px solid rgba(255, 107, 107, 0.15); }
+
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 12px; }
+@media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.stat-card { position: relative; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); padding: 18px 16px 14px; text-align: center; cursor: pointer; transition: all 0.2s ease; overflow: hidden; }
+.stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0; transition: opacity 0.2s ease; }
+.stat-card:hover { border-color: var(--border-2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.stat-card:hover::before { opacity: 1; }
+.stat-num { font-size: 30px; font-weight: 700; color: #fff; font-family: var(--sans); letter-spacing: -0.02em; line-height: 1.2; }
+.stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--sans); font-weight: 600; margin-top: 2px; }
+
+.usage-strip { background: var(--bg-1); border: 1px solid var(--border-1); border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-2); }
+.usage-track { flex: 1; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.usage-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+.usage-fill.warn { background: var(--warn); }
+.usage-fill.danger { background: var(--danger); }
+.usage-text { white-space: nowrap; font-family: var(--mono); }
+.usage-tier { font-family: var(--sans); }
+
+.breadcrumb { font-size: 13px; color: var(--text-3); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.breadcrumb a { color: var(--link); text-decoration: none; transition: color 0.1s; }
+.breadcrumb a:hover { color: #8dd4ff; text-decoration: underline; }
+.breadcrumb .sep { color: var(--border-2); margin: 0 2px; }
+.breadcrumb .current { color: var(--text-2); }
+
+.content-card { background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); min-height: 200px; animation: fadeUp 0.25s ease-out; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 10px 16px; color: var(--text-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--sans); border-bottom: 1px solid var(--border-1); background: var(--bg-0); }
+th:first-child { border-radius: var(--radius) 0 0 0; }
+th:last-child { border-radius: 0 var(--radius) 0 0; }
+td { padding: 10px 16px; border-bottom: 1px solid rgba(26, 37, 64, 0.5); font-size: 13px; transition: background 0.1s; }
+tr:last-child td { border-bottom: none; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--bg-2); }
+tr.clickable:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.cell-name { color: var(--link); font-weight: 500; }
+.cell-dim { color: var(--text-2); }
+.cell-muted { color: var(--text-3); font-size: 12px; }
+
+.stagger { animation: rowSlide 0.25s ease-out both; animation-delay: calc(var(--i) * 30ms); }
+@keyframes rowSlide { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+.tag { display: inline-block; padding: 2px 8px; background: var(--bg-3); border-radius: 4px; font-size: 11px; color: var(--text-2); margin-right: 4px; }
+
+.status-active, .status-completed { color: var(--green); }
+.status-failed, .status-suspended { color: var(--danger); }
+.status-running { color: var(--warn); }
+.status-pending { color: var(--text-3); }
+
+pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; color: var(--text-2); }
+.schema-block { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 14px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; color: var(--text-2); }
+
+.key-reveal { background: rgba(0, 223, 162, 0.06); border: 1px solid rgba(0, 223, 162, 0.2); border-radius: 8px; padding: 14px; margin-bottom: 16px; animation: fadeUp 0.3s ease-out; }
+.key-reveal-label { color: var(--accent); font-size: 13px; font-weight: 500; font-family: var(--sans); margin-bottom: 8px; }
+.key-reveal-row { display: flex; align-items: center; gap: 10px; }
+.key-reveal-row code { flex: 1; font-size: 13px; color: var(--text-1); word-break: break-all; }
+
+.detail-section { padding: 24px; }
+.detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.detail-title { font-family: var(--sans); font-size: 18px; font-weight: 700; color: #fff; }
+.detail-version { font-size: 12px; color: var(--text-3); background: var(--bg-3); padding: 3px 8px; border-radius: 4px; }
+.detail-desc { color: var(--text-2); font-size: 13px; margin-bottom: 14px; }
+.detail-meta { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+.detail-meta span { color: var(--text-2); }
+.section-label { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; margin-top: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.empty { text-align: center; padding: 56px 24px; }
+.empty-icon { font-size: 28px; color: var(--text-3); margin-bottom: 10px; font-family: var(--mono); opacity: 0.6; }
+.empty-text { color: var(--text-2); font-size: 14px; font-family: var(--sans); margin-bottom: 4px; }
+.empty-hint { color: var(--text-3); font-size: 12px; }
+
+.loading { padding: 24px; color: var(--text-3); display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.loader { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border-2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hidden { display: none !important; }
+
+.inline-form { display: flex; align-items: flex-end; gap: 10px; background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+.inline-form .field { flex: 1; }
+.inline-form label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 4px; font-family: var(--sans); text-transform: uppercase; letter-spacing: 0.04em; }
+.inline-form input { margin-bottom: 0; }
+
+.endpoint-url { font-size: 12px; color: var(--text-3); background: var(--bg-0); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border-1); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <header>
+    <div class="logo">mcpworks <span class="logo-accent">console</span><span class="logo-cursor"></span></div>
+    <div id="user-info" class="user-bar hidden">
+      <span id="tier-badge" class="tier-badge hidden"></span>
+      <span id="user-email" class="user-email"></span>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">logout</button>
+    </div>
+  </header>
+
+  <div id="login-section">
+    <div class="login-wrapper">
+      <div class="login-card">
+        <h2>Sign in</h2>
+        <div id="login-error" class="error-msg hidden"></div>
+        <input id="login-email" type="email" placeholder="Email">
+        <input id="login-password" type="password" placeholder="Password">
+        <button class="btn btn-primary btn-block" onclick="doLogin()">Login</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard" class="hidden">
+
+    <div id="stats-bar" class="stats-grid">
+      <div class="stat-card" onclick="loadNamespaces()">
+        <div class="stat-num" id="stat-namespaces">&mdash;</div>
+        <div class="stat-label">Namespaces</div>
+      </div>
+      <div class="stat-card" onclick="loadAllServices()">
+        <div class="stat-num" id="stat-services">&mdash;</div>
+        <div class="stat-label">Services</div>
+      </div>
+      <div class="stat-card" onclick="loadAllFunctions()">
+        <div class="stat-num" id="stat-functions">&mdash;</div>
+        <div class="stat-label">Functions</div>
+      </div>
+      <div class="stat-card" onclick="loadApiKeys()">
+        <div class="stat-num" id="stat-keys">&mdash;</div>
+        <div class="stat-label">API Keys</div>
+      </div>
+    </div>
+
+    <div id="usage-strip" class="usage-strip hidden">
+      <span class="usage-text" id="usage-text"></span>
+      <div class="usage-track"><div class="usage-fill" id="usage-fill"></div></div>
+      <span class="usage-tier" id="usage-tier"></span>
+    </div>
+
+    <div id="breadcrumb" class="breadcrumb"></div>
+
+    <div id="content" class="content-card"></div>
+  </div>
+
+</div>
+
+<script>
+let TOKEN = localStorage.getItem('mcpworks_token');
+let USER_EMAIL = localStorage.getItem('mcpworks_email');
+const API = window.location.origin;
+
+let cachedNamespaces = [];
+let pendingKeyBanner = null;
+
+if (TOKEN && USER_EMAIL) showDashboard(USER_EMAIL);
+
+function showDashboard(email) {
+  document.getElementById('login-section').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('user-info').classList.remove('hidden');
+  document.getElementById('user-email').textContent = email;
+  loadStats();
+  loadNamespaces();
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch(`${API}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail?.message || data.detail || 'Login failed');
+    }
+    const data = await res.json();
+    TOKEN = data.access_token;
+    USER_EMAIL = email;
+    localStorage.setItem('mcpworks_token', TOKEN);
+    localStorage.setItem('mcpworks_email', email);
+    showDashboard(email);
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+function doLogout() {
+  TOKEN = null;
+  USER_EMAIL = null;
+  localStorage.removeItem('mcpworks_token');
+  localStorage.removeItem('mcpworks_email');
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('user-info').classList.add('hidden');
+  document.getElementById('usage-strip').classList.add('hidden');
+  document.getElementById('login-section').classList.remove('hidden');
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').classList.add('hidden');
+}
+
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${TOKEN}`, ...(opts.headers || {}) },
+  });
+  if (res.status === 401 || res.status === 403) {
+    doLogout();
+    document.getElementById('login-error').textContent = 'Session expired';
+    document.getElementById('login-error').classList.remove('hidden');
+    throw new Error('Unauthorized');
+  }
+  if (res.status === 204) return null;
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
+}
+
+function countUp(el, target, duration) {
+  duration = duration || 500;
+  if (isNaN(target)) { el.textContent = target; return; }
+  const start = performance.now();
+  function step(now) {
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(target * eased);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+async function loadStats() {
+  try {
+    const [nsData, usageData, profile, keysData] = await Promise.all([
+      apiFetch('/v1/namespaces?page=1&page_size=100'),
+      apiFetch('/v1/account/usage'),
+      apiFetch('/v1/users/me'),
+      apiFetch('/v1/users/me/api-keys'),
+    ]);
+
+    cachedNamespaces = nsData.namespaces || [];
+    countUp(document.getElementById('stat-namespaces'), nsData.total);
+    countUp(document.getElementById('stat-keys'), (keysData.items || []).length);
+
+    if (profile.tier) {
+      const badge = document.getElementById('tier-badge');
+      badge.textContent = profile.tier.replace('_', ' ');
+      badge.className = 'tier-badge tier-' + profile.tier;
+      badge.classList.remove('hidden');
+    }
+
+    const strip = document.getElementById('usage-strip');
+    const isUnlimited = usageData.executions_limit === -1;
+    const used = usageData.executions_count;
+    const limit = usageData.executions_limit;
+    document.getElementById('usage-text').textContent = isUnlimited ? `${used} executions` : `${used} / ${limit}`;
+    document.getElementById('usage-tier').textContent = usageData.tier.replace('_', ' ');
+    const fill = document.getElementById('usage-fill');
+    const pct = isUnlimited ? 0 : Math.min((used / limit) * 100, 100);
+    fill.style.width = '0%';
+    strip.classList.remove('hidden');
+    requestAnimationFrame(() => { fill.style.width = pct + '%'; });
+    fill.classList.remove('warn', 'danger');
+    if (pct > 80) fill.classList.add('danger');
+    else if (pct > 50) fill.classList.add('warn');
+
+    let totalServices = 0, totalFunctions = 0;
+    const svcResults = await Promise.all(
+      cachedNamespaces.map(ns =>
+        apiFetch(`/v1/namespaces/${encodeURIComponent(ns.name)}/services`).catch(() => ({ services: [] }))
+      )
+    );
+    for (const r of svcResults) {
+      const svcs = r.services || [];
+      totalServices += svcs.length;
+      for (const s of svcs) totalFunctions += s.function_count || 0;
+    }
+    countUp(document.getElementById('stat-services'), totalServices);
+    countUp(document.getElementById('stat-functions'), totalFunctions);
+  } catch (e) { console.error('Stats failed', e); }
+}
+
+function setBreadcrumb(parts) {
+  document.getElementById('breadcrumb').innerHTML = parts.map((p, i) => {
+    if (i < parts.length - 1 && p.onclick) return `<a href="#" onclick="${p.onclick}; return false;">${p.label}</a><span class="sep">/</span>`;
+    return `<span class="current">${p.label}</span>`;
+  }).join('');
+}
+
+function emptyState(icon, text, hint) {
+  return `<div class="empty"><div class="empty-icon">${icon}</div><div class="empty-text">${text}</div>${hint ? `<div class="empty-hint">${hint}</div>` : ''}</div>`;
+}
+
+async function loadNamespaces() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading namespaces</div>';
+  setBreadcrumb([{ label: 'Namespaces' }]);
+  try {
+    const data = await apiFetch('/v1/namespaces?page=1&page_size=100');
+    const ns = data.namespaces || [];
+    if (!ns.length) { c.innerHTML = emptyState('{ }', 'No namespaces yet', 'Create one via the MCP server or REST API'); return; }
+    c.innerHTML = `<table><thead><tr><th>Namespace</th><th>Description</th><th>Calls</th><th>Created</th></tr></thead><tbody>${ns.map((n, i) => `
+      <tr class="clickable stagger" style="--i:${i}" onclick="loadNamespace('${esc(n.name)}')">
+        <td class="cell-name">${esc(n.name)}</td>
+        <td class="cell-dim">${esc(n.description || '\u2014')}</td>
+        <td>${n.call_count ?? 0}</td>
+        <td class="cell-muted">${fmtDate(n.created_at)}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function loadNamespace(nsName) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading</div>';
+  setBreadcrumb([{ label: 'Namespaces', onclick: 'loadNamespaces()' }, { label: nsName }]);
+  try {
+    const [ns, svcData] = await Promise.all([
+      apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}`),
+      apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services`),
+    ]);
+    const svcs = svcData.services || [];
+    const svcHtml = !svcs.length ? '<div style="padding:16px;color:var(--text-3)">No services</div>' : `
+      <table><thead><tr><th>Service</th><th>Description</th><th>Functions</th><th>Calls</th><th>Created</th></tr></thead><tbody>${svcs.map((s, i) => `
+        <tr class="clickable stagger" style="--i:${i}" onclick="loadFunctions('${esc(nsName)}','${esc(s.name)}')">
+          <td class="cell-name">${esc(s.name)}</td>
+          <td class="cell-dim">${esc(s.description || '\u2014')}</td>
+          <td>${s.function_count}</td>
+          <td>${s.call_count ?? 0}</td>
+          <td class="cell-muted">${fmtDate(s.created_at)}</td>
+        </tr>`).join('')}</tbody></table>`;
+    c.innerHTML = `<div class="detail-section">
+      <div class="detail-header"><div class="detail-title">${esc(nsName)}</div><span class="endpoint-url">${esc(ns.create_endpoint)}</span></div>
+      ${ns.description ? `<div class="detail-desc">${esc(ns.description)}</div>` : ''}
+      <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
+      ${ns.network_whitelist?.length ? `<div class="detail-meta">Whitelist: <span>${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
+      <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function loadAllServices() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading services</div>';
+  setBreadcrumb([{ label: 'Services' }]);
+  try {
+    const nsData = await apiFetch('/v1/namespaces?page=1&page_size=100');
+    const svcs = (await Promise.all((nsData.namespaces || []).map(ns =>
+      apiFetch(`/v1/namespaces/${encodeURIComponent(ns.name)}/services`)
+        .then(d => (d.services || []).map(s => ({ ...s, namespace: ns.name })))
+        .catch(() => [])
+    ))).flat();
+    if (!svcs.length) { c.innerHTML = emptyState('[ ]', 'No services found'); return; }
+    c.innerHTML = `<table><thead><tr><th>Service</th><th>Namespace</th><th>Functions</th><th>Calls</th><th>Created</th></tr></thead><tbody>${svcs.map((s, i) => `
+      <tr class="clickable stagger" style="--i:${i}" onclick="loadFunctions('${esc(s.namespace)}','${esc(s.name)}')">
+        <td class="cell-name">${esc(s.name)}</td>
+        <td class="cell-dim">${esc(s.namespace)}</td>
+        <td>${s.function_count}</td>
+        <td>${s.call_count ?? 0}</td>
+        <td class="cell-muted">${fmtDate(s.created_at)}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function loadAllFunctions() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading functions</div>';
+  setBreadcrumb([{ label: 'Functions' }]);
+  try {
+    const nsData = await apiFetch('/v1/namespaces?page=1&page_size=100');
+    const allSvcs = (await Promise.all((nsData.namespaces || []).map(ns =>
+      apiFetch(`/v1/namespaces/${encodeURIComponent(ns.name)}/services`)
+        .then(d => (d.services || []).map(s => ({ ...s, namespace: ns.name })))
+        .catch(() => [])
+    ))).flat();
+    const fns = (await Promise.all(allSvcs.map(s =>
+      apiFetch(`/v1/namespaces/${encodeURIComponent(s.namespace)}/services/${encodeURIComponent(s.name)}/functions`)
+        .then(d => (d.functions || []).map(f => ({ ...f, namespace: s.namespace, service: s.name })))
+        .catch(() => [])
+    ))).flat();
+    if (!fns.length) { c.innerHTML = emptyState('fn()', 'No functions found'); return; }
+    c.innerHTML = `<table><thead><tr><th>Function</th><th>Service</th><th>Namespace</th><th>Tags</th><th>Ver</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
+      <tr class="clickable stagger" style="--i:${i}" onclick="loadFunction('${esc(f.namespace)}','${esc(f.service)}','${esc(f.name)}')">
+        <td class="cell-name">${esc(f.name)}</td>
+        <td class="cell-dim">${esc(f.service)}</td>
+        <td class="cell-dim">${esc(f.namespace)}</td>
+        <td>${(f.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
+        <td>v${f.active_version}</td>
+        <td class="cell-muted">${fmtDate(f.created_at)}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function loadFunctions(nsName, svcName) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading</div>';
+  setBreadcrumb([
+    { label: 'Namespaces', onclick: 'loadNamespaces()' },
+    { label: nsName, onclick: `loadNamespace('${esc(nsName)}')` },
+    { label: svcName },
+  ]);
+  try {
+    const fns = (await apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions`)).functions || [];
+    if (!fns.length) { c.innerHTML = emptyState('fn()', 'No functions in this service'); return; }
+    c.innerHTML = `<table><thead><tr><th>Function</th><th>Description</th><th>Tags</th><th>Ver</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
+      <tr class="clickable stagger" style="--i:${i}" onclick="loadFunction('${esc(nsName)}','${esc(svcName)}','${esc(f.name)}')">
+        <td class="cell-name">${esc(f.name)}</td>
+        <td class="cell-dim">${esc(f.description || '\u2014')}</td>
+        <td>${(f.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td>
+        <td>v${f.active_version}</td>
+        <td class="cell-muted">${fmtDate(f.created_at)}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function loadFunction(nsName, svcName, fnName) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading</div>';
+  setBreadcrumb([
+    { label: 'Namespaces', onclick: 'loadNamespaces()' },
+    { label: nsName, onclick: `loadNamespace('${esc(nsName)}')` },
+    { label: svcName, onclick: `loadFunctions('${esc(nsName)}','${esc(svcName)}')` },
+    { label: fnName },
+  ]);
+  try {
+    const fn = await apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions/${encodeURIComponent(fnName)}`);
+    const av = fn.active_version_details;
+    c.innerHTML = `<div class="detail-section">
+      <div class="detail-header"><div class="detail-title">${esc(fn.name)}</div><span class="detail-version">v${fn.active_version}</span></div>
+      ${fn.description ? `<div class="detail-desc">${esc(fn.description)}</div>` : ''}
+      ${(fn.tags || []).length ? `<div style="margin-bottom:14px">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+      ${av ? `
+        <div class="detail-meta">Backend: <span>${esc(av.backend)}</span></div>
+        ${av.code ? `<div class="section-label">Code</div><pre class="code-block">${esc(av.code)}</pre>` : ''}
+        ${av.config ? `<div class="section-label">Config</div><div class="schema-block">${esc(JSON.stringify(av.config, null, 2))}</div>` : ''}
+        ${av.input_schema ? `<div class="section-label">Input Schema</div><div class="schema-block">${esc(JSON.stringify(av.input_schema, null, 2))}</div>` : ''}
+        ${av.output_schema ? `<div class="section-label">Output Schema</div><div class="schema-block">${esc(JSON.stringify(av.output_schema, null, 2))}</div>` : ''}
+      ` : '<div style="color:var(--text-3);margin-top:12px">No active version details</div>'}
+      ${fn.versions?.length > 1 ? `
+        <div class="section-label" style="margin-top:24px">Version History</div>
+        <table><thead><tr><th>Version</th><th>Backend</th><th>Created</th></tr></thead><tbody>${fn.versions.map(v => `
+          <tr><td>${v.version === fn.active_version ? `<span style="color:var(--accent)">v${v.version} (active)</span>` : `v${v.version}`}</td>
+          <td class="cell-dim">${esc(v.backend)}</td><td class="cell-muted">${fmtDate(v.created_at)}</td></tr>`).join('')}</tbody></table>` : ''}
+    </div>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function loadApiKeys() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading API keys</div>';
+  setBreadcrumb([{ label: 'API Keys' }]);
+  try {
+    const keys = (await apiFetch('/v1/users/me/api-keys')).items || [];
+    const banner = pendingKeyBanner ? `<div class="key-reveal">
+      <div class="key-reveal-label">API key created &mdash; copy it now, it won't be shown again</div>
+      <div class="key-reveal-row"><code>${esc(pendingKeyBanner)}</code><button class="btn btn-copy btn-sm" onclick="copyText('${esc(pendingKeyBanner)}',this)">copy</button></div>
+    </div>` : '';
+    pendingKeyBanner = null;
+    c.innerHTML = `<div class="detail-section">
+      <div class="detail-header"><div class="detail-title">API Keys</div><button class="btn btn-primary btn-sm" onclick="showCreateKeyForm()">Create Key</button></div>
+      <div id="key-create-area"></div>
+      <div id="key-banner">${banner}</div>
+      ${!keys.length ? emptyState('&bull;&bull;&bull;', 'No API keys', 'Create one to authenticate via the REST API or MCP')
+      : `<table><thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Created</th><th>Last Used</th><th>Expires</th><th></th></tr></thead><tbody>${keys.map((k, i) => `
+        <tr class="stagger" style="--i:${i}">
+          <td class="cell-dim">${esc(k.name || '\u2014')}</td>
+          <td><code style="color:var(--text-2)">${esc(k.key_prefix)}&hellip;</code></td>
+          <td>${(k.scopes || []).map(s => `<span class="tag">${esc(s)}</span>`).join('')}</td>
+          <td class="cell-muted">${fmtDate(k.created_at)}</td>
+          <td class="cell-muted">${fmtDate(k.last_used_at)}</td>
+          <td class="cell-muted">${k.expires_at ? fmtDate(k.expires_at) : 'never'}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="revokeKey('${esc(k.id)}')">revoke</button></td>
+        </tr>`).join('')}</tbody></table>`}
+    </div>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+function showCreateKeyForm() {
+  const area = document.getElementById('key-create-area');
+  area.innerHTML = `<div class="inline-form"><div class="field"><label>Key Name</label><input id="new-key-name" type="text" placeholder="e.g. my-cli-key"></div>
+    <button class="btn btn-primary btn-sm" onclick="createKey()">Create</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('key-create-area').innerHTML=''">Cancel</button></div>`;
+  document.getElementById('new-key-name').focus();
+  document.getElementById('new-key-name').addEventListener('keydown', e => { if (e.key === 'Enter') createKey(); });
+}
+
+async function createKey() {
+  const name = document.getElementById('new-key-name').value || null;
+  try {
+    const result = await apiFetch('/v1/users/me/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    pendingKeyBanner = result.key;
+    loadApiKeys();
+    loadStats();
+  } catch (e) { alert('Failed to create key: ' + e.message); }
+}
+
+async function revokeKey(keyId) {
+  if (!confirm('Revoke this API key? This cannot be undone.')) return;
+  try {
+    await apiFetch(`/v1/users/me/api-keys/${keyId}`, { method: 'DELETE' });
+    loadApiKeys();
+    loadStats();
+  } catch (e) { alert('Failed to revoke key: ' + e.message); }
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '\u2014';
+  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+  catch { return iso; }
+}
+</script>
+</body>
+</html>
