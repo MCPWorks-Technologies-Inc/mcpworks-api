@@ -25,7 +25,10 @@ All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
     "{ns}-run": {
       "type": "http",
       "url": "https://{ns}.run.mcpworks.io/mcp",
-      "headers": { "Authorization": "Bearer {API_KEY}" }
+      "headers": {
+        "Authorization": "Bearer {API_KEY}",
+        "X-MCPWorks-Env": "base64:{base64-encoded JSON of env vars}"
+      }
     }
   }
 }
@@ -66,8 +69,8 @@ Default run mode is **code** (no query param needed).
 
 | Tool | Required Params | Optional Params | Notes |
 |------|----------------|-----------------|-------|
-| `make_function` | `service`, `name`, `backend` | `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `template` | `template` overrides code/schemas/reqs as defaults |
-| `update_function` | `service`, `name` | `backend`, `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `restore_version` | Code/config/schema/req changes → new version |
+| `make_function` | `service`, `name`, `backend` | `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `required_env`, `optional_env`, `template` | `template` overrides code/schemas/reqs as defaults |
+| `update_function` | `service`, `name` | `backend`, `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `required_env`, `optional_env`, `restore_version` | Code/config/schema/req/env changes → new version |
 | `delete_function` | `service`, `name` | — | Permanent |
 | `list_functions` | `service` | `tag` | Returns qualified names (`service.function`) |
 | `describe_function` | `service`, `name` | — | Full details + version history |
@@ -108,6 +111,50 @@ result = my_func(param="value")
 ```
 
 **Return data:** Set `result = ...` (or `output = ...`).
+
+---
+
+## Environment Variable Passthrough
+
+Functions can receive secrets (API keys, tokens) via the `X-MCPWorks-Env` header. Nothing is stored server-side.
+
+### Declaring Env Vars
+
+```
+make_function(service="ai", name="summarize", backend="code_sandbox",
+  required_env=["OPENAI_API_KEY"], optional_env=["OPENAI_ORG_ID"], ...)
+```
+
+### Passing Env Vars
+
+Add `X-MCPWorks-Env` header to the **run** server in `.mcp.json`:
+
+```json
+"headers": {
+  "Authorization": "Bearer {API_KEY}",
+  "X-MCPWorks-Env": "base64:{base64 of JSON object}"
+}
+```
+
+Encode: `echo -n '{"OPENAI_API_KEY":"sk-xxx"}' | base64`
+
+### Reading in Function Code
+
+```python
+import os
+api_key = os.environ["OPENAI_API_KEY"]
+```
+
+### Diagnostics
+
+Call `_env_status` tool (run endpoint, tool mode) to check which vars are configured vs missing.
+
+### Rules
+
+- Max 64 vars, 32 KB header
+- Names: `^[A-Z][A-Z0-9_]*$`
+- Blocked: `PATH`, `HOME`, `LD_*`, `PYTHON*`, `NSJAIL*`, `MCPWORKS_*`
+- Each function receives only its declared vars (least-privilege)
 
 ---
 
@@ -277,7 +324,7 @@ make_function(
 | `pip install` in function code | Declare in `requirements` field |
 | Use `os.system` / `subprocess` | These are blocked by seccomp |
 | Return large binary data | Return references or summaries |
-| Hardcode API keys in function code | Use environment variables (future) |
+| Hardcode API keys in function code | Declare `required_env` and pass via `X-MCPWorks-Env` header |
 | Create functions without `input_schema` | Always define schemas for better AI discovery |
 
 ---
