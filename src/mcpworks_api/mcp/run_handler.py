@@ -206,11 +206,14 @@ class RunMCPHandler:
         )
 
         # Filter env vars to only those declared by this function
-        filtered_env = filter_env_for_function(
-            sandbox_env or {},
-            version.required_env,
-            version.optional_env,
-        ) or None
+        filtered_env = (
+            filter_env_for_function(
+                sandbox_env or {},
+                version.required_env,
+                version.optional_env,
+            )
+            or None
+        )
 
         # Check all required env vars are present
         missing = check_required_env(
@@ -221,11 +224,13 @@ class RunMCPHandler:
             return MCPToolResult(
                 content=[
                     MCPContent(
-                        text=json.dumps({
-                            "error": "missing_env",
-                            "missing": missing,
-                            "message": f"Required environment variables not provided: {', '.join(missing)}",
-                        })
+                        text=json.dumps(
+                            {
+                                "error": "missing_env",
+                                "missing": missing,
+                                "message": f"Required environment variables not provided: {', '.join(missing)}",
+                            }
+                        )
                     )
                 ],
                 isError=True,
