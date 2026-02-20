@@ -6,7 +6,13 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
-None! 🎉
+### ~~PROBLEM-006: Code-Mode Execution Not Exposed via MCP Run Server~~
+
+**Status:** RESOLVED (2026-02-20)
+
+Code-mode was fully implemented but hidden behind a `?mode=code` query parameter, while the default was `"tools"`. Flipped the default: `{ns}.run.mcpworks.io/mcp` now serves code-mode by default (single `execute` tool). Per-function tools mode available via `?mode=tools`.
+
+Remaining sub-issue: functions created mid-session aren't discoverable until MCP client reconnects (client-side `tools/list` snapshot limitation). Code-mode sidesteps this since the AI writes code that imports from the `functions` package — no tool discovery needed.
 
 ---
 

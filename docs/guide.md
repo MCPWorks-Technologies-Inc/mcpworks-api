@@ -601,7 +601,7 @@ echo -n '{"OPENAI_API_KEY":"sk-xxx","STRIPE_KEY":"sk_live_xxx"}' | base64
 
 ### Step 3: Check Configuration
 
-Call the `_env_status` tool (available on all run endpoints in tool mode) to see which variables are configured and which are missing across all your functions.
+Call the `_env_status` tool (available on run endpoints in tool mode via `?mode=tools`) to see which variables are configured and which are missing across all your functions.
 
 ### Security Properties
 

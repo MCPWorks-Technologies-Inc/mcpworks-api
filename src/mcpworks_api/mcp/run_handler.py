@@ -44,7 +44,7 @@ class RunMCPHandler:
         namespace: str,
         account: Account,
         db: AsyncSession,
-        mode: str = "tools",
+        mode: str = "code",
     ):
         """Initialize handler.
 
@@ -52,8 +52,8 @@ class RunMCPHandler:
             namespace: The namespace name from subdomain.
             account: The authenticated account.
             db: Database session.
-            mode: Run mode — ``"tools"`` (default, one tool per function)
-                or ``"code"`` (single execute tool with sandbox).
+            mode: Run mode — ``"code"`` (default, single execute tool with sandbox)
+                or ``"tools"`` (one tool per function).
         """
         self.namespace_name = namespace
         self.account = account

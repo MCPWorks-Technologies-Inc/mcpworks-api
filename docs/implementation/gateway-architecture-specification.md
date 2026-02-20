@@ -76,17 +76,21 @@ The Gateway is the **single entrypoint** for all MCPWorks requests. It handles:
 │  │  Create MCP Handler         │   │  Run MCP Handler                │       │
 │  │  (*.create.mcpworks.io)     │   │  (*.run.mcpworks.io)            │       │
 │  │                             │   │                                 │       │
-│  │  10 Management Tools:       │   │  Dynamic Tools:                 │       │
-│  │  • make_namespace           │   │  • {service}.{function}         │       │
-│  │  • list_namespaces          │   │  • Generated from DB            │       │
-│  │  • make_service             │   │                                 │       │
-│  │  • list_services            │   │  Response includes:             │       │
-│  │  • delete_service           │   │  • result                       │       │
-│  │  • make_function            │   │  • execution metadata           │       │
-│  │  • update_function          │   │                                 │       │
-│  │  • delete_function          │   │                                 │       │
-│  │  • list_functions           │   │                                 │       │
-│  │  • describe_function        │   │                                 │       │
+│  │  13 Management Tools:       │   │  Two modes (?mode= query param):│       │
+│  │  • make_namespace           │   │                                 │       │
+│  │  • list_namespaces          │   │  Code mode (DEFAULT):           │       │
+│  │  • make_service             │   │  • Single "execute" tool        │       │
+│  │  • list_services            │   │  • AI writes Python code        │       │
+│  │  • delete_service           │   │  • Imports from functions/ pkg  │       │
+│  │  • make_function            │   │                                 │       │
+│  │  • update_function          │   │  Tool mode (?mode=tools):       │       │
+│  │  • delete_function          │   │  • One tool per function        │       │
+│  │  • list_functions           │   │  • {service}.{function}         │       │
+│  │  • describe_function        │   │  • Generated from DB            │       │
+│  │  • list_packages            │   │                                 │       │
+│  │  • list_templates           │   │  Response includes:             │       │
+│  │  • describe_template        │   │  • result                       │       │
+│  │                             │   │  • execution metadata           │       │
 │  └─────────────────────────────┘   └──────────────┬──────────────────┘       │
 │                                                    │                          │
 └────────────────────────────────────────────────────┼──────────────────────────┘
@@ -1050,181 +1054,82 @@ class CreateMCPHandler:
 
 ## 7. Run MCP Handler
 
-### 7.1 Handler Implementation
+The run handler operates in two modes, controlled by the `?mode=` query parameter on the MCP endpoint URL:
+
+| Mode | URL | Behavior |
+|------|-----|----------|
+| **Code mode** (default) | `.../mcp` or `.../mcp?mode=code` | Single `execute` tool — AI writes Python that imports from a generated `functions/` package |
+| **Tool mode** | `.../mcp?mode=tools` | One MCP tool per function, named `service.function` |
+
+Code mode is the default because it enables function composition, data transformation between calls, and on-demand tool discovery without loading all function schemas into the AI's context window. See [Anthropic's code execution research](https://www.anthropic.com/engineering/code-execution-with-mcp) for the 70-98% token savings this achieves.
+
+### 7.1 Code Mode (default)
+
+In code mode, `tools/list` returns a single tool:
+
+```json
+{
+  "name": "execute",
+  "description": "Execute Python code in a sandbox with access to all namespace functions. ...",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "code": { "type": "string", "description": "Python code to execute." }
+    },
+    "required": ["code"]
+  }
+}
+```
+
+When `execute` is called, the handler:
+
+1. Loads all functions from the namespace's database records
+2. Generates a `functions/` Python package via `code_mode.py` (wrappers, registry, `__init__.py` with catalog docstring)
+3. Writes the package into the sandbox directory as `extra_files`
+4. Appends a call-log capture snippet to the user's code (for per-function billing)
+5. Executes via the `code_sandbox` backend
+6. Parses the call log from stderr to record which functions were invoked
+
+The AI discovers functions with `import functions; print(functions.__doc__)` and calls them with `from functions import hello; result = hello(name="World")`.
+
+### 7.2 Tool Mode (`?mode=tools`)
+
+In tool mode, `tools/list` generates one MCP tool per function in the namespace, plus the `_env_status` diagnostic tool. Each tool is named `service.function` with the function's `input_schema` as parameters.
+
+### 7.3 Handler Implementation
 
 ```python
 # src/mcpworks_api/mcp/run_handler.py
-"""
-Run MCP Handler - Execution interface for namespace functions.
-
-Generates dynamic tools from database and dispatches to backends.
-"""
-
-from typing import Any, Dict, List
-from datetime import datetime
-import json
-import uuid
-
-from .protocol import (
-    JSONRPCRequest, JSONRPCResponse, MCPTool, MCPToolsListResult,
-    MCPToolCallParams, MCPToolResult, MCPContent,
-    MCPErrorCodes, make_error_response, make_success_response
-)
-from ..models import Account
-from ..services.function_service import FunctionService
-from ..backends import get_backend
-
 
 class RunMCPHandler:
     """Handler for *.run.mcpworks.io endpoints."""
 
-    def __init__(self, namespace: str, account: Account):
-        self.namespace_name = namespace
-        self.account = account
-        self.function_service = FunctionService()
+    def __init__(self, namespace, account, db, mode="code"):
+        # mode: "code" (default) or "tools"
+        self.mode = mode
+        ...
 
-    async def handle(self, request: JSONRPCRequest) -> JSONRPCResponse:
-        """Handle MCP request."""
-        method = request.method
-        params = request.params or {}
+    async def get_tools(self) -> list[MCPTool]:
+        if self.mode == "code":
+            return self._get_code_mode_tools()
+        # else: generate per-function tools from DB + _env_status
+        ...
 
-        if method == "initialize":
-            return await self._handle_initialize(request.id)
-        elif method == "tools/list":
-            return await self._handle_tools_list(request.id)
-        elif method == "tools/call":
-            return await self._handle_tools_call(params, request.id)
-        else:
-            return make_error_response(
-                MCPErrorCodes.METHOD_NOT_FOUND,
-                f"Unknown method: {method}",
-                request_id=request.id
-            )
+    async def dispatch_tool(self, name, arguments, sandbox_env=None):
+        if name == "execute" and self.mode == "code":
+            return await self._execute_code_mode(arguments.get("code", ""), ...)
+        if name == "_env_status":
+            return await self._handle_env_status(sandbox_env)
+        # else: look up service.function in DB and execute via backend
+        ...
+```
 
-    async def _handle_initialize(self, request_id) -> JSONRPCResponse:
-        """Handle initialize method."""
-        return make_success_response({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {
-                "tools": {}
-            },
-            "serverInfo": {
-                "name": f"mcpworks-run-{self.namespace_name}",
-                "version": "1.0.0"
-            }
-        }, request_id)
+The mode is selected by the transport layer from the query parameter:
 
-    async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
-        """Generate tools list from database functions."""
-        functions = await self.function_service.list_all_for_namespace(
-            namespace_name=self.namespace_name,
-            account_id=self.account.id
-        )
-
-        tools = []
-        for func, version in functions:
-            # Tool name uses dot notation: service.function
-            tool_name = f"{func.service.name}.{func.name}"
-
-            tools.append(MCPTool(
-                name=tool_name,
-                description=func.description or f"Execute {tool_name}",
-                inputSchema=version.input_schema or {"type": "object", "properties": {}}
-            ))
-
-        result = MCPToolsListResult(tools=tools)
-        return make_success_response(result.model_dump(), request_id)
-
-    async def _handle_tools_call(
-        self, params: Dict[str, Any], request_id
-    ) -> JSONRPCResponse:
-        """Execute a function via its backend."""
-        try:
-            call_params = MCPToolCallParams(**params)
-        except Exception as e:
-            return make_error_response(
-                MCPErrorCodes.INVALID_PARAMS,
-                f"Invalid tool call params: {e}",
-                request_id=request_id
-            )
-
-        tool_name = call_params.name
-        args = call_params.arguments
-
-        # Parse tool name (service.function)
-        if "." not in tool_name:
-            return make_error_response(
-                MCPErrorCodes.INVALID_PARAMS,
-                f"Invalid tool name format. Expected service.function, got: {tool_name}",
-                request_id=request_id
-            )
-
-        service_name, function_name = tool_name.split(".", 1)
-
-        # Get function and active version
-        try:
-            function, version = await self.function_service.get_for_execution(
-                namespace_name=self.namespace_name,
-                account_id=self.account.id,
-                service_name=service_name,
-                function_name=function_name
-            )
-        except Exception as e:
-            return make_error_response(
-                MCPErrorCodes.NOT_FOUND,
-                f"Function not found: {tool_name}",
-                request_id=request_id
-            )
-
-        # Get backend
-        backend = get_backend(version.backend)
-        if not backend:
-            return make_error_response(
-                MCPErrorCodes.INTERNAL_ERROR,
-                f"Backend not available: {version.backend}",
-                request_id=request_id
-            )
-
-        # Execute
-        execution_id = str(uuid.uuid4())
-        start_time = datetime.utcnow()
-
-        try:
-            result = await backend.execute(
-                code=version.code,
-                config=version.config,
-                input_data=args,
-                account=self.account,
-                execution_id=execution_id
-            )
-
-            execution_time_ms = int(
-                (datetime.utcnow() - start_time).total_seconds() * 1000
-            )
-
-            # Return result with metadata
-            tool_result = MCPToolResult(
-                content=[MCPContent(text=json.dumps(result.output))],
-                isError=not result.success,
-                metadata={
-                    "function": tool_name,
-                    "version": version.version,
-                    "backend": version.backend,
-                    "execution_time_ms": execution_time_ms,
-                    "executed_at": datetime.utcnow().isoformat(),
-                    "execution_id": execution_id
-                }
-            )
-
-            return make_success_response(tool_result.model_dump(), request_id)
-
-        except Exception as e:
-            return make_error_response(
-                MCPErrorCodes.EXECUTION_ERROR,
-                str(e),
-                data={"execution_id": execution_id},
-                request_id=request_id
-            )
+```python
+# src/mcpworks_api/mcp/transport.py
+run_mode = request.query_params.get("mode", "code")  # default: code
+handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
 ```
 
 ---
