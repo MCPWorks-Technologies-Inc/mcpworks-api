@@ -399,7 +399,7 @@ class TestRunMCPHandler:
         test_account: Account,
         test_namespace: Namespace,
     ):
-        """Test tools/list with no functions."""
+        """Test tools/list with no functions (tool mode)."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
@@ -407,6 +407,7 @@ class TestRunMCPHandler:
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            mode="tools",
         )
 
         request = JSONRPCRequest(method="tools/list", id="list-1")
@@ -425,7 +426,7 @@ class TestRunMCPHandler:
         test_service: NamespaceService,
         test_function: tuple[Function, FunctionVersion],
     ):
-        """Test tools/list returns functions as tools."""
+        """Test tools/list returns functions as tools (tool mode)."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
@@ -435,6 +436,7 @@ class TestRunMCPHandler:
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            mode="tools",
         )
 
         request = JSONRPCRequest(method="tools/list", id="list-1")
