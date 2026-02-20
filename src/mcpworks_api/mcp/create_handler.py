@@ -318,7 +318,7 @@ class CreateMCPHandler:
         self,
         name: str,
         arguments: dict[str, Any],
-        sandbox_env: dict[str, str] | None = None,
+        sandbox_env: dict[str, str] | None = None,  # noqa: ARG002
     ) -> MCPToolResult:
         """Dispatch tool call directly without JSON-RPC wrapping.
 
