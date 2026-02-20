@@ -1,8 +1,10 @@
-"""Getting-started documentation endpoint.
+"""Documentation endpoints.
 
-ORDER-012: Single page — "From zero to first function in 5 minutes."
-Served at GET /v1/docs/quickstart as HTML.
+ORDER-012: Getting-started quickstart page.
+Platform guide and LLM reference served as rendered markdown.
 """
+
+from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
@@ -127,3 +129,77 @@ MCPWorks — Code Sandbox for AI Assistants &middot;
 async def quickstart() -> HTMLResponse:
     """Serve the getting-started guide."""
     return HTMLResponse(content=_QUICKSTART_HTML)
+
+
+# ---------------------------------------------------------------------------
+# Markdown-based docs (guide + LLM reference)
+# ---------------------------------------------------------------------------
+
+_DOCS_DIR = Path(__file__).resolve().parents[4] / "docs"
+
+_MD_CSS = """\
+<style>
+  body { font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1.5rem; color: #d1d5db; background: #111827; line-height: 1.7; }
+  h1, h2, h3, h4 { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; color: #60a5fa; font-weight: 700; }
+  h1 { color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-bottom: 0.5rem; }
+  code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #60a5fa; }
+  pre { background: #1f2937; padding: 1rem; border-radius: 8px; overflow-x: auto; border: 1px solid #374151; }
+  pre code { background: none; padding: 0; color: #d1d5db; }
+  a { color: #60a5fa; transition: color 0.15s; }
+  a:hover { color: #d1d5db; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #374151; padding: 0.5rem 0.75rem; text-align: left; }
+  th { background: #1f2937; color: #60a5fa; }
+  tr:nth-child(even) { background: rgba(31, 41, 55, 0.5); }
+  blockquote { border-left: 3px solid #3b82f6; margin: 1rem 0; padding: 0.5rem 1rem; background: rgba(31, 41, 55, 0.5); }
+  hr { border: none; border-top: 1px solid #374151; margin: 2rem 0; }
+  ul, ol { padding-left: 1.5rem; }
+  li { margin: 0.25rem 0; }
+</style>
+"""
+
+_MD_HEAD = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+{css}
+</head>
+<body>
+{body}
+<p style="margin-top: 3rem; color: #4b5563; font-size: 0.85em; border-top: 1px solid #374151; padding-top: 1rem;">
+MCPWorks &middot;
+<a href="/v1/docs/quickstart">Quick Start</a> &middot;
+<a href="/v1/docs/guide">Platform Guide</a> &middot;
+<a href="/v1/docs/llm-reference">LLM Reference</a>
+</p>
+</body>
+</html>
+"""
+
+
+def _render_md(filename: str, title: str) -> str:
+    """Read a markdown file from docs/ and render to HTML."""
+    import markdown as md
+
+    md_path = _DOCS_DIR / filename
+    md_text = md_path.read_text(encoding="utf-8")
+    body = md.markdown(md_text, extensions=["tables", "fenced_code", "toc"])
+    return _MD_HEAD.format(title=title, css=_MD_CSS, body=body)
+
+
+@router.get("/guide", response_class=HTMLResponse, include_in_schema=False)
+async def guide() -> HTMLResponse:
+    """Serve the platform guide (rendered from docs/guide.md)."""
+    return HTMLResponse(content=_render_md("guide.md", "MCPWorks Platform Guide"))
+
+
+@router.get("/llm-reference", response_class=HTMLResponse, include_in_schema=False)
+async def llm_reference() -> HTMLResponse:
+    """Serve the LLM agent reference (rendered from docs/llm-reference.md)."""
+    return HTMLResponse(content=_render_md("llm-reference.md", "MCPWorks LLM Agent Reference"))
