@@ -199,6 +199,8 @@ Create a new function in a service.
 | `description` | string | No | Human-readable description |
 | `tags` | string[] | No | Tags for filtering |
 | `requirements` | string[] | No | Python packages from the allow-list |
+| `required_env` | string[] | No | Environment variables required for execution (e.g., `["OPENAI_API_KEY"]`) |
+| `optional_env` | string[] | No | Optional environment variables the function can use |
 | `template` | string | No | Clone from a template (overrides code/schemas/requirements) |
 
 If `template` is provided, it fills in code, schemas, description, tags, and requirements as defaults. Explicit arguments override template values.
@@ -221,6 +223,8 @@ Update a function. Creates a new version if code, config, schemas, or requiremen
 | `description` | string | No | New description |
 | `tags` | string[] | No | New tags |
 | `requirements` | string[] | No | New package requirements |
+| `required_env` | string[] | No | New required environment variables |
+| `optional_env` | string[] | No | New optional environment variables |
 | `restore_version` | integer | No | Restore code from a previous version number |
 
 #### `delete_function`
@@ -536,7 +540,7 @@ Generate and format a structured report from data.
 Functions use immutable versioning:
 
 - **Creating a function** starts at version 1
-- **Updating code, config, schemas, or requirements** creates a new version (version number increments)
+- **Updating code, config, schemas, requirements, or env declarations** creates a new version (version number increments)
 - **Updating only metadata** (description, tags) does not create a new version
 - **Restoring** copies a previous version's code/config/schemas/requirements into a new version
 
@@ -546,12 +550,72 @@ Use `describe_function` to see version history. Use `update_function` with `rest
 
 ## Environment Variables
 
-Functions can declare environment variables via two schema fields:
+Functions that call external APIs (OpenAI, Stripe, Twilio, etc.) need credentials. MCPWorks supports **stateless environment variable passthrough** — secrets travel with each request and are never stored on our servers.
 
-- **`required_env`** — variables that must be provided for execution
-- **`optional_env`** — variables the function can use if available
+### How It Works
 
-This is a future feature. Currently, environment variables are not injected into the sandbox at runtime.
+1. **Declare** which env vars a function needs when you create it
+2. **Encode** your secrets as a base64 JSON header
+3. **Execute** — the sandbox receives only the declared variables, then they're destroyed
+
+### Step 1: Declare Env Vars
+
+When creating or updating a function, specify `required_env` and/or `optional_env`:
+
+```
+make_function(
+  service="ai",
+  name="summarize",
+  backend="code_sandbox",
+  required_env=["OPENAI_API_KEY"],
+  optional_env=["OPENAI_ORG_ID"],
+  code="import openai\ndef main(input_data):\n    import os\n    client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])\n    ...",
+  requirements=["openai"]
+)
+```
+
+### Step 2: Add the Header to `.mcp.json`
+
+Base64-encode a JSON object of key-value pairs and add the `X-MCPWorks-Env` header to your **run** server config:
+
+```json
+{
+  "mcpServers": {
+    "myns-run": {
+      "type": "http",
+      "url": "https://myns.run.mcpworks.io/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY",
+        "X-MCPWorks-Env": "base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCJ9"
+      }
+    }
+  }
+}
+```
+
+To encode your variables:
+
+```bash
+echo -n '{"OPENAI_API_KEY":"sk-xxx","STRIPE_KEY":"sk_live_xxx"}' | base64
+```
+
+### Step 3: Check Configuration
+
+Call the `_env_status` tool (available on all run endpoints in tool mode) to see which variables are configured and which are missing across all your functions.
+
+### Security Properties
+
+- **Never stored** — values exist only in memory during request processing
+- **Never logged** — structlog processors strip env values from all log output
+- **Least-privilege** — each function receives only its declared variables, not the full set
+- **Destroyed after execution** — env file is unlinked before code runs, dict is cleared after file write
+- **Blocked names** — `PATH`, `HOME`, `LD_*`, `PYTHON*`, `NSJAIL*`, `MCPWORKS_*` are rejected to prevent sandbox escape
+
+### Limits
+
+- Maximum 64 variables per request
+- Maximum 32 KB total header size
+- Variable names must match `^[A-Z][A-Z0-9_]*$`
 
 ---
 
