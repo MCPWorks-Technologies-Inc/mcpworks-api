@@ -37,6 +37,8 @@ docker-compose*.yml
 
 # Documentation
 docs/
+!docs/guide.md
+!docs/llm-reference.md
 specs/
 # Exclude markdown except README.md (required for build)
 CHANGELOG.md
