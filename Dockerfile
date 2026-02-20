@@ -193,6 +193,7 @@ RUN chmod +x /opt/mcpworks/bin/spawn-sandbox.sh /opt/mcpworks/bin/setup-cgroups.
 
 # Copy application code
 COPY src/ ./src/
+COPY docs/guide.md docs/llm-reference.md ./docs/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY scripts/ ./scripts/
