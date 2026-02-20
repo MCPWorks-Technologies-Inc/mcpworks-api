@@ -83,6 +83,23 @@ Executed in 0.12s | Secure nsjail sandbox | 60+ Python packages available
 **Narration**:
 > "Every execution runs in an isolated sandbox. Your code is secure."
 
+### Scene 6: Show env passthrough (1:30 - 1:50) — Optional bonus
+
+**Action**: Show adding `X-MCPWorks-Env` header to `.mcp.json`:
+
+```
+"X-MCPWorks-Env": "base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCJ9"
+```
+
+**Action**: Create a function that uses an API key:
+
+```
+Create a function 'summarize' with required_env OPENAI_API_KEY
+```
+
+**Narration**:
+> "Pass your API keys securely. Nothing stored — secrets live only during execution."
+
 **End card**:
 > "MCPWorks — Code Sandbox for AI Assistants"
 > "mcpworks.io | 100 free executions/month"

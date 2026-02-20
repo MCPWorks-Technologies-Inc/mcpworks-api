@@ -236,6 +236,16 @@
                         </ul>
                     </div>
 
+                    <div class="mt-4 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                        <h4 class="font-bold mb-2 font-display">Need to pass API keys to functions?</h4>
+                        <p class="text-sm text-gray-300 mb-2">Functions that call external APIs (OpenAI, Stripe, etc.) can receive secrets via a header. Add <code class="bg-gray-950 px-1.5 py-0.5 rounded text-blue-400">X-MCPWorks-Env</code> to your <strong>run</strong> server config:</p>
+                        <pre class="bg-gray-950 border border-gray-700 rounded p-3 text-xs font-mono overflow-x-auto">"headers": {
+  "Authorization": "Bearer YOUR_KEY",
+  "X-MCPWorks-Env": "base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCJ9"
+}</pre>
+                        <p class="text-xs text-gray-500 mt-2">Encode with: <code class="bg-gray-950 px-1 rounded">echo -n '{"KEY":"value"}' | base64</code> &mdash; secrets are never stored, only injected at execution time. <a href="/v1/docs/quickstart" class="text-blue-400 hover:underline">Full guide &rarr;</a></p>
+                    </div>
+
                     <div class="mt-6 flex gap-4">
                         <a href="/docs" class="border border-gray-600 hover:border-gray-400 text-gray-300 hover:text-white rounded px-6 py-2 font-medium inline-block transition-colors">
                             View Documentation

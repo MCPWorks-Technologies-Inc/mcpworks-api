@@ -32,7 +32,35 @@ Authorization: Bearer {api_key_or_access_token}
 
 **Access Token Format:** JWT signed with ES256 (returned from `/auth/token`)
 
-### 1.3 Request/Response Format
+### 1.3 Environment Variable Passthrough
+
+Functions that call external APIs can receive secrets via the `X-MCPWorks-Env` header on **run** endpoint requests (`*.run.mcpworks.io`). Values are never stored, logged, or persisted — they exist only for the duration of execution.
+
+```
+X-MCPWorks-Env: base64:{base64-encoded JSON object}
+```
+
+**Encoding:** Base64-encode a JSON object of key-value pairs, prefixed with `base64:`.
+
+```bash
+# Encode
+echo -n '{"OPENAI_API_KEY":"sk-xxx","STRIPE_KEY":"sk_live_xxx"}' | base64
+
+# Result header value
+X-MCPWorks-Env: base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCIsIlNUUklQRV9LRVkiOiJza19saXZlX3h4eCJ9
+```
+
+**Limits:**
+- Maximum 64 variables per request
+- Maximum 32 KB total header size
+- Variable names must be uppercase alphanumeric + underscore (`^[A-Z][A-Z0-9_]*$`)
+- Blocked names: `PATH`, `HOME`, `LD_*`, `PYTHON*`, `NSJAIL*`, `MCPWORKS_*`, `SSL_*`
+
+**Function declarations:** Functions declare `required_env` and `optional_env` when created. Only declared variables are passed to each function (least-privilege). Missing required variables return an error before execution.
+
+**Diagnostics:** The `_env_status` tool (available on all run endpoints) reports which variables are configured vs missing across all namespace functions.
+
+### 1.4 Request/Response Format
 
 - **Content-Type:** `application/json`
 - **Character Encoding:** UTF-8
