@@ -97,18 +97,58 @@ _QUICKSTART_HTML = """\
 Use <code>list_templates</code> to see all options, or <code>describe_template</code> for full details.
 </div>
 
+<h2>Passing API Keys &amp; Secrets to Functions</h2>
+<p>Functions that call external APIs (OpenAI, Stripe, Twilio, etc.) need credentials. MCPWorks lets you pass environment variables securely via a header — <strong>nothing is stored on our servers</strong>.</p>
+
+<div class="step">
+<p><span class="step-num">Step A:</span> Declare env vars when creating the function</p>
+<p>When you create or update a function, specify which env vars it needs:</p>
+<pre><code>"Create a function called 'summarize' that calls OpenAI to summarize text.
+It requires OPENAI_API_KEY."</code></pre>
+<p>The AI will set <code>required_env: ["OPENAI_API_KEY"]</code> on the function automatically.</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">Step B:</span> Add the header to your <code>.mcp.json</code></p>
+<p>Base64-encode your env vars as JSON, then add the <code>X-MCPWorks-Env</code> header to your <strong>run</strong> server:</p>
+<pre><code>{
+  "mcpServers": {
+    "myns-run": {
+      "type": "http",
+      "url": "https://myns.run.mcpworks.io/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY",
+        "X-MCPWorks-Env": "base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCJ9"
+      }
+    }
+  }
+}</code></pre>
+<p>To encode: <code>echo -n '{"OPENAI_API_KEY":"sk-xxx"}' | base64</code></p>
+</div>
+
+<div class="step">
+<p><span class="step-num">Step C:</span> Check what's configured</p>
+<p>Ask your AI assistant to call the <code>_env_status</code> tool — it shows which variables are configured and which are missing across all your functions.</p>
+</div>
+
+<div class="tip">
+<strong>Security:</strong> Env vars are never stored, logged, or persisted. They travel encrypted (HTTPS), are injected into the sandbox for the duration of execution, and are destroyed immediately after. Each function only receives the specific variables it declared — not the full set.
+</div>
+
 <h2>What's Happening Behind the Scenes</h2>
 <ul>
 <li><strong>create endpoint</strong> (<code>*.create.mcpworks.io</code>) — manages your namespaces, services, and functions</li>
 <li><strong>run endpoint</strong> (<code>*.run.mcpworks.io</code>) — executes functions in a secure nsjail sandbox</li>
 <li>Each function runs in an isolated container with no network access to your database or secrets</li>
 <li>60+ Python packages pre-installed (numpy, pandas, httpx, etc.) — use <code>list_packages</code> to see all</li>
+<li>Environment variables are passed per-request via header — never stored server-side</li>
 </ul>
 
 <h2>Next Steps</h2>
 <ul>
 <li>Browse templates: ask your AI to <code>list_templates</code></li>
 <li>See available packages: ask your AI to <code>list_packages</code></li>
+<li>Pass secrets to functions: add <code>X-MCPWorks-Env</code> header to your run config</li>
 <li>Check usage: visit <a href="/dashboard">/dashboard</a></li>
 <li>Read the API docs: <a href="/docs">/docs</a> (development mode only)</li>
 </ul>
