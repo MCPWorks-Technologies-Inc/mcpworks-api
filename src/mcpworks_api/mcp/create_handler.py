@@ -704,7 +704,18 @@ class CreateMCPHandler:
                 optional_env=old_version.optional_env,
             )
             message = f"Restored from v{restore_version}"
-        elif any([backend, code, config, input_schema, output_schema, requirements is not None, required_env is not None, optional_env is not None]):
+        elif any(
+            [
+                backend,
+                code,
+                config,
+                input_schema,
+                output_schema,
+                requirements is not None,
+                required_env is not None,
+                optional_env is not None,
+            ]
+        ):
             active = await self.function_service.get_active_version(function.id)
             await self.function_service.create_version(
                 function_id=function.id,
@@ -714,8 +725,12 @@ class CreateMCPHandler:
                 input_schema=input_schema if input_schema is not None else active.input_schema,
                 output_schema=output_schema if output_schema is not None else active.output_schema,
                 requirements=validated_reqs if requirements is not None else active.requirements,
-                required_env=validated_required_env if required_env is not None else active.required_env,
-                optional_env=validated_optional_env if optional_env is not None else active.optional_env,
+                required_env=validated_required_env
+                if required_env is not None
+                else active.required_env,
+                optional_env=validated_optional_env
+                if optional_env is not None
+                else active.optional_env,
             )
             message = "Created new version"
         else:

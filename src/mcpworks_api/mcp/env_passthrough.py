@@ -33,23 +33,25 @@ BLOCKED_PREFIXES = (
     "MCPWORKS_INTERNAL_",
 )
 
-BLOCKED_EXACT = frozenset({
-    "PATH",
-    "HOME",
-    "USER",
-    "SHELL",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "TMPDIR",
-    "TMP",
-    "TEMP",
-    "DISPLAY",
-    "DBUS_SESSION_BUS_ADDRESS",
-    "XDG_RUNTIME_DIR",
-    "HOSTNAME",
-    "IFS",
-})
+BLOCKED_EXACT = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USER",
+        "SHELL",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "DISPLAY",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_RUNTIME_DIR",
+        "HOSTNAME",
+        "IFS",
+    }
+)
 
 RESERVED_PREFIX = "MCPWORKS_"
 
@@ -71,9 +73,7 @@ def extract_env_vars(request: Request) -> dict[str, str]:
     try:
         decoded = base64.b64decode(raw, validate=True)
     except Exception:
-        raise EnvPassthroughError(
-            f"{HEADER_NAME} header is not valid base64"
-        )
+        raise EnvPassthroughError(f"{HEADER_NAME} header is not valid base64")
 
     if len(decoded) > MAX_DECODED_BYTES:
         raise EnvPassthroughError(
@@ -83,19 +83,13 @@ def extract_env_vars(request: Request) -> dict[str, str]:
     try:
         env = json.loads(decoded)
     except json.JSONDecodeError:
-        raise EnvPassthroughError(
-            f"{HEADER_NAME} decoded content is not valid JSON"
-        )
+        raise EnvPassthroughError(f"{HEADER_NAME} decoded content is not valid JSON")
 
     if not isinstance(env, dict):
-        raise EnvPassthroughError(
-            f"{HEADER_NAME} must be a JSON object, got {type(env).__name__}"
-        )
+        raise EnvPassthroughError(f"{HEADER_NAME} must be a JSON object, got {type(env).__name__}")
 
     if len(env) > MAX_KEY_COUNT:
-        raise EnvPassthroughError(
-            f"Too many env vars ({len(env)}, max {MAX_KEY_COUNT})"
-        )
+        raise EnvPassthroughError(f"Too many env vars ({len(env)}, max {MAX_KEY_COUNT})")
 
     sanitized: dict[str, str] = {}
     for key, value in env.items():
@@ -147,20 +141,15 @@ def check_required_env(
 
 def _validate_key(key: str) -> None:
     if not isinstance(key, str):
-        raise EnvPassthroughError(
-            f"Env var key must be a string, got {type(key).__name__}"
-        )
+        raise EnvPassthroughError(f"Env var key must be a string, got {type(key).__name__}")
 
     if not KEY_PATTERN.match(key):
         raise EnvPassthroughError(
-            f"Invalid env var name: '{key}'. "
-            "Must match ^[A-Z][A-Z0-9_]{{0,127}}$"
+            f"Invalid env var name: '{key}'. Must match ^[A-Z][A-Z0-9_]{{{{0,127}}}}$"
         )
 
     if key in BLOCKED_EXACT:
-        raise EnvPassthroughError(
-            f"Env var name '{key}' is blocked (system variable)"
-        )
+        raise EnvPassthroughError(f"Env var name '{key}' is blocked (system variable)")
 
     for prefix in BLOCKED_PREFIXES:
         if key.startswith(prefix):
@@ -186,6 +175,4 @@ def _validate_value(key: str, value: Any) -> None:
         )
 
     if "\x00" in value:
-        raise EnvPassthroughError(
-            f"Env var '{key}' contains null byte"
-        )
+        raise EnvPassthroughError(f"Env var '{key}' contains null byte")
