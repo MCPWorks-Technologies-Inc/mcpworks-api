@@ -85,6 +85,7 @@ class Backend(ABC):
         execution_id: str,
         timeout_ms: int = 30000,
         extra_files: dict[str, str] | None = None,
+        sandbox_env: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute function code/config with input data.
 
@@ -97,6 +98,9 @@ class Backend(ABC):
             timeout_ms: Maximum execution time in milliseconds.
             extra_files: Optional mapping of relative paths to file contents
                 to write into the execution directory before running code.
+            sandbox_env: User-provided environment variables to inject into
+                the sandbox. Already validated and filtered to declared vars.
+                Values are NEVER logged or persisted.
 
         Returns:
             ExecutionResult with output or error details.

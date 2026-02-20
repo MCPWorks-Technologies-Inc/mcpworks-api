@@ -5,6 +5,7 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import FastAPI
@@ -48,10 +49,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 def _configure_logging(log_level: str) -> None:
     """ORDER-021: Configure structlog for JSON output with stdlib integration."""
+    def _strip_env_vars(
+        logger: Any, method_name: str, event_dict: dict[str, Any]
+    ) -> dict[str, Any]:
+        for key in ("sandbox_env", "env_vars", "env_dict"):
+            event_dict.pop(key, None)
+        return event_dict
+
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
+        _strip_env_vars,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,

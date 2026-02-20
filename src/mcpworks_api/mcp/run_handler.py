@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.exceptions import NotFoundError
+from mcpworks_api.mcp.env_passthrough import check_required_env, filter_env_for_function
 from mcpworks_api.mcp.protocol import (
     JSONRPCRequest,
     JSONRPCResponse,
@@ -114,13 +115,29 @@ class RunMCPHandler:
         tools = []
         for func, version in functions:
             tool_name = f"{func.service.name}.{func.name}"
+            desc = func.description or f"Execute {tool_name}"
+
+            if version.required_env:
+                desc += f"\n\nRequired env: {', '.join(version.required_env)}"
+            if version.optional_env:
+                desc += f"\nOptional env: {', '.join(version.optional_env)}"
+
             tools.append(
                 MCPTool(
                     name=tool_name,
-                    description=func.description or f"Execute {tool_name}",
+                    description=desc,
                     inputSchema=version.input_schema or {"type": "object", "properties": {}},
                 )
             )
+
+        tools.append(
+            MCPTool(
+                name="_env_status",
+                description="Check which environment variables are configured and which are missing for this namespace's functions",
+                inputSchema={"type": "object", "properties": {}},
+            )
+        )
+
         return tools
 
     @staticmethod
@@ -149,13 +166,19 @@ class RunMCPHandler:
             )
         ]
 
-    async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
+    async def dispatch_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        sandbox_env: dict[str, str] | None = None,
+    ) -> MCPToolResult:
         """Execute a function via its backend without JSON-RPC wrapping.
 
         Args:
             name: Tool name — ``service.function`` for tools mode,
                 or ``"execute"`` for code mode.
             arguments: Tool arguments dict.
+            sandbox_env: User-provided env vars (already validated by transport layer).
 
         Returns:
             MCPToolResult with execution output.
@@ -165,7 +188,10 @@ class RunMCPHandler:
             NotFoundError: If namespace/function not found.
         """
         if name == "execute" and self.mode == "code":
-            return await self._execute_code_mode(arguments.get("code", ""))
+            return await self._execute_code_mode(arguments.get("code", ""), sandbox_env=sandbox_env)
+
+        if name == "_env_status":
+            return await self._handle_env_status(sandbox_env)
 
         if "." not in name:
             raise ValueError(f"Invalid tool name format. Expected service.function, got: {name}")
@@ -178,6 +204,32 @@ class RunMCPHandler:
             service_name=service_name,
             function_name=function_name,
         )
+
+        # Filter env vars to only those declared by this function
+        filtered_env = filter_env_for_function(
+            sandbox_env or {},
+            version.required_env,
+            version.optional_env,
+        ) or None
+
+        # Check all required env vars are present
+        missing = check_required_env(
+            filtered_env or {},
+            version.required_env,
+        )
+        if missing:
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps({
+                            "error": "missing_env",
+                            "missing": missing,
+                            "message": f"Required environment variables not provided: {', '.join(missing)}",
+                        })
+                    )
+                ],
+                isError=True,
+            )
 
         backend = get_backend(version.backend)
         if not backend:
@@ -192,6 +244,7 @@ class RunMCPHandler:
             input_data=arguments,
             account=self.account,
             execution_id=execution_id,
+            sandbox_env=filtered_env,
         )
 
         execution_time_ms = result.execution_time_ms or int(
@@ -222,7 +275,11 @@ class RunMCPHandler:
             },
         )
 
-    async def _execute_code_mode(self, code: str) -> MCPToolResult:
+    async def _execute_code_mode(
+        self,
+        code: str,
+        sandbox_env: dict[str, str] | None = None,
+    ) -> MCPToolResult:
         """Execute agent-written code in a sandbox with function wrappers.
 
         Generates a ``functions/`` package from the namespace's DB functions,
@@ -258,6 +315,7 @@ class RunMCPHandler:
             account=self.account,
             execution_id=execution_id,
             extra_files=extra_files,
+            sandbox_env=sandbox_env,
         )
 
         execution_time_ms = result.execution_time_ms or int(
@@ -287,6 +345,53 @@ class RunMCPHandler:
                 "execution_id": execution_id,
                 "called_functions": called_functions,
             },
+        )
+
+    async def _handle_env_status(
+        self,
+        sandbox_env: dict[str, str] | None,
+    ) -> MCPToolResult:
+        """Return env var configuration status for all namespace functions."""
+        namespace = await self._get_namespace()
+        functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
+        provided = set(sandbox_env or {})
+
+        all_required: set[str] = set()
+        all_optional: set[str] = set()
+        per_function: dict[str, dict] = {}
+
+        for func, version in functions:
+            tool_name = f"{func.service.name}.{func.name}"
+            req = version.required_env or []
+            opt = version.optional_env or []
+            all_required.update(req)
+            all_optional.update(opt)
+
+            fn_missing = [r for r in req if r not in provided]
+            per_function[tool_name] = {
+                "required": req,
+                "optional": opt,
+                "status": "missing_env" if fn_missing else "ready",
+            }
+
+        configured = sorted(provided & (all_required | all_optional))
+        missing_required = sorted(all_required - provided)
+        missing_optional = sorted(all_optional - provided)
+
+        result: dict[str, Any] = {
+            "configured": configured,
+            "missing_required": missing_required,
+            "missing_optional": missing_optional,
+            "functions": per_function,
+        }
+        if missing_required:
+            result["note"] = (
+                "Functions with status 'missing_env' will fail. "
+                "Add missing variables to your MCP server X-MCPWorks-Env header."
+            )
+
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps(result))],
         )
 
     async def _handle_tools_list(self, request_id) -> JSONRPCResponse:

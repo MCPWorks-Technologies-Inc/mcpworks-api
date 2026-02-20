@@ -190,6 +190,16 @@ class CreateMCPHandler:
                             "items": {"type": "string"},
                             "description": "Python packages required (from allowed list). Use list_packages to see available.",
                         },
+                        "required_env": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Environment variables required for execution (e.g. ['OPENAI_API_KEY']). Caller must provide these via X-MCPWorks-Env header.",
+                        },
+                        "optional_env": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional environment variables the function can use if provided.",
+                        },
                         "template": {
                             "type": "string",
                             "description": "Clone from a template (e.g. hello-world). Overrides code/schemas/requirements. Use list_templates to see available.",
@@ -217,6 +227,16 @@ class CreateMCPHandler:
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Python packages required (from allowed list). Use list_packages to see available.",
+                        },
+                        "required_env": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Environment variables required for execution.",
+                        },
+                        "optional_env": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional environment variables.",
                         },
                         "restore_version": {
                             "type": "integer",
@@ -294,12 +314,18 @@ class CreateMCPHandler:
             ),
         ]
 
-    async def dispatch_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
+    async def dispatch_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        sandbox_env: dict[str, str] | None = None,
+    ) -> MCPToolResult:
         """Dispatch tool call directly without JSON-RPC wrapping.
 
         Args:
             name: Tool name.
             arguments: Tool arguments dict.
+            sandbox_env: Ignored for create handler (env vars are run-only).
 
         Returns:
             MCPToolResult with tool output.
@@ -514,6 +540,8 @@ class CreateMCPHandler:
         description: str | None = None,
         tags: list[str] | None = None,
         requirements: list[str] | None = None,
+        required_env: list[str] | None = None,
+        optional_env: list[str] | None = None,
         template: str | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
@@ -555,6 +583,24 @@ class CreateMCPHandler:
                     isError=True,
                 )
 
+        # Validate env var names against blocklist
+        validated_required_env = None
+        validated_optional_env = None
+        if required_env or optional_env:
+            from mcpworks_api.mcp.env_passthrough import EnvPassthroughError, _validate_key
+
+            all_env_names = (required_env or []) + (optional_env or [])
+            for env_name in all_env_names:
+                try:
+                    _validate_key(env_name)
+                except EnvPassthroughError as e:
+                    return MCPToolResult(
+                        content=[MCPContent(text=json.dumps({"error": str(e)}))],
+                        isError=True,
+                    )
+            validated_required_env = required_env
+            validated_optional_env = optional_env
+
         namespace = await self._get_current_namespace()
         svc = await self.service_service.get_by_name(namespace.id, service)
 
@@ -569,6 +615,8 @@ class CreateMCPHandler:
             description=description,
             tags=tags,
             requirements=validated_reqs,
+            required_env=validated_required_env,
+            optional_env=validated_optional_env,
         )
         result: dict[str, Any] = {
             "name": f"{service}.{name}",
@@ -578,6 +626,10 @@ class CreateMCPHandler:
         }
         if validated_reqs:
             result["requirements"] = validated_reqs
+        if validated_required_env:
+            result["required_env"] = validated_required_env
+        if validated_optional_env:
+            result["optional_env"] = validated_optional_env
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _update_function(
@@ -592,6 +644,8 @@ class CreateMCPHandler:
         description: str | None = None,
         tags: list[str] | None = None,
         requirements: list[str] | None = None,
+        required_env: list[str] | None = None,
+        optional_env: list[str] | None = None,
         restore_version: int | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
@@ -607,6 +661,22 @@ class CreateMCPHandler:
                     isError=True,
                 )
 
+        # Validate env var names against blocklist
+        validated_required_env = required_env
+        validated_optional_env = optional_env
+        if required_env is not None or optional_env is not None:
+            from mcpworks_api.mcp.env_passthrough import EnvPassthroughError, _validate_key
+
+            all_env_names = (required_env or []) + (optional_env or [])
+            for env_name in all_env_names:
+                try:
+                    _validate_key(env_name)
+                except EnvPassthroughError as e:
+                    return MCPToolResult(
+                        content=[MCPContent(text=json.dumps({"error": str(e)}))],
+                        isError=True,
+                    )
+
         namespace = await self._get_current_namespace()
         svc = await self.service_service.get_by_name(namespace.id, service)
         function = await self.function_service.get_by_name(svc.id, name)
@@ -619,7 +689,7 @@ class CreateMCPHandler:
                 tags=tags,
             )
 
-        # Create new version if code/config/requirements changes or restoring
+        # Create new version if code/config/requirements/env changes or restoring
         if restore_version:
             old_version = await self.function_service.get_version(function.id, restore_version)
             await self.function_service.create_version(
@@ -630,9 +700,11 @@ class CreateMCPHandler:
                 input_schema=old_version.input_schema,
                 output_schema=old_version.output_schema,
                 requirements=old_version.requirements,
+                required_env=old_version.required_env,
+                optional_env=old_version.optional_env,
             )
             message = f"Restored from v{restore_version}"
-        elif any([backend, code, config, input_schema, output_schema, requirements is not None]):
+        elif any([backend, code, config, input_schema, output_schema, requirements is not None, required_env is not None, optional_env is not None]):
             active = await self.function_service.get_active_version(function.id)
             await self.function_service.create_version(
                 function_id=function.id,
@@ -642,6 +714,8 @@ class CreateMCPHandler:
                 input_schema=input_schema if input_schema is not None else active.input_schema,
                 output_schema=output_schema if output_schema is not None else active.output_schema,
                 requirements=validated_reqs if requirements is not None else active.requirements,
+                required_env=validated_required_env if required_env is not None else active.required_env,
+                optional_env=validated_optional_env if optional_env is not None else active.optional_env,
             )
             message = "Created new version"
         else:

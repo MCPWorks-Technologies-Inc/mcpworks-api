@@ -39,6 +39,16 @@ class FunctionVersionCreate(BaseModel):
         description="JSON Schema for output validation",
     )
 
+    required_env: list[str] | None = Field(
+        None,
+        description="Environment variables required for execution",
+    )
+
+    optional_env: list[str] | None = Field(
+        None,
+        description="Optional environment variables",
+    )
+
     @field_validator("backend")
     @classmethod
     def validate_backend(cls, v: str) -> str:
@@ -61,6 +71,8 @@ class FunctionVersionResponse(BaseModel):
     config: dict[str, Any] | None = None
     input_schema: dict[str, Any] | None = None
     output_schema: dict[str, Any] | None = None
+    required_env: list[str] | None = None
+    optional_env: list[str] | None = None
     created_at: datetime
 
 
