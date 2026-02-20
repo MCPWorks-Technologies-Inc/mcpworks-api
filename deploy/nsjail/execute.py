@@ -21,6 +21,7 @@ INPUT_PATH = f"{SANDBOX_DIR}/input.json"
 OUTPUT_PATH = f"{SANDBOX_DIR}/output.json"
 CODE_PATH = f"{SANDBOX_DIR}/user_code.py"
 TOKEN_PATH = f"{SANDBOX_DIR}/.exec_token"
+ENV_PATH = f"{SANDBOX_DIR}/.sandbox_env.json"
 
 # Output size limits (defense-in-depth against json-bomb / stdout-flood)
 MAX_STDOUT_BYTES = 64 * 1024       # 64 KB per stream
@@ -38,6 +39,19 @@ def run():
         import os
         os.unlink(TOKEN_PATH)
     except FileNotFoundError:
+        pass
+
+    # ENV PASSTHROUGH: Read user-provided env vars, delete file, inject into os.environ.
+    # File lifecycle: written to tmpfs by spawn-sandbox.sh, read here, unlinked immediately.
+    try:
+        import os as _os
+        with open(ENV_PATH) as f:
+            _env_data = json.load(f)
+        _os.unlink(ENV_PATH)
+        if isinstance(_env_data, dict):
+            _os.environ.update(_env_data)
+        del _env_data
+    except (FileNotFoundError, Exception):
         pass
 
     # Read input data

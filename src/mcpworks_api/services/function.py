@@ -38,6 +38,8 @@ class FunctionService:
         input_schema: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
         requirements: list[str] | None = None,
+        required_env: list[str] | None = None,
+        optional_env: list[str] | None = None,
     ) -> Function:
         """Create a new function with initial version.
 
@@ -91,6 +93,8 @@ class FunctionService:
             input_schema=input_schema,
             output_schema=output_schema,
             requirements=requirements,
+            required_env=required_env,
+            optional_env=optional_env,
         )
         self.db.add(version)
         await self.db.flush()
@@ -240,6 +244,8 @@ class FunctionService:
         input_schema: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
         requirements: builtins.list[str] | None = None,
+        required_env: builtins.list[str] | None = None,
+        optional_env: builtins.list[str] | None = None,
         activate: bool = True,
     ) -> FunctionVersion:
         """Create a new version of a function.
@@ -279,6 +285,8 @@ class FunctionService:
             input_schema=input_schema,
             output_schema=output_schema,
             requirements=requirements,
+            required_env=required_env,
+            optional_env=optional_env,
         )
         self.db.add(version)
 
@@ -499,6 +507,8 @@ class FunctionService:
                 "input_schema": active_version.input_schema if active_version else None,
                 "output_schema": active_version.output_schema if active_version else None,
                 "requirements": active_version.requirements if active_version else None,
+                "required_env": active_version.required_env if active_version else None,
+                "optional_env": active_version.optional_env if active_version else None,
                 "created_at": active_version.created_at.isoformat() if active_version else None,
             }
             if active_version

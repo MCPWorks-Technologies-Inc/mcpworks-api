@@ -97,6 +97,13 @@ if [ -n "${EXEC_TOKEN_FILE}" ] && [ -f "${EXEC_TOKEN_FILE}" ]; then
     rm -f "${EXEC_TOKEN_FILE}"
 fi
 
+# ENV PASSTHROUGH: Copy env vars file into workspace if present.
+# Read once by execute.py, then deleted. Never in nsjail --env (avoids /proc leak).
+if [ -f "${EXEC_DIR}/.sandbox_env.json" ]; then
+    cp "${EXEC_DIR}/.sandbox_env.json" "${WORKSPACE}/.sandbox_env.json"
+    rm -f "${EXEC_DIR}/.sandbox_env.json"
+fi
+
 # Chown workspace to UID 65534 (required for outside_id: 65534 mapping)
 chown -R 65534:65534 "${WORKSPACE}"
 

@@ -162,6 +162,7 @@ class SandboxBackend(Backend):
         execution_id: str,
         timeout_ms: int = 30000,
         extra_files: dict[str, str] | None = None,
+        sandbox_env: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute Python code in sandbox.
 
@@ -197,6 +198,7 @@ class SandboxBackend(Backend):
                 execution_id=execution_id,
                 timeout_sec=timeout_sec,
                 extra_files=extra_files,
+                sandbox_env=sandbox_env,
             )
         else:
             return await self._execute_nsjail(
@@ -207,6 +209,7 @@ class SandboxBackend(Backend):
                 timeout_sec=timeout_sec,
                 tier_config=tier_config,
                 extra_files=extra_files,
+                sandbox_env=sandbox_env,
             )
 
     async def _execute_dev_mode(
@@ -216,6 +219,7 @@ class SandboxBackend(Backend):
         execution_id: str,
         timeout_sec: float,
         extra_files: dict[str, str] | None = None,
+        sandbox_env: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute code in development mode (subprocess, no isolation).
 
@@ -233,6 +237,11 @@ class SandboxBackend(Backend):
                     file_path = exec_dir / rel_path
                     file_path.parent.mkdir(parents=True, exist_ok=True)
                     file_path.write_text(content)
+
+            # Write env vars file if provided (never logged, never persisted)
+            if sandbox_env:
+                (exec_dir / ".sandbox_env.json").write_text(json.dumps(sandbox_env))
+                sandbox_env.clear()
 
             # Write input and code files
             input_file = exec_dir / "input.json"
@@ -317,6 +326,7 @@ class SandboxBackend(Backend):
         timeout_sec: float,
         tier_config: dict[str, Any],
         extra_files: dict[str, str] | None = None,
+        sandbox_env: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """Execute code in nsjail sandbox.
 
@@ -334,6 +344,11 @@ class SandboxBackend(Backend):
                     file_path = exec_dir / rel_path
                     file_path.parent.mkdir(parents=True, exist_ok=True)
                     file_path.write_text(content)
+
+            # Write env vars file if provided (never logged, never persisted)
+            if sandbox_env:
+                (exec_dir / ".sandbox_env.json").write_text(json.dumps(sandbox_env))
+                sandbox_env.clear()
 
             # Write input and code files
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))

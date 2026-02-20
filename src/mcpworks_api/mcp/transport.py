@@ -22,6 +22,7 @@ from starlette.requests import Request
 
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.mcp.create_handler import CreateMCPHandler
+from mcpworks_api.mcp.env_passthrough import EnvPassthroughError, extract_env_vars
 from mcpworks_api.mcp.protocol import MCPTool
 from mcpworks_api.mcp.run_handler import RunMCPHandler
 from mcpworks_api.middleware.subdomain import EndpointType
@@ -48,9 +49,26 @@ try:
         ["endpoint_type", "tool_name"],
         buckets=[100, 250, 500, 1000, 2500, 5000, 10000, 50000],
     )
+    env_passthrough_requests_total = Counter(
+        "mcpworks_env_passthrough_requests_total",
+        "Requests with X-MCPWorks-Env header present",
+    )
+    env_passthrough_vars_count = Histogram(
+        "mcpworks_env_passthrough_vars_count",
+        "Number of env vars per request",
+        buckets=[0, 1, 2, 5, 10, 20, 50, 64],
+    )
+    env_passthrough_errors_total = Counter(
+        "mcpworks_env_passthrough_errors_total",
+        "Env passthrough validation errors",
+        ["error_type"],
+    )
 except ImportError:
     mcp_tool_calls_total = None  # type: ignore[assignment]
     mcp_response_bytes = None  # type: ignore[assignment]
+    env_passthrough_requests_total = None  # type: ignore[assignment]
+    env_passthrough_vars_count = None  # type: ignore[assignment]
+    env_passthrough_errors_total = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # ContextVar – set by the ASGI wrapper, read by MCP handlers
@@ -237,6 +255,19 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
 
     args = arguments or {}
 
+    # Extract user-provided env vars from header (run endpoints only)
+    sandbox_env: dict[str, str] | None = None
+    if endpoint_type == EndpointType.RUN:
+        try:
+            sandbox_env = extract_env_vars(request) or None
+            if sandbox_env and env_passthrough_requests_total is not None:
+                env_passthrough_requests_total.inc()
+                env_passthrough_vars_count.observe(len(sandbox_env))
+        except EnvPassthroughError as e:
+            if env_passthrough_errors_total is not None:
+                env_passthrough_errors_total.labels(error_type=type(e).__name__).inc()
+            raise ValueError(str(e)) from e
+
     async with get_db_context() as db:
         account = await _authenticate(request, db)
 
@@ -246,7 +277,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
             run_mode = request.query_params.get("mode", "tools")
             handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
 
-        result = await handler.dispatch_tool(name, args)
+        result = await handler.dispatch_tool(name, args, sandbox_env=sandbox_env)
         contents = [TextContent(type="text", text=c.text) for c in result.content]
 
         # Increment call counts (fail-open — errors logged, not raised)

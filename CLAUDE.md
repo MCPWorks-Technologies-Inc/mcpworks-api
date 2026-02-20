@@ -666,6 +666,8 @@ This project is on a **15-month acquisition timeline** targeting $10M-$15M exit.
 ## Active Technologies
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe (001-api-gateway-mvp)
 - PostgreSQL 15+ (primary), Redis 7+ (rate limiting, sessions) (001-api-gateway-mvp)
+- Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, structlog, MCP Python SDK (002-env-passthrough)
+- PostgreSQL 15+ (env var names only — never values), tmpfs (transient env file during execution) (002-env-passthrough)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe

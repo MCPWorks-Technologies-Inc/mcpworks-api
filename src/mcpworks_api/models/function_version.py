@@ -91,6 +91,17 @@ class FunctionVersion(Base, UUIDMixin):
         nullable=True,
     )
 
+    # Environment variable declarations (names only, never values)
+    required_env: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
+        nullable=True,
+    )
+
+    optional_env: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
+        nullable=True,
+    )
+
     # Timestamp (immutable - no updated_at)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
