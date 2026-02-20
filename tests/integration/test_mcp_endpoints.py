@@ -413,7 +413,9 @@ class TestRunMCPHandler:
         response = await handler.handle(request)
 
         assert response.error is None
-        assert response.result["tools"] == []
+        tools = response.result["tools"]
+        assert len(tools) == 1
+        assert tools[0]["name"] == "_env_status"
 
     async def test_tools_list_with_functions(
         self,
