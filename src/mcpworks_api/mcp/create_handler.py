@@ -601,6 +601,12 @@ class CreateMCPHandler:
             validated_required_env = required_env
             validated_optional_env = optional_env
 
+        credential_warnings: list[str] = []
+        if code:
+            from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
+
+            credential_warnings = scan_code_for_credentials(code)
+
         namespace = await self._get_current_namespace()
         svc = await self.service_service.get_by_name(namespace.id, service)
 
@@ -630,6 +636,8 @@ class CreateMCPHandler:
             result["required_env"] = validated_required_env
         if validated_optional_env:
             result["optional_env"] = validated_optional_env
+        if credential_warnings:
+            result["warnings"] = credential_warnings
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _update_function(
@@ -676,6 +684,12 @@ class CreateMCPHandler:
                         content=[MCPContent(text=json.dumps({"error": str(e)}))],
                         isError=True,
                     )
+
+        credential_warnings: list[str] = []
+        if code:
+            from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
+
+            credential_warnings = scan_code_for_credentials(code)
 
         namespace = await self._get_current_namespace()
         svc = await self.service_service.get_by_name(namespace.id, service)
@@ -739,18 +753,15 @@ class CreateMCPHandler:
         # Refresh function to get updated active_version
         function = await self.function_service.get_by_id(function.id)
 
+        result_data: dict[str, Any] = {
+            "name": f"{service}.{name}",
+            "version": function.active_version,
+            "message": message,
+        }
+        if credential_warnings:
+            result_data["warnings"] = credential_warnings
         return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "name": f"{service}.{name}",
-                            "version": function.active_version,
-                            "message": message,
-                        }
-                    )
-                )
-            ]
+            content=[MCPContent(text=json.dumps(result_data))]
         )
 
     async def _delete_function(self, service: str, name: str) -> MCPToolResult:
