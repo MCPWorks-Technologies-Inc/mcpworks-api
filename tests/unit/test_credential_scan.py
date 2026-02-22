@@ -63,17 +63,17 @@ class TestGitHubTokens:
 
 class TestPrivateKeys:
     def test_rsa_private_key(self):
-        code = '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIB...'
+        code = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIB..."
         warnings = scan_code_for_credentials(code)
         assert any("private key" in w for w in warnings)
 
     def test_ec_private_key(self):
-        code = '-----BEGIN EC PRIVATE KEY-----'
+        code = "-----BEGIN EC PRIVATE KEY-----"
         warnings = scan_code_for_credentials(code)
         assert any("private key" in w for w in warnings)
 
     def test_generic_private_key(self):
-        code = '-----BEGIN PRIVATE KEY-----'
+        code = "-----BEGIN PRIVATE KEY-----"
         warnings = scan_code_for_credentials(code)
         assert any("private key" in w for w in warnings)
 
@@ -138,7 +138,7 @@ class TestOsEnvironAssignment:
 
 class TestLineNumbers:
     def test_reports_correct_line(self):
-        code = "import os\n\n# line 3\npassword = \"supersecretpassword123\""
+        code = 'import os\n\n# line 3\npassword = "supersecretpassword123"'
         warnings = scan_code_for_credentials(code)
         assert any("line 4" in w for w in warnings)
 

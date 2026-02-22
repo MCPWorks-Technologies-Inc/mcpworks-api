@@ -760,9 +760,7 @@ class CreateMCPHandler:
         }
         if credential_warnings:
             result_data["warnings"] = credential_warnings
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps(result_data))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result_data))])
 
     async def _delete_function(self, service: str, name: str) -> MCPToolResult:
         """Delete a function."""

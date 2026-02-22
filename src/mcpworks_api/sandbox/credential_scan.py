@@ -21,9 +21,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("private key", re.compile(r"-----BEGIN[A-Z ]*PRIVATE KEY-----")),
     (
         "JWT token",
-        re.compile(
-            r"eyJ[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]+"
-        ),
+        re.compile(r"eyJ[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]+"),
     ),
     (
         "connection string with password",
