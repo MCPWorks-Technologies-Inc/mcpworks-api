@@ -1,5 +1,6 @@
 """Authentication service - API key validation and JWT token management."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -230,6 +231,34 @@ class AuthService:
             event_data={"reason": reason},
         )
         self.db.add(audit_log)
+
+        asyncio.create_task(
+            self._fire_auth_security_event(
+                ip_address,
+                str(user_id) if user_id else None,
+                reason,
+            )
+        )
+
+    @staticmethod
+    async def _fire_auth_security_event(
+        actor_ip: str | None,
+        actor_id: str | None,
+        reason: str,
+    ) -> None:
+        """ORDER-022: Fire-and-forget security event for auth failures."""
+        from mcpworks_api.core.database import get_db_context
+        from mcpworks_api.services.security_event import fire_security_event
+
+        async with get_db_context() as db:
+            await fire_security_event(
+                db,
+                event_type="auth.login_failed",
+                severity="warning",
+                actor_ip=actor_ip,
+                actor_id=actor_id,
+                details={"reason": reason},
+            )
 
     async def register_user(
         self,

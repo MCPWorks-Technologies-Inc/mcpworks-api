@@ -16,6 +16,22 @@ Remaining sub-issue: functions created mid-session aren't discoverable until MCP
 
 ---
 
+### NOTE: Safe Logging Strategy — Implementation Tracked in ORDERS.md
+
+**Filed:** 2026-02-20
+**Status:** Spec complete, implementation pending (ORDER-020 through ORDER-023)
+
+The question of how to safely log MCP server requests (given PII, credentials, and sensitive data in request/response bodies) has been fully spec'd:
+
+- **Spec:** `../mcpworks-internals/docs/implementation/logging-specification.md` (v1.0.0)
+- **Implementation orders:** ORDER-020 (stop logging PII in execution records), ORDER-021 (structured JSON logging), ORDER-022 (security events table), ORDER-023 (truncate/PII-scrub error messages)
+
+**Core principles:** Log metadata never content. Hash IPs, reference API keys by prefix only. `input_data` and `result_data` fields must be NULL by default — only populated with opt-in debug logging (A1). Error messages truncated to 255 chars with PII scrub (email patterns, phone patterns, API key patterns).
+
+**Iain Harper's "decision logging" gap** (from iain.so MCP tooling article, Feb 2026): Most observability tools log *what happened* but not *why it was allowed*. Consider adding policy-context logging for HITL approvals in A1. See `../mcpworks-internals/docs/research/competitive/2026-02-20_mcp-tooling-security-crisis-analysis.md`.
+
+---
+
 ---
 
 ## Resolved Issues

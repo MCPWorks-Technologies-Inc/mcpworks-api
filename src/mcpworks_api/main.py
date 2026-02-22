@@ -20,6 +20,7 @@ from mcpworks_api.mcp.transport import MCPTransportMiddleware, session_manager
 from mcpworks_api.middleware import (
     BillingMiddleware,
     CorrelationIdMiddleware,
+    RequestLoggingMiddleware,
     SubdomainMiddleware,
     register_exception_handlers,
 )
@@ -145,6 +146,9 @@ def create_app() -> FastAPI:
 
     # Subdomain parsing (A0: namespace + endpoint type extraction)
     app.add_middleware(SubdomainMiddleware)
+
+    # ORDER-021: Structured per-request logging (runs after correlation ID is set)
+    app.add_middleware(RequestLoggingMiddleware)
 
     # Correlation ID middleware
     app.add_middleware(CorrelationIdMiddleware)

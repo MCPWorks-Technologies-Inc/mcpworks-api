@@ -7,6 +7,7 @@ from mcpworks_api.middleware.billing import (
 )
 from mcpworks_api.middleware.correlation import CorrelationIdMiddleware
 from mcpworks_api.middleware.error_handler import register_exception_handlers
+from mcpworks_api.middleware.request_logging import RequestLoggingMiddleware
 from mcpworks_api.middleware.subdomain import (
     EndpointType,
     SubdomainMiddleware,
@@ -18,6 +19,7 @@ from mcpworks_api.middleware.subdomain import (
 
 __all__ = [
     "CorrelationIdMiddleware",
+    "RequestLoggingMiddleware",
     "register_exception_handlers",
     # Subdomain middleware (A0)
     "SubdomainMiddleware",

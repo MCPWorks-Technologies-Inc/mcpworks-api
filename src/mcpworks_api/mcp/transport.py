@@ -11,9 +11,9 @@ Starlette ``Request`` whose ``state`` was already populated by
 """
 
 import contextvars
-import logging
 from typing import Any
 
+import structlog
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
@@ -30,7 +30,7 @@ from mcpworks_api.models.function import Function
 from mcpworks_api.models.namespace import Namespace
 from mcpworks_api.models.namespace_service import NamespaceService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # ORDER-017: Token savings measurement — Prometheus instrumentation
@@ -139,7 +139,7 @@ async def _increment_call_counts(
                 )
             # Session auto-commits via get_db_context()
     except Exception:
-        logger.exception("Failed to increment call counts for tool=%s", tool_name)
+        logger.exception("call_count_increment_failed", tool=tool_name)
 
 
 async def _increment_function_counts(
@@ -182,10 +182,7 @@ async def _increment_function_counts(
                     .values(call_count=Function.call_count + 1)
                 )
     except Exception:
-        logger.exception(
-            "Failed to increment function counts for code-mode calls: %s",
-            called_functions,
-        )
+        logger.exception("function_count_increment_failed", called_functions=called_functions)
 
 
 async def _authenticate(request: Request, db: Any) -> Any:
@@ -232,7 +229,7 @@ async def list_tools() -> list[Tool]:
     except ValueError:
         raise
     except Exception as e:
-        logger.error("list_tools error: %s", e, exc_info=True)
+        logger.error("list_tools_error", error=str(e), exc_info=True)
         return []
 
 
