@@ -19,12 +19,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     Skips health checks and metrics to keep logs focused.
     """
 
-    SKIP_PATHS = frozenset({
-        "/v1/health",
-        "/v1/health/live",
-        "/v1/health/ready",
-        "/metrics",
-    })
+    SKIP_PATHS = frozenset(
+        {
+            "/v1/health",
+            "/v1/health/live",
+            "/v1/health/ready",
+            "/metrics",
+        }
+    )
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in self.SKIP_PATHS:
