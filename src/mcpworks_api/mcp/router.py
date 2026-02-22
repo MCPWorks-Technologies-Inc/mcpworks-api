@@ -4,6 +4,7 @@ This module provides FastAPI router for MCP endpoints, routing to either
 CreateMCPHandler or RunMCPHandler based on subdomain endpoint type.
 """
 
+import asyncio
 import json
 from typing import Any
 
@@ -58,7 +59,9 @@ async def get_account_from_api_key(
     raw_key = auth_header[7:]  # Remove "Bearer " prefix
 
     # Extract prefix for lookup (first 12 chars)
+    client_ip = _get_client_ip(request)
     if len(raw_key) < 12:
+        asyncio.create_task(_fire_mcp_auth_failure(client_ip, "Key too short"))
         raise HTTPException(status_code=401, detail="Invalid API key format")
 
     key_prefix = raw_key[:12]
@@ -73,6 +76,7 @@ async def get_account_from_api_key(
     api_keys = result.scalars().all()
 
     if not api_keys:
+        asyncio.create_task(_fire_mcp_auth_failure(client_ip, "No matching key prefix"))
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Verify against each matching key's hash
@@ -83,6 +87,7 @@ async def get_account_from_api_key(
             break
 
     if not valid_key:
+        asyncio.create_task(_fire_mcp_auth_failure(client_ip, "Hash verification failed"))
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Get account from user
@@ -93,6 +98,30 @@ async def get_account_from_api_key(
         )
 
     return valid_key.user.account
+
+
+def _get_client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
+
+
+async def _fire_mcp_auth_failure(actor_ip: str | None, reason: str) -> None:
+    """ORDER-022: Fire-and-forget security event for MCP auth failures."""
+    from mcpworks_api.core.database import get_db_context
+    from mcpworks_api.services.security_event import fire_security_event
+
+    async with get_db_context() as db:
+        await fire_security_event(
+            db,
+            event_type="auth.login_failed",
+            severity="warning",
+            actor_ip=actor_ip,
+            details={"reason": reason, "source": "mcp"},
+        )
 
 
 async def validate_namespace_access(
