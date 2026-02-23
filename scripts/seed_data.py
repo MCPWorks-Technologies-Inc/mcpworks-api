@@ -47,9 +47,7 @@ async def seed_services() -> None:
     async with get_db_context() as db:
         for service_data in services_data:
             # Check if service already exists
-            result = await db.execute(
-                select(Service).where(Service.name == service_data["name"])
-            )
+            result = await db.execute(select(Service).where(Service.name == service_data["name"]))
             existing = result.scalar_one_or_none()
 
             if existing:
@@ -73,9 +71,7 @@ async def seed_test_user() -> None:
 
     async with get_db_context() as db:
         # Check if test user exists
-        result = await db.execute(
-            select(User).where(User.email == "test@mcpworks.io")
-        )
+        result = await db.execute(select(User).where(User.email == "test@mcpworks.io"))
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -107,7 +103,7 @@ async def seed_test_user() -> None:
         db.add(credit)
 
         await db.commit()
-        print(f"Created test user: test@mcpworks.io (password: testpassword)")
+        print("Created test user: test@mcpworks.io (password: testpassword)")
 
 
 async def main() -> None:

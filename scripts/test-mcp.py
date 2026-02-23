@@ -187,15 +187,13 @@ def run_smoke_tests(client: MCPTestClient):
 
 def main():
     parser = argparse.ArgumentParser(description="MCP Test Client")
-    parser.add_argument("--base-url", "-u", default="http://localhost:8000",
-                        help="Base URL of the API")
+    parser.add_argument(
+        "--base-url", "-u", default="http://localhost:8000", help="Base URL of the API"
+    )
     parser.add_argument("--token", "-t", help="Bearer token for auth")
-    parser.add_argument("--namespace", "-n", default="default",
-                        help="Namespace for local testing")
-    parser.add_argument("--interactive", "-i", action="store_true",
-                        help="Run in interactive mode")
-    parser.add_argument("--smoke", "-s", action="store_true",
-                        help="Run smoke tests")
+    parser.add_argument("--namespace", "-n", default="default", help="Namespace for local testing")
+    parser.add_argument("--interactive", "-i", action="store_true", help="Run in interactive mode")
+    parser.add_argument("--smoke", "-s", action="store_true", help="Run smoke tests")
 
     args = parser.parse_args()
 

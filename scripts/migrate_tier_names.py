@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-
 TIER_MAPPING = {
     "starter": "founder",
     "pro": "founder_pro",
@@ -44,8 +43,7 @@ async def migrate_tiers(database_url: str, dry_run: bool = False) -> dict:
         for old_tier, new_tier in TIER_MAPPING.items():
             # Count affected users
             count_result = await conn.execute(
-                text("SELECT COUNT(*) FROM users WHERE tier = :old_tier"),
-                {"old_tier": old_tier}
+                text("SELECT COUNT(*) FROM users WHERE tier = :old_tier"), {"old_tier": old_tier}
             )
             count = count_result.scalar()
             results["users"][f"{old_tier}_to_{new_tier}"] = count
@@ -53,7 +51,7 @@ async def migrate_tiers(database_url: str, dry_run: bool = False) -> dict:
             if count > 0 and not dry_run:
                 await conn.execute(
                     text("UPDATE users SET tier = :new_tier WHERE tier = :old_tier"),
-                    {"old_tier": old_tier, "new_tier": new_tier}
+                    {"old_tier": old_tier, "new_tier": new_tier},
                 )
                 print(f"  Updated {count} users from '{old_tier}' to '{new_tier}'")
             elif count > 0:
@@ -64,7 +62,7 @@ async def migrate_tiers(database_url: str, dry_run: bool = False) -> dict:
             # Count affected subscriptions
             count_result = await conn.execute(
                 text("SELECT COUNT(*) FROM subscriptions WHERE tier = :old_tier"),
-                {"old_tier": old_tier}
+                {"old_tier": old_tier},
             )
             count = count_result.scalar()
             results["subscriptions"][f"{old_tier}_to_{new_tier}"] = count
@@ -72,11 +70,13 @@ async def migrate_tiers(database_url: str, dry_run: bool = False) -> dict:
             if count > 0 and not dry_run:
                 await conn.execute(
                     text("UPDATE subscriptions SET tier = :new_tier WHERE tier = :old_tier"),
-                    {"old_tier": old_tier, "new_tier": new_tier}
+                    {"old_tier": old_tier, "new_tier": new_tier},
                 )
                 print(f"  Updated {count} subscriptions from '{old_tier}' to '{new_tier}'")
             elif count > 0:
-                print(f"  [DRY RUN] Would update {count} subscriptions from '{old_tier}' to '{new_tier}'")
+                print(
+                    f"  [DRY RUN] Would update {count} subscriptions from '{old_tier}' to '{new_tier}'"
+                )
 
     await engine.dispose()
     return results
