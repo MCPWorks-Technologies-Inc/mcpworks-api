@@ -5,17 +5,18 @@ Revises: 20251217_000002
 Create Date: 2026-02-09
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260209_000001"
-down_revision: Union[str, None] = "20251217_000002"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "20251217_000002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -122,9 +123,7 @@ def upgrade() -> None:
             name="namespace_service_name_format",
         ),
     )
-    op.create_index(
-        "ix_namespace_services_namespace_id", "namespace_services", ["namespace_id"]
-    )
+    op.create_index("ix_namespace_services_namespace_id", "namespace_services", ["namespace_id"])
     op.create_index("ix_namespace_services_name", "namespace_services", ["name"])
 
     # Create functions table
@@ -162,9 +161,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_functions_service_id", "functions", ["service_id"])
     op.create_index("ix_functions_name", "functions", ["name"])
-    op.create_index(
-        "ix_functions_tags", "functions", ["tags"], postgresql_using="gin"
-    )
+    op.create_index("ix_functions_tags", "functions", ["tags"], postgresql_using="gin")
 
     # Create function_versions table
     op.create_table(
@@ -188,18 +185,14 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.UniqueConstraint(
-            "function_id", "version", name="uq_function_version_number"
-        ),
+        sa.UniqueConstraint("function_id", "version", name="uq_function_version_number"),
         sa.CheckConstraint("version > 0", name="function_version_positive"),
         sa.CheckConstraint(
             "backend IN ('code_sandbox', 'activepieces', 'nanobot', 'github_repo')",
             name="function_version_backend_valid",
         ),
     )
-    op.create_index(
-        "ix_function_versions_function_id", "function_versions", ["function_id"]
-    )
+    op.create_index("ix_function_versions_function_id", "function_versions", ["function_id"])
     op.create_index(
         "ix_function_versions_version",
         "function_versions",
@@ -267,9 +260,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_webhooks_account_id", "webhooks", ["account_id"])
     op.create_index("ix_webhooks_enabled", "webhooks", ["enabled"])
-    op.create_index(
-        "ix_webhooks_events", "webhooks", ["events"], postgresql_using="gin"
-    )
+    op.create_index("ix_webhooks_events", "webhooks", ["events"], postgresql_using="gin")
 
     # Extend api_keys table with namespace_id
     op.add_column(
@@ -320,9 +311,7 @@ def upgrade() -> None:
         ondelete="CASCADE",
     )
     op.create_index("ix_executions_function_id", "executions", ["function_id"])
-    op.create_index(
-        "ix_executions_function_created", "executions", ["function_id", "created_at"]
-    )
+    op.create_index("ix_executions_function_created", "executions", ["function_id", "created_at"])
 
 
 def downgrade() -> None:
@@ -371,9 +360,7 @@ def downgrade() -> None:
 
     # Drop namespace_services table
     op.drop_index("ix_namespace_services_name", table_name="namespace_services")
-    op.drop_index(
-        "ix_namespace_services_namespace_id", table_name="namespace_services"
-    )
+    op.drop_index("ix_namespace_services_namespace_id", table_name="namespace_services")
     op.drop_table("namespace_services")
 
     # Drop namespaces table
