@@ -504,6 +504,8 @@ class FunctionService:
                 "id": str(active_version.id) if active_version else None,
                 "version": active_version.version if active_version else None,
                 "backend": active_version.backend if active_version else None,
+                "code": active_version.code if active_version else None,
+                "config": active_version.config if active_version else None,
                 "input_schema": active_version.input_schema if active_version else None,
                 "output_schema": active_version.output_schema if active_version else None,
                 "requirements": active_version.requirements if active_version else None,
@@ -523,4 +525,40 @@ class FunctionService:
             ],
             "created_at": function.created_at.isoformat(),
             "updated_at": function.updated_at.isoformat() if function.updated_at else None,
+        }
+
+    async def get_version_detail(
+        self,
+        function_id: uuid.UUID,
+        version_number: int,
+    ) -> dict[str, Any]:
+        """Get full detail for a specific version of a function.
+
+        Args:
+            function_id: The function UUID.
+            version_number: The version number.
+
+        Returns:
+            Dictionary with version details including code, config, schemas,
+            requirements, env vars, and is_active flag.
+
+        Raises:
+            NotFoundError: If function or version not found.
+        """
+        function = await self.get_by_id(function_id)
+        version = await self.get_version(function_id, version_number)
+
+        return {
+            "id": str(version.id),
+            "version": version.version,
+            "backend": version.backend,
+            "code": version.code,
+            "config": version.config,
+            "input_schema": version.input_schema,
+            "output_schema": version.output_schema,
+            "requirements": version.requirements,
+            "required_env": version.required_env,
+            "optional_env": version.optional_env,
+            "is_active": version.version == function.active_version,
+            "created_at": version.created_at.isoformat(),
         }

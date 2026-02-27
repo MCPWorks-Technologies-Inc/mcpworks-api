@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
@@ -28,6 +29,8 @@ from mcpworks_api.mcp.protocol import (
 from mcpworks_api.models import Account, Namespace
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import NamespaceServiceManager
+
+logger = structlog.get_logger(__name__)
 
 
 class RunMCPHandler:
@@ -256,6 +259,16 @@ class RunMCPHandler:
             (datetime.now(UTC) - start_time).total_seconds() * 1000
         )
 
+        logger.info(
+            "function_executed",
+            function=name,
+            version=version.version,
+            backend=version.backend,
+            execution_time_ms=execution_time_ms,
+            execution_id=execution_id,
+            success=result.success,
+        )
+
         if result.success:
             content_text = json.dumps(result.output)
         else:
@@ -329,6 +342,14 @@ class RunMCPHandler:
 
         # Extract call log from stderr marker
         called_functions = _parse_call_log(result.stderr)
+
+        logger.info(
+            "code_executed",
+            execution_time_ms=execution_time_ms,
+            execution_id=execution_id,
+            success=result.success,
+            called_functions=called_functions,
+        )
 
         if result.success:
             content_text = json.dumps(result.output)

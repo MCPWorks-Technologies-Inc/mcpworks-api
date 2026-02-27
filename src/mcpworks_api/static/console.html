@@ -190,6 +190,20 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
 .inline-form input { margin-bottom: 0; }
 
 .endpoint-url { font-size: 12px; font-family: var(--mono); color: var(--text-3); background: var(--bg-0); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border-1); }
+
+.version-clickable { cursor: pointer; }
+.version-clickable:hover td { background: var(--bg-2); }
+.version-clickable.selected td { background: rgba(37, 99, 235, 0.08); }
+
+.diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.diff-panel { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; }
+.diff-panel-label { font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.diff-line-add { background: rgba(74, 222, 128, 0.10); color: var(--green); }
+.diff-line-remove { background: rgba(248, 113, 113, 0.10); color: var(--danger); }
+.diff-line-same { color: var(--text-3); }
+.diff-section-title { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 16px; margin-bottom: 6px; }
+.diff-section-title:first-child { margin-top: 0; }
+.diff-empty { color: var(--text-3); font-style: italic; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -538,6 +552,8 @@ async function loadFunction(nsName, svcName, fnName) {
   ]);
   try {
     const fn = await apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions/${encodeURIComponent(fnName)}`);
+    _currentFnContext = fn;
+    _selectedVersion = null;
     const av = fn.active_version_details;
     c.innerHTML = `<div class="detail-section">
       <div class="detail-header"><div class="detail-title">${esc(fn.name)}</div><span class="detail-version">v${fn.active_version}</span></div>
@@ -552,9 +568,12 @@ async function loadFunction(nsName, svcName, fnName) {
       ` : '<div style="color:var(--text-3);margin-top:12px">No active version details</div>'}
       ${fn.versions?.length > 1 ? `
         <div class="section-label" style="margin-top:24px">Version History</div>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Click a version to compare with active</div>
         <table><thead><tr><th>Version</th><th>Backend</th><th>Created</th></tr></thead><tbody>${fn.versions.map(v => `
-          <tr><td>${v.version === fn.active_version ? `<span style="color:var(--accent)">v${v.version} (active)</span>` : `v${v.version}`}</td>
-          <td class="cell-dim">${esc(v.backend)}</td><td class="cell-muted">${fmtDate(v.created_at)}</td></tr>`).join('')}</tbody></table>` : ''}
+          <tr id="version-row-${v.version}" class="version-clickable" onclick="selectVersion('${esc(nsName)}','${esc(svcName)}','${esc(fnName)}',${v.version})">
+            <td>${v.version === fn.active_version ? `<span style="color:var(--accent)">v${v.version} (active)</span>` : `v${v.version}`}</td>
+            <td class="cell-dim">${esc(v.backend)}</td><td class="cell-muted">${fmtDate(v.created_at)}</td></tr>`).join('')}</tbody></table>
+        <div id="version-diff-area"></div>` : ''}
     </div>`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }
@@ -640,6 +659,117 @@ function fmtDate(iso) {
   if (!iso) return '\u2014';
   try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
   catch { return iso; }
+}
+
+let _currentFnContext = null;
+let _selectedVersion = null;
+
+function computeLineDiff(oldText, newText) {
+  const oldLines = (oldText || '').split('\n');
+  const newLines = (newText || '').split('\n');
+  const maxLen = Math.max(oldLines.length, newLines.length);
+  const left = [];
+  const right = [];
+  for (let i = 0; i < maxLen; i++) {
+    const ol = i < oldLines.length ? oldLines[i] : undefined;
+    const nl = i < newLines.length ? newLines[i] : undefined;
+    if (ol === nl) {
+      left.push({ type: 'same', text: ol });
+      right.push({ type: 'same', text: nl });
+    } else {
+      if (ol !== undefined) left.push({ type: 'remove', text: ol });
+      else left.push({ type: 'empty', text: '' });
+      if (nl !== undefined) right.push({ type: 'add', text: nl });
+      else right.push({ type: 'empty', text: '' });
+    }
+  }
+  return { left, right };
+}
+
+function renderDiffLines(lines) {
+  return lines.map(l => {
+    if (l.type === 'empty') return `<div class="diff-line-same">&nbsp;</div>`;
+    const cls = l.type === 'add' ? 'diff-line-add' : l.type === 'remove' ? 'diff-line-remove' : 'diff-line-same';
+    const prefix = l.type === 'add' ? '+ ' : l.type === 'remove' ? '- ' : '  ';
+    return `<div class="${cls}">${prefix}${esc(l.text)}</div>`;
+  }).join('');
+}
+
+async function selectVersion(nsName, svcName, fnName, versionNum) {
+  const rows = document.querySelectorAll('.version-clickable');
+  rows.forEach(r => r.classList.remove('selected'));
+  const row = document.getElementById(`version-row-${versionNum}`);
+  if (row) row.classList.add('selected');
+
+  const diffArea = document.getElementById('version-diff-area');
+  diffArea.innerHTML = '<div class="loading"><span class="loader"></span>Loading version</div>';
+
+  try {
+    const detail = await apiFetch(
+      `/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions/${encodeURIComponent(fnName)}/versions/${versionNum}`
+    );
+    _selectedVersion = detail;
+    showVersionDiff();
+  } catch (e) {
+    diffArea.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`;
+  }
+}
+
+function showVersionDiff() {
+  const diffArea = document.getElementById('version-diff-area');
+  if (!_selectedVersion || !_currentFnContext) {
+    diffArea.innerHTML = '';
+    return;
+  }
+
+  const active = _currentFnContext.active_version_details;
+  const selected = _selectedVersion;
+
+  if (selected.version === _currentFnContext.active_version) {
+    diffArea.innerHTML = `<div style="padding:12px;color:var(--text-3);font-size:13px">This is the active version.</div>`;
+    return;
+  }
+
+  const sections = [
+    { label: 'Code', key: 'code', format: v => v || '' },
+    { label: 'Input Schema', key: 'input_schema', format: v => v ? JSON.stringify(v, null, 2) : '' },
+    { label: 'Output Schema', key: 'output_schema', format: v => v ? JSON.stringify(v, null, 2) : '' },
+    { label: 'Config', key: 'config', format: v => v ? JSON.stringify(v, null, 2) : '' },
+    { label: 'Requirements', key: 'requirements', format: v => (v || []).join('\n') },
+    { label: 'Env Vars', key: 'required_env', format: v => {
+      const req = (v || []).map(e => e + ' (required)');
+      return req.join('\n');
+    }},
+  ];
+
+  let html = `<div class="section-label" style="margin-top:20px">Comparing v${selected.version} &larr;&rarr; v${_currentFnContext.active_version} (active)</div>`;
+  let hasDiff = false;
+
+  for (const sec of sections) {
+    const oldVal = sec.format(selected[sec.key]);
+    const activeVal = active ? sec.format(active[sec.key]) : '';
+    if (!oldVal && !activeVal) continue;
+
+    const diff = computeLineDiff(oldVal, activeVal);
+    const anyChange = diff.left.some(l => l.type !== 'same') || diff.right.some(l => l.type !== 'same');
+
+    if (!anyChange && !oldVal && !activeVal) continue;
+
+    hasDiff = hasDiff || anyChange;
+    html += `<div class="diff-section-title">${sec.label}${anyChange ? '' : ' <span style="color:var(--text-3)">(unchanged)</span>'}</div>`;
+    if (anyChange) {
+      html += `<div class="diff-container">
+        <div><div class="diff-panel-label">v${selected.version}</div><div class="diff-panel">${renderDiffLines(diff.left)}</div></div>
+        <div><div class="diff-panel-label">v${_currentFnContext.active_version} (active)</div><div class="diff-panel">${renderDiffLines(diff.right)}</div></div>
+      </div>`;
+    }
+  }
+
+  if (!hasDiff) {
+    html += `<div style="padding:8px 0;color:var(--text-3);font-size:13px">No differences between versions.</div>`;
+  }
+
+  diffArea.innerHTML = html;
 }
 </script>
 </body>
