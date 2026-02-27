@@ -94,7 +94,19 @@ class Settings(BaseSettings):
     rate_limit_requests_per_hour: int = Field(default=1000, ge=100, le=10000)
 
     # Admin
-    admin_emails: list[str] = Field(default_factory=lambda: ["simon.carr@gmail.com"])
+    admin_emails: list[str] = Field(default_factory=lambda: ["simon.carr@mcpworks.io"])
+
+    # OAuth Providers
+    oauth_google_client_id: str = Field(default="")
+    oauth_google_client_secret: str = Field(default="")
+    oauth_github_client_id: str = Field(default="")
+    oauth_github_client_secret: str = Field(default="")
+    oauth_state_secret: str = Field(default="")
+
+    # Email - Resend
+    resend_api_key: str = Field(default="")
+    resend_from_email: str = Field(default="noreply@mcpworks.io")
+    email_provider: str = Field(default="resend")
 
     # Tier Execution Limits (monthly) - per PRICING.md
     tier_executions_free: int = Field(default=100)

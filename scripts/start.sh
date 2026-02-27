@@ -118,9 +118,21 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
 fi
 
 # Start the application
-echo "Starting uvicorn..."
-exec uvicorn mcpworks_api.main:app \
+UVICORN_CMD="uvicorn mcpworks_api.main:app \
     --host 0.0.0.0 \
     --port ${APP_PORT:-8000} \
     --workers ${UVICORN_WORKERS:-1} \
-    --log-level ${LOG_LEVEL:-info}
+    --log-level ${LOG_LEVEL:-info}"
+
+if [ -n "${INFISICAL_TOKEN:-}" ] && [ -n "${INFISICAL_PROJECT_ID:-}" ] && command -v infisical >/dev/null 2>&1; then
+    echo "Starting uvicorn with Infisical secrets injection..."
+    exec infisical run \
+        --token "$INFISICAL_TOKEN" \
+        --projectId "$INFISICAL_PROJECT_ID" \
+        --env prod \
+        ${INFISICAL_API_URL:+--domain "$INFISICAL_API_URL"} \
+        -- $UVICORN_CMD
+else
+    echo "Starting uvicorn (no Infisical — using environment variables)..."
+    exec $UVICORN_CMD
+fi

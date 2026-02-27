@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ subject | default("MCPWorks") }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:32px 16px;">
+<tr>
+<td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
+<!-- Header -->
+<tr>
+<td style="background-color:#18181b;padding:24px 32px;text-align:center;">
+<span style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">MCPWorks</span>
+</td>
+</tr>
+<!-- Body -->
+<tr>
+<td style="padding:32px;">
+{% block content %}{% endblock %}
+</td>
+</tr>
+<!-- Footer -->
+<tr>
+<td style="padding:24px 32px;border-top:1px solid #e4e4e7;text-align:center;">
+<p style="margin:0;color:#71717a;font-size:13px;">MCPWorks - Function hosting for AI assistants</p>
+<p style="margin:8px 0 0 0;color:#a1a1aa;font-size:12px;">This is an automated message. Please do not reply directly.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>

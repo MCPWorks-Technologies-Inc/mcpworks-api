@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +29,8 @@ from mcpworks_api.core.security import (
     verify_refresh_token,
 )
 from mcpworks_api.models import Account, APIKey, AuditAction, AuditLog, User
+
+logger = structlog.get_logger(__name__)
 
 
 class AuthService:
@@ -268,8 +271,11 @@ class AuthService:
         ip_address: str | None = None,
         user_agent: str | None = None,
         accept_tos: bool = False,
-    ) -> tuple[User, str, str, int]:
+    ) -> tuple[User, str | None, str | None, int | None]:
         """Register a new user.
+
+        Email/password registrations enter pending_approval status.
+        No JWT tokens are issued until admin approves the account.
 
         Args:
             email: User's email address.
@@ -280,39 +286,36 @@ class AuthService:
 
         Returns:
             Tuple of (user, access_token, refresh_token, expires_in_seconds)
+            Tokens are None for pending_approval accounts.
 
         Raises:
             EmailExistsError: If email is already registered.
         """
-        # Check if email exists
         result = await self.db.execute(select(User).where(User.email == email.lower()))
         existing = result.scalar_one_or_none()
 
         if existing:
             raise EmailExistsError()
 
-        # Create user with hashed password
         user = User(
             email=email.lower(),
             password_hash=hash_password(password),
             name=name,
             tier="free",
-            status="active",
+            status="pending_approval",
             email_verified=False,
             tos_accepted_at=datetime.now(UTC) if accept_tos else None,
             tos_version="1.0.0" if accept_tos else None,
         )
         self.db.add(user)
-        await self.db.flush()  # Get user ID
+        await self.db.flush()
 
-        # Create account for the user (1:1 relationship)
         account = Account(
             user_id=user.id,
             name=name or email.split("@")[0],
         )
         self.db.add(account)
 
-        # Log registration
         audit_log = AuditLog(
             user_id=user.id,
             action=AuditAction.USER_REGISTERED.value,
@@ -320,24 +323,28 @@ class AuthService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            event_data={"email": user.email},
+            event_data={"email": user.email, "status": "pending_approval"},
         )
         self.db.add(audit_log)
 
-        # Create tokens
-        access_token = create_access_token(
-            user_id=str(user.id),
-            scopes=["read", "write", "execute"],
-            additional_claims={
-                "tier": user.tier,
-                "email": user.email,
-            },
-        )
-        refresh_token = create_refresh_token(user_id=str(user.id))
+        asyncio.create_task(self._send_registration_emails(user.email, name))
 
-        expires_in = get_settings().jwt_access_token_expire_minutes * 60
+        return user, None, None, None
 
-        return user, access_token, refresh_token, expires_in
+    @staticmethod
+    async def _send_registration_emails(email: str, name: str | None) -> None:
+        try:
+            from mcpworks_api.services.email import (
+                send_admin_new_registration_email,
+                send_registration_pending_email,
+            )
+
+            await send_registration_pending_email(email, name)
+            settings = get_settings()
+            for admin_email in settings.admin_emails:
+                await send_admin_new_registration_email(admin_email, email, name)
+        except Exception:
+            logger.warning("registration_email_failed", email=email)
 
     async def login_user(
         self,
@@ -368,12 +375,24 @@ class AuthService:
             await self._log_auth_failure(None, ip_address, user_agent, "Email not found")
             raise InvalidCredentialsError()
 
-        # Verify password
+        if not user.password_hash:
+            await self._log_auth_failure(user.id, ip_address, user_agent, "OAuth-only account")
+            raise InvalidCredentialsError(
+                message="This account uses social login. Please sign in with your OAuth provider."
+            )
+
         if not verify_password(password, user.password_hash):
             await self._log_auth_failure(user.id, ip_address, user_agent, "Invalid password")
             raise InvalidCredentialsError()
 
-        # Check user status
+        if user.status == "pending_approval":
+            await self._log_auth_failure(user.id, ip_address, user_agent, "Pending approval")
+            raise InvalidCredentialsError(message="Account is awaiting admin approval")
+
+        if user.status == "rejected":
+            await self._log_auth_failure(user.id, ip_address, user_agent, "Account rejected")
+            raise InvalidCredentialsError(message="Account has not been approved")
+
         if user.status != "active":
             await self._log_auth_failure(user.id, ip_address, user_agent, "User inactive")
             raise InvalidCredentialsError(message="User account is not active")
