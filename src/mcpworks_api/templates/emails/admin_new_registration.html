@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">New Registration</h1>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+A new user has registered and is awaiting approval:
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;border-radius:6px;padding:16px;margin-bottom:24px;">
+<tr>
+<td>
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:14px;"><strong>Email:</strong> {{ user_email }}</p>
+{% if user_name %}
+<p style="margin:0;color:#3f3f46;font-size:14px;"><strong>Name:</strong> {{ user_name }}</p>
+{% endif %}
+</td>
+</tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0">
+<tr>
+<td style="background-color:#18181b;border-radius:6px;padding:12px 24px;">
+<a href="https://api.mcpworks.io/admin" style="color:#ffffff;font-size:15px;font-weight:500;text-decoration:none;">Review in Admin Dashboard</a>
+</td>
+</tr>
+</table>
+{% endblock %}

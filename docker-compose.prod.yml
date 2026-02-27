@@ -26,17 +26,31 @@ services:
     expose:
       - "8000"
     environment:
+      # Non-secret config (hardcoded)
       - DATABASE_URL=postgresql+asyncpg://mcpworks:${POSTGRES_PASSWORD}@postgres:5432/mcpworks
       - REDIS_URL=redis://redis:6379/0
       - APP_ENV=production
       - APP_DEBUG=false
       - APP_PORT=8000
-      - SECRET_KEY=${SECRET_KEY}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
       - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
       - SANDBOX_DEV_MODE=false
+      # Infisical injects remaining secrets at startup (SECRET_KEY, STRIPE_*,
+      # OAUTH_*, RESEND_*). Falls back to env vars if INFISICAL_TOKEN is unset.
+      - INFISICAL_TOKEN=${INFISICAL_TOKEN:-}
+      - INFISICAL_PROJECT_ID=${INFISICAL_PROJECT_ID:-}
+      - INFISICAL_API_URL=${INFISICAL_API_URL:-}
+      # Fallback: direct secret vars (used when Infisical is not configured)
+      - SECRET_KEY=${SECRET_KEY:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
+      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
+      - OAUTH_STATE_SECRET=${OAUTH_STATE_SECRET:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@mcpworks.io}
     depends_on:
       postgres:
         condition: service_healthy

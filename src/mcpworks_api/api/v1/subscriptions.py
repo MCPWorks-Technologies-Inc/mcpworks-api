@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.redis import get_redis
-from mcpworks_api.dependencies import CurrentUserId
+from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
 from mcpworks_api.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutSessionResponse,

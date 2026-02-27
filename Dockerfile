@@ -160,13 +160,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies (postgres client + nsjail runtime libs)
+# Install runtime dependencies (postgres client + nsjail runtime libs + Infisical CLI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libprotobuf32 \
     libnl-3-200 \
     libnl-route-3-200 \
     iptables \
+    curl \
+    bash \
+    gnupg \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | bash \
+    && apt-get install -y infisical \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy API virtual environment from builder

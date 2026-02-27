@@ -1,8 +1,12 @@
 """Admin API endpoints - superadmin cross-user visibility."""
 
+import asyncio
+import uuid as uuid_module
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,6 +15,7 @@ from mcpworks_api.core.database import get_db
 from mcpworks_api.dependencies import AdminUserId
 from mcpworks_api.models import (
     Account,
+    AuditLog,
     Execution,
     Function,
     FunctionVersion,
@@ -18,6 +23,8 @@ from mcpworks_api.models import (
     NamespaceService,
     User,
 )
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -339,3 +346,154 @@ async def list_all_executions(
         }
         for ex in executions
     ]
+
+
+# --- Pending approvals management ---
+
+
+class RejectRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/pending-approvals")
+async def list_pending_approvals(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """List accounts pending admin approval."""
+    result = await db.execute(
+        select(User).where(User.status == "pending_approval").order_by(User.created_at.desc())
+    )
+    users = result.scalars().all()
+
+    return [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "name": u.name,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]
+
+
+@router.post("/users/{user_id}/approve")
+async def approve_user(
+    user_id: str,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Approve a pending user account."""
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.status != "pending_approval":
+        raise HTTPException(status_code=409, detail="User is not in pending_approval status")
+
+    user.status = "active"
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="user_approved",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={"approved_user_email": user.email},
+    )
+    db.add(audit_log)
+
+    asyncio.create_task(
+        _fire_approval_security_event(admin_id, str(user.id), user.email, "approved")
+    )
+    asyncio.create_task(_send_approval_email(user.email, user.name))
+
+    await db.commit()
+
+    return {
+        "user_id": str(user.id),
+        "status": "active",
+        "message": f"User {user.email} has been approved",
+    }
+
+
+@router.post("/users/{user_id}/reject")
+async def reject_user(
+    user_id: str,
+    admin_id: AdminUserId,
+    body: RejectRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Reject a pending user account."""
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.status != "pending_approval":
+        raise HTTPException(status_code=409, detail="User is not in pending_approval status")
+
+    user.status = "rejected"
+    reason = body.reason if body else None
+    user.rejection_reason = reason
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="user_rejected",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={"rejected_user_email": user.email, "reason": reason},
+    )
+    db.add(audit_log)
+
+    asyncio.create_task(
+        _fire_approval_security_event(admin_id, str(user.id), user.email, "rejected")
+    )
+    asyncio.create_task(_send_rejection_email(user.email, user.name, reason))
+
+    await db.commit()
+
+    return {
+        "user_id": str(user.id),
+        "status": "rejected",
+        "message": f"User {user.email} has been rejected",
+    }
+
+
+async def _fire_approval_security_event(
+    admin_id: str, user_id: str, email: str, action: str
+) -> None:
+    from mcpworks_api.core.database import get_db_context
+    from mcpworks_api.services.security_event import fire_security_event
+
+    try:
+        async with get_db_context() as db:
+            await fire_security_event(
+                db,
+                event_type=f"admin.user_{action}",
+                severity="info",
+                actor_id=admin_id,
+                details={"target_user_id": user_id, "target_email": email},
+            )
+    except Exception as e:
+        logger.warning("approval_security_event_failed", error=str(e))
+
+
+async def _send_approval_email(email: str, name: str | None) -> None:
+    try:
+        from mcpworks_api.services.email import send_account_approved_email
+
+        await send_account_approved_email(email, name)
+    except Exception as e:
+        logger.warning("approval_email_failed", error=str(e))
+
+
+async def _send_rejection_email(email: str, name: str | None, reason: str | None) -> None:
+    try:
+        from mcpworks_api.services.email import send_account_rejected_email
+
+        await send_account_rejected_email(email, name, reason)
+    except Exception as e:
+        logger.warning("rejection_email_failed", error=str(e))

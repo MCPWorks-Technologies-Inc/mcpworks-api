@@ -50,7 +50,7 @@ class TestAuthServiceRegister:
 
     @pytest.mark.asyncio
     async def test_register_user_basic(self, db):
-        """Test registering a new user."""
+        """Test registering a new user (enters pending_approval status)."""
         auth_service = AuthService(db)
         unique_email = f"newuser-{uuid.uuid4().hex[:8]}@example.com"
 
@@ -61,10 +61,10 @@ class TestAuthServiceRegister:
 
         assert user.email == unique_email
         assert user.tier == "free"
-        assert user.status == "active"
-        assert access_token is not None
-        assert refresh_token is not None
-        assert expires_in > 0
+        assert user.status == "pending_approval"
+        assert access_token is None
+        assert refresh_token is None
+        assert expires_in is None
 
     @pytest.mark.asyncio
     async def test_register_user_with_name(self, db):
