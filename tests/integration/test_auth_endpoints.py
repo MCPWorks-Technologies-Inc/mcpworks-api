@@ -285,7 +285,7 @@ class TestUserRegistration:
     """Tests for POST /v1/auth/register endpoint."""
 
     async def test_register_success(self, client: AsyncClient, db):  # noqa: ARG002
-        """Valid registration should return 201 with user info and tokens."""
+        """Valid registration should return 201 with pending_approval status."""
         response = await client.post(
             "/v1/auth/register",
             json={
@@ -301,10 +301,7 @@ class TestUserRegistration:
         assert "user" in data
         assert data["user"]["email"] == "newuser@example.com"
         assert data["user"]["name"] == "New User"
-        assert "access_token" in data
-        assert "refresh_token" in data
-        assert data["token_type"] == "bearer"
-        assert "expires_in" in data
+        assert data["status"] == "pending_approval"
 
     async def test_register_duplicate_email(self, client: AsyncClient, db, make_user):
         """Duplicate email should return 409 with EMAIL_EXISTS error."""
