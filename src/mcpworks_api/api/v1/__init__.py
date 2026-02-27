@@ -10,6 +10,7 @@ from mcpworks_api.api.v1.health import router as health_router
 from mcpworks_api.api.v1.legal import router as legal_router
 from mcpworks_api.api.v1.llm import router as llm_router
 from mcpworks_api.api.v1.namespaces import router as namespaces_router
+from mcpworks_api.api.v1.oauth import router as oauth_router
 from mcpworks_api.api.v1.quickstart import router as quickstart_router
 from mcpworks_api.api.v1.services import router as services_router
 from mcpworks_api.api.v1.subscriptions import router as subscriptions_router
@@ -26,6 +27,7 @@ router.include_router(legal_router)  # ORDER-007: Legal documents
 router.include_router(quickstart_router)  # ORDER-012: Getting-started docs
 router.include_router(llm_router)  # LLM-oriented instructions
 router.include_router(auth_router)
+router.include_router(oauth_router)  # OAuth social login
 router.include_router(account_router)  # Usage tracking
 router.include_router(users_router)
 router.include_router(services_router)

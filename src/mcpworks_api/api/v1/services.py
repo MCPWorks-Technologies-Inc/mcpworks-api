@@ -15,7 +15,8 @@ from mcpworks_api.core.exceptions import (
     ServiceTimeoutError,
     ServiceUnavailableError,
 )
-from mcpworks_api.dependencies import CurrentUserId, verify_agent_callback_secret
+from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
+from mcpworks_api.dependencies import verify_agent_callback_secret
 from mcpworks_api.models import User
 from mcpworks_api.schemas.service import (
     AgentCallbackRequest,

@@ -88,6 +88,15 @@ tailwind.config = {
       <div class="card stat-card p-4 text-center"><div class="stat-num" id="stat-calls">-</div><div class="stat-label">Tool Calls</div></div>
     </div>
 
+    <!-- Pending Approvals -->
+    <div id="pending-section" class="card p-4 mb-6 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-white font-bold font-display text-sm">Pending Approvals</h3>
+        <span id="pending-count" class="tag" style="background:#92400e;color:#fbbf24;"></span>
+      </div>
+      <table id="pending-table"><thead><tr><th>Email</th><th>Name</th><th>Registered</th><th>Actions</th></tr></thead><tbody id="pending-body"></tbody></table>
+    </div>
+
     <!-- Breadcrumb -->
     <div id="breadcrumb" class="breadcrumb mb-4"></div>
 
@@ -130,6 +139,7 @@ async function doLogin() {
     document.getElementById('user-info').textContent = email;
 
     loadStats();
+    loadPendingApprovals();
     loadNamespaces();
   } catch (e) {
     errEl.textContent = e.message;
@@ -174,6 +184,57 @@ async function loadStats() {
   } catch (e) {
     console.error('Failed to load stats', e);
   }
+}
+
+// --- Pending Approvals ---
+
+async function loadPendingApprovals() {
+  try {
+    const users = await apiFetch('/v1/admin/pending-approvals');
+    const section = document.getElementById('pending-section');
+    const body = document.getElementById('pending-body');
+    const count = document.getElementById('pending-count');
+    if (!users.length) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden');
+    count.textContent = users.length + ' pending';
+    body.innerHTML = users.map(u => `<tr>
+      <td>${u.email}</td>
+      <td>${u.name || '<span class="text-gray-500">—</span>'}</td>
+      <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+      <td>
+        <button class="btn" style="padding:4px 12px;font-size:12px;" onclick="approveUser('${u.id}')">Approve</button>
+        <button class="btn" style="padding:4px 12px;font-size:12px;background:#991b1b;margin-left:4px;" onclick="rejectUserPrompt('${u.id}','${u.email}')">Reject</button>
+      </td>
+    </tr>`).join('');
+  } catch (e) { console.error('Failed to load pending approvals', e); }
+}
+
+async function approveUser(userId) {
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/approve`, {
+      method: 'POST', headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    loadPendingApprovals(); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+function rejectUserPrompt(userId, email) {
+  const reason = prompt(`Reason for rejecting ${email} (optional):`);
+  if (reason === null) return;
+  rejectUser(userId, reason);
+}
+
+async function rejectUser(userId, reason) {
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/reject`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || null }),
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    loadPendingApprovals(); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
 }
 
 // --- Breadcrumb ---

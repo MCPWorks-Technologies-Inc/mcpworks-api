@@ -12,7 +12,7 @@ from mcpworks_api.core.exceptions import (
     RateLimitExceededError,
     TokenExpiredError,
 )
-from mcpworks_api.dependencies import get_current_user_id
+from mcpworks_api.dependencies import require_active_status
 from mcpworks_api.middleware.rate_limit import check_auth_rate_limit
 from mcpworks_api.schemas.auth import (
     ApiKeyInfo,
@@ -23,10 +23,8 @@ from mcpworks_api.schemas.auth import (
     RefreshRequest,
     RefreshResponse,
     RegisterRequest,
-    RegisterResponse,
     TokenRequest,
     TokenResponse,
-    UserInfo,
 )
 from mcpworks_api.services.auth import AuthService
 
@@ -35,10 +33,9 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 @router.post(
     "/register",
-    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
-        201: {"description": "User registered successfully"},
+        201: {"description": "User registered successfully (pending approval)"},
         409: {"description": "Email already registered"},
         429: {"description": "Rate limit exceeded"},
     },
@@ -48,14 +45,12 @@ async def register(
     body: RegisterRequest,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(check_auth_rate_limit),
-) -> RegisterResponse:
+) -> dict:
     """Register a new user account.
 
-    Creates a new user with the provided email and password.
-    Returns JWT tokens for immediate authentication.
-    New users start with free tier (100 executions/month).
+    Creates a new user with pending_approval status.
+    Admin must approve before user can log in.
     """
-    # ORDER-008: Reject registration if ToS not accepted
     if not body.accept_tos:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -88,18 +83,30 @@ async def register(
             detail=e.to_dict(),
         )
 
-    return RegisterResponse(
-        user=UserInfo(
-            id=user.id,
-            email=user.email,
-            name=user.name,
-            created_at=user.created_at,
-        ),
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in=expires_in,
-    )
+    if access_token:
+        return {
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "name": user.name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            },
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": expires_in,
+        }
+
+    return {
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "name": user.name,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+        "status": "pending_approval",
+        "message": "Your account has been created and is awaiting admin approval. You will be notified when your account is activated.",
+    }
 
 
 @router.post(
@@ -255,7 +262,7 @@ async def create_api_key(
     request: Request,
     body: CreateApiKeyRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(require_active_status),
 ) -> CreateApiKeyResponse:
     """Create a new API key for the authenticated user.
 

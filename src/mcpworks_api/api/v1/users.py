@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ApiKeyNotFoundError, UserNotFoundError
-from mcpworks_api.dependencies import CurrentUserId
+from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
 from mcpworks_api.models import User
 from mcpworks_api.schemas.user import (
     ApiKeyCreated,
