@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
     from mcpworks_api.models.execution import Execution
+    from mcpworks_api.models.oauth_account import OAuthAccount
     from mcpworks_api.models.subscription import Subscription
 
 
@@ -29,6 +30,8 @@ class UserStatus(str, Enum):
     """User account status."""
 
     ACTIVE = "active"
+    PENDING_APPROVAL = "pending_approval"
+    REJECTED = "rejected"
     SUSPENDED = "suspended"
     DELETED = "deleted"
 
@@ -37,9 +40,12 @@ class User(Base, UUIDMixin, TimestampMixin):
     """User account model.
 
     State transitions:
-        [new] → active → suspended → active
-                                   → deleted
-               active → deleted
+        [email/password] → pending_approval → active       (admin approves)
+                                            → rejected      (admin rejects)
+        [OAuth]          → active
+        active           → suspended → active
+                                     → deleted
+        active           → deleted
     """
 
     __tablename__ = "users"
@@ -50,9 +56,9 @@ class User(Base, UUIDMixin, TimestampMixin):
         unique=True,
         nullable=False,
     )
-    password_hash: Mapped[str] = mapped_column(
+    password_hash: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
     name: Mapped[str | None] = mapped_column(
         String(255),
@@ -80,6 +86,11 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     verification_token: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    rejection_reason: Mapped[str | None] = mapped_column(
+        String(500),
         nullable=True,
     )
 
@@ -114,6 +125,11 @@ class User(Base, UUIDMixin, TimestampMixin):
         "Account",
         back_populates="user",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
+        "OAuthAccount",
+        back_populates="user",
         cascade="all, delete-orphan",
     )
 

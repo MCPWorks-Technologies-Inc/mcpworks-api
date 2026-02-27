@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -109,6 +110,32 @@ def create_app() -> FastAPI:
     # ORDER-021: Configure structured JSON logging via structlog
     _configure_logging(settings.log_level)
 
+    # Initialize OAuth registry for social login providers
+    from mcpworks_api.core.oauth_cache import RedisOAuthCache
+
+    oauth_cache = RedisOAuthCache()
+    oauth = OAuth(cache=oauth_cache)
+
+    if settings.oauth_google_client_id:
+        oauth.register(
+            name="google",
+            client_id=settings.oauth_google_client_id,
+            client_secret=settings.oauth_google_client_secret,
+            server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+            client_kwargs={"scope": "openid email profile", "code_challenge_method": "S256"},
+        )
+
+    if settings.oauth_github_client_id:
+        oauth.register(
+            name="github",
+            client_id=settings.oauth_github_client_id,
+            client_secret=settings.oauth_github_client_secret,
+            authorize_url="https://github.com/login/oauth/authorize",
+            access_token_url="https://github.com/login/oauth/access_token",
+            api_base_url="https://api.github.com/",
+            client_kwargs={"scope": "user:email"},
+        )
+
     # ORDER-013: Initialize Sentry error tracking
     if settings.sentry_dsn:
         import sentry_sdk
@@ -129,6 +156,9 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.app_debug else None,
         lifespan=lifespan,
     )
+
+    # Store OAuth registry on app state for route access
+    app.state.oauth = oauth
 
     # Add middleware (order matters - first added = last executed on request)
     # So add in reverse order of desired execution:

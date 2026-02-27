@@ -1,0 +1,217 @@
+openapi: "3.0.3"
+info:
+  title: mcpworks OAuth & Admin Approval Endpoints
+  version: "1.0.0"
+  description: OAuth social login, admin approval, and email log endpoints for 002-oauth-email-system
+
+paths:
+  /v1/auth/oauth/{provider}/login:
+    get:
+      operationId: oauthLogin
+      summary: Initiate OAuth login flow
+      description: Redirects user to the provider's consent screen. Valid providers are google, github, microsoft.
+      tags: [authentication]
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft]
+      responses:
+        "302":
+          description: Redirect to provider consent screen
+        "400":
+          description: Invalid provider name
+
+  /v1/auth/oauth/{provider}/callback:
+    get:
+      operationId: oauthCallback
+      summary: Handle OAuth provider callback
+      description: |
+        Receives the authorization code from the provider, exchanges it for tokens,
+        creates or links user account, and returns mcpworks JWT tokens.
+        On error, redirects to login page with error query parameter.
+      tags: [authentication]
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft]
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OAuth login successful, JWT tokens returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthLoginResponse"
+        "302":
+          description: Redirect to login page on error (consent denied, state mismatch, etc.)
+
+  /v1/admin/pending-approvals:
+    get:
+      operationId: listPendingApprovals
+      summary: List accounts pending admin approval
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of pending accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingUser"
+        "403":
+          description: Admin access required
+
+  /v1/admin/users/{user_id}/approve:
+    post:
+      operationId: approveUser
+      summary: Approve a pending user account
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalResponse"
+        "404":
+          description: User not found
+        "409":
+          description: User is not in pending_approval status
+
+  /v1/admin/users/{user_id}/reject:
+    post:
+      operationId: rejectUser
+      summary: Reject a pending user account
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectRequest"
+      responses:
+        "200":
+          description: User rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalResponse"
+        "404":
+          description: User not found
+        "409":
+          description: User is not in pending_approval status
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    OAuthLoginResponse:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, user, is_new_user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          example: bearer
+        expires_in:
+          type: integer
+          example: 3600
+        user:
+          $ref: "#/components/schemas/UserInfo"
+        is_new_user:
+          type: boolean
+          description: True if a new account was created during this OAuth login
+
+    UserInfo:
+      type: object
+      required: [id, email, name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    PendingUser:
+      type: object
+      required: [id, email, name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    RejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          description: Optional reason for rejection
+
+    ApprovalResponse:
+      type: object
+      required: [user_id, status, message]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, rejected]
+        message:
+          type: string

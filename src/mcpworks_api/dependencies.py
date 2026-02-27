@@ -158,6 +158,55 @@ def require_scope(required_scope: str) -> Callable[..., Awaitable[None]]:
     return check_scope
 
 
+async def require_active_status(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """Require the authenticated user to have active status.
+
+    Returns:
+        The user's ID.
+
+    Raises:
+        HTTPException: 403 if user is not active.
+    """
+    from sqlalchemy import select
+
+    from mcpworks_api.models import User
+
+    result = await db.execute(select(User.status).where(User.id == user_id))
+    user_status = result.scalar_one_or_none()
+
+    if not user_status:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "USER_NOT_FOUND", "message": "User account not found"},
+        )
+
+    if user_status == "pending_approval":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "PENDING_APPROVAL", "message": "Account is awaiting admin approval"},
+        )
+
+    if user_status == "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "ACCOUNT_REJECTED", "message": "Account has been rejected"},
+        )
+
+    if user_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "ACCOUNT_INACTIVE", "message": "Account is not active"},
+        )
+
+    return user_id
+
+
+ActiveUserId = Annotated[str, Depends(require_active_status)]
+
+
 async def require_admin(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),

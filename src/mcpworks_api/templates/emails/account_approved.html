@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Account Approved</h1>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Hi {{ name }},
+</p>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Your MCPWorks account has been approved. You can now log in and start using the platform.
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0">
+<tr>
+<td style="background-color:#18181b;border-radius:6px;padding:12px 24px;">
+<a href="https://api.mcpworks.io/onboarding" style="color:#ffffff;font-size:15px;font-weight:500;text-decoration:none;">Log In Now</a>
+</td>
+</tr>
+</table>
+{% endblock %}

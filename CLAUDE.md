@@ -93,8 +93,8 @@ Constitution → Specification → Plan → Tasks → Implementation
 | Property | Value |
 |----------|-------|
 | **Name** | mcpworks-prod |
-| **IP Address** | 159.203.30.199 |
-| **Region** | NYC1 |
+| **IP Address** | TBD after TOR1 migration (was 159.203.30.199 in NYC1) |
+| **Region** | TOR1 (Toronto) — migrating from NYC1 |
 | **Size** | s-2vcpu-4gb |
 | **SSH User** | root |
 | **App Directory** | /opt/mcpworks |
@@ -158,6 +158,54 @@ ssh root@159.203.30.199 "cd /opt/mcpworks && \
 
 # 4. Verify deployment
 curl https://api.mcpworks.io/v1/health
+```
+
+### Secrets Management (Infisical)
+
+**Status:** Self-hosted Infisical on mgmt droplet (`mcpworks-mgmt`, TOR1 VPC).
+
+**Architecture:**
+- Infisical runs on the mgmt droplet (VPC-only, no public IP)
+- API container has Infisical CLI installed in the Docker image
+- `scripts/start.sh` wraps uvicorn with `infisical run` when `INFISICAL_TOKEN` is set
+- Falls back to direct env vars if Infisical is not configured (backwards-compatible)
+
+**Access:**
+```bash
+# SSH tunnel to Infisical UI
+cd ~/dev/mcpworks.io/mcpworks-infra
+./scripts/tunnel.sh <mgmt-vpc-ip> <prod-public-ip>
+# Then open http://localhost:9080
+```
+
+**Prod droplet `.env` (only 3 bootstrap values):**
+- `INFISICAL_TOKEN` — machine identity universal auth token
+- `INFISICAL_PROJECT_ID` — Infisical project identifier
+- `POSTGRES_PASSWORD` — needed by postgres container directly
+
+**All other secrets** (SECRET_KEY, STRIPE_*, OAUTH_*, RESEND_*) are stored in Infisical and injected at API startup via `infisical run`.
+
+**JWT keys** — still mounted as files from `./keys/` (unchanged).
+
+**Infrastructure-as-code:** `~/dev/mcpworks.io/mcpworks-infra/` (private repo)
+
+### Management Droplet
+
+| Property | Value |
+|----------|-------|
+| **Name** | mcpworks-mgmt |
+| **Region** | TOR1 (Toronto) |
+| **Size** | s-1vcpu-2gb |
+| **Access** | VPC-only, SSH via jump through prod |
+| **Services** | Infisical (:9080), Grafana (:3000), Prometheus (:9090), Loki (:3100), Uptime Kuma (:3001) |
+
+```bash
+# SSH to mgmt via jump host
+ssh -J root@<prod-public-ip> root@<mgmt-vpc-ip>
+
+# SSH tunnels for all mgmt services
+cd ~/dev/mcpworks.io/mcpworks-infra
+./scripts/tunnel.sh <mgmt-vpc-ip> <prod-public-ip>
 ```
 
 ### Quick Commands
@@ -668,6 +716,8 @@ This project is on a **15-month acquisition timeline** targeting $10M-$15M exit.
 - PostgreSQL 15+ (primary), Redis 7+ (rate limiting, sessions) (001-api-gateway-mvp)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, structlog, MCP Python SDK (002-env-passthrough)
 - PostgreSQL 15+ (env var names only — never values), tmpfs (transient env file during execution) (002-env-passthrough)
+- Python 3.11+ (existing) + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, Authlib 1.3+ (new), httpx (existing) (002-oauth-email-system)
+- PostgreSQL 15+ (existing), Redis 7+ (existing, also used for OAuth state storage) (002-oauth-email-system)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe

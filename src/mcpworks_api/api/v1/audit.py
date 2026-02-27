@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
-from mcpworks_api.dependencies import CurrentUserId
+from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
 from mcpworks_api.services.security_event import SecurityEventService
 
 router = APIRouter(prefix="/audit", tags=["audit"])
