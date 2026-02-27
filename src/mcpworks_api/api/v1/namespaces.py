@@ -137,6 +137,23 @@ class FunctionDetailResponse(BaseModel):
     updated_at: str | None
 
 
+class FunctionVersionDetailResponse(BaseModel):
+    """Detailed response for a specific function version."""
+
+    id: str
+    version: int
+    backend: str
+    code: str | None
+    config: dict[str, Any] | None
+    input_schema: dict[str, Any] | None
+    output_schema: dict[str, Any] | None
+    requirements: list[str] | None
+    required_env: list[str] | None
+    optional_env: list[str] | None
+    is_active: bool
+    created_at: str
+
+
 class FunctionListResponse(BaseModel):
     """List of functions."""
 
@@ -543,6 +560,34 @@ async def get_function(
             created_at=details["created_at"],
             updated_at=details["updated_at"],
         )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get(
+    "/{namespace_name}/services/{service_name}/functions/{function_name}/versions/{version_num}",
+    response_model=FunctionVersionDetailResponse,
+)
+async def get_function_version(
+    namespace_name: str,
+    service_name: str,
+    function_name: str,
+    version_num: int,
+    db: AsyncSession = Depends(get_db),
+    account: Account = Depends(get_current_account),
+) -> FunctionVersionDetailResponse:
+    """Get detailed information for a specific function version."""
+    ns_service = NamespaceServiceManager(db)
+    svc_service = NamespaceServiceService(db)
+    func_service = FunctionService(db)
+
+    try:
+        namespace = await ns_service.get_by_name(namespace_name, account.id)
+        service = await svc_service.get_by_name(namespace.id, service_name)
+        function = await func_service.get_by_name(service.id, function_name)
+        detail = await func_service.get_version_detail(function.id, version_num)
+
+        return FunctionVersionDetailResponse(**detail)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
