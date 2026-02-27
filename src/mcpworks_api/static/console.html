@@ -204,6 +204,11 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
 .diff-section-title { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 16px; margin-bottom: 6px; }
 .diff-section-title:first-child { margin-top: 0; }
 .diff-empty { color: var(--text-3); font-style: italic; font-size: 12px; }
+
+.version-hint { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--bg-3); color: var(--text-3); font-size: 10px; font-weight: 700; font-family: var(--sans); cursor: help; margin-left: 6px; vertical-align: middle; }
+.version-hint:hover { color: var(--text-1); background: var(--border-2); }
+.version-hint .hint-popup { display: none; position: absolute; top: calc(100% + 8px); right: -8px; width: 280px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 8px; font-size: 12px; font-weight: 400; line-height: 1.6; color: var(--text-2); z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4); white-space: normal; }
+.version-hint:hover .hint-popup { display: block; }
 </style>
 </head>
 <body>
@@ -556,7 +561,7 @@ async function loadFunction(nsName, svcName, fnName) {
     _selectedVersion = null;
     const av = fn.active_version_details;
     c.innerHTML = `<div class="detail-section">
-      <div class="detail-header"><div class="detail-title">${esc(fn.name)}</div><span class="detail-version">v${fn.active_version}</span></div>
+      <div class="detail-header"><div class="detail-title">${esc(fn.name)}</div><span class="detail-version">v${fn.active_version}</span><span class="version-hint">?<span class="hint-popup">Versions are immutable. To roll back, use the MCP <strong>update_function</strong> tool with <code style="background:var(--bg-0);padding:1px 4px;border-radius:3px">restore_version</code> set to the version number. This copies that version's code and config into a new version and activates it.</span></span></div>
       ${fn.description ? `<div class="detail-desc">${esc(fn.description)}</div>` : ''}
       ${(fn.tags || []).length ? `<div style="margin-bottom:14px">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
       ${av ? `
