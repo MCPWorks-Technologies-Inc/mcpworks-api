@@ -49,6 +49,12 @@ class FunctionVersionCreate(BaseModel):
         description="Optional environment variables",
     )
 
+    created_by: str | None = Field(
+        None,
+        max_length=100,
+        description="Who created this version (e.g. 'Claude Opus 4.6')",
+    )
+
     @field_validator("backend")
     @classmethod
     def validate_backend(cls, v: str) -> str:
@@ -73,6 +79,7 @@ class FunctionVersionResponse(BaseModel):
     output_schema: dict[str, Any] | None = None
     required_env: list[str] | None = None
     optional_env: list[str] | None = None
+    created_by: str | None = None
     created_at: datetime
 
 

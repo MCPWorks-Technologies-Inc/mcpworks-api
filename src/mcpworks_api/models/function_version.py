@@ -102,6 +102,11 @@ class FunctionVersion(Base, UUIDMixin):
         nullable=True,
     )
 
+    created_by: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
     # Timestamp (immutable - no updated_at)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

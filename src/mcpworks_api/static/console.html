@@ -220,7 +220,7 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
 .diff-section-title:first-child { margin-top: 0; }
 .diff-empty { color: var(--text-3); font-style: italic; font-size: 12px; }
 
-.version-hint { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--bg-3); color: var(--text-3); font-size: 10px; font-weight: 700; font-family: var(--sans); cursor: help; margin-left: 6px; vertical-align: middle; }
+.version-hint { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--bg-3); color: var(--text-3); font-size: 10px; font-weight: 700; font-family: var(--sans); cursor: help; vertical-align: middle; }
 .version-hint:hover { color: var(--text-1); background: var(--border-2); }
 .version-hint .hint-popup { display: none; position: absolute; top: calc(100% + 8px); right: -8px; width: 280px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 8px; font-size: 12px; font-weight: 400; line-height: 1.6; color: var(--text-2); z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4); white-space: normal; }
 .version-hint:hover .hint-popup { display: block; }
@@ -645,11 +645,11 @@ async function loadFunction(nsName, svcName, fnName) {
     _selectedVersion = null;
     const av = fn.active_version_details;
     c.innerHTML = `<div class="detail-section">
-      <div class="detail-header"><div class="detail-title">${esc(fn.name)}</div><span class="detail-version">v${fn.active_version}</span><span class="version-hint">?<span class="hint-popup">Versions are immutable. To roll back, use the MCP <strong>update_function</strong> tool with <code style="background:var(--bg-0);padding:1px 4px;border-radius:3px">restore_version</code> set to the version number. This copies that version's code and config into a new version and activates it.</span></span></div>
+      <div class="detail-header"><div class="detail-title">${esc(fn.name)}</div><div style="display:flex;align-items:center;gap:6px"><span class="detail-version">v${fn.active_version}</span><span class="version-hint">?<span class="hint-popup">Versions are immutable. To roll back, use the MCP <strong>update_function</strong> tool with <code style="background:var(--bg-0);padding:1px 4px;border-radius:3px">restore_version</code> set to the version number. This copies that version's code and config into a new version and activates it.</span></span></div></div>
       ${fn.description ? `<div class="detail-desc">${esc(fn.description)}</div>` : ''}
       ${(fn.tags || []).length ? `<div style="margin-bottom:14px">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
       ${av ? `
-        <div class="detail-meta">Backend: <span>${esc(av.backend)}</span> &middot; Calls: <span>${fn.call_count ?? 0}</span></div>
+        <div class="detail-meta">Backend: <span>${esc(av.backend)}</span> &middot; Calls: <span>${fn.call_count ?? 0}</span>${av.created_by ? ` &middot; Author: <span>${esc(av.created_by)}</span>` : ''}</div>
         ${av.code ? `<div class="section-label">Code</div><pre class="code-block">${esc(av.code)}</pre>` : ''}
         ${av.config ? `<div class="section-label">Config</div><div class="schema-block">${esc(JSON.stringify(av.config, null, 2))}</div>` : ''}
         ${av.input_schema ? `<div class="section-label">Input Schema</div><div class="schema-block">${esc(JSON.stringify(av.input_schema, null, 2))}</div>` : ''}
@@ -658,10 +658,10 @@ async function loadFunction(nsName, svcName, fnName) {
       ${fn.versions?.length > 1 ? `
         <div class="section-label" style="margin-top:24px">Version History</div>
         <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Click a version to compare with active</div>
-        <table><thead><tr><th>Version</th><th>Backend</th><th>Created</th></tr></thead><tbody>${fn.versions.map(v => `
+        <table><thead><tr><th>Version</th><th>Backend</th><th>Author</th><th>Created</th></tr></thead><tbody>${fn.versions.map(v => `
           <tr id="version-row-${v.version}" class="version-clickable" onclick="selectVersion('${esc(nsName)}','${esc(svcName)}','${esc(fnName)}',${v.version})">
             <td>${v.version === fn.active_version ? `<span style="color:var(--accent)">v${v.version} (active)</span>` : `v${v.version}`}</td>
-            <td class="cell-dim">${esc(v.backend)}</td><td class="cell-muted">${fmtDate(v.created_at)}</td></tr>`).join('')}</tbody></table>
+            <td class="cell-dim">${esc(v.backend)}</td><td class="cell-dim">${v.created_by ? esc(v.created_by) : ''}</td><td class="cell-muted">${fmtDate(v.created_at)}</td></tr>`).join('')}</tbody></table>
         <div id="version-diff-area"></div>` : ''}
     </div>`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }

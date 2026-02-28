@@ -40,6 +40,7 @@ class FunctionService:
         requirements: list[str] | None = None,
         required_env: list[str] | None = None,
         optional_env: list[str] | None = None,
+        created_by: str | None = None,
     ) -> Function:
         """Create a new function with initial version.
 
@@ -95,6 +96,7 @@ class FunctionService:
             requirements=requirements,
             required_env=required_env,
             optional_env=optional_env,
+            created_by=created_by,
         )
         self.db.add(version)
         await self.db.flush()
@@ -246,6 +248,7 @@ class FunctionService:
         requirements: builtins.list[str] | None = None,
         required_env: builtins.list[str] | None = None,
         optional_env: builtins.list[str] | None = None,
+        created_by: str | None = None,
         activate: bool = True,
     ) -> FunctionVersion:
         """Create a new version of a function.
@@ -287,6 +290,7 @@ class FunctionService:
             requirements=requirements,
             required_env=required_env,
             optional_env=optional_env,
+            created_by=created_by,
         )
         self.db.add(version)
 
@@ -511,6 +515,7 @@ class FunctionService:
                 "requirements": active_version.requirements if active_version else None,
                 "required_env": active_version.required_env if active_version else None,
                 "optional_env": active_version.optional_env if active_version else None,
+                "created_by": active_version.created_by if active_version else None,
                 "created_at": active_version.created_at.isoformat() if active_version else None,
             }
             if active_version
@@ -519,6 +524,7 @@ class FunctionService:
                 {
                     "version": v.version,
                     "backend": v.backend,
+                    "created_by": v.created_by,
                     "created_at": v.created_at.isoformat(),
                 }
                 for v in sorted(function.versions, key=lambda x: x.version, reverse=True)
@@ -559,6 +565,7 @@ class FunctionService:
             "requirements": version.requirements,
             "required_env": version.required_env,
             "optional_env": version.optional_env,
+            "created_by": version.created_by,
             "is_active": version.version == function.active_version,
             "created_at": version.created_at.isoformat(),
         }
