@@ -54,6 +54,8 @@ tailwind.config = {
   .status-failed { color: #f87171; }
   .status-running { color: #fbbf24; }
   .status-pending { color: #6b7280; }
+  .status-pending_approval { color: #fbbf24; }
+  .status-rejected { color: #f87171; }
 </style>
 </head>
 <body>
@@ -278,7 +280,7 @@ async function loadUsers() {
         </thead>
         <tbody>
           ${users.map(u => `
-            <tr>
+            <tr class="clickable" onclick="loadUser('${esc(u.id)}')">
               <td class="text-blue-400 font-medium">${esc(u.email)}</td>
               <td class="text-gray-400">${esc(u.name || '-')}</td>
               <td><span class="tag">${esc(u.tier)}</span></td>
@@ -294,6 +296,152 @@ async function loadUsers() {
   } catch (e) {
     content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
   }
+}
+
+// --- User detail ---
+
+async function loadUser(userId) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="p-6"><span class="loader"></span> Loading user...</div>';
+  setBreadcrumb([
+    { label: 'Users', onclick: 'loadUsers()' },
+    { label: '...' },
+  ]);
+
+  try {
+    const u = await apiFetch(`/v1/admin/users/${encodeURIComponent(userId)}`);
+
+    setBreadcrumb([
+      { label: 'Users', onclick: 'loadUsers()' },
+      { label: u.email },
+    ]);
+
+    let actionsHtml = '';
+    if (u.status === 'active') {
+      actionsHtml = `<button class="btn" style="background:#991b1b;" onclick="suspendUserPrompt('${esc(u.id)}','${esc(u.email)}')">Suspend Account</button>`;
+    } else if (u.status === 'suspended') {
+      actionsHtml = `<button class="btn" style="background:#166534;" onclick="unsuspendUser('${esc(u.id)}')">Unsuspend Account</button>`;
+    } else if (u.status === 'pending_approval') {
+      actionsHtml = `
+        <button class="btn" style="padding:8px 16px;" onclick="approveUser('${esc(u.id)}')">Approve</button>
+        <button class="btn" style="padding:8px 16px;background:#991b1b;margin-left:8px;" onclick="rejectUserPrompt('${esc(u.id)}','${esc(u.email)}')">Reject</button>
+      `;
+    }
+
+    let namespacesHtml = '<div class="text-gray-500 text-sm">No namespaces.</div>';
+    if (u.namespaces && u.namespaces.length > 0) {
+      namespacesHtml = `
+        <table>
+          <thead><tr><th>Namespace</th><th>Services</th><th>Functions</th><th>Calls</th><th>Created</th></tr></thead>
+          <tbody>
+            ${u.namespaces.map(ns => `
+              <tr class="clickable" onclick="loadNamespace('${esc(ns.name)}')">
+                <td class="text-blue-400 font-medium">${esc(ns.name)}</td>
+                <td>${ns.service_count}</td>
+                <td>${ns.function_count}</td>
+                <td>${ns.call_count}</td>
+                <td class="text-gray-500 text-sm">${fmtDate(ns.created_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    let apiKeysHtml = '<div class="text-gray-500 text-sm">No API keys.</div>';
+    if (u.api_keys && u.api_keys.length > 0) {
+      apiKeysHtml = `
+        <table>
+          <thead><tr><th>Prefix</th><th>Name</th><th>Scopes</th><th>Last Used</th><th>Created</th></tr></thead>
+          <tbody>
+            ${u.api_keys.map(k => `
+              <tr>
+                <td class="text-gray-300" style="font-family:ui-monospace,monospace;font-size:13px;">${esc(k.prefix)}</td>
+                <td class="text-gray-400">${esc(k.name || '-')}</td>
+                <td>${(k.scopes || []).map(s => '<span class="tag">' + esc(s) + '</span>').join('')}</td>
+                <td class="text-gray-500 text-sm">${fmtDate(k.last_used_at)}</td>
+                <td class="text-gray-500 text-sm">${fmtDate(k.created_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    content.innerHTML = `
+      <div class="p-6 fade-in">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-white text-lg font-semibold">${esc(u.email)}</h2>
+            ${u.name ? `<p class="text-gray-400 text-sm mt-1">${esc(u.name)}</p>` : ''}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="tag">${esc(u.tier)}</span>
+            <span class="status-${u.status}" style="font-weight:600;">${esc(u.status)}</span>
+          </div>
+        </div>
+
+        ${u.status === 'suspended' && u.rejection_reason ? `
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(239,68,68,0.1);border-left:4px solid #ef4444;border-radius:4px;padding:12px 16px;margin-bottom:16px;">
+          <tr><td><p style="margin:0;color:#f87171;font-size:13px;"><strong>Suspension reason:</strong> ${esc(u.rejection_reason)}</p></td></tr>
+          </table>
+        ` : ''}
+
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="card p-3 text-center"><div class="stat-num text-base">${u.namespace_count}</div><div class="stat-label" style="font-size:10px;">Namespaces</div></div>
+          <div class="card p-3 text-center"><div class="stat-num text-base">${u.total_functions}</div><div class="stat-label" style="font-size:10px;">Functions</div></div>
+          <div class="card p-3 text-center"><div class="stat-num text-base">${u.total_calls}</div><div class="stat-label" style="font-size:10px;">Calls</div></div>
+          <div class="card p-3 text-center"><div class="stat-num text-base">${u.api_key_count}</div><div class="stat-label" style="font-size:10px;">API Keys</div></div>
+        </div>
+
+        <div class="text-gray-500 text-sm mb-6">
+          <span>Email verified: <span class="text-gray-300">${u.email_verified ? 'Yes' : 'No'}</span></span>
+          <span class="ml-4">Subscription: <span class="text-gray-300">${esc(u.subscription_status || 'none')}</span></span>
+          <span class="ml-4">Created: <span class="text-gray-300">${fmtDate(u.created_at)}</span></span>
+        </div>
+
+        <h3 class="text-gray-300 font-medium mb-2">Namespaces</h3>
+        <div class="mb-6">${namespacesHtml}</div>
+
+        <h3 class="text-gray-300 font-medium mb-2">API Keys</h3>
+        <div class="mb-6">${apiKeysHtml}</div>
+
+        ${actionsHtml ? `<div class="pt-4 border-t border-gray-700">${actionsHtml}</div>` : ''}
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function suspendUserPrompt(userId, email) {
+  const reason = prompt(`Reason for suspending ${email} (optional):`);
+  if (reason === null) return;
+  suspendUser(userId, reason);
+}
+
+async function suspendUser(userId, reason) {
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/suspend`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || null }),
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    loadUser(userId); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function unsuspendUser(userId) {
+  if (!confirm('Unsuspend this user account?')) return;
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/unsuspend`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    loadUser(userId); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
 }
 
 // --- Namespaces list ---

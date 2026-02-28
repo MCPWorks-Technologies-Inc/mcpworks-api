@@ -355,6 +355,10 @@ class RejectRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class SuspendRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
 @router.get("/pending-approvals")
 async def list_pending_approvals(
     _admin: AdminUserId,
@@ -462,6 +466,167 @@ async def reject_user(
     }
 
 
+@router.get("/users/{user_id}")
+async def get_user(
+    user_id: str,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Full user detail: profile, namespaces, API keys, subscription."""
+    result = await db.execute(
+        select(User)
+        .where(User.id == uuid_module.UUID(user_id))
+        .options(
+            selectinload(User.account)
+            .selectinload(Account.namespaces)
+            .selectinload(Namespace.services)
+            .selectinload(NamespaceService.functions),
+            selectinload(User.api_keys),
+            selectinload(User.subscription),
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    namespaces = []
+    total_functions = 0
+    total_calls = 0
+    if user.account and user.account.namespaces:
+        for ns in user.account.namespaces:
+            fn_count = sum(len(svc.functions) for svc in (ns.services or []) if svc.functions)
+            total_functions += fn_count
+            total_calls += ns.call_count or 0
+            namespaces.append(
+                {
+                    "name": ns.name,
+                    "service_count": len(ns.services) if ns.services else 0,
+                    "function_count": fn_count,
+                    "call_count": ns.call_count or 0,
+                    "created_at": ns.created_at.isoformat() if ns.created_at else None,
+                }
+            )
+
+    api_keys = []
+    for key in user.api_keys or []:
+        if key.revoked_at:
+            continue
+        api_keys.append(
+            {
+                "prefix": key.key_prefix,
+                "name": key.name,
+                "scopes": key.scopes,
+                "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
+                "created_at": key.created_at.isoformat() if key.created_at else None,
+            }
+        )
+
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "name": user.name,
+        "tier": user.tier,
+        "status": user.status,
+        "email_verified": user.email_verified,
+        "rejection_reason": user.rejection_reason,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "namespace_count": len(namespaces),
+        "total_functions": total_functions,
+        "total_calls": total_calls,
+        "api_key_count": len(api_keys),
+        "subscription_status": user.subscription.status if user.subscription else None,
+        "namespaces": namespaces,
+        "api_keys": api_keys,
+    }
+
+
+@router.post("/users/{user_id}/suspend")
+async def suspend_user(
+    user_id: str,
+    admin_id: AdminUserId,
+    body: SuspendRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Suspend an active user account."""
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.status != "active":
+        raise HTTPException(status_code=409, detail="User is not in active status")
+
+    user.status = "suspended"
+    reason = body.reason if body else None
+    user.rejection_reason = reason
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="user_suspended",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={"suspended_user_email": user.email, "reason": reason},
+    )
+    db.add(audit_log)
+
+    asyncio.create_task(
+        _fire_approval_security_event(admin_id, str(user.id), user.email, "suspended")
+    )
+    asyncio.create_task(_send_suspension_email(user.email, user.name, reason))
+
+    await db.commit()
+
+    return {
+        "user_id": str(user.id),
+        "status": "suspended",
+        "message": f"User {user.email} has been suspended",
+    }
+
+
+@router.post("/users/{user_id}/unsuspend")
+async def unsuspend_user(
+    user_id: str,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Unsuspend a suspended user account."""
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.status != "suspended":
+        raise HTTPException(status_code=409, detail="User is not in suspended status")
+
+    user.status = "active"
+    user.rejection_reason = None
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="user_unsuspended",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={"unsuspended_user_email": user.email},
+    )
+    db.add(audit_log)
+
+    asyncio.create_task(
+        _fire_approval_security_event(admin_id, str(user.id), user.email, "unsuspended")
+    )
+    asyncio.create_task(_send_unsuspension_email(user.email, user.name))
+
+    await db.commit()
+
+    return {
+        "user_id": str(user.id),
+        "status": "active",
+        "message": f"User {user.email} has been unsuspended",
+    }
+
+
 async def _fire_approval_security_event(
     admin_id: str, user_id: str, email: str, action: str
 ) -> None:
@@ -497,3 +662,21 @@ async def _send_rejection_email(email: str, name: str | None, reason: str | None
         await send_account_rejected_email(email, name, reason)
     except Exception as e:
         logger.warning("rejection_email_failed", error=str(e))
+
+
+async def _send_suspension_email(email: str, name: str | None, reason: str | None) -> None:
+    try:
+        from mcpworks_api.services.email import send_account_suspended_email
+
+        await send_account_suspended_email(email, name, reason)
+    except Exception as e:
+        logger.warning("suspension_email_failed", error=str(e))
+
+
+async def _send_unsuspension_email(email: str, name: str | None) -> None:
+    try:
+        from mcpworks_api.services.email import send_account_unsuspended_email
+
+        await send_account_unsuspended_email(email, name)
+    except Exception as e:
+        logger.warning("unsuspension_email_failed", error=str(e))
