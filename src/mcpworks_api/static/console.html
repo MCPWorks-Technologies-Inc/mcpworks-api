@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
 <style>
 @property --border-angle {
   syntax: '<angle>';
@@ -171,8 +173,10 @@ tr.clickable:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .status-running { color: var(--warn); }
 .status-pending { color: var(--text-3); }
 
-pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; color: var(--text-2); }
-.schema-block { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 14px; font-family: var(--mono); font-size: 12px; overflow-x: auto; white-space: pre-wrap; color: var(--text-2); }
+pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 0; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; color: var(--text-2); }
+pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius: 8px; font-family: var(--mono); font-size: 13px; line-height: 1.7; }
+.schema-block { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 0; font-family: var(--mono); font-size: 12px; overflow-x: auto; white-space: pre-wrap; color: var(--text-2); }
+.schema-block code.hljs { background: var(--bg-0); padding: 14px; border-radius: 8px; font-family: var(--mono); font-size: 12px; }
 
 .key-reveal { background: rgba(0, 223, 162, 0.06); border: 1px solid rgba(0, 223, 162, 0.2); border-radius: 8px; padding: 14px; margin-bottom: 16px; animation: fadeUp 0.3s ease-out; }
 .key-reveal-label { color: var(--accent); font-size: 13px; font-weight: 500; font-family: var(--sans); margin-bottom: 8px; }
@@ -660,10 +664,10 @@ async function loadFunction(nsName, svcName, fnName) {
       ${(fn.tags || []).length ? `<div style="margin-bottom:14px">${fn.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
       ${av ? `
         <div class="detail-meta">Backend: <span>${esc(av.backend)}</span> &middot; Calls: <span>${fn.call_count ?? 0}</span>${av.created_by ? ` &middot; Author: <span>${esc(av.created_by)}</span>` : ''}</div>
-        ${av.code ? `<div class="section-label">Code</div><pre class="code-block">${esc(av.code)}</pre>` : ''}
-        ${av.config ? `<div class="section-label">Config</div><div class="schema-block">${esc(JSON.stringify(av.config, null, 2))}</div>` : ''}
-        ${av.input_schema ? `<div class="section-label">Input Schema</div><div class="schema-block">${esc(JSON.stringify(av.input_schema, null, 2))}</div>` : ''}
-        ${av.output_schema ? `<div class="section-label">Output Schema</div><div class="schema-block">${esc(JSON.stringify(av.output_schema, null, 2))}</div>` : ''}
+        ${av.code ? `<div class="section-label">Code</div><pre class="code-block"><code class="language-python">${esc(av.code)}</code></pre>` : ''}
+        ${av.config ? `<div class="section-label">Config</div><pre class="schema-block"><code class="language-json">${esc(JSON.stringify(av.config, null, 2))}</code></pre>` : ''}
+        ${av.input_schema ? `<div class="section-label">Input Schema</div><pre class="schema-block"><code class="language-json">${esc(JSON.stringify(av.input_schema, null, 2))}</code></pre>` : ''}
+        ${av.output_schema ? `<div class="section-label">Output Schema</div><pre class="schema-block"><code class="language-json">${esc(JSON.stringify(av.output_schema, null, 2))}</code></pre>` : ''}
       ` : '<div style="color:var(--text-3);margin-top:12px">No active version details</div>'}
       ${fn.versions?.length > 1 ? `
         <div class="section-label" style="margin-top:24px">Version History</div>
@@ -674,6 +678,7 @@ async function loadFunction(nsName, svcName, fnName) {
             <td class="cell-dim">${esc(v.backend)}</td><td class="cell-dim">${v.created_by ? esc(v.created_by) : ''}</td><td class="cell-muted">${fmtDate(v.created_at)}</td></tr>`).join('')}</tbody></table>
         <div id="version-diff-area"></div>` : ''}
     </div>`;
+    hljs.highlightAll();
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }
 
