@@ -195,6 +195,12 @@ async def require_active_status(
             detail={"error": "ACCOUNT_REJECTED", "message": "Account has been rejected"},
         )
 
+    if user_status == "suspended":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "ACCOUNT_SUSPENDED", "message": "Account has been suspended"},
+        )
+
     if user_status != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

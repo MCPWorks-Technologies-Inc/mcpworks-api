@@ -198,3 +198,25 @@ async def send_account_rejected_email(
         template_name="account_rejected.html",
         template_vars={"name": name or email.split("@")[0], "reason": reason},
     )
+
+
+async def send_account_suspended_email(
+    email: str, name: str | None = None, reason: str | None = None
+) -> None:
+    await send_email(
+        to=email,
+        email_type="account_suspended",
+        subject="MCPWorks - Account Suspended",
+        template_name="account_suspended.html",
+        template_vars={"name": name or email.split("@")[0], "reason": reason},
+    )
+
+
+async def send_account_unsuspended_email(email: str, name: str | None = None) -> None:
+    await send_email(
+        to=email,
+        email_type="account_unsuspended",
+        subject="MCPWorks - Account Reinstated",
+        template_name="account_unsuspended.html",
+        template_vars={"name": name or email.split("@")[0]},
+    )

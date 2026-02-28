@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Account Suspended</h1>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Hi {{ name }},
+</p>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Your MCPWorks account has been suspended.
+</p>
+{% if reason %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-left:4px solid #ef4444;border-radius:4px;padding:16px;margin-bottom:16px;">
+<tr>
+<td>
+<p style="margin:0;color:#991b1b;font-size:14px;"><strong>Reason:</strong> {{ reason }}</p>
+</td>
+</tr>
+</table>
+{% endif %}
+<p style="margin:0;color:#71717a;font-size:13px;">
+If you believe this was in error, please contact support.
+</p>
+{% endblock %}
