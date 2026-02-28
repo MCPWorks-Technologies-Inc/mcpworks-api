@@ -234,15 +234,17 @@ class TestMCPRouterParsing:
 class TestCreateMCPHandler:
     """Tests for CreateMCPHandler (management interface)."""
 
-    async def test_initialize(self, db: AsyncSession, test_account: Account):
+    async def test_initialize(self, db: AsyncSession, test_account: Account, test_api_key):
         """Test initialize method."""
         from mcpworks_api.mcp.create_handler import CreateMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
 
+        api_key, _ = test_api_key
         handler = CreateMCPHandler(
             namespace="test-namespace",
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="initialize", id="init-1")
@@ -254,15 +256,17 @@ class TestCreateMCPHandler:
         assert "tools" in response.result["capabilities"]
         assert "mcpworks-create" in response.result["serverInfo"]["name"]
 
-    async def test_tools_list(self, db: AsyncSession, test_account: Account):
+    async def test_tools_list(self, db: AsyncSession, test_account: Account, test_api_key):
         """Test tools/list method returns management tools."""
         from mcpworks_api.mcp.create_handler import CreateMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
 
+        api_key, _ = test_api_key
         handler = CreateMCPHandler(
             namespace="test-namespace",
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="tools/list", id="list-1")
@@ -280,15 +284,17 @@ class TestCreateMCPHandler:
         assert "make_function" in tool_names
         assert "list_functions" in tool_names
 
-    async def test_unknown_method(self, db: AsyncSession, test_account: Account):
+    async def test_unknown_method(self, db: AsyncSession, test_account: Account, test_api_key):
         """Test unknown method returns error."""
         from mcpworks_api.mcp.create_handler import CreateMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
 
+        api_key, _ = test_api_key
         handler = CreateMCPHandler(
             namespace="test-namespace",
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="unknown/method", id="err-1")
@@ -302,15 +308,18 @@ class TestCreateMCPHandler:
         self,
         db: AsyncSession,
         test_account: Account,
+        test_api_key,
     ):
         """Test make_namespace tool."""
         from mcpworks_api.mcp.create_handler import CreateMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
 
+        api_key, _ = test_api_key
         handler = CreateMCPHandler(
             namespace="test-namespace",
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(
@@ -339,15 +348,18 @@ class TestCreateMCPHandler:
         db: AsyncSession,
         test_account: Account,
         test_namespace: Namespace,
+        test_api_key,
     ):
         """Test list_namespaces tool."""
         from mcpworks_api.mcp.create_handler import CreateMCPHandler
         from mcpworks_api.mcp.protocol import JSONRPCRequest
 
+        api_key, _ = test_api_key
         handler = CreateMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(
@@ -375,15 +387,18 @@ class TestRunMCPHandler:
         db: AsyncSession,
         test_account: Account,
         test_namespace: Namespace,
+        test_api_key,
     ):
         """Test initialize method."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
+        api_key, _ = test_api_key
         handler = RunMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="initialize", id="init-1")
@@ -398,16 +413,19 @@ class TestRunMCPHandler:
         db: AsyncSession,
         test_account: Account,
         test_namespace: Namespace,
+        test_api_key,
     ):
         """Test tools/list with no functions (tool mode)."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
+        api_key, _ = test_api_key
         handler = RunMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
             mode="tools",
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="tools/list", id="list-1")
@@ -425,18 +443,21 @@ class TestRunMCPHandler:
         test_namespace: Namespace,
         test_service: NamespaceService,
         test_function: tuple[Function, FunctionVersion],
+        test_api_key,
     ):
         """Test tools/list returns functions as tools (tool mode)."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
         function, version = test_function
+        api_key, _ = test_api_key
 
         handler = RunMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
             mode="tools",
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="tools/list", id="list-1")
@@ -461,15 +482,18 @@ class TestRunMCPHandler:
         db: AsyncSession,
         test_account: Account,
         test_namespace: Namespace,
+        test_api_key,
     ):
         """Test tools/call with invalid tool name format."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
+        api_key, _ = test_api_key
         handler = RunMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(
@@ -491,15 +515,18 @@ class TestRunMCPHandler:
         db: AsyncSession,
         test_account: Account,
         test_namespace: Namespace,
+        test_api_key,
     ):
         """Test tools/call with invalid params structure."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
+        api_key, _ = test_api_key
         handler = RunMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(
@@ -517,15 +544,18 @@ class TestRunMCPHandler:
         db: AsyncSession,
         test_account: Account,
         test_namespace: Namespace,
+        test_api_key,
     ):
         """Test unknown method returns error."""
         from mcpworks_api.mcp.protocol import JSONRPCRequest, MCPErrorCodes
         from mcpworks_api.mcp.run_handler import RunMCPHandler
 
+        api_key, _ = test_api_key
         handler = RunMCPHandler(
             namespace=test_namespace.name,
             account=test_account,
             db=db,
+            api_key=api_key,
         )
 
         request = JSONRPCRequest(method="unknown/method", id="err-1")
