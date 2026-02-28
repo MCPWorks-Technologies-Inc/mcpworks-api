@@ -106,26 +106,22 @@ input::placeholder { color: var(--text-3); }
 .login-card .btn { margin-top: 4px; }
 .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; padding: 8px 12px; background: rgba(255, 107, 107, 0.08); border-radius: 6px; border: 1px solid rgba(255, 107, 107, 0.15); }
 
-.stats-drawer { margin-bottom: 12px; }
-.stats-drawer-header { display: flex; align-items: center; padding: 0 16px; height: 44px; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); cursor: pointer; user-select: none; gap: 6px; transition: border-color 0.15s; }
-.stats-drawer-header:hover { border-color: var(--border-2); }
-.drawer-chevron { flex-shrink: 0; color: var(--text-3); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s; }
-.stats-drawer-header:hover .drawer-chevron { color: var(--text-2); }
-.stats-drawer.open .drawer-chevron { transform: rotate(90deg); }
-.drawer-label { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; transition: color 0.15s; margin-right: auto; }
-.stats-drawer-header:hover .drawer-label { color: var(--text-2); }
-.drawer-summary { display: flex; align-items: center; gap: 0; }
-.drawer-stat { display: flex; align-items: center; gap: 6px; padding: 0 14px; height: 44px; border-left: 1px solid var(--border-1); cursor: pointer; transition: background 0.15s; }
-.drawer-stat:hover { background: var(--bg-2); border-radius: 0 var(--radius) var(--radius) 0; }
-.drawer-stat:hover .drawer-stat-label { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
-.drawer-stat-num { font-family: var(--sans); font-size: 15px; font-weight: 700; color: var(--text-1); letter-spacing: -0.02em; }
-.drawer-stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; font-family: var(--sans); font-weight: 600; transition: color 0.15s; white-space: nowrap; }
-.drawer-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
-.stats-drawer:not(.open) .drawer-body { grid-template-rows: 0fr; }
-.drawer-body-inner { overflow: hidden; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 12px; }
+@media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
 
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 14px 0 0; }
-@media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .drawer-stat:nth-child(n+3) { display: none; } }
+.insights-drawer { margin-bottom: 14px; }
+.insights-header { display: flex; align-items: center; padding: 0 14px; height: 36px; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); cursor: pointer; user-select: none; gap: 6px; transition: border-color 0.15s; }
+.insights-header:hover { border-color: var(--border-2); }
+.insights-chevron { flex-shrink: 0; color: var(--text-3); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s; }
+.insights-header:hover .insights-chevron { color: var(--text-2); }
+.insights-drawer.open .insights-chevron { transform: rotate(90deg); }
+.insights-label { font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; transition: color 0.15s; }
+.insights-header:hover .insights-label { color: var(--text-2); }
+.insights-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+.insights-drawer:not(.open) .insights-body { grid-template-rows: 0fr; }
+.insights-body-inner { overflow: hidden; }
+.insights-content { padding: 14px; background: var(--bg-1); border: 1px solid var(--border-1); border-top: none; border-radius: 0 0 var(--radius) var(--radius); }
+.insights-drawer.open .insights-header { border-radius: var(--radius) var(--radius) 0 0; }
 
 .stat-card { position: relative; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); padding: 18px 16px 14px; text-align: center; cursor: pointer; transition: all 0.2s ease; overflow: hidden; }
 .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0; transition: opacity 0.2s ease; }
@@ -268,37 +264,23 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
 
   <div id="dashboard" class="hidden">
 
-    <div id="stats-drawer" class="stats-drawer open">
-      <div class="stats-drawer-header" onclick="toggleStats(event)">
-        <svg class="drawer-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="drawer-label">Overview</span>
-        <div class="drawer-summary">
-          <div class="drawer-stat" onclick="event.stopPropagation(); loadNamespaces()"><span class="drawer-stat-num" id="ds-ns">&mdash;</span><span class="drawer-stat-label">NS</span></div>
-          <div class="drawer-stat" onclick="event.stopPropagation(); loadAllServices()"><span class="drawer-stat-num" id="ds-svc">&mdash;</span><span class="drawer-stat-label">Svc</span></div>
-          <div class="drawer-stat" onclick="event.stopPropagation(); loadAllFunctions()"><span class="drawer-stat-num" id="ds-fn">&mdash;</span><span class="drawer-stat-label">Fn</span></div>
-          <div class="drawer-stat" onclick="event.stopPropagation(); loadApiKeys()"><span class="drawer-stat-num" id="ds-keys">&mdash;</span><span class="drawer-stat-label">Keys</span></div>
-        </div>
+    <div class="stats-grid">
+      <div class="stat-card" onclick="loadNamespaces()">
+        <div class="stat-num" id="stat-namespaces">&mdash;</div>
+        <div class="stat-label">Namespaces</div>
       </div>
-      <div class="drawer-body"><div class="drawer-body-inner">
-        <div class="stats-grid">
-          <div class="stat-card" onclick="loadNamespaces()">
-            <div class="stat-num" id="stat-namespaces">&mdash;</div>
-            <div class="stat-label">Namespaces</div>
-          </div>
-          <div class="stat-card" onclick="loadAllServices()">
-            <div class="stat-num" id="stat-services">&mdash;</div>
-            <div class="stat-label">Services</div>
-          </div>
-          <div class="stat-card" onclick="loadAllFunctions()">
-            <div class="stat-num" id="stat-functions">&mdash;</div>
-            <div class="stat-label">Functions</div>
-          </div>
-          <div class="stat-card" onclick="loadApiKeys()">
-            <div class="stat-num" id="stat-keys">&mdash;</div>
-            <div class="stat-label">API Keys</div>
-          </div>
-        </div>
-      </div></div>
+      <div class="stat-card" onclick="loadAllServices()">
+        <div class="stat-num" id="stat-services">&mdash;</div>
+        <div class="stat-label">Services</div>
+      </div>
+      <div class="stat-card" onclick="loadAllFunctions()">
+        <div class="stat-num" id="stat-functions">&mdash;</div>
+        <div class="stat-label">Functions</div>
+      </div>
+      <div class="stat-card" onclick="loadApiKeys()">
+        <div class="stat-num" id="stat-keys">&mdash;</div>
+        <div class="stat-label">API Keys</div>
+      </div>
     </div>
 
     <div id="usage-strip" class="usage-strip hidden">
@@ -308,6 +290,16 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
     </div>
 
     <div id="breadcrumb" class="breadcrumb"></div>
+
+    <div id="insights-drawer" class="insights-drawer hidden">
+      <div class="insights-header" onclick="toggleInsights()">
+        <svg class="insights-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2.5l3.5 3.5-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="insights-label">Insights</span>
+      </div>
+      <div class="insights-body"><div class="insights-body-inner">
+        <div class="insights-content" id="insights-content"></div>
+      </div></div>
+    </div>
 
     <div id="content" class="content-card"></div>
   </div>
@@ -322,23 +314,21 @@ const API = window.location.origin;
 let cachedNamespaces = [];
 let pendingKeyBanner = null;
 
-function toggleStats(e) {
-  const d = document.getElementById('stats-drawer');
+function toggleInsights() {
+  const d = document.getElementById('insights-drawer');
   d.classList.toggle('open');
-  localStorage.setItem('mcpworks_stats_open', d.classList.contains('open') ? '1' : '0');
+  localStorage.setItem('mcpworks_insights_open', d.classList.contains('open') ? '1' : '0');
 }
 
-function restoreStatsState() {
-  const saved = localStorage.getItem('mcpworks_stats_open');
-  if (saved === '0') document.getElementById('stats-drawer').classList.remove('open');
-}
-
-function syncDrawerSummary() {
-  const ids = [['stat-namespaces','ds-ns'],['stat-services','ds-svc'],['stat-functions','ds-fn'],['stat-keys','ds-keys']];
-  for (const [src, dst] of ids) {
-    const el = document.getElementById(src);
-    if (el) document.getElementById(dst).textContent = el.textContent;
-  }
+function setInsights(html) {
+  const d = document.getElementById('insights-drawer');
+  const c = document.getElementById('insights-content');
+  if (!html) { d.classList.add('hidden'); d.classList.remove('open'); return; }
+  c.innerHTML = html;
+  d.classList.remove('hidden');
+  const saved = localStorage.getItem('mcpworks_insights_open');
+  if (saved !== '0') d.classList.add('open');
+  else d.classList.remove('open');
 }
 
 if (TOKEN && USER_EMAIL) showDashboard(USER_EMAIL);
@@ -348,7 +338,6 @@ function showDashboard(email) {
   document.getElementById('dashboard').classList.remove('hidden');
   document.getElementById('user-info').classList.remove('hidden');
   document.getElementById('user-email').textContent = email;
-  restoreStatsState();
   loadStats();
   loadNamespaces();
 }
@@ -474,7 +463,6 @@ async function loadStats() {
     }
     countUp(document.getElementById('stat-services'), totalServices);
     countUp(document.getElementById('stat-functions'), totalFunctions);
-    setTimeout(syncDrawerSummary, 600);
   } catch (e) { console.error('Stats failed', e); }
 }
 
@@ -518,6 +506,7 @@ async function loadNamespaces() {
   const c = document.getElementById('content');
   c.innerHTML = '<div class="loading"><span class="loader"></span>Loading namespaces</div>';
   setBreadcrumb([{ label: 'Namespaces' }]);
+  setInsights(null);
   try {
     const data = await apiFetch('/v1/namespaces?page=1&page_size=100');
     const ns = data.namespaces || [];
@@ -542,7 +531,7 @@ async function loadNamespace(nsName) {
       apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services`),
     ]);
     const svcs = svcData.services || [];
-    const svcChart = svcs.length > 1 ? renderPieChart(svcs, 'name', 'call_count') : '';
+    setInsights(svcs.length > 1 ? renderPieChart(svcs, 'name', 'call_count') : null);
     const svcHtml = !svcs.length ? '<div style="padding:16px;color:var(--text-3)">No services</div>' : `
       <table><thead><tr><th>Service</th><th>Description</th><th>Functions</th><th>Calls</th><th>Created</th></tr></thead><tbody>${svcs.map((s, i) => `
         <tr class="clickable stagger" style="--i:${i}" onclick="loadFunctions('${esc(nsName)}','${esc(s.name)}')">
@@ -557,7 +546,7 @@ async function loadNamespace(nsName) {
       ${ns.description ? `<div class="detail-desc">${esc(ns.description)}</div>` : ''}
       <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
       ${ns.network_whitelist?.length ? `<div class="detail-meta">Whitelist: <span>${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
-      <div class="section-label" style="margin-top:18px">Services</div>${svcChart}</div>${svcHtml}`;
+      <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }
 
@@ -565,6 +554,7 @@ async function loadAllServices() {
   const c = document.getElementById('content');
   c.innerHTML = '<div class="loading"><span class="loader"></span>Loading services</div>';
   setBreadcrumb([{ label: 'Services' }]);
+  setInsights(null);
   try {
     const nsData = await apiFetch('/v1/namespaces?page=1&page_size=100');
     const svcs = (await Promise.all((nsData.namespaces || []).map(ns =>
@@ -588,6 +578,7 @@ async function loadAllFunctions() {
   const c = document.getElementById('content');
   c.innerHTML = '<div class="loading"><span class="loader"></span>Loading functions</div>';
   setBreadcrumb([{ label: 'Functions' }]);
+  setInsights(null);
   try {
     const nsData = await apiFetch('/v1/namespaces?page=1&page_size=100');
     const allSvcs = (await Promise.all((nsData.namespaces || []).map(ns =>
@@ -624,9 +615,9 @@ async function loadFunctions(nsName, svcName) {
   ]);
   try {
     const fns = (await apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions`)).functions || [];
-    if (!fns.length) { c.innerHTML = emptyState('fn()', 'No functions in this service'); return; }
-    const fnChart = fns.length > 1 ? `<div style="padding:16px 16px 0">${renderPieChart(fns, 'name', 'call_count')}</div>` : '';
-    c.innerHTML = `${fnChart}<table><thead><tr><th>Function</th><th>Description</th><th>Tags</th><th>Ver</th><th>Calls</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
+    if (!fns.length) { setInsights(null); c.innerHTML = emptyState('fn()', 'No functions in this service'); return; }
+    setInsights(fns.length > 1 ? renderPieChart(fns, 'name', 'call_count') : null);
+    c.innerHTML = `<table><thead><tr><th>Function</th><th>Description</th><th>Tags</th><th>Ver</th><th>Calls</th><th>Created</th></tr></thead><tbody>${fns.map((f, i) => `
       <tr class="clickable stagger" style="--i:${i}" onclick="loadFunction('${esc(nsName)}','${esc(svcName)}','${esc(f.name)}')">
         <td class="cell-name">${esc(f.name)}</td>
         <td class="cell-dim">${esc(f.description || '\u2014')}</td>
@@ -647,6 +638,7 @@ async function loadFunction(nsName, svcName, fnName) {
     { label: svcName, onclick: `loadFunctions('${esc(nsName)}','${esc(svcName)}')` },
     { label: fnName },
   ]);
+  setInsights(null);
   try {
     const fn = await apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(svcName)}/functions/${encodeURIComponent(fnName)}`);
     _currentFnContext = fn;
@@ -679,6 +671,7 @@ async function loadApiKeys() {
   const c = document.getElementById('content');
   c.innerHTML = '<div class="loading"><span class="loader"></span>Loading API keys</div>';
   setBreadcrumb([{ label: 'API Keys' }]);
+  setInsights(null);
   try {
     const keys = (await apiFetch('/v1/users/me/api-keys')).items || [];
     const banner = pendingKeyBanner ? `<div class="key-reveal">
