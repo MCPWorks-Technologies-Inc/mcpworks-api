@@ -26,12 +26,14 @@ from mcpworks_api.mcp.protocol import (
     make_error_response,
     make_success_response,
 )
-from mcpworks_api.models import Account, Namespace
+from mcpworks_api.models import Account, APIKey, Namespace
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import (
     NamespaceServiceManager,
     NamespaceServiceService,
 )
+
+VALID_SCOPES = frozenset({"read", "write", "execute"})
 
 
 class CreateMCPHandler:
@@ -40,22 +42,33 @@ class CreateMCPHandler:
     Provides management operations for namespaces, services, and functions.
     """
 
+    TOOL_SCOPES: dict[str, str] = {
+        "list_namespaces": "read",
+        "list_services": "read",
+        "list_functions": "read",
+        "describe_function": "read",
+        "list_packages": "read",
+        "list_templates": "read",
+        "describe_template": "read",
+        "make_namespace": "write",
+        "make_service": "write",
+        "delete_service": "write",
+        "make_function": "write",
+        "update_function": "write",
+        "delete_function": "write",
+    }
+
     def __init__(
         self,
         namespace: str,
         account: Account,
         db: AsyncSession,
+        api_key: APIKey,
     ):
-        """Initialize handler.
-
-        Args:
-            namespace: The namespace name from subdomain.
-            account: The authenticated account.
-            db: Database session.
-        """
         self.namespace_name = namespace
         self.account = account
         self.db = db
+        self.api_key = api_key
         self.namespace_service = NamespaceServiceManager(db)
         self.service_service = NamespaceServiceService(db)
         self.function_service = FunctionService(db)
@@ -200,6 +213,10 @@ class CreateMCPHandler:
                             "items": {"type": "string"},
                             "description": "Optional environment variables the function can use if provided.",
                         },
+                        "created_by": {
+                            "type": "string",
+                            "description": "Who created this function (e.g. 'Claude Opus 4.6'). Optional attribution.",
+                        },
                         "template": {
                             "type": "string",
                             "description": "Clone from a template (e.g. hello-world). Overrides code/schemas/requirements. Use list_templates to see available.",
@@ -237,6 +254,10 @@ class CreateMCPHandler:
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Optional environment variables.",
+                        },
+                        "created_by": {
+                            "type": "string",
+                            "description": "Who created this function (e.g. 'Claude Opus 4.6'). Optional attribution.",
                         },
                         "restore_version": {
                             "type": "integer",
@@ -314,6 +335,15 @@ class CreateMCPHandler:
             ),
         ]
 
+    def _check_scope(self, tool_name: str) -> None:
+        """Check that the API key has the required scope for a tool.
+
+        Raises ValueError if scope is missing.
+        """
+        required = self.TOOL_SCOPES.get(tool_name)
+        if required and not self.api_key.has_scope(required):
+            raise ValueError(f"API key missing required scope '{required}' for tool '{tool_name}'")
+
     async def dispatch_tool(
         self,
         name: str,
@@ -331,9 +361,11 @@ class CreateMCPHandler:
             MCPToolResult with tool output.
 
         Raises:
-            ValueError: If tool name is unknown.
+            ValueError: If tool name is unknown or scope missing.
             NotFoundError, ConflictError, ForbiddenError: From tool logic.
         """
+        self._check_scope(name)
+
         handlers = {
             "make_namespace": self._make_namespace,
             "list_namespaces": self._list_namespaces,
@@ -542,6 +574,7 @@ class CreateMCPHandler:
         requirements: list[str] | None = None,
         required_env: list[str] | None = None,
         optional_env: list[str] | None = None,
+        created_by: str | None = None,
         template: str | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
@@ -623,6 +656,7 @@ class CreateMCPHandler:
             requirements=validated_reqs,
             required_env=validated_required_env,
             optional_env=validated_optional_env,
+            created_by=created_by,
         )
         result: dict[str, Any] = {
             "name": f"{service}.{name}",
@@ -636,6 +670,8 @@ class CreateMCPHandler:
             result["required_env"] = validated_required_env
         if validated_optional_env:
             result["optional_env"] = validated_optional_env
+        if created_by:
+            result["created_by"] = created_by
         if credential_warnings:
             result["warnings"] = credential_warnings
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
@@ -654,6 +690,7 @@ class CreateMCPHandler:
         requirements: list[str] | None = None,
         required_env: list[str] | None = None,
         optional_env: list[str] | None = None,
+        created_by: str | None = None,
         restore_version: int | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
@@ -716,6 +753,7 @@ class CreateMCPHandler:
                 requirements=old_version.requirements,
                 required_env=old_version.required_env,
                 optional_env=old_version.optional_env,
+                created_by=created_by,
             )
             message = f"Restored from v{restore_version}"
         elif any(
@@ -745,6 +783,7 @@ class CreateMCPHandler:
                 optional_env=validated_optional_env
                 if optional_env is not None
                 else active.optional_env,
+                created_by=created_by,
             )
             message = "Created new version"
         else:
@@ -758,6 +797,8 @@ class CreateMCPHandler:
             "version": function.active_version,
             "message": message,
         }
+        if created_by:
+            result_data["created_by"] = created_by
         if credential_warnings:
             result_data["warnings"] = credential_warnings
         return MCPToolResult(content=[MCPContent(text=json.dumps(result_data))])

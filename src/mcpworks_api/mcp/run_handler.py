@@ -26,7 +26,7 @@ from mcpworks_api.mcp.protocol import (
     make_error_response,
     make_success_response,
 )
-from mcpworks_api.models import Account, Namespace
+from mcpworks_api.models import Account, APIKey, Namespace
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import NamespaceServiceManager
 
@@ -42,26 +42,23 @@ class RunMCPHandler:
     3. Recording execution metrics
     """
 
+    TOOL_SCOPES: dict[str, str] = {
+        "_env_status": "read",
+    }
+
     def __init__(
         self,
         namespace: str,
         account: Account,
         db: AsyncSession,
+        api_key: APIKey,
         mode: str = "code",
     ):
-        """Initialize handler.
-
-        Args:
-            namespace: The namespace name from subdomain.
-            account: The authenticated account.
-            db: Database session.
-            mode: Run mode — ``"code"`` (default, single execute tool with sandbox)
-                or ``"tools"`` (one tool per function).
-        """
         self.namespace_name = namespace
         self.account = account
         self.db = db
         self.mode = mode
+        self.api_key = api_key
         self.namespace_service = NamespaceServiceManager(db)
         self.function_service = FunctionService(db)
         self._namespace: Namespace | None = None
@@ -169,6 +166,16 @@ class RunMCPHandler:
             )
         ]
 
+    def _check_scope(self, tool_name: str) -> None:
+        """Check that the API key has the required scope for a tool.
+
+        For run handler, dynamic tools (service.function and execute) require
+        ``execute`` scope. Static tools use ``TOOL_SCOPES`` mapping.
+        """
+        required = self.TOOL_SCOPES.get(tool_name, "execute")
+        if not self.api_key.has_scope(required):
+            raise ValueError(f"API key missing required scope '{required}' for tool '{tool_name}'")
+
     async def dispatch_tool(
         self,
         name: str,
@@ -187,9 +194,11 @@ class RunMCPHandler:
             MCPToolResult with execution output.
 
         Raises:
-            ValueError: If tool name format is invalid or backend unavailable.
+            ValueError: If tool name format is invalid, backend unavailable, or scope missing.
             NotFoundError: If namespace/function not found.
         """
+        self._check_scope(name)
+
         if name == "execute" and self.mode == "code":
             return await self._execute_code_mode(arguments.get("code", ""), sandbox_env=sandbox_env)
 

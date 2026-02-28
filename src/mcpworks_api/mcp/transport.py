@@ -185,8 +185,8 @@ async def _increment_function_counts(
         logger.exception("function_count_increment_failed", called_functions=called_functions)
 
 
-async def _authenticate(request: Request, db: Any) -> Any:
-    """Authenticate request via API key, returning the Account.
+async def _authenticate(request: Request, db: Any) -> tuple[Any, Any]:
+    """Authenticate request via API key, returning (Account, APIKey).
 
     Raises ``ValueError`` on auth failure so the MCP SDK can surface
     the error to the client.
@@ -199,6 +199,18 @@ async def _authenticate(request: Request, db: Any) -> Any:
         return await get_account_from_api_key(request, db)
     except HTTPException as e:
         raise ValueError(f"Authentication failed: {e.detail}") from e
+
+
+def _check_namespace_scope_mcp(api_key: Any, namespace: str) -> None:
+    """Wrap check_namespace_scope for the MCP SDK path (raises ValueError)."""
+    from fastapi import HTTPException
+
+    from mcpworks_api.mcp.router import check_namespace_scope
+
+    try:
+        check_namespace_scope(api_key, namespace)
+    except HTTPException as e:
+        raise ValueError(e.detail) from e
 
 
 # ---------------------------------------------------------------------------
@@ -218,13 +230,19 @@ async def list_tools() -> list[Tool]:
 
     try:
         async with get_db_context() as db:
-            account = await _authenticate(request, db)
+            account, api_key = await _authenticate(request, db)
+            _check_namespace_scope_mcp(api_key, namespace)
+
+            if not api_key.has_scope("read"):
+                return []
 
             if endpoint_type == EndpointType.CREATE:
                 return _to_sdk_tools(CreateMCPHandler.get_tools())
             else:
                 run_mode = request.query_params.get("mode", "code")
-                handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
+                handler = RunMCPHandler(
+                    namespace=namespace, account=account, db=db, mode=run_mode, api_key=api_key
+                )
                 return _to_sdk_tools(await handler.get_tools())
     except ValueError:
         raise
@@ -266,13 +284,16 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
             raise ValueError(str(e)) from e
 
     async with get_db_context() as db:
-        account = await _authenticate(request, db)
+        account, api_key = await _authenticate(request, db)
+        _check_namespace_scope_mcp(api_key, namespace)
 
         if endpoint_type == EndpointType.CREATE:
-            handler = CreateMCPHandler(namespace=namespace, account=account, db=db)
+            handler = CreateMCPHandler(namespace=namespace, account=account, db=db, api_key=api_key)
         else:
             run_mode = request.query_params.get("mode", "code")
-            handler = RunMCPHandler(namespace=namespace, account=account, db=db, mode=run_mode)
+            handler = RunMCPHandler(
+                namespace=namespace, account=account, db=db, mode=run_mode, api_key=api_key
+            )
 
         result = await handler.dispatch_tool(name, args, sandbox_env=sandbox_env)
         contents = [TextContent(type="text", text=c.text) for c in result.content]
