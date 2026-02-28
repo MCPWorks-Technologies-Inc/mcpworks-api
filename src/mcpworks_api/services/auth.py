@@ -12,9 +12,11 @@ from mcpworks_api.config import get_settings
 from mcpworks_api.core.exceptions import (
     ApiKeyNotFoundError,
     EmailExistsError,
+    ForbiddenError,
     InvalidApiKeyError,
     InvalidCredentialsError,
     InvalidTokenError,
+    NotFoundError,
     UserNotFoundError,
 )
 from mcpworks_api.core.security import (
@@ -429,6 +431,7 @@ class AuthService:
         user_id: uuid.UUID,
         name: str | None = None,
         scopes: list[str] | None = None,
+        namespace_id: uuid.UUID | None = None,
         expires_in_days: int | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
@@ -439,6 +442,7 @@ class AuthService:
             user_id: User's UUID.
             name: Optional human-readable label.
             scopes: Permissions granted to this key.
+            namespace_id: Optional namespace to scope the key to.
             expires_in_days: Days until expiration (None = never).
             ip_address: Client IP address for audit logging.
             user_agent: Client user agent for audit logging.
@@ -448,37 +452,56 @@ class AuthService:
 
         Raises:
             UserNotFoundError: If user doesn't exist.
+            NotFoundError: If namespace_id is given but doesn't exist.
+            ForbiddenError: If namespace doesn't belong to user's account.
         """
-        # Verify user exists
+        from sqlalchemy.orm import selectinload
+
+        from mcpworks_api.models import Namespace
+
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
 
         if not user:
             raise UserNotFoundError()
 
-        # Generate API key
+        if namespace_id is not None:
+            ns_result = await self.db.execute(select(Namespace).where(Namespace.id == namespace_id))
+            namespace = ns_result.scalar_one_or_none()
+            if not namespace:
+                raise NotFoundError(message="Namespace not found")
+            result = await self.db.execute(select(Account).where(Account.user_id == user_id))
+            account = result.scalar_one_or_none()
+            if not account or namespace.account_id != account.id:
+                raise ForbiddenError(message="Namespace does not belong to this account")
+
         raw_key = generate_api_key(prefix="mcpw")
         key_prefix = raw_key[:12]
         key_hash = hash_api_key(raw_key)
 
-        # Calculate expiration if specified
         expires_at = None
         if expires_in_days:
             expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
 
-        # Create API key record
         api_key = APIKey(
             user_id=user_id,
             key_hash=key_hash,
             key_prefix=key_prefix,
             name=name,
             scopes=scopes or ["read", "write", "execute"],
+            namespace_id=namespace_id,
             expires_at=expires_at,
         )
         self.db.add(api_key)
-        await self.db.flush()  # Get API key ID
+        await self.db.flush()
 
-        # Log API key creation
+        if namespace_id:
+            await self.db.execute(
+                select(APIKey)
+                .where(APIKey.id == api_key.id)
+                .options(selectinload(APIKey.namespace))
+            )
+
         audit_log = AuditLog(
             user_id=user_id,
             action=AuditAction.API_KEY_CREATED.value,
@@ -486,7 +509,11 @@ class AuthService:
             resource_id=api_key.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            event_data={"key_prefix": key_prefix, "scopes": api_key.scopes},
+            event_data={
+                "key_prefix": key_prefix,
+                "scopes": api_key.scopes,
+                "namespace_id": str(namespace_id) if namespace_id else None,
+            },
         )
         self.db.add(audit_log)
 
@@ -504,9 +531,13 @@ class AuthService:
             include_revoked: Whether to include revoked keys.
 
         Returns:
-            List of API key records.
+            List of API key records (with namespace eager-loaded).
         """
-        query = select(APIKey).where(APIKey.user_id == user_id)
+        from sqlalchemy.orm import selectinload
+
+        query = (
+            select(APIKey).where(APIKey.user_id == user_id).options(selectinload(APIKey.namespace))
+        )
 
         if not include_revoked:
             query = query.where(APIKey.revoked_at.is_(None))

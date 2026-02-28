@@ -7,7 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
-from mcpworks_api.core.exceptions import ApiKeyNotFoundError, UserNotFoundError
+from mcpworks_api.core.exceptions import (
+    ApiKeyNotFoundError,
+    ForbiddenError,
+    NotFoundError,
+    UserNotFoundError,
+)
 from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
 from mcpworks_api.models import User
 from mcpworks_api.schemas.user import (
@@ -91,6 +96,7 @@ async def create_api_key(
             user_id=uuid.UUID(user_id),
             name=body.name,
             scopes=body.scopes,
+            namespace_id=body.namespace_id,
             expires_in_days=body.expires_in_days,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -101,6 +107,18 @@ async def create_api_key(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=e.to_dict(),
         )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NAMESPACE_NOT_FOUND", "message": str(e)},
+        )
+    except ForbiddenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": str(e)},
+        )
+
+    ns_name = api_key.namespace.name if api_key.namespace else None
 
     return ApiKeyCreated(
         id=api_key.id,
@@ -108,6 +126,8 @@ async def create_api_key(
         key_prefix=api_key.key_prefix,
         name=api_key.name,
         scopes=api_key.scopes,
+        namespace_id=api_key.namespace_id,
+        namespace_name=ns_name,
         created_at=api_key.created_at,
     )
 
@@ -141,6 +161,8 @@ async def list_api_keys(
             key_prefix=key.key_prefix,
             name=key.name,
             scopes=key.scopes,
+            namespace_id=key.namespace_id,
+            namespace_name=key.namespace.name if key.namespace else None,
             created_at=key.created_at,
             last_used_at=key.last_used_at,
             expires_at=key.expires_at,

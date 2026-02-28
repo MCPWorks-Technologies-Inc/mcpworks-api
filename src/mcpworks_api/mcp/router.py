@@ -30,15 +30,15 @@ router = APIRouter(tags=["mcp"])
 async def get_account_from_api_key(
     request: Request,
     db: AsyncSession,
-) -> Account:
-    """Extract and validate API key, return associated account.
+) -> tuple[Account, APIKey]:
+    """Extract and validate API key, return associated account and key.
 
     Args:
         request: FastAPI request object.
         db: Database session.
 
     Returns:
-        The account associated with the API key.
+        Tuple of (account, api_key).
 
     Raises:
         HTTPException: If API key is missing, invalid, or revoked.
@@ -48,7 +48,6 @@ async def get_account_from_api_key(
 
     from mcpworks_api.core.security import verify_api_key
 
-    # Get API key from Authorization header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -58,7 +57,6 @@ async def get_account_from_api_key(
 
     raw_key = auth_header[7:]  # Remove "Bearer " prefix
 
-    # Extract prefix for lookup (first 12 chars)
     client_ip = _get_client_ip(request)
     if len(raw_key) < 12:
         asyncio.create_task(_fire_mcp_auth_failure(client_ip, "Key too short"))
@@ -66,12 +64,14 @@ async def get_account_from_api_key(
 
     key_prefix = raw_key[:12]
 
-    # Look up API keys with matching prefix
     result = await db.execute(
         select(APIKey)
         .where(APIKey.key_prefix == key_prefix)
-        .where(APIKey.revoked_at.is_(None))  # Not revoked
-        .options(selectinload(APIKey.user).selectinload(User.account))
+        .where(APIKey.revoked_at.is_(None))
+        .options(
+            selectinload(APIKey.user).selectinload(User.account),
+            selectinload(APIKey.namespace),
+        )
     )
     api_keys = result.scalars().all()
 
@@ -79,7 +79,6 @@ async def get_account_from_api_key(
         asyncio.create_task(_fire_mcp_auth_failure(client_ip, "No matching key prefix"))
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # Verify against each matching key's hash
     valid_key: APIKey | None = None
     for api_key in api_keys:
         if verify_api_key(raw_key, api_key.key_hash):
@@ -90,14 +89,13 @@ async def get_account_from_api_key(
         asyncio.create_task(_fire_mcp_auth_failure(client_ip, "Hash verification failed"))
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # Get account from user
     if not valid_key.user or not valid_key.user.account:
         raise HTTPException(
             status_code=403,
             detail="API key not associated with an account",
         )
 
-    return valid_key.user.account
+    return valid_key.user.account, valid_key
 
 
 def _get_client_ip(request: Request) -> str | None:
@@ -158,6 +156,25 @@ async def validate_namespace_access(
             status_code=403,
             detail=f"Access denied to namespace '{namespace_name}'",
         )
+
+
+def check_namespace_scope(api_key: APIKey, namespace_name: str) -> None:
+    """Check that API key is allowed to access the given namespace.
+
+    Keys with namespace_id=NULL are unrestricted.
+    Keys scoped to a namespace can only access that namespace.
+
+    Raises:
+        HTTPException: 403 if the key is namespace-scoped and doesn't match.
+    """
+    if api_key.namespace_id is None:
+        return
+    if api_key.namespace and api_key.namespace.name == namespace_name:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=f"API key is scoped to namespace '{api_key.namespace.name if api_key.namespace else 'unknown'}', cannot access '{namespace_name}'",
+    )
 
 
 def parse_json_rpc_request(body: bytes) -> JSONRPCRequest:
@@ -227,7 +244,7 @@ async def handle_mcp_request(
 
     # Authenticate
     try:
-        account = await get_account_from_api_key(request, db)
+        account, api_key = await get_account_from_api_key(request, db)
     except HTTPException as e:
         return make_error_response(
             MCPErrorCodes.UNAUTHORIZED,
@@ -246,18 +263,30 @@ async def handle_mcp_request(
             request_id=rpc_request.id,
         ).model_dump()
 
+    # Check namespace-scoped key
+    try:
+        check_namespace_scope(api_key, namespace_name)
+    except HTTPException as e:
+        return make_error_response(
+            MCPErrorCodes.FORBIDDEN,
+            e.detail,
+            request_id=rpc_request.id,
+        ).model_dump()
+
     # Route to appropriate handler
     if endpoint_type == "create":
         handler = CreateMCPHandler(
             namespace=namespace_name,
             account=account,
             db=db,
+            api_key=api_key,
         )
     else:  # endpoint_type == "run"
         handler = RunMCPHandler(
             namespace=namespace_name,
             account=account,
             db=db,
+            api_key=api_key,
         )
 
     # Handle request

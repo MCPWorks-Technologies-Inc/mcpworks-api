@@ -3,7 +3,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+ALLOWED_SCOPES = {"read", "write", "execute"}
 
 
 class UserProfile(BaseModel):
@@ -62,6 +64,14 @@ class ApiKeySummary(BaseModel):
         ...,
         description="Permissions granted to this key",
     )
+    namespace_id: uuid.UUID | None = Field(
+        default=None,
+        description="Namespace this key is scoped to (null = all namespaces)",
+    )
+    namespace_name: str | None = Field(
+        default=None,
+        description="Name of the scoped namespace (null = all namespaces)",
+    )
     created_at: datetime = Field(
         ...,
         description="Key creation timestamp",
@@ -103,6 +113,14 @@ class ApiKeyCreated(BaseModel):
         ...,
         description="Permissions granted to this key",
     )
+    namespace_id: uuid.UUID | None = Field(
+        default=None,
+        description="Namespace this key is scoped to (null = all namespaces)",
+    )
+    namespace_name: str | None = Field(
+        default=None,
+        description="Name of the scoped namespace (null = all namespaces)",
+    )
     created_at: datetime = Field(
         ...,
         description="Key creation timestamp",
@@ -132,7 +150,11 @@ class CreateApiKeyRequest(BaseModel):
     )
     scopes: list[str] = Field(
         default=["read", "write", "execute"],
-        description="Permissions to grant to this key",
+        description="Permissions to grant to this key (allowed: read, write, execute)",
+    )
+    namespace_id: uuid.UUID | None = Field(
+        default=None,
+        description="Scope key to a specific namespace (null = all namespaces)",
     )
     expires_in_days: int | None = Field(
         default=None,
@@ -140,3 +162,15 @@ class CreateApiKeyRequest(BaseModel):
         ge=1,
         le=730,  # Max 2 years
     )
+
+    @field_validator("scopes")
+    @classmethod
+    def validate_scopes(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("At least one scope is required")
+        invalid = set(v) - ALLOWED_SCOPES
+        if invalid:
+            raise ValueError(
+                f"Invalid scopes: {', '.join(sorted(invalid))}. Allowed: {', '.join(sorted(ALLOWED_SCOPES))}"
+            )
+        return sorted(set(v))
