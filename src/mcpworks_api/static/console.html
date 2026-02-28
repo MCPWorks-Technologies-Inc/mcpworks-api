@@ -106,15 +106,34 @@ input::placeholder { color: var(--text-3); }
 .login-card .btn { margin-top: 4px; }
 .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; padding: 8px 12px; background: rgba(255, 107, 107, 0.08); border-radius: 6px; border: 1px solid rgba(255, 107, 107, 0.15); }
 
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 12px; }
-@media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+.stats-drawer { margin-bottom: 12px; }
+.stats-drawer-header { display: flex; align-items: center; padding: 0 16px; height: 44px; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); cursor: pointer; user-select: none; gap: 6px; transition: border-color 0.15s; }
+.stats-drawer-header:hover { border-color: var(--border-2); }
+.drawer-chevron { flex-shrink: 0; color: var(--text-3); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s; }
+.stats-drawer-header:hover .drawer-chevron { color: var(--text-2); }
+.stats-drawer.open .drawer-chevron { transform: rotate(90deg); }
+.drawer-label { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; transition: color 0.15s; margin-right: auto; }
+.stats-drawer-header:hover .drawer-label { color: var(--text-2); }
+.drawer-summary { display: flex; align-items: center; gap: 0; }
+.drawer-stat { display: flex; align-items: center; gap: 6px; padding: 0 14px; height: 44px; border-left: 1px solid var(--border-1); cursor: pointer; transition: background 0.15s; }
+.drawer-stat:hover { background: var(--bg-2); border-radius: 0 var(--radius) var(--radius) 0; }
+.drawer-stat:hover .drawer-stat-label { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.drawer-stat-num { font-family: var(--sans); font-size: 15px; font-weight: 700; color: var(--text-1); letter-spacing: -0.02em; }
+.drawer-stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; font-family: var(--sans); font-weight: 600; transition: color 0.15s; white-space: nowrap; }
+.drawer-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+.stats-drawer:not(.open) .drawer-body { grid-template-rows: 0fr; }
+.drawer-body-inner { overflow: hidden; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 14px 0 0; }
+@media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .drawer-stat:nth-child(n+3) { display: none; } }
 
 .stat-card { position: relative; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); padding: 18px 16px 14px; text-align: center; cursor: pointer; transition: all 0.2s ease; overflow: hidden; }
 .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0; transition: opacity 0.2s ease; }
 .stat-card:hover { border-color: var(--border-2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
 .stat-card:hover::before { opacity: 1; }
 .stat-num { font-size: 30px; font-weight: 700; color: #fff; font-family: var(--sans); letter-spacing: -0.02em; line-height: 1.2; }
-.stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--sans); font-weight: 600; margin-top: 2px; }
+.stat-label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--sans); font-weight: 600; margin-top: 2px; transition: color 0.15s; }
+.stat-card:hover .stat-label { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
 
 .usage-strip { background: var(--bg-1); border: 1px solid var(--border-1); border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-2); }
 .usage-track { flex: 1; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
@@ -249,23 +268,37 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
 
   <div id="dashboard" class="hidden">
 
-    <div id="stats-bar" class="stats-grid">
-      <div class="stat-card" onclick="loadNamespaces()">
-        <div class="stat-num" id="stat-namespaces">&mdash;</div>
-        <div class="stat-label">Namespaces</div>
+    <div id="stats-drawer" class="stats-drawer open">
+      <div class="stats-drawer-header" onclick="toggleStats(event)">
+        <svg class="drawer-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="drawer-label">Overview</span>
+        <div class="drawer-summary">
+          <div class="drawer-stat" onclick="event.stopPropagation(); loadNamespaces()"><span class="drawer-stat-num" id="ds-ns">&mdash;</span><span class="drawer-stat-label">NS</span></div>
+          <div class="drawer-stat" onclick="event.stopPropagation(); loadAllServices()"><span class="drawer-stat-num" id="ds-svc">&mdash;</span><span class="drawer-stat-label">Svc</span></div>
+          <div class="drawer-stat" onclick="event.stopPropagation(); loadAllFunctions()"><span class="drawer-stat-num" id="ds-fn">&mdash;</span><span class="drawer-stat-label">Fn</span></div>
+          <div class="drawer-stat" onclick="event.stopPropagation(); loadApiKeys()"><span class="drawer-stat-num" id="ds-keys">&mdash;</span><span class="drawer-stat-label">Keys</span></div>
+        </div>
       </div>
-      <div class="stat-card" onclick="loadAllServices()">
-        <div class="stat-num" id="stat-services">&mdash;</div>
-        <div class="stat-label">Services</div>
-      </div>
-      <div class="stat-card" onclick="loadAllFunctions()">
-        <div class="stat-num" id="stat-functions">&mdash;</div>
-        <div class="stat-label">Functions</div>
-      </div>
-      <div class="stat-card" onclick="loadApiKeys()">
-        <div class="stat-num" id="stat-keys">&mdash;</div>
-        <div class="stat-label">API Keys</div>
-      </div>
+      <div class="drawer-body"><div class="drawer-body-inner">
+        <div class="stats-grid">
+          <div class="stat-card" onclick="loadNamespaces()">
+            <div class="stat-num" id="stat-namespaces">&mdash;</div>
+            <div class="stat-label">Namespaces</div>
+          </div>
+          <div class="stat-card" onclick="loadAllServices()">
+            <div class="stat-num" id="stat-services">&mdash;</div>
+            <div class="stat-label">Services</div>
+          </div>
+          <div class="stat-card" onclick="loadAllFunctions()">
+            <div class="stat-num" id="stat-functions">&mdash;</div>
+            <div class="stat-label">Functions</div>
+          </div>
+          <div class="stat-card" onclick="loadApiKeys()">
+            <div class="stat-num" id="stat-keys">&mdash;</div>
+            <div class="stat-label">API Keys</div>
+          </div>
+        </div>
+      </div></div>
     </div>
 
     <div id="usage-strip" class="usage-strip hidden">
@@ -289,6 +322,25 @@ const API = window.location.origin;
 let cachedNamespaces = [];
 let pendingKeyBanner = null;
 
+function toggleStats(e) {
+  const d = document.getElementById('stats-drawer');
+  d.classList.toggle('open');
+  localStorage.setItem('mcpworks_stats_open', d.classList.contains('open') ? '1' : '0');
+}
+
+function restoreStatsState() {
+  const saved = localStorage.getItem('mcpworks_stats_open');
+  if (saved === '0') document.getElementById('stats-drawer').classList.remove('open');
+}
+
+function syncDrawerSummary() {
+  const ids = [['stat-namespaces','ds-ns'],['stat-services','ds-svc'],['stat-functions','ds-fn'],['stat-keys','ds-keys']];
+  for (const [src, dst] of ids) {
+    const el = document.getElementById(src);
+    if (el) document.getElementById(dst).textContent = el.textContent;
+  }
+}
+
 if (TOKEN && USER_EMAIL) showDashboard(USER_EMAIL);
 
 function showDashboard(email) {
@@ -296,6 +348,7 @@ function showDashboard(email) {
   document.getElementById('dashboard').classList.remove('hidden');
   document.getElementById('user-info').classList.remove('hidden');
   document.getElementById('user-email').textContent = email;
+  restoreStatsState();
   loadStats();
   loadNamespaces();
 }
@@ -421,6 +474,7 @@ async function loadStats() {
     }
     countUp(document.getElementById('stat-services'), totalServices);
     countUp(document.getElementById('stat-functions'), totalFunctions);
+    setTimeout(syncDrawerSummary, 600);
   } catch (e) { console.error('Stats failed', e); }
 }
 
