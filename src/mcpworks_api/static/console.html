@@ -213,8 +213,13 @@ pre.code-block { background: var(--bg-0); border: 1px solid var(--border-1); bor
 .diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
 .diff-panel { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; }
 .diff-panel-label { font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.diff-line { display: flex; }
+.diff-line-num { display: inline-block; width: 32px; flex-shrink: 0; text-align: right; padding-right: 10px; color: var(--text-3); opacity: 0.5; user-select: none; }
+.diff-line-text { flex: 1; min-width: 0; }
 .diff-line-add { background: rgba(74, 222, 128, 0.10); color: var(--green); }
+.diff-line-add .diff-line-num { color: var(--green); opacity: 0.5; }
 .diff-line-remove { background: rgba(248, 113, 113, 0.10); color: var(--danger); }
+.diff-line-remove .diff-line-num { color: var(--danger); opacity: 0.5; }
 .diff-line-same { color: var(--text-3); }
 .diff-section-title { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 16px; margin-bottom: 6px; }
 .diff-section-title:first-child { margin-top: 0; }
@@ -790,17 +795,19 @@ function computeLineDiff(oldText, newText) {
   const maxLen = Math.max(oldLines.length, newLines.length);
   const left = [];
   const right = [];
+  let leftNum = 0, rightNum = 0;
   for (let i = 0; i < maxLen; i++) {
     const ol = i < oldLines.length ? oldLines[i] : undefined;
     const nl = i < newLines.length ? newLines[i] : undefined;
     if (ol === nl) {
-      left.push({ type: 'same', text: ol });
-      right.push({ type: 'same', text: nl });
+      leftNum++; rightNum++;
+      left.push({ type: 'same', text: ol, lineNum: leftNum });
+      right.push({ type: 'same', text: nl, lineNum: rightNum });
     } else {
-      if (ol !== undefined) left.push({ type: 'remove', text: ol });
-      else left.push({ type: 'empty', text: '' });
-      if (nl !== undefined) right.push({ type: 'add', text: nl });
-      else right.push({ type: 'empty', text: '' });
+      if (ol !== undefined) { leftNum++; left.push({ type: 'remove', text: ol, lineNum: leftNum }); }
+      else left.push({ type: 'empty', text: '', lineNum: null });
+      if (nl !== undefined) { rightNum++; right.push({ type: 'add', text: nl, lineNum: rightNum }); }
+      else right.push({ type: 'empty', text: '', lineNum: null });
     }
   }
   return { left, right };
@@ -808,10 +815,11 @@ function computeLineDiff(oldText, newText) {
 
 function renderDiffLines(lines) {
   return lines.map(l => {
-    if (l.type === 'empty') return `<div class="diff-line-same">&nbsp;</div>`;
+    if (l.type === 'empty') return `<div class="diff-line diff-line-same"><span class="diff-line-num"></span><span class="diff-line-text">&nbsp;</span></div>`;
     const cls = l.type === 'add' ? 'diff-line-add' : l.type === 'remove' ? 'diff-line-remove' : 'diff-line-same';
     const prefix = l.type === 'add' ? '+ ' : l.type === 'remove' ? '- ' : '  ';
-    return `<div class="${cls}">${prefix}${esc(l.text)}</div>`;
+    const num = l.lineNum != null ? l.lineNum : '';
+    return `<div class="diff-line ${cls}"><span class="diff-line-num">${num}</span><span class="diff-line-text">${prefix}${esc(l.text)}</span></div>`;
   }).join('');
 }
 
