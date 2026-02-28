@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from mcpworks_api.dependencies import get_current_user_id
+from mcpworks_api.dependencies import get_current_user_id, require_scope
 from mcpworks_api.models import Account
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import (
@@ -150,6 +150,7 @@ class FunctionVersionDetailResponse(BaseModel):
     requirements: list[str] | None
     required_env: list[str] | None
     optional_env: list[str] | None
+    created_by: str | None = None
     is_active: bool
     created_at: str
 
@@ -182,7 +183,12 @@ async def get_current_account(
 
 
 # Namespace Endpoints
-@router.post("", response_model=NamespaceResponse, status_code=201)
+@router.post(
+    "",
+    response_model=NamespaceResponse,
+    status_code=201,
+    dependencies=[Depends(require_scope("write"))],
+)
 async def create_namespace(
     request: CreateNamespaceRequest,
     db: AsyncSession = Depends(get_db),
@@ -215,7 +221,7 @@ async def create_namespace(
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.get("", response_model=NamespaceListResponse)
+@router.get("", response_model=NamespaceListResponse, dependencies=[Depends(require_scope("read"))])
 async def list_namespaces(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
@@ -251,7 +257,11 @@ async def list_namespaces(
     )
 
 
-@router.get("/{namespace_name}", response_model=NamespaceResponse)
+@router.get(
+    "/{namespace_name}",
+    response_model=NamespaceResponse,
+    dependencies=[Depends(require_scope("read"))],
+)
 async def get_namespace(
     namespace_name: str,
     db: AsyncSession = Depends(get_db),
@@ -279,7 +289,11 @@ async def get_namespace(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.patch("/{namespace_name}", response_model=NamespaceResponse)
+@router.patch(
+    "/{namespace_name}",
+    response_model=NamespaceResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
 async def update_namespace(
     namespace_name: str,
     request: UpdateNamespaceRequest,
@@ -316,7 +330,7 @@ async def update_namespace(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.delete("/{namespace_name}", status_code=204)
+@router.delete("/{namespace_name}", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def delete_namespace(
     namespace_name: str,
     db: AsyncSession = Depends(get_db),
@@ -336,7 +350,12 @@ async def delete_namespace(
 
 
 # Service Endpoints
-@router.post("/{namespace_name}/services", response_model=ServiceResponse, status_code=201)
+@router.post(
+    "/{namespace_name}/services",
+    response_model=ServiceResponse,
+    status_code=201,
+    dependencies=[Depends(require_scope("write"))],
+)
 async def create_service(
     namespace_name: str,
     request: CreateServiceRequest,
@@ -371,7 +390,11 @@ async def create_service(
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.get("/{namespace_name}/services", response_model=ServiceListResponse)
+@router.get(
+    "/{namespace_name}/services",
+    response_model=ServiceListResponse,
+    dependencies=[Depends(require_scope("read"))],
+)
 async def list_services(
     namespace_name: str,
     db: AsyncSession = Depends(get_db),
@@ -404,7 +427,11 @@ async def list_services(
         raise HTTPException(status_code=404, detail=f"Namespace '{namespace_name}' not found")
 
 
-@router.delete("/{namespace_name}/services/{service_name}", status_code=204)
+@router.delete(
+    "/{namespace_name}/services/{service_name}",
+    status_code=204,
+    dependencies=[Depends(require_scope("write"))],
+)
 async def delete_service(
     namespace_name: str,
     service_name: str,
@@ -429,6 +456,7 @@ async def delete_service(
     "/{namespace_name}/services/{service_name}/functions",
     response_model=FunctionResponse,
     status_code=201,
+    dependencies=[Depends(require_scope("write"))],
 )
 async def create_function(
     namespace_name: str,
@@ -478,6 +506,7 @@ async def create_function(
 @router.get(
     "/{namespace_name}/services/{service_name}/functions",
     response_model=FunctionListResponse,
+    dependencies=[Depends(require_scope("read"))],
 )
 async def list_functions(
     namespace_name: str,
@@ -529,6 +558,7 @@ async def list_functions(
 @router.get(
     "/{namespace_name}/services/{service_name}/functions/{function_name}",
     response_model=FunctionDetailResponse,
+    dependencies=[Depends(require_scope("read"))],
 )
 async def get_function(
     namespace_name: str,
@@ -567,6 +597,7 @@ async def get_function(
 @router.get(
     "/{namespace_name}/services/{service_name}/functions/{function_name}/versions/{version_num}",
     response_model=FunctionVersionDetailResponse,
+    dependencies=[Depends(require_scope("read"))],
 )
 async def get_function_version(
     namespace_name: str,
@@ -595,6 +626,7 @@ async def get_function_version(
 @router.delete(
     "/{namespace_name}/services/{service_name}/functions/{function_name}",
     status_code=204,
+    dependencies=[Depends(require_scope("write"))],
 )
 async def delete_function(
     namespace_name: str,
