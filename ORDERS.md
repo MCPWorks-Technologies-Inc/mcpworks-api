@@ -462,7 +462,7 @@ Do NOT work on any of these until the review date and board approval:
 - Advanced analytics dashboard
 - SOC 2 compliance features
 - Multi-account support
-- IP whitelisting enforcement
+- IP allowlisting enforcement
 - Webhook event delivery system
 - OAuth 2.1 for dashboard
 - TypeScript/Node.js sandbox support

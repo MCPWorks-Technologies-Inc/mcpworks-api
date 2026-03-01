@@ -710,7 +710,7 @@ async function loadNamespace(nsName) {
         </div>
         ${ns.description ? `<p class="text-gray-400 mb-4">${esc(ns.description)}</p>` : ''}
         <p class="text-gray-500 text-sm mb-4">Total calls: <span class="text-gray-300 font-medium">${ns.call_count ?? 0}</span></p>
-        ${ns.network_whitelist && ns.network_whitelist.length ? `<p class="text-gray-500 text-sm mb-4">Whitelist: ${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</p>` : ''}
+        ${ns.network_allowlist && ns.network_allowlist.length ? `<p class="text-gray-500 text-sm mb-4">Allowlist: ${ns.network_allowlist.map(ip => esc(ip)).join(', ')}</p>` : ''}
         <h3 class="text-gray-300 font-medium mb-2">Services</h3>
         ${servicesHtml}
 

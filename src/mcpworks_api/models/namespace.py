@@ -32,7 +32,7 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     Namespaces provide:
     - Unique DNS subdomain ({namespace}.create.mcpworks.io, {namespace}.run.mcpworks.io)
     - Resource isolation between accounts
-    - Network security controls (IP whitelisting)
+    - Network security controls (IP allowlisting)
     - Organizational boundary for services and functions
 
     Relationships:
@@ -63,17 +63,17 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     )
 
     # Network Security
-    network_whitelist: Mapped[list[str] | None] = mapped_column(
+    network_allowlist: Mapped[list[str] | None] = mapped_column(
         ARRAY(String),
         nullable=True,
     )
 
-    whitelist_updated_at: Mapped[datetime | None] = mapped_column(
+    allowlist_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    whitelist_changes_today: Mapped[int] = mapped_column(
+    allowlist_changes_today: Mapped[int] = mapped_column(
         Integer,
         default=0,
         nullable=False,
@@ -117,8 +117,8 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
             name="namespace_name_format",
         ),
         CheckConstraint(
-            "whitelist_changes_today >= 0",
-            name="whitelist_changes_positive",
+            "allowlist_changes_today >= 0",
+            name="allowlist_changes_positive",
         ),
         Index("ix_namespaces_account_id", "account_id"),
         Index("ix_namespaces_name", "name"),
@@ -147,9 +147,9 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
 
         return value.lower()
 
-    def can_update_whitelist(self) -> bool:
-        """Check if whitelist can be updated (rate limit check)."""
-        return self.whitelist_changes_today < 5
+    def can_update_allowlist(self) -> bool:
+        """Check if allowlist can be updated (rate limit check)."""
+        return self.allowlist_changes_today < 5
 
     @property
     def create_endpoint(self) -> str:

@@ -111,17 +111,17 @@ class TestNamespaceServiceManagerCreate:
         assert namespace.description == "A namespace with a description"
 
     @pytest.mark.asyncio
-    async def test_create_namespace_with_network_whitelist(self, db, test_account):
-        """Test creating a namespace with network whitelist."""
+    async def test_create_namespace_with_network_allowlist(self, db, test_account):
+        """Test creating a namespace with network allowlist."""
         manager = NamespaceServiceManager(db)
 
         namespace = await manager.create(
             account_id=test_account.id,
-            name="whitelisted-ns",
-            network_whitelist=["192.168.1.0/24", "10.0.0.1"],
+            name="allowlisted-ns",
+            network_allowlist=["192.168.1.0/24", "10.0.0.1"],
         )
 
-        assert namespace.network_whitelist == ["192.168.1.0/24", "10.0.0.1"]
+        assert namespace.network_allowlist == ["192.168.1.0/24", "10.0.0.1"]
 
     @pytest.mark.asyncio
     async def test_create_namespace_name_normalized(self, db, test_account):

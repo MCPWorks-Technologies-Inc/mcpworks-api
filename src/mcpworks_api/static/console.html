@@ -559,7 +559,7 @@ async function loadNamespace(nsName) {
       <div class="detail-header"><div class="detail-title">${esc(nsName)}</div><span class="endpoint-url">${esc(ns.create_endpoint)}</span></div>
       ${ns.description ? `<div class="detail-desc">${esc(ns.description)}</div>` : ''}
       <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
-      ${ns.network_whitelist?.length ? `<div class="detail-meta">Whitelist: <span>${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
+      ${ns.network_allowlist?.length ? `<div class="detail-meta">Allowlist: <span>${ns.network_allowlist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
       <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }

@@ -4,7 +4,7 @@ Executes LLM-authored Python code in a secure, isolated environment.
 
 In production:
 - Uses nsjail with Linux namespaces, cgroups v2, seccomp-bpf
-- Egress proxy for network whitelist enforcement
+- Egress proxy for network allowlist enforcement
 - Per-tier resource limits
 
 In development (SANDBOX_DEV_MODE=true):

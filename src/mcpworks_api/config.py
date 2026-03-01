@@ -64,21 +64,6 @@ class Settings(BaseSettings):
     stripe_price_founder_pro: str = Field(default="price_founder_pro_placeholder")  # $59/mo
     stripe_price_enterprise: str = Field(default="price_enterprise_placeholder")  # $129+/mo
 
-    # Backend Services
-    math_service_url: str = Field(
-        default="http://localhost:8001",
-        description="URL for mcpworks-math service",
-    )
-    agent_service_url: str = Field(
-        default="http://localhost:8002",
-        description="URL for mcpworks-agent service",
-    )
-    agent_callback_secret: str = Field(
-        default="",
-        description="Shared secret for agent callback authentication (required in production)",
-    )
-    service_timeout_seconds: int = Field(default=30, ge=5, le=300)
-
     # Observability
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     prometheus_enabled: bool = True

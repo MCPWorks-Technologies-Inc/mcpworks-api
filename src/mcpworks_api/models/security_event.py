@@ -40,7 +40,7 @@ class SecurityEvent(Base, UUIDMixin):
     - auth.login_failed
     - auth.api_key_created
     - auth.api_key_revoked
-    - namespace.whitelist_updated
+    - namespace.allowlist_updated
     - function.execution_blocked
     - billing.quota_exceeded
     - sandbox.violation

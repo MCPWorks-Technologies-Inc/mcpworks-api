@@ -60,7 +60,7 @@ Common patterns extracted into reusable mixins:
 Function versions are immutable once created. Updates create new versions.
 
 ### 4. Security-First Design
-- Network whitelisting with rate limits
+- Network allowlisting with rate limits
 - Security event logging for all sensitive operations
 - Encrypted sensitive fields (webhook secrets)
 - IP hashing for privacy
@@ -171,7 +171,7 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     Namespaces provide:
     - Unique DNS subdomain ({namespace}.create.mcpworks.io, {namespace}.run.mcpworks.io)
     - Resource isolation between accounts
-    - Network security controls (IP whitelisting)
+    - Network security controls (IP allowlisting)
     - Organizational boundary for services and functions
 
     Relationships:
@@ -205,23 +205,23 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     )
 
     # Network Security
-    network_whitelist: Mapped[Optional[List[str]]] = mapped_column(
+    network_allowlist: Mapped[Optional[List[str]]] = mapped_column(
         ARRAY(String),
         nullable=True,
         doc="List of allowed IP addresses/CIDR ranges"
     )
 
-    whitelist_updated_at: Mapped[Optional[datetime]] = mapped_column(
+    allowlist_updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        doc="Last time whitelist was modified"
+        doc="Last time allowlist was modified"
     )
 
-    whitelist_changes_today: Mapped[int] = mapped_column(
+    allowlist_changes_today: Mapped[int] = mapped_column(
         Integer,
         default=0,
         nullable=False,
-        doc="Number of whitelist changes in last 24h (rate limit)"
+        doc="Number of allowlist changes in last 24h (rate limit)"
     )
 
     # Relationships
@@ -250,8 +250,8 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
             name="namespace_name_format"
         ),
         CheckConstraint(
-            "whitelist_changes_today >= 0",
-            name="whitelist_changes_positive"
+            "allowlist_changes_today >= 0",
+            name="allowlist_changes_positive"
         ),
         Index("ix_namespaces_account_id", "account_id"),
         Index("ix_namespaces_name", "name"),
@@ -282,10 +282,10 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
 
         return value.lower()
 
-    def can_update_whitelist(self) -> bool:
-        """Check if whitelist can be updated (rate limit check)."""
+    def can_update_allowlist(self) -> bool:
+        """Check if allowlist can be updated (rate limit check)."""
         # Allow 5 changes per 24 hours
-        return self.whitelist_changes_today < 5
+        return self.allowlist_changes_today < 5
 
     def __repr__(self) -> str:
         return f"<Namespace(id={self.id}, name={self.name}, account_id={self.account_id})>"
@@ -739,7 +739,7 @@ class SecurityEvent(Base, UUIDMixin):
     - auth.login_failed
     - auth.api_key_created
     - auth.api_key_revoked
-    - namespace.whitelist_updated
+    - namespace.allowlist_updated
     - function.execution_blocked
     - admin.user_suspended
     - etc.
@@ -1177,9 +1177,9 @@ class NamespaceBase(BaseModel):
 class NamespaceCreate(NamespaceBase):
     """Schema for creating a namespace."""
 
-    network_whitelist: Optional[List[str]] = Field(
+    network_allowlist: Optional[List[str]] = Field(
         None,
-        description="Optional IP whitelist (CIDR format)",
+        description="Optional IP allowlist (CIDR format)",
         examples=[["192.168.1.0/24", "10.0.0.1"]]
     )
 
@@ -1188,7 +1188,7 @@ class NamespaceUpdate(BaseModel):
     """Schema for updating a namespace."""
 
     description: Optional[str] = Field(None, max_length=1000)
-    network_whitelist: Optional[List[str]] = None
+    network_allowlist: Optional[List[str]] = None
 
 
 class NamespaceResponse(NamespaceBase):
@@ -1198,9 +1198,9 @@ class NamespaceResponse(NamespaceBase):
 
     id: str
     account_id: str
-    network_whitelist: Optional[List[str]] = None
-    whitelist_updated_at: Optional[datetime] = None
-    whitelist_changes_today: int
+    network_allowlist: Optional[List[str]] = None
+    allowlist_updated_at: Optional[datetime] = None
+    allowlist_changes_today: int
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -1664,9 +1664,9 @@ def upgrade() -> None:
         sa.Column('account_id', sa.String(length=36), nullable=False),
         sa.Column('name', sa.String(length=63), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('network_whitelist', postgresql.ARRAY(sa.String()), nullable=True),
-        sa.Column('whitelist_updated_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('whitelist_changes_today', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('network_allowlist', postgresql.ARRAY(sa.String()), nullable=True),
+        sa.Column('allowlist_updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('allowlist_changes_today', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -1677,8 +1677,8 @@ def upgrade() -> None:
             name='namespace_name_format'
         ),
         sa.CheckConstraint(
-            'whitelist_changes_today >= 0',
-            name='whitelist_changes_positive'
+            'allowlist_changes_today >= 0',
+            name='allowlist_changes_positive'
         )
     )
     op.create_index('ix_namespaces_account_id', 'namespaces', ['account_id'])
@@ -2008,34 +2008,34 @@ async def get_account_functions(
 
 ## Security Considerations
 
-### 1. Network Whitelisting
+### 1. Network Allowlisting
 
 **Rate Limiting:**
-- Max 5 whitelist changes per 24 hours per namespace
-- `whitelist_changes_today` counter resets daily via background task
-- Prevents rapid whitelist manipulation attacks
+- Max 5 allowlist changes per 24 hours per namespace
+- `allowlist_changes_today` counter resets daily via background task
+- Prevents rapid allowlist manipulation attacks
 
 **Implementation:**
 
 ```python
-async def update_namespace_whitelist(
+async def update_namespace_allowlist(
     session: AsyncSession,
     namespace: Namespace,
-    new_whitelist: List[str]
+    new_allowlist: List[str]
 ) -> None:
-    if not namespace.can_update_whitelist():
-        raise TooManyWhitelistChanges(
-            "Maximum 5 whitelist changes per 24 hours"
+    if not namespace.can_update_allowlist():
+        raise TooManyAllowlistChanges(
+            "Maximum 5 allowlist changes per 24 hours"
         )
 
-    namespace.network_whitelist = new_whitelist
-    namespace.whitelist_updated_at = datetime.utcnow()
-    namespace.whitelist_changes_today += 1
+    namespace.network_allowlist = new_allowlist
+    namespace.allowlist_updated_at = datetime.utcnow()
+    namespace.allowlist_changes_today += 1
 
     # Log security event
     await log_security_event(
         session=session,
-        event_type="namespace.whitelist_updated",
+        event_type="namespace.allowlist_updated",
         severity="info",
         actor_id=namespace.account_id,
         details={"namespace_id": namespace.id}
@@ -2091,7 +2091,7 @@ async def log_security_event(
 
     Event types:
     - auth.* (login_failed, api_key_created, etc.)
-    - namespace.* (created, whitelist_updated, etc.)
+    - namespace.* (created, allowlist_updated, etc.)
     - function.* (created, execution_blocked, etc.)
     - admin.* (user_suspended, etc.)
     """

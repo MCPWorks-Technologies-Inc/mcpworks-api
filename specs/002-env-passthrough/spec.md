@@ -394,7 +394,7 @@ Function authors need their code to call external APIs (OpenAI, Stripe, database
 
 **Threat:** Malicious function exfiltrates env vars to external endpoint
 **Impact:** Confidentiality (user's own secrets)
-**Mitigation:** Existing sandbox network restrictions (free tier: zero outbound; founder tier: egress proxy whitelist). The user's own function, with the user's own secrets — the risk is accepted and documented.
+**Mitigation:** Existing sandbox network restrictions (free tier: zero outbound; founder tier: egress proxy allowlist). The user's own function, with the user's own secrets — the risk is accepted and documented.
 **Residual Risk:** Medium (by design — user trusts their own functions)
 
 **Threat:** Header intercepted in transit

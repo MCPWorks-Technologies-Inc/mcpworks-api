@@ -34,6 +34,50 @@ The question of how to safely log MCP server requests (given PII, credentials, a
 
 ---
 
+### ~~PROBLEM-007: Legacy ServiceRouter and math/agent endpoints~~
+
+**Status:** RESOLVED (2026-03-01)
+
+Deleted all legacy gateway-era dead code:
+- `services/router.py`, `services/execution.py`, `api/v1/services.py`, `schemas/service.py`, `scripts/seed_data.py`
+- `tests/unit/test_service_router.py`, `tests/unit/test_execution_service.py`, `tests/unit/test_router_service.py`, `tests/integration/test_agent_endpoints.py`
+- Removed `services_router` import/include from `api/v1/__init__.py`
+- Removed legacy service schema exports from `schemas/__init__.py`
+- Removed legacy config fields (`math_service_url`, `agent_service_url`, `agent_callback_secret`, `service_timeout_seconds`) from `config.py`
+- Removed dead `verify_agent_callback_secret()` dependency from `dependencies.py`
+
+---
+
+### ~~PROBLEM-008: Misleading commit message in git history~~
+
+**Status:** RESOLVED (2026-03-01, documented — cannot rewrite shared history)
+
+Commit `7fc38ff` message says "switch seccomp to denylist" but the implementation actually added an **allowlist** (seccomp default-deny with explicit syscall permits). This was later corrected in commit `7c7b892`. No code issue — the seccomp policy is correct — but the original commit message is misleading if read without context.
+
+---
+
+### ~~PROBLEM-009: "whitelist" → "allowlist" terminology migration~~
+
+**Status:** RESOLVED (2026-03-01)
+
+Full rename completed across all source, templates, tests, and documentation. Only remaining "whitelist" references are in alembic migration history (correct — migrations are immutable).
+
+**Changes applied:**
+- **Models:** `network_whitelist` → `network_allowlist`, `whitelist_updated_at` → `allowlist_updated_at`, `whitelist_changes_today` → `allowlist_changes_today`, `can_update_whitelist()` → `can_update_allowlist()`, constraint `whitelist_changes_positive` → `allowlist_changes_positive`
+- **Schemas/API:** `network_whitelist` field → `network_allowlist` in all request/response models
+- **Services:** Parameter names, error messages, method calls updated
+- **MCP protocol:** `WHITELIST_RATE_LIMITED` → `ALLOWLIST_RATE_LIMITED`
+- **HTML templates:** console.html, admin.html labels and field references
+- **Tests:** test names, fixture names, assertions
+- **Docs:** ~110 instances across 7 doc files + "agentic service(s)" terminology cleanup
+- **DB migration:** `alembic/versions/20260301_000001_rename_whitelist_to_allowlist.py` (pre-existing)
+
+**Note — legacy gateway docs archival not yet done:**
+- Move `specs/001-api-gateway-mvp/` → `specs/archive/001-api-gateway-mvp/`
+- Move `docs/implementation/gateway-architecture-specification.md` → `docs/archive/gateway-architecture-specification.md`
+
+---
+
 ## Resolved Issues
 
 ### ~~PROBLEM-005: MCP Run Server Tools Not Discoverable / Returning Null~~

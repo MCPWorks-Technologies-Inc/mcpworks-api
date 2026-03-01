@@ -41,21 +41,6 @@ from mcpworks_api.schemas.security_event import (
     SecurityEventList,
     SecurityEventResponse,
 )
-from mcpworks_api.schemas.service import (
-    AgentCallbackRequest,
-    AgentCallbackResponse,
-    AgentExecuteRequest,
-    AgentExecuteResponse,
-    ExecutionInfo,
-    ExecutionList,
-    MathHelpRequest,
-    MathHelpResponse,
-    MathVerifyRequest,
-    MathVerifyResponse,
-    ServiceCatalog,
-    ServiceInfo,
-    ServiceProxyResponse,
-)
 from mcpworks_api.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutSessionResponse,
@@ -101,21 +86,6 @@ __all__ = [
     "ApiKeyCreated",
     "ApiKeyList",
     "CreateApiKeyRequest",
-    # Services
-    "ServiceInfo",
-    "ServiceCatalog",
-    "MathVerifyRequest",
-    "MathVerifyResponse",
-    "MathHelpRequest",
-    "MathHelpResponse",
-    "ServiceProxyResponse",
-    # Agent Execution
-    "AgentExecuteRequest",
-    "AgentExecuteResponse",
-    "AgentCallbackRequest",
-    "AgentCallbackResponse",
-    "ExecutionInfo",
-    "ExecutionList",
     # Subscriptions
     "CreateSubscriptionRequest",
     "CheckoutSessionResponse",

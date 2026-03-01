@@ -177,7 +177,7 @@ class Namespace(Base):
     account_id: Mapped[uuid.UUID]  # FK to accounts
     name: Mapped[str]              # Unique subdomain
     display_name: Mapped[str]
-    network_whitelist: Mapped[list[str]]  # JSONB
+    network_allowlist: Mapped[list[str]]  # JSONB
 ```
 
 ### 2. Function + FunctionVersion Models (NEW)
