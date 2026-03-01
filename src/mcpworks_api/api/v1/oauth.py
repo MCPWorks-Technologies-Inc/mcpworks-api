@@ -1,7 +1,9 @@
 """OAuth endpoints - social login via Google and GitHub."""
 
+from urllib.parse import urlencode
+
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +35,7 @@ def _get_client_ip(request: Request) -> str:
 async def oauth_login(
     provider: str,
     request: Request,
+    redirect_uri: str | None = Query(default=None),
     _: None = Depends(check_auth_rate_limit),
 ) -> RedirectResponse:
     """Initiate OAuth login flow — redirects to provider consent screen."""
@@ -55,9 +58,30 @@ async def oauth_login(
 
     settings = get_settings()
     base_url = settings.jwt_issuer
-    redirect_uri = f"{base_url}/v1/auth/oauth/{provider}/callback"
+    callback_redirect_uri = f"{base_url}/v1/auth/oauth/{provider}/callback"
 
-    return await client.authorize_redirect(request, redirect_uri)
+    response = await client.authorize_redirect(request, callback_redirect_uri)
+
+    if redirect_uri:
+        if not redirect_uri.startswith("/") or redirect_uri.startswith("//"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "INVALID_REDIRECT",
+                    "message": "redirect_uri must be a relative path",
+                },
+            )
+        response.set_cookie(
+            "oauth_redirect_uri",
+            redirect_uri,
+            max_age=600,
+            httponly=True,
+            samesite="lax",
+            secure=True,
+            path="/",
+        )
+
+    return response
 
 
 @router.get("/{provider}/callback")
@@ -66,7 +90,7 @@ async def oauth_callback(
     request: Request,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(check_auth_rate_limit),
-) -> dict:
+) -> dict | RedirectResponse:
     """Handle OAuth provider callback — exchange code for JWT."""
     if provider not in VALID_PROVIDERS:
         raise HTTPException(
@@ -121,6 +145,23 @@ async def oauth_callback(
         user_agent=user_agent,
     )
     await db.commit()
+
+    cookie_redirect_uri = request.cookies.get("oauth_redirect_uri")
+    if cookie_redirect_uri:
+        fragment = urlencode(
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": expires_in,
+            }
+        )
+        response = RedirectResponse(
+            url=f"{cookie_redirect_uri}#{fragment}",
+            status_code=302,
+        )
+        response.delete_cookie("oauth_redirect_uri", path="/")
+        return response
 
     return {
         "access_token": access_token,
