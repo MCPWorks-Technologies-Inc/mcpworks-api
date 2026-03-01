@@ -52,21 +52,44 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          # Sync source code (excludes sensitive/generated files)
+          # Allowlist-only sync: only files needed for Docker build and runtime.
+          # Everything else stays off the server. --delete removes stale files.
+          #
+          # What the server needs:
+          #   src/              Application code (COPY in Dockerfile)
+          #   deploy/           nsjail scripts, config, rootfs (COPY in Dockerfile)
+          #   alembic/          Database migrations (COPY in Dockerfile)
+          #   alembic.ini       Migration config (COPY in Dockerfile)
+          #   scripts/          start.sh entrypoint (COPY in Dockerfile)
+          #   docs/guide.md     User-facing docs served by API (COPY in Dockerfile)
+          #   docs/llm-reference.md  LLM reference served by API (COPY in Dockerfile)
+          #   pyproject.toml    Python deps (COPY in Dockerfile)
+          #   README.md         Required by pyproject.toml metadata
+          #   Dockerfile        Docker build
+          #   docker-compose.prod.yml  Container orchestration
+          #   Caddyfile         Reverse proxy config
+          #
+          # NOT synced (and removed if present):
+          #   CLAUDE.md, SPEC.md, .secrets.baseline  (internal docs / security risk)
+          #   tests/, docs/implementation/, infra/    (dev-only)
+          #   .github/, .pre-commit-config.yaml       (CI/dev tooling)
           rsync -avz --delete \
-            --exclude='.git' \
-            --exclude='.venv' \
-            --exclude='venv' \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
-            --exclude='.env' \
-            --exclude='.coverage' \
-            --exclude='htmlcov' \
-            --exclude='.pytest_cache' \
-            --exclude='.mypy_cache' \
-            --exclude='keys' \
-            --exclude='logs' \
-            --exclude='data' \
+            --include='src/***' \
+            --include='deploy/***' \
+            --include='alembic/***' \
+            --include='alembic.ini' \
+            --include='scripts/***' \
+            --include='docs/' \
+            --include='docs/guide.md' \
+            --include='docs/llm-reference.md' \
+            --include='pyproject.toml' \
+            --include='README.md' \
+            --include='Dockerfile' \
+            --include='docker-compose.prod.yml' \
+            --include='Caddyfile' \
+            --exclude='*' \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ ${DEPLOY_USER}@${DEPLOY_HOST}:/opt/mcpworks/
 
