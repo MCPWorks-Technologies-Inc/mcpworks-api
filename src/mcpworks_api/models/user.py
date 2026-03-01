@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
     from mcpworks_api.models.execution import Execution
+    from mcpworks_api.models.namespace_share import NamespaceShare
     from mcpworks_api.models.oauth_account import OAuthAccount
     from mcpworks_api.models.subscription import Subscription
 
@@ -129,6 +130,12 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
         "OAuthAccount",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    namespace_shares: Mapped[list["NamespaceShare"]] = relationship(
+        "NamespaceShare",
+        foreign_keys="[NamespaceShare.user_id]",
         back_populates="user",
         cascade="all, delete-orphan",
     )

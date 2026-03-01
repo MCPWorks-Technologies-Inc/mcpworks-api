@@ -232,6 +232,7 @@ async def list_namespaces(
     service = NamespaceServiceManager(db)
     namespaces, total = await service.list(
         account_id=account.id,
+        user_id=account.user_id,
         page=page,
         page_size=page_size,
     )
@@ -271,7 +272,12 @@ async def get_namespace(
     service = NamespaceServiceManager(db)
 
     try:
-        namespace = await service.get_by_name(namespace_name, account.id)
+        namespace = await service.get_by_name(
+            namespace_name,
+            account.id,
+            user_id=account.user_id,
+            required_permission="read",
+        )
         return NamespaceResponse(
             id=str(namespace.id),
             name=namespace.name,
@@ -405,7 +411,12 @@ async def list_services(
     svc_service = NamespaceServiceService(db)
 
     try:
-        namespace = await ns_service.get_by_name(namespace_name, account.id)
+        namespace = await ns_service.get_by_name(
+            namespace_name,
+            account.id,
+            user_id=account.user_id,
+            required_permission="read",
+        )
         services = await svc_service.list(namespace.id)
 
         return ServiceListResponse(
@@ -523,7 +534,12 @@ async def list_functions(
     func_service = FunctionService(db)
 
     try:
-        namespace = await ns_service.get_by_name(namespace_name, account.id)
+        namespace = await ns_service.get_by_name(
+            namespace_name,
+            account.id,
+            user_id=account.user_id,
+            required_permission="read",
+        )
         service = await svc_service.get_by_name(namespace.id, service_name)
 
         tags = [tag] if tag else None
@@ -573,7 +589,12 @@ async def get_function(
     func_service = FunctionService(db)
 
     try:
-        namespace = await ns_service.get_by_name(namespace_name, account.id)
+        namespace = await ns_service.get_by_name(
+            namespace_name,
+            account.id,
+            user_id=account.user_id,
+            required_permission="read",
+        )
         service = await svc_service.get_by_name(namespace.id, service_name)
         function = await func_service.get_by_name(service.id, function_name)
         details = await func_service.describe(function.id)
@@ -613,7 +634,12 @@ async def get_function_version(
     func_service = FunctionService(db)
 
     try:
-        namespace = await ns_service.get_by_name(namespace_name, account.id)
+        namespace = await ns_service.get_by_name(
+            namespace_name,
+            account.id,
+            user_id=account.user_id,
+            required_permission="read",
+        )
         service = await svc_service.get_by_name(namespace.id, service_name)
         function = await func_service.get_by_name(service.id, function_name)
         detail = await func_service.get_version_detail(function.id, version_num)

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Namespace Invitation</h1>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Hi {{ name }},
+</p>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+{{ owner_name }} has invited you to access the <strong>{{ namespace_name }}</strong> namespace on MCPWorks.
+</p>
+<p style="margin:0 0 24px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Log in to your MCPWorks account to accept or decline this invitation.
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0">
+<tr>
+<td style="background-color:#18181b;border-radius:6px;padding:12px 24px;">
+<a href="https://api.mcpworks.io/onboarding" style="color:#ffffff;font-size:15px;font-weight:500;text-decoration:none;">View Invitation</a>
+</td>
+</tr>
+</table>
+<p style="margin:24px 0 0 0;color:#71717a;font-size:13px;">
+If you did not expect this invitation, you can safely ignore this email.
+</p>
+{% endblock %}

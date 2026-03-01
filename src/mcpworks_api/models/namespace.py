@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
     from mcpworks_api.models.namespace_service import NamespaceService
+    from mcpworks_api.models.namespace_share import NamespaceShare
 
 
 class Namespace(Base, UUIDMixin, TimestampMixin):
@@ -100,6 +101,12 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
 
     api_keys: Mapped[list["APIKey"]] = relationship(
         "APIKey",
+        back_populates="namespace",
+        cascade="all, delete-orphan",
+    )
+
+    shares: Mapped[list["NamespaceShare"]] = relationship(
+        "NamespaceShare",
         back_populates="namespace",
         cascade="all, delete-orphan",
     )
