@@ -55,12 +55,21 @@ class OAuthService:
                 select(User).where(User.id == existing_oauth.user_id)
             )
             user = user_result.scalar_one()
+            if user.status == "pending_approval":
+                user.status = "active"
+                user.email_verified = True
+                await self._log_oauth_event(
+                    user.id, "oauth_auto_approved", provider, ip_address, user_agent
+                )
             await self._log_oauth_event(user.id, "oauth_login", provider, ip_address, user_agent)
         else:
             user_result = await self.db.execute(select(User).where(User.email == email.lower()))
             user = user_result.scalar_one_or_none()
 
             if user:
+                if user.status == "pending_approval":
+                    user.status = "active"
+                    user.email_verified = True
                 oauth_account = OAuthAccount(
                     user_id=user.id,
                     provider=provider,
@@ -100,6 +109,11 @@ class OAuthService:
                 await self._log_oauth_event(
                     user.id, "oauth_registered", provider, ip_address, user_agent
                 )
+
+        if user.status not in ("active",) and not is_new_user:
+            from mcpworks_api.services.auth import InvalidCredentialsError
+
+            raise InvalidCredentialsError(message=f"Account is {user.status}")
 
         access_token = create_access_token(
             user_id=str(user.id),
