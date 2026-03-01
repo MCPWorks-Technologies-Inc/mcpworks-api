@@ -3,7 +3,7 @@
 Aligns database schema with inclusive terminology policy.
 
 Revision ID: 20260301_000001
-Revises: 20260215_000001
+Revises: 20260228_000002
 Create Date: 2026-03-01
 """
 
@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260301_000001"
-down_revision: str | None = "20260215_000001"
+down_revision: str | None = "20260228_000002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
