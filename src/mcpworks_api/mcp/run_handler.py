@@ -64,13 +64,24 @@ class RunMCPHandler:
         self._namespace: Namespace | None = None
 
     async def _get_namespace(self) -> Namespace:
-        """Get and cache the current namespace."""
+        """Get and cache the current namespace (with execute share access)."""
         if self._namespace is None:
             self._namespace = await self.namespace_service.get_by_name(
                 self.namespace_name,
                 self.account.id,
+                user_id=self.account.user_id,
+                required_permission="execute",
             )
         return self._namespace
+
+    async def _get_namespace_for_read(self) -> Namespace:
+        """Get namespace with read share access (for tools/list)."""
+        return await self.namespace_service.get_by_name(
+            self.namespace_name,
+            self.account.id,
+            user_id=self.account.user_id,
+            required_permission="read",
+        )
 
     async def handle(self, request: JSONRPCRequest) -> JSONRPCResponse:
         """Handle MCP request."""
@@ -109,7 +120,7 @@ class RunMCPHandler:
         if self.mode == "code":
             return self._get_code_mode_tools()
 
-        namespace = await self._get_namespace()
+        namespace = await self._get_namespace_for_read()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
         tools = []

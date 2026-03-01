@@ -15,6 +15,7 @@ from mcpworks_api.core.exceptions import (
     ValidationError,
 )
 from mcpworks_api.models import Namespace, NamespaceService
+from mcpworks_api.models.namespace_share import NamespaceShare, ShareStatus
 
 
 class NamespaceServiceManager:
@@ -72,19 +73,23 @@ class NamespaceServiceManager:
         self,
         namespace_id: uuid.UUID,
         account_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+        required_permission: str | None = None,
     ) -> Namespace:
         """Get namespace by ID.
 
         Args:
             namespace_id: The namespace UUID.
             account_id: Optional account ID for access control.
+            user_id: Optional user ID for share-based access check.
+            required_permission: Permission needed (e.g. "read", "execute").
 
         Returns:
             The namespace.
 
         Raises:
             NotFoundError: If namespace not found.
-            ForbiddenError: If account doesn't own the namespace.
+            ForbiddenError: If account doesn't own the namespace and no share access.
         """
         result = await self.db.execute(
             select(Namespace)
@@ -97,6 +102,12 @@ class NamespaceServiceManager:
             raise NotFoundError(f"Namespace '{namespace_id}' not found")
 
         if account_id and namespace.account_id != account_id:
+            if (
+                user_id
+                and required_permission
+                and await self._check_share_access(namespace.id, user_id, required_permission)
+            ):
+                return namespace
             raise ForbiddenError("Access denied to this namespace")
 
         return namespace
@@ -105,19 +116,23 @@ class NamespaceServiceManager:
         self,
         name: str,
         account_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+        required_permission: str | None = None,
     ) -> Namespace:
         """Get namespace by name.
 
         Args:
             name: The namespace name.
             account_id: Optional account ID for access control.
+            user_id: Optional user ID for share-based access check.
+            required_permission: Permission needed (e.g. "read", "execute").
 
         Returns:
             The namespace.
 
         Raises:
             NotFoundError: If namespace not found.
-            ForbiddenError: If account doesn't own the namespace.
+            ForbiddenError: If account doesn't own the namespace and no share access.
         """
         result = await self.db.execute(
             select(Namespace)
@@ -130,6 +145,12 @@ class NamespaceServiceManager:
             raise NotFoundError(f"Namespace '{name}' not found")
 
         if account_id and namespace.account_id != account_id:
+            if (
+                user_id
+                and required_permission
+                and await self._check_share_access(namespace.id, user_id, required_permission)
+            ):
+                return namespace
             raise ForbiddenError("Access denied to this namespace")
 
         return namespace
@@ -137,26 +158,28 @@ class NamespaceServiceManager:
     async def list(
         self,
         account_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[Namespace], int]:
-        """List namespaces for an account.
+        """List namespaces for an account, plus shared namespaces.
 
         Args:
             account_id: The account ID.
+            user_id: Optional user ID to also include shared namespaces.
             page: Page number (1-indexed).
             page_size: Number of items per page.
 
         Returns:
             Tuple of (namespaces list, total count).
         """
-        # Get total count
+        # Get total count of owned
         count_result = await self.db.execute(
             select(func.count()).select_from(Namespace).where(Namespace.account_id == account_id)
         )
-        total = count_result.scalar() or 0
+        owned_total = count_result.scalar() or 0
 
-        # Get paginated results
+        # Get owned namespaces
         offset = (page - 1) * page_size
         result = await self.db.execute(
             select(Namespace)
@@ -167,7 +190,51 @@ class NamespaceServiceManager:
         )
         namespaces = list(result.scalars().all())
 
-        return namespaces, total
+        # Also fetch shared namespaces if user_id provided
+        shared_total = 0
+        if user_id:
+            shared_count_result = await self.db.execute(
+                select(func.count())
+                .select_from(NamespaceShare)
+                .where(
+                    NamespaceShare.user_id == user_id,
+                    NamespaceShare.status == ShareStatus.ACCEPTED.value,
+                )
+            )
+            shared_total = shared_count_result.scalar() or 0
+
+            if shared_total > 0:
+                shared_result = await self.db.execute(
+                    select(Namespace)
+                    .join(NamespaceShare, NamespaceShare.namespace_id == Namespace.id)
+                    .where(
+                        NamespaceShare.user_id == user_id,
+                        NamespaceShare.status == ShareStatus.ACCEPTED.value,
+                    )
+                    .order_by(Namespace.name)
+                )
+                shared_namespaces = list(shared_result.scalars().all())
+                for ns in shared_namespaces:
+                    ns._is_shared = True  # type: ignore[attr-defined]
+                namespaces.extend(shared_namespaces)
+
+        return namespaces, owned_total + shared_total
+
+    async def _check_share_access(
+        self,
+        namespace_id: uuid.UUID,
+        user_id: uuid.UUID,
+        permission: str,
+    ) -> bool:
+        result = await self.db.execute(
+            select(NamespaceShare).where(
+                NamespaceShare.namespace_id == namespace_id,
+                NamespaceShare.user_id == user_id,
+                NamespaceShare.status == ShareStatus.ACCEPTED.value,
+            )
+        )
+        share = result.scalar_one_or_none()
+        return share is not None and permission in share.permissions
 
     async def update(
         self,

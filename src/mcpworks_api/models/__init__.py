@@ -10,6 +10,7 @@ from mcpworks_api.models.function import Function
 from mcpworks_api.models.function_version import ALLOWED_BACKENDS, FunctionVersion
 from mcpworks_api.models.namespace import Namespace
 from mcpworks_api.models.namespace_service import NamespaceService
+from mcpworks_api.models.namespace_share import NamespaceShare, ShareStatus
 from mcpworks_api.models.oauth_account import OAuthAccount
 from mcpworks_api.models.security_event import ALLOWED_SEVERITIES, SecurityEvent
 from mcpworks_api.models.service import Service, ServiceStatus
@@ -34,6 +35,9 @@ __all__ = [
     "Namespace",
     # NamespaceService (A0)
     "NamespaceService",
+    # NamespaceShare
+    "NamespaceShare",
+    "ShareStatus",
     # Function (A0)
     "Function",
     "FunctionVersion",

@@ -21,6 +21,7 @@ from mcpworks_api.models import (
     FunctionVersion,
     Namespace,
     NamespaceService,
+    NamespaceShare,
     User,
 )
 
@@ -52,6 +53,156 @@ async def get_stats(
         "functions": functions_count,
         "executions": executions_count,
         "total_calls": total_calls,
+    }
+
+
+@router.get("/stats/leaderboard")
+async def get_stats_leaderboard(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Leaderboard stats: top users, namespaces, services, functions by activity."""
+    top_users_q = (
+        select(
+            User.id,
+            User.email,
+            User.name,
+            User.tier,
+            func.coalesce(func.sum(Namespace.call_count), 0).label("total_calls"),
+            func.count(func.distinct(Namespace.id)).label("namespace_count"),
+            func.count(func.distinct(Function.id)).label("function_count"),
+        )
+        .outerjoin(Account, User.id == Account.user_id)
+        .outerjoin(Namespace, Account.id == Namespace.account_id)
+        .outerjoin(NamespaceService, Namespace.id == NamespaceService.namespace_id)
+        .outerjoin(Function, NamespaceService.id == Function.service_id)
+        .where(User.status == "active")
+        .group_by(User.id)
+        .order_by(func.coalesce(func.sum(Namespace.call_count), 0).desc())
+        .limit(10)
+    )
+    top_users_rows = (await db.execute(top_users_q)).all()
+    top_users = [
+        {
+            "id": str(r.id),
+            "email": r.email,
+            "name": r.name,
+            "tier": r.tier,
+            "total_calls": int(r.total_calls),
+            "namespace_count": int(r.namespace_count),
+            "function_count": int(r.function_count),
+        }
+        for r in top_users_rows
+    ]
+
+    top_ns_q = (
+        select(Namespace)
+        .options(
+            selectinload(Namespace.account).selectinload(Account.user),
+            selectinload(Namespace.services).selectinload(NamespaceService.functions),
+        )
+        .order_by(Namespace.call_count.desc())
+        .limit(10)
+    )
+    top_ns_rows = (await db.execute(top_ns_q)).scalars().all()
+    top_namespaces = [
+        {
+            "name": ns.name,
+            "call_count": ns.call_count,
+            "owner_email": ns.account.user.email if ns.account and ns.account.user else None,
+            "service_count": len(ns.services) if ns.services else 0,
+            "function_count": sum(
+                len(svc.functions) for svc in (ns.services or []) if svc.functions
+            ),
+        }
+        for ns in top_ns_rows
+    ]
+
+    top_svc_q = (
+        select(NamespaceService)
+        .options(
+            selectinload(NamespaceService.namespace)
+            .selectinload(Namespace.account)
+            .selectinload(Account.user),
+        )
+        .order_by(NamespaceService.call_count.desc())
+        .limit(10)
+    )
+    top_svc_rows = (await db.execute(top_svc_q)).scalars().all()
+    top_services = [
+        {
+            "name": svc.name,
+            "call_count": svc.call_count,
+            "namespace": svc.namespace.name if svc.namespace else None,
+            "owner_email": (
+                svc.namespace.account.user.email
+                if svc.namespace and svc.namespace.account and svc.namespace.account.user
+                else None
+            ),
+        }
+        for svc in top_svc_rows
+    ]
+
+    top_fn_q = (
+        select(Function)
+        .options(
+            selectinload(Function.service).selectinload(NamespaceService.namespace),
+            selectinload(Function.versions),
+        )
+        .order_by(Function.call_count.desc())
+        .limit(10)
+    )
+    top_fn_rows = (await db.execute(top_fn_q)).scalars().all()
+    top_functions = [
+        {
+            "name": fn.name,
+            "call_count": fn.call_count,
+            "service": fn.service.name if fn.service else None,
+            "namespace": fn.service.namespace.name if fn.service and fn.service.namespace else None,
+            "backend": (
+                fn.get_active_version_obj().backend if fn.get_active_version_obj() else None
+            ),
+        }
+        for fn in top_fn_rows
+    ]
+
+    tier_q = (
+        select(User.tier, func.count(User.id).label("count"))
+        .where(User.status == "active")
+        .group_by(User.tier)
+    )
+    tier_rows = (await db.execute(tier_q)).all()
+    tier_breakdown = [{"tier": r.tier, "count": int(r.count)} for r in tier_rows]
+
+    recent_exec_q = (
+        select(Execution)
+        .options(
+            selectinload(Execution.user),
+            selectinload(Execution.function),
+        )
+        .order_by(Execution.created_at.desc())
+        .limit(10)
+    )
+    recent_exec_rows = (await db.execute(recent_exec_q)).scalars().all()
+    recent_executions = [
+        {
+            "id": str(ex.id),
+            "user_email": ex.user.email if ex.user else None,
+            "function_name": ex.function.name if ex.function else None,
+            "status": ex.status,
+            "duration_seconds": ex.duration_seconds,
+            "created_at": ex.created_at.isoformat() if ex.created_at else None,
+        }
+        for ex in recent_exec_rows
+    ]
+
+    return {
+        "top_users": top_users,
+        "top_namespaces": top_namespaces,
+        "top_services": top_services,
+        "top_functions": top_functions,
+        "tier_breakdown": tier_breakdown,
+        "recent_executions": recent_executions,
     }
 
 
@@ -98,6 +249,7 @@ async def get_namespace(
         .options(
             selectinload(Namespace.account).selectinload(Account.user),
             selectinload(Namespace.services).selectinload(NamespaceService.functions),
+            selectinload(Namespace.shares).selectinload(NamespaceShare.user),
         )
     )
     ns = result.scalar_one_or_none()
@@ -122,6 +274,17 @@ async def get_namespace(
                 "created_at": svc.created_at.isoformat() if svc.created_at else None,
             }
             for svc in (ns.services or [])
+        ],
+        "shares": [
+            {
+                "id": str(share.id),
+                "user_email": share.user.email if share.user else None,
+                "user_name": share.user.name if share.user else None,
+                "permissions": share.permissions,
+                "status": share.status,
+                "created_at": share.created_at.isoformat() if share.created_at else None,
+            }
+            for share in (ns.shares or [])
         ],
     }
 
@@ -680,3 +843,89 @@ async def _send_unsuspension_email(email: str, name: str | None) -> None:
         await send_account_unsuspended_email(email, name)
     except Exception as e:
         logger.warning("unsuspension_email_failed", error=str(e))
+
+
+# --- Namespace Shares (admin) ---
+
+
+class AdminCreateShareRequest(BaseModel):
+    email: str = Field(..., description="Email of the user to invite")
+    permissions: list[str] = Field(default=["read", "execute"])
+
+
+@router.post("/namespaces/{ns_name}/shares")
+async def create_namespace_share(
+    ns_name: str,
+    request: AdminCreateShareRequest,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Admin: create a share invite on a namespace."""
+    from mcpworks_api.core.exceptions import (
+        ConflictError,
+        ForbiddenError,
+        NotFoundError,
+        ValidationError,
+    )
+    from mcpworks_api.services.namespace_share import NamespaceShareService
+
+    ns_result = await db.execute(
+        select(Namespace).where(Namespace.name == ns_name).options(selectinload(Namespace.account))
+    )
+    ns = ns_result.scalar_one_or_none()
+    if not ns:
+        raise HTTPException(status_code=404, detail=f"Namespace '{ns_name}' not found")
+
+    share_service = NamespaceShareService(db)
+    try:
+        share = await share_service.create_invite(
+            namespace_id=ns.id,
+            invitee_email=request.email,
+            permissions=request.permissions,
+            granted_by_user_id=ns.account.user_id,
+        )
+        await db.commit()
+        return {
+            "id": str(share.id),
+            "user_id": str(share.user_id),
+            "permissions": share.permissions,
+            "status": share.status,
+        }
+    except (NotFoundError, ForbiddenError) as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.delete("/namespaces/{ns_name}/shares/{share_id}")
+async def revoke_namespace_share(
+    ns_name: str,
+    share_id: str,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Admin: revoke a namespace share."""
+    from mcpworks_api.core.exceptions import ForbiddenError, NotFoundError
+    from mcpworks_api.services.namespace_share import NamespaceShareService
+
+    ns_result = await db.execute(
+        select(Namespace).where(Namespace.name == ns_name).options(selectinload(Namespace.account))
+    )
+    ns = ns_result.scalar_one_or_none()
+    if not ns:
+        raise HTTPException(status_code=404, detail=f"Namespace '{ns_name}' not found")
+
+    share_service = NamespaceShareService(db)
+    try:
+        await share_service.revoke(
+            share_id=share_id,
+            owner_user_id=ns.account.user_id,
+        )
+        await db.commit()
+        return {"status": "revoked"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ForbiddenError as e:
+        raise HTTPException(status_code=403, detail=str(e))

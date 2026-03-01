@@ -145,6 +145,8 @@ async def validate_namespace_access(
         return await namespace_service.get_by_name(
             namespace_name,
             account.id,
+            user_id=account.user_id,
+            required_permission="read",
         )
     except NotFoundError:
         raise HTTPException(

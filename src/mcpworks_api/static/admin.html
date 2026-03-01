@@ -56,9 +56,55 @@ tailwind.config = {
   .status-pending { color: #6b7280; }
   .status-pending_approval { color: #fbbf24; }
   .status-rejected { color: #f87171; }
+  .leaderboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .lb-card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 16px; }
+  .lb-card h4 { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-size: 13px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .lb-card table { width: 100%; border-collapse: collapse; }
+  .lb-card td { padding: 5px 8px; font-size: 13px; border-bottom: 1px solid #111827; }
+  .lb-card tr:last-child td { border-bottom: none; }
+  .lb-card tr:hover td { background: #111827; }
+  .lb-rank { width: 28px; text-align: center; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 12px; }
+  .lb-rank-1 { color: #fbbf24; }
+  .lb-rank-2 { color: #9ca3af; }
+  .lb-rank-3 { color: #b45309; }
+  .tier-bar { display: flex; height: 28px; border-radius: 6px; overflow: hidden; background: #374151; }
+  .tier-segment { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; white-space: nowrap; min-width: 0; }
+  .tier-legend { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+  .tier-legend span { font-size: 11px; color: #9ca3af; display: flex; align-items: center; gap: 4px; }
+  .tier-legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; display: flex; align-items: center; justify-content: center; }
+  .modal-box { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 24px; max-width: 460px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .modal-box h3 { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-size: 18px; font-weight: 600; color: #fff; margin: 0 0 12px 0; }
+  .btn-danger { background: #dc2626; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 500; font-size: 13px; transition: background 0.15s; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-ghost { background: transparent; color: #9ca3af; padding: 6px 14px; border-radius: 6px; border: 1px solid #374151; cursor: pointer; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 500; font-size: 13px; transition: all 0.15s; }
+  .btn-ghost:hover { background: #374151; color: #e5e7eb; }
 </style>
 </head>
 <body>
+
+<!-- Billing acknowledgment modal -->
+<div id="share-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeShareModal()">
+  <div class="modal-box">
+    <h3>Confirm namespace sharing</h3>
+    <p class="text-gray-400 text-sm mb-1">You are inviting:</p>
+    <p class="text-white text-sm font-medium mb-3" id="share-modal-email"></p>
+    <div style="background:#7c2d12;border:1px solid #9a3412;border-radius:8px;padding:12px;margin-bottom:16px;">
+      <p class="text-orange-200 text-sm" style="margin:0;line-height:1.5;">
+        <strong>Owner-pays billing:</strong> All executions by this user in your namespace will count against <em>your</em> account's quota and billing.
+      </p>
+    </div>
+    <label class="flex items-start gap-2 cursor-pointer mb-4">
+      <input type="checkbox" id="share-modal-ack" class="mt-1" style="accent-color:#2563eb;">
+      <span class="text-gray-300 text-sm">I acknowledge that shared executions will be billed to my account</span>
+    </label>
+    <div id="share-modal-error" class="text-red-400 text-sm mb-3 hidden"></div>
+    <div class="flex justify-end gap-2">
+      <button class="btn-ghost" onclick="closeShareModal()">Cancel</button>
+      <button id="share-modal-confirm" class="btn" disabled onclick="confirmShare()">Confirm &amp; Invite</button>
+    </div>
+  </div>
+</div>
 
 <div id="app" class="max-w-6xl mx-auto px-4 py-6">
 
@@ -88,6 +134,18 @@ tailwind.config = {
       <div class="card stat-card p-4 text-center" onclick="loadAllFunctions()"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
       <div class="card stat-card p-4 text-center" onclick="loadExecutions()"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
       <div class="card stat-card p-4 text-center"><div class="stat-num" id="stat-calls">-</div><div class="stat-label">Tool Calls</div></div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard-section" class="mb-6 hidden">
+      <div class="leaderboard-grid mb-4">
+        <div class="lb-card" id="lb-users"></div>
+        <div class="lb-card" id="lb-namespaces"></div>
+        <div class="lb-card" id="lb-services"></div>
+        <div class="lb-card" id="lb-functions"></div>
+      </div>
+      <div class="card p-4 mb-4" id="lb-tiers"></div>
+      <div class="card p-4" id="lb-recent-exec"></div>
     </div>
 
     <!-- Pending Approvals -->
@@ -141,6 +199,7 @@ async function doLogin() {
     document.getElementById('user-info').textContent = email;
 
     loadStats();
+    loadLeaderboard();
     loadPendingApprovals();
     loadNamespaces();
   } catch (e) {
@@ -185,6 +244,104 @@ async function loadStats() {
     document.getElementById('stat-calls').textContent = stats.total_calls ?? '-';
   } catch (e) {
     console.error('Failed to load stats', e);
+  }
+}
+
+// --- Leaderboard ---
+
+const TIER_COLORS = { free: '#6b7280', founder: '#2563eb', founder_pro: '#7c3aed', enterprise: '#059669' };
+const TIER_LABELS = { free: 'Free', founder: 'Founder', founder_pro: 'Founder Pro', enterprise: 'Enterprise' };
+
+function lbRankClass(i) {
+  if (i === 0) return 'lb-rank lb-rank-1';
+  if (i === 1) return 'lb-rank lb-rank-2';
+  if (i === 2) return 'lb-rank lb-rank-3';
+  return 'lb-rank';
+}
+
+function renderLbTable(rows, cols, onclick) {
+  if (!rows.length) return '<div class="text-gray-500 text-sm">No data yet.</div>';
+  return '<table>' + rows.map((r, i) => {
+    const click = onclick ? ` class="clickable" onclick="${onclick(r)}"` : '';
+    return `<tr${click}><td class="${lbRankClass(i)}">${i + 1}</td>${cols.map(c => `<td${c.cls ? ' class="' + c.cls + '"' : ''}>${c.val(r)}</td>`).join('')}</tr>`;
+  }).join('') + '</table>';
+}
+
+async function loadLeaderboard() {
+  try {
+    const lb = await apiFetch('/v1/admin/stats/leaderboard');
+    document.getElementById('leaderboard-section').classList.remove('hidden');
+
+    document.getElementById('lb-users').innerHTML =
+      '<h4>Top Users</h4>' +
+      renderLbTable(lb.top_users, [
+        { val: r => `<span class="text-blue-400">${esc(r.email)}</span>`, cls: '' },
+        { val: r => `<span class="text-gray-500 text-xs">${r.namespace_count}ns / ${r.function_count}fn</span>`, cls: '' },
+        { val: r => `<span class="text-white font-medium">${r.total_calls.toLocaleString()}</span>`, cls: 'text-right' },
+      ], r => `loadUser('${esc(r.id)}')`);
+
+    document.getElementById('lb-namespaces').innerHTML =
+      '<h4>Top Namespaces</h4>' +
+      renderLbTable(lb.top_namespaces, [
+        { val: r => `<span class="text-blue-400">${esc(r.name)}</span>`, cls: '' },
+        { val: r => `<span class="text-gray-500 text-xs">${esc(r.owner_email || '')}</span>`, cls: '' },
+        { val: r => `<span class="text-white font-medium">${r.call_count.toLocaleString()}</span>`, cls: 'text-right' },
+      ], r => `loadNamespace('${esc(r.name)}')`);
+
+    document.getElementById('lb-services').innerHTML =
+      '<h4>Top Services</h4>' +
+      renderLbTable(lb.top_services, [
+        { val: r => `<span class="text-blue-400">${esc(r.name)}</span>`, cls: '' },
+        { val: r => `<span class="text-gray-500 text-xs">${esc(r.namespace || '')}</span>`, cls: '' },
+        { val: r => `<span class="text-white font-medium">${r.call_count.toLocaleString()}</span>`, cls: 'text-right' },
+      ], r => `loadFunctions('${esc(r.namespace)}', '${esc(r.name)}')`);
+
+    document.getElementById('lb-functions').innerHTML =
+      '<h4>Top Functions</h4>' +
+      renderLbTable(lb.top_functions, [
+        { val: r => `<span class="text-blue-400">${esc(r.name)}</span>`, cls: '' },
+        { val: r => `<span class="text-gray-500 text-xs">${esc(r.namespace || '')}/${esc(r.service || '')}</span>`, cls: '' },
+        { val: r => `<span class="text-white font-medium">${r.call_count.toLocaleString()}</span>`, cls: 'text-right' },
+      ], r => `loadFunction('${esc(r.namespace)}', '${esc(r.service)}', '${esc(r.name)}')`);
+
+    const totalTier = lb.tier_breakdown.reduce((s, t) => s + t.count, 0);
+    if (totalTier > 0) {
+      const segments = lb.tier_breakdown
+        .filter(t => t.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .map(t => {
+          const pct = (t.count / totalTier * 100);
+          const bg = TIER_COLORS[t.tier] || '#6b7280';
+          return `<div class="tier-segment" style="width:${pct}%;background:${bg};color:#fff;">${pct >= 8 ? t.count : ''}</div>`;
+        }).join('');
+      const legend = lb.tier_breakdown
+        .filter(t => t.count > 0)
+        .map(t => `<span><span class="dot" style="background:${TIER_COLORS[t.tier] || '#6b7280'}"></span>${TIER_LABELS[t.tier] || t.tier}: ${t.count}</span>`)
+        .join('');
+      document.getElementById('lb-tiers').innerHTML =
+        '<h4 style="font-family:\'Space Grotesk\',ui-sans-serif,system-ui,sans-serif;font-size:13px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Tier Breakdown</h4>' +
+        `<div class="tier-bar">${segments}</div><div class="tier-legend">${legend}</div>`;
+    } else {
+      document.getElementById('lb-tiers').innerHTML = '<div class="text-gray-500 text-sm">No active users.</div>';
+    }
+
+    if (lb.recent_executions.length > 0) {
+      document.getElementById('lb-recent-exec').innerHTML =
+        '<h4 style="font-family:\'Space Grotesk\',ui-sans-serif,system-ui,sans-serif;font-size:13px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Recent Executions</h4>' +
+        '<table><thead><tr><th>User</th><th>Function</th><th>Status</th><th>Duration</th><th>Time</th></tr></thead><tbody>' +
+        lb.recent_executions.map(ex => `<tr>
+          <td class="text-gray-400 text-sm">${esc(ex.user_email || '-')}</td>
+          <td class="text-blue-400 text-sm">${esc(ex.function_name || '-')}</td>
+          <td><span class="status-${ex.status} text-sm">${esc(ex.status)}</span></td>
+          <td class="text-gray-400 text-sm">${ex.duration_seconds != null ? ex.duration_seconds.toFixed(1) + 's' : '-'}</td>
+          <td class="text-gray-500 text-sm">${fmtDate(ex.created_at)}</td>
+        </tr>`).join('') +
+        '</tbody></table>';
+    } else {
+      document.getElementById('lb-recent-exec').innerHTML = '<div class="text-gray-500 text-sm">No executions yet.</div>';
+    }
+  } catch (e) {
+    console.error('Failed to load leaderboard', e);
   }
 }
 
@@ -524,6 +681,27 @@ async function loadNamespace(nsName) {
       `;
     }
 
+    const activeShares = (ns.shares || []).filter(s => s.status === 'accepted' || s.status === 'pending');
+    let sharesHtml = '<div class="text-gray-500 text-sm">No shares.</div>';
+    if (activeShares.length > 0) {
+      sharesHtml = `
+        <table>
+          <thead><tr><th>User</th><th>Permissions</th><th>Status</th><th>Since</th><th></th></tr></thead>
+          <tbody>
+            ${activeShares.map(s => `
+              <tr>
+                <td class="text-gray-300">${esc(s.user_email || '-')}</td>
+                <td>${(s.permissions || []).map(p => `<span class="tag">${esc(p)}</span>`).join('')}</td>
+                <td><span class="status-${s.status}">${esc(s.status)}</span></td>
+                <td class="text-gray-500 text-sm">${fmtDate(s.created_at)}</td>
+                <td><button class="btn-danger" style="padding:3px 10px;font-size:12px;" onclick="revokeShare('${esc(nsName)}','${esc(s.id)}')">Revoke</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
     content.innerHTML = `
       <div class="p-6 fade-in">
         <div class="flex items-center justify-between mb-4">
@@ -535,10 +713,92 @@ async function loadNamespace(nsName) {
         ${ns.network_whitelist && ns.network_whitelist.length ? `<p class="text-gray-500 text-sm mb-4">Whitelist: ${ns.network_whitelist.map(ip => esc(ip)).join(', ')}</p>` : ''}
         <h3 class="text-gray-300 font-medium mb-2">Services</h3>
         ${servicesHtml}
+
+        <h3 class="text-gray-300 font-medium mb-2 mt-6">Shared With</h3>
+        ${sharesHtml}
+        <div class="flex items-center gap-2 mt-3">
+          <input id="share-email-input" type="email" placeholder="user@example.com" style="width:260px;">
+          <button class="btn" style="font-size:13px;" onclick="openShareModal('${esc(nsName)}')">Share namespace</button>
+        </div>
       </div>
     `;
   } catch (e) {
     content.innerHTML = `<div class="p-6 text-red-400">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// --- Namespace sharing ---
+
+let _pendingShareNs = null;
+
+function openShareModal(nsName) {
+  const emailInput = document.getElementById('share-email-input');
+  const email = emailInput ? emailInput.value.trim() : '';
+  if (!email) { emailInput && emailInput.focus(); return; }
+
+  _pendingShareNs = nsName;
+  document.getElementById('share-modal-email').textContent = email;
+  document.getElementById('share-modal-ack').checked = false;
+  document.getElementById('share-modal-confirm').disabled = true;
+  document.getElementById('share-modal-error').classList.add('hidden');
+  document.getElementById('share-modal').classList.remove('hidden');
+}
+
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'share-modal-ack') {
+    document.getElementById('share-modal-confirm').disabled = !e.target.checked;
+  }
+});
+
+function closeShareModal() {
+  document.getElementById('share-modal').classList.add('hidden');
+  _pendingShareNs = null;
+}
+
+async function confirmShare() {
+  const email = document.getElementById('share-modal-email').textContent;
+  const btn = document.getElementById('share-modal-confirm');
+  const errEl = document.getElementById('share-modal-error');
+  btn.disabled = true;
+  btn.textContent = 'Inviting...';
+  errEl.classList.add('hidden');
+
+  try {
+    const nsForReload = _pendingShareNs;
+    const res = await fetch(`${API}/v1/admin/namespaces/${encodeURIComponent(_pendingShareNs)}/shares`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, permissions: ['read', 'execute'] }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Error ${res.status}`);
+    }
+    closeShareModal();
+    await loadNamespace(nsForReload);
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to create share';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.textContent = 'Confirm & Invite';
+    btn.disabled = !document.getElementById('share-modal-ack').checked;
+  }
+}
+
+async function revokeShare(nsName, shareId) {
+  if (!confirm('Revoke this share? The user will immediately lose access.')) return;
+  try {
+    const res = await fetch(`${API}/v1/admin/namespaces/${encodeURIComponent(nsName)}/shares/${encodeURIComponent(shareId)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Error ${res.status}`);
+    }
+    await loadNamespace(nsName);
+  } catch (e) {
+    alert('Error revoking share: ' + (e.message || e));
   }
 }
 

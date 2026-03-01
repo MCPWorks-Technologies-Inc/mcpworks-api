@@ -13,6 +13,7 @@ from mcpworks_api.api.v1.namespaces import router as namespaces_router
 from mcpworks_api.api.v1.oauth import router as oauth_router
 from mcpworks_api.api.v1.quickstart import router as quickstart_router
 from mcpworks_api.api.v1.services import router as services_router
+from mcpworks_api.api.v1.shares import router as shares_router
 from mcpworks_api.api.v1.subscriptions import router as subscriptions_router
 from mcpworks_api.api.v1.subscriptions import webhook_router
 from mcpworks_api.api.v1.users import router as users_router
@@ -34,6 +35,7 @@ router.include_router(services_router)
 router.include_router(subscriptions_router)
 router.include_router(webhook_router)
 router.include_router(namespaces_router)  # A0: Namespace management
+router.include_router(shares_router)  # Namespace sharing
 router.include_router(audit_router)  # ORDER-022: Security audit logs
 router.include_router(admin_router)  # Admin dashboard
 router.include_router(mcp_router)  # A0: MCP JSON-RPC endpoints

@@ -443,10 +443,19 @@ class CreateMCPHandler:
             )
 
     async def _get_current_namespace(self) -> Namespace:
-        """Get the current namespace from the subdomain."""
+        """Get the current namespace (owner-only, for write operations)."""
         return await self.namespace_service.get_by_name(
             self.namespace_name,
             self.account.id,
+        )
+
+    async def _get_current_namespace_read(self) -> Namespace:
+        """Get the current namespace with share-based read access."""
+        return await self.namespace_service.get_by_name(
+            self.namespace_name,
+            self.account.id,
+            user_id=self.account.user_id,
+            required_permission="read",
         )
 
     # Tool implementations
@@ -478,8 +487,11 @@ class CreateMCPHandler:
         )
 
     async def _list_namespaces(self) -> MCPToolResult:
-        """List all namespaces for account."""
-        namespaces, total = await self.namespace_service.list(self.account.id)
+        """List all namespaces for account (including shared)."""
+        namespaces, total = await self.namespace_service.list(
+            self.account.id,
+            user_id=self.account.user_id,
+        )
         return MCPToolResult(
             content=[
                 MCPContent(
@@ -530,7 +542,7 @@ class CreateMCPHandler:
 
     async def _list_services(self) -> MCPToolResult:
         """List services in current namespace."""
-        namespace = await self._get_current_namespace()
+        namespace = await self._get_current_namespace_read()
         services = await self.service_service.list(namespace.id)
         return MCPToolResult(
             content=[
@@ -817,7 +829,7 @@ class CreateMCPHandler:
         tag: str | None = None,
     ) -> MCPToolResult:
         """List functions in a service."""
-        namespace = await self._get_current_namespace()
+        namespace = await self._get_current_namespace_read()
         svc = await self.service_service.get_by_name(namespace.id, service)
 
         tags = [tag] if tag else None
@@ -847,7 +859,7 @@ class CreateMCPHandler:
 
     async def _describe_function(self, service: str, name: str) -> MCPToolResult:
         """Get detailed function info."""
-        namespace = await self._get_current_namespace()
+        namespace = await self._get_current_namespace_read()
         svc = await self.service_service.get_by_name(namespace.id, service)
         function = await self.function_service.get_by_name(svc.id, name)
         details = await self.function_service.describe(function.id)
