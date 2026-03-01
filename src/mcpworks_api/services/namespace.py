@@ -34,7 +34,7 @@ class NamespaceServiceManager:
         account_id: uuid.UUID,
         name: str,
         description: str | None = None,
-        network_whitelist: list[str] | None = None,
+        network_allowlist: list[str] | None = None,
     ) -> Namespace:
         """Create a new namespace.
 
@@ -42,7 +42,7 @@ class NamespaceServiceManager:
             account_id: The account that will own this namespace.
             name: Unique namespace name (DNS-compliant).
             description: Optional description.
-            network_whitelist: Optional list of allowed IPs/CIDRs.
+            network_allowlist: Optional list of allowed IPs/CIDRs.
 
         Returns:
             The created namespace.
@@ -61,7 +61,7 @@ class NamespaceServiceManager:
             account_id=account_id,
             name=name.lower(),
             description=description,
-            network_whitelist=network_whitelist,
+            network_allowlist=network_allowlist,
         )
         self.db.add(namespace)
         await self.db.flush()
@@ -241,7 +241,7 @@ class NamespaceServiceManager:
         namespace_id: uuid.UUID,
         account_id: uuid.UUID,
         description: str | None = None,
-        network_whitelist: builtins.list[str] | None = None,
+        network_allowlist: builtins.list[str] | None = None,
     ) -> Namespace:
         """Update a namespace.
 
@@ -249,7 +249,7 @@ class NamespaceServiceManager:
             namespace_id: The namespace UUID.
             account_id: The account ID for access control.
             description: New description (if provided).
-            network_whitelist: New whitelist (if provided).
+            network_allowlist: New allowlist (if provided).
 
         Returns:
             The updated namespace.
@@ -257,20 +257,19 @@ class NamespaceServiceManager:
         Raises:
             NotFoundError: If namespace not found.
             ForbiddenError: If account doesn't own the namespace.
-            ValidationError: If whitelist update rate limit exceeded.
+            ValidationError: If allowlist update rate limit exceeded.
         """
         namespace = await self.get_by_id(namespace_id, account_id)
 
         if description is not None:
             namespace.description = description
 
-        if network_whitelist is not None:
-            # Check rate limit
-            if not namespace.can_update_whitelist():
-                raise ValidationError("Whitelist update rate limit exceeded (max 5 per 24 hours)")
-            namespace.network_whitelist = network_whitelist
-            namespace.whitelist_updated_at = datetime.now(UTC)
-            namespace.whitelist_changes_today += 1
+        if network_allowlist is not None:
+            if not namespace.can_update_allowlist():
+                raise ValidationError("Allowlist update rate limit exceeded (max 5 per 24 hours)")
+            namespace.network_allowlist = network_allowlist
+            namespace.allowlist_updated_at = datetime.now(UTC)
+            namespace.allowlist_changes_today += 1
 
         await self.db.flush()
         await self.db.refresh(namespace)

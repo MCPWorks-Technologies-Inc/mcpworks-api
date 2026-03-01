@@ -12,7 +12,6 @@ from mcpworks_api.api.v1.llm import router as llm_router
 from mcpworks_api.api.v1.namespaces import router as namespaces_router
 from mcpworks_api.api.v1.oauth import router as oauth_router
 from mcpworks_api.api.v1.quickstart import router as quickstart_router
-from mcpworks_api.api.v1.services import router as services_router
 from mcpworks_api.api.v1.shares import router as shares_router
 from mcpworks_api.api.v1.subscriptions import router as subscriptions_router
 from mcpworks_api.api.v1.subscriptions import webhook_router
@@ -31,7 +30,6 @@ router.include_router(auth_router)
 router.include_router(oauth_router)  # OAuth social login
 router.include_router(account_router)  # Usage tracking
 router.include_router(users_router)
-router.include_router(services_router)
 router.include_router(subscriptions_router)
 router.include_router(webhook_router)
 router.include_router(namespaces_router)  # A0: Namespace management

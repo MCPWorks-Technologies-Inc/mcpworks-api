@@ -21,7 +21,7 @@ This specification defines the complete implementation of the Code Execution San
 - 70-98% token savings through architectural efficiency
 - Defense-in-depth isolation against malicious code
 - Per-tier resource limits enforced at kernel level
-- Egress proxy for network whitelist enforcement
+- Egress proxy for network allowlist enforcement
 
 ---
 
@@ -872,7 +872,7 @@ USE mcpworks_sandbox DEFAULT KILL
 
 ### Overview
 
-The egress proxy controls all outbound network access from sandboxes. It enforces per-tier whitelist policies and logs all network activity.
+The egress proxy controls all outbound network access from sandboxes. It enforces per-tier allowlist policies and logs all network activity.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -885,10 +885,10 @@ The egress proxy controls all outbound network access from sandboxes. It enforce
 │  │  Per-request enforcement:                                            │   │
 │  │  1. Extract execution ID from X-MCPWorks-Exec-ID header             │   │
 │  │  2. Look up tier and allowed hosts from Redis/file                  │   │
-│  │  3. Check destination against whitelist                             │   │
+│  │  3. Check destination against allowlist                             │   │
 │  │  4. Allow or reject with logging                                    │   │
 │  │                                                                      │   │
-│  │  Whitelist by tier:                                                  │   │
+│  │  Allowlist by tier:                                                  │   │
 │  │  - Free: NONE (no network access)                                   │   │
 │  │  - Founder: 5 user-configured hosts                                 │   │
 │  │  - Founder Pro: 25 user-configured hosts                            │   │
@@ -914,7 +914,7 @@ The egress proxy controls all outbound network access from sandboxes. It enforce
 │  │  - OUTPUT -p tcp --dport 443 -j REDIRECT --to-port 8888             │   │
 │  │  - OUTPUT -j DROP (everything else)                                 │   │
 │  │                                                                      │   │
-│  │  User code sees: Normal HTTPS access to whitelisted hosts           │   │
+│  │  User code sees: Normal HTTPS access to allowlisted hosts           │   │
 │  │  Actually routes through: Egress proxy on host                      │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
@@ -989,12 +989,12 @@ echo "  Max hosts: $MAX_HOSTS"
 ### Egress Proxy Implementation (mitmproxy addon)
 
 ```python
-# /opt/mcpworks/egress-proxy/whitelist_addon.py
+# /opt/mcpworks/egress-proxy/allowlist_addon.py
 """
-MCPWorks Egress Proxy - Whitelist Enforcement Addon for mitmproxy
+MCPWorks Egress Proxy - Allowlist Enforcement Addon for mitmproxy
 
 This addon intercepts all HTTP/HTTPS traffic from sandboxes and enforces
-per-tier whitelist policies.
+per-tier allowlist policies.
 """
 
 import logging
@@ -1004,7 +1004,7 @@ from typing import Optional, Set
 
 logger = logging.getLogger("mcpworks.egress")
 
-# Redis connection for whitelist lookup
+# Redis connection for allowlist lookup
 redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # Tier-based host limits
@@ -1032,9 +1032,9 @@ BLOCKED_HOSTS = {
 }
 
 
-class WhitelistAddon:
+class AllowlistAddon:
     def __init__(self):
-        self.cached_whitelists: dict[str, Set[str]] = {}
+        self.cached_allowlists: dict[str, Set[str]] = {}
 
     def get_exec_id(self, flow: http.HTTPFlow) -> Optional[str]:
         """Extract execution ID from request headers or source IP."""
@@ -1053,19 +1053,19 @@ class WhitelistAddon:
         tier = redis_client.get(f"egress:{exec_id}:tier")
         return tier or "free"
 
-    def get_whitelist(self, exec_id: str) -> Set[str]:
+    def get_allowlist(self, exec_id: str) -> Set[str]:
         """Get allowed hosts for this execution."""
         # Check cache first
-        if exec_id in self.cached_whitelists:
-            return self.cached_whitelists[exec_id]
+        if exec_id in self.cached_allowlists:
+            return self.cached_allowlists[exec_id]
 
         # Load from Redis
         hosts = redis_client.smembers(f"egress:{exec_id}:hosts")
-        whitelist = set(hosts) | INTERNAL_HOSTS
+        allowlist = set(hosts) | INTERNAL_HOSTS
 
         # Cache for this execution
-        self.cached_whitelists[exec_id] = whitelist
-        return whitelist
+        self.cached_allowlists[exec_id] = allowlist
+        return allowlist
 
     def is_host_allowed(self, exec_id: str, host: str, tier: str) -> tuple[bool, str]:
         """Check if host is allowed for this execution."""
@@ -1081,15 +1081,15 @@ class WhitelistAddon:
         if tier == "free":
             return False, "Free tier has no network access"
 
-        # Get whitelist
-        whitelist = self.get_whitelist(exec_id)
+        # Get allowlist
+        allowlist = self.get_allowlist(exec_id)
 
-        # Check against whitelist
-        if host in whitelist:
-            return True, "whitelisted"
+        # Check against allowlist
+        if host in allowlist:
+            return True, "allowlisted"
 
         # Check wildcard (*.example.com)
-        for allowed in whitelist:
+        for allowed in allowlist:
             if allowed.startswith("*.") and host.endswith(allowed[1:]):
                 return True, f"wildcard match {allowed}"
 
@@ -1097,8 +1097,8 @@ class WhitelistAddon:
         if tier == "enterprise":
             return True, "enterprise (all allowed)"
 
-        # Not in whitelist
-        return False, f"Host {host} not in whitelist"
+        # Not in allowlist
+        return False, f"Host {host} not in allowlist"
 
     def request(self, flow: http.HTTPFlow) -> None:
         """Intercept and validate each request."""
@@ -1137,7 +1137,7 @@ class WhitelistAddon:
             )
 
 
-addons = [WhitelistAddon()]
+addons = [AllowlistAddon()]
 ```
 
 ### User Host Configuration API
@@ -1145,7 +1145,7 @@ addons = [WhitelistAddon()]
 Users configure their allowed hosts via the Gateway API:
 
 ```http
-POST /v1/account/network-whitelist
+POST /v1/account/network-allowlist
 Authorization: Bearer {api_key}
 Content-Type: application/json
 
@@ -1414,7 +1414,7 @@ MCPWorks SDK - Available inside Code Execution Sandbox
 
 Provides access to:
 - mcpworks.workflows.{workflow_name}.run() - Execute Activepieces workflows
-- mcpworks.services.{service_name}.run() - Call agentic services
+- mcpworks.services.{service_name}.run() - Call services
 - mcpworks.http.get/post() - Make HTTP requests (through egress proxy)
 
 All external communication routes through the internal gateway at
@@ -1560,14 +1560,14 @@ class WorkflowsNamespace:
 
 
 class ServiceProxy:
-    """Proxy for accessing agentic services."""
+    """Proxy for accessing services."""
 
     def __init__(self, client: GatewayClient, service_name: str):
         self.client = client
         self.service_name = service_name
 
     def run(self, **kwargs) -> Any:
-        """Call this agentic service with the given parameters."""
+        """Call this service with the given parameters."""
         response = self.client.post(
             f"/internal/services/{self.service_name}/invoke",
             {"params": kwargs}
@@ -1580,7 +1580,7 @@ class ServiceProxy:
 
 
 class ServicesNamespace:
-    """Namespace for accessing agentic services."""
+    """Namespace for accessing services."""
 
     def __init__(self, client: GatewayClient):
         self.client = client
@@ -1596,7 +1596,7 @@ class ServicesNamespace:
         return self._cache[service_name]
 
     def list(self) -> list:
-        """List available agentic services."""
+        """List available services."""
         response = self.client.get("/internal/services")
         if not response.success:
             raise RuntimeError(f"Failed to list services: {response.error}")
@@ -1636,7 +1636,7 @@ class HttpClient:
             raise RuntimeError(f"HTTP {e.code}: {error_body}")
         except urllib.error.URLError as e:
             if "403" in str(e.reason) or "denied" in str(e.reason).lower():
-                raise RuntimeError(f"Network access denied. Add this host to your whitelist.")
+                raise RuntimeError(f"Network access denied. Add this host to your allowlist.")
             raise RuntimeError(f"Network error: {e.reason}")
 
     def get(self, url: str, **kwargs) -> Any:
@@ -1670,7 +1670,7 @@ class MCPWorks:
 
     @property
     def services(self) -> ServicesNamespace:
-        """Access to agentic services."""
+        """Access to services."""
         if self._services is None:
             self._services = ServicesNamespace(self._client)
         return self._services
@@ -1734,7 +1734,7 @@ http = mcpworks.http
 │       └── ...
 │
 └── egress-proxy/
-    ├── whitelist_addon.py      # mitmproxy addon
+    ├── allowlist_addon.py      # mitmproxy addon
     └── config.yaml             # Proxy configuration
 ```
 
@@ -2105,8 +2105,8 @@ async def execute_code(
     Available in sandbox:
     - `input_data`: Dict with input parameters
     - `mcpworks.workflows`: Access to user workflows
-    - `mcpworks.services`: Access to agentic services
-    - `mcpworks.http`: HTTP client (whitelisted hosts only)
+    - `mcpworks.services`: Access to services
+    - `mcpworks.http`: HTTP client (allowlisted hosts only)
     - Pre-installed packages: requests, httpx, pandas, numpy, pyyaml
 
     Set `result` variable to return data from execution.
@@ -2193,7 +2193,7 @@ echo "+memory +cpu +pids" > /sys/fs/cgroup/mcpworks/cgroup.subtree_control
 |--------|---------------|------------|------------|
 | **Process escape** | Kill host processes | PID namespace (sandbox is PID 1) | High |
 | **Filesystem access** | Read /etc/shadow, credentials | Mount namespace (read-only, minimal mounts) | High |
-| **Network exfiltration** | Send data to attacker | Network namespace + egress proxy whitelist | High |
+| **Network exfiltration** | Send data to attacker | Network namespace + egress proxy allowlist | High |
 | **Privilege escalation** | setuid, capabilities | User namespace (nobody, no capabilities) | High |
 | **Resource exhaustion** | Fork bomb, memory bomb | cgroups v2 (CPU, memory, PIDs) | High |
 | **Kernel exploits** | Dangerous syscalls | seccomp allowlist (200 syscalls blocked) | High |
@@ -2225,7 +2225,7 @@ Layer 3: Filesystem Isolation
 
 Layer 4: Network Isolation
 ├── Network namespace (isolated network)
-├── Egress proxy (whitelist enforcement)
+├── Egress proxy (allowlist enforcement)
 ├── No direct internet access
 └── Blocked metadata services
 
@@ -2252,7 +2252,7 @@ Layer 7: Monitoring
 | Component Compromised | Impact | Recovery Time |
 |-----------------------|--------|---------------|
 | Single sandbox | One user's current request | Immediate (sandbox destroyed) |
-| Egress proxy | Network whitelist bypassed | 5-10 minutes (restart proxy) |
+| Egress proxy | Network allowlist bypassed | 5-10 minutes (restart proxy) |
 | Gateway process | All active requests | 1-5 minutes (auto-restart) |
 | Host machine | All users, all data | 30-60 minutes (restore from backup) |
 | Database credentials | CRITICAL | Days (rotate all credentials) |
@@ -2401,8 +2401,8 @@ groups:
 
 ### Phase 3: Egress Proxy (Week 3-4)
 
-- [ ] Set up mitmproxy with whitelist addon
-  - [ ] Per-tier whitelist enforcement
+- [ ] Set up mitmproxy with allowlist addon
+  - [ ] Per-tier allowlist enforcement
   - [ ] Logging all requests
   - [ ] Blocking metadata services
 - [ ] Create network setup script
@@ -2412,8 +2412,8 @@ groups:
 - [ ] Test network isolation
   - [ ] Verify no direct internet access
   - [ ] Verify egress proxy routing
-  - [ ] Test whitelist enforcement
-- [ ] Implement user whitelist API
+  - [ ] Test allowlist enforcement
+- [ ] Implement user allowlist API
   - [ ] Add/remove hosts
   - [ ] Tier-based limits
 
@@ -2555,7 +2555,7 @@ if __name__ == "__main__":
 - Initial specification
 - Complete nsjail configuration with all isolation layers
 - Seccomp allowlist policy (not blocklist) with rationale
-- Egress proxy architecture with per-tier whitelist
+- Egress proxy architecture with per-tier allowlist
 - Execution wrapper with SDK injection
 - Sandbox root filesystem structure
 - Gateway integration with SandboxBackend

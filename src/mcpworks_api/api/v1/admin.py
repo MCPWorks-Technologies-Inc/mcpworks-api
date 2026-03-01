@@ -262,7 +262,7 @@ async def get_namespace(
         "description": ns.description,
         "owner_email": ns.account.user.email if ns.account and ns.account.user else None,
         "account_name": ns.account.name if ns.account else None,
-        "network_whitelist": ns.network_whitelist,
+        "network_allowlist": ns.network_allowlist,
         "call_count": ns.call_count,
         "created_at": ns.created_at.isoformat() if ns.created_at else None,
         "services": [

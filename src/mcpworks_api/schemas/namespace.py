@@ -39,9 +39,9 @@ class NamespaceBase(BaseModel):
 class NamespaceCreate(NamespaceBase):
     """Schema for creating a namespace."""
 
-    network_whitelist: list[str] | None = Field(
+    network_allowlist: list[str] | None = Field(
         None,
-        description="Optional IP whitelist (CIDR format)",
+        description="Optional IP allowlist (CIDR format)",
         examples=[["192.168.1.0/24", "10.0.0.1"]],
     )
 
@@ -50,7 +50,7 @@ class NamespaceUpdate(BaseModel):
     """Schema for updating a namespace."""
 
     description: str | None = Field(None, max_length=1000)
-    network_whitelist: list[str] | None = None
+    network_allowlist: list[str] | None = None
 
 
 class NamespaceResponse(NamespaceBase):
@@ -60,9 +60,9 @@ class NamespaceResponse(NamespaceBase):
 
     id: UUID
     account_id: UUID
-    network_whitelist: list[str] | None = None
-    whitelist_updated_at: datetime | None = None
-    whitelist_changes_today: int
+    network_allowlist: list[str] | None = None
+    allowlist_updated_at: datetime | None = None
+    allowlist_changes_today: int
     call_count: int = Field(default=0, description="Total tool invocations in this namespace")
     created_at: datetime
     updated_at: datetime | None = None

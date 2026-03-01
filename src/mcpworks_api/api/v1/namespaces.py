@@ -35,14 +35,14 @@ class CreateNamespaceRequest(BaseModel):
         description="DNS-compliant namespace name",
     )
     description: str | None = Field(None, max_length=500)
-    network_whitelist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
+    network_allowlist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
 
 
 class UpdateNamespaceRequest(BaseModel):
     """Request to update a namespace."""
 
     description: str | None = Field(None, max_length=500)
-    network_whitelist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
+    network_allowlist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
 
 
 class NamespaceResponse(BaseModel):
@@ -53,7 +53,7 @@ class NamespaceResponse(BaseModel):
     description: str | None
     create_endpoint: str
     run_endpoint: str
-    network_whitelist: list[str] | None
+    network_allowlist: list[str] | None
     call_count: int = 0
     created_at: str
     updated_at: str | None
@@ -202,7 +202,7 @@ async def create_namespace(
             account_id=account.id,
             name=request.name,
             description=request.description,
-            network_whitelist=request.network_whitelist,
+            network_allowlist=request.network_allowlist,
         )
         await db.commit()
 
@@ -212,7 +212,7 @@ async def create_namespace(
             description=namespace.description,
             create_endpoint=namespace.create_endpoint,
             run_endpoint=namespace.run_endpoint,
-            network_whitelist=namespace.network_whitelist,
+            network_allowlist=namespace.network_allowlist,
             call_count=namespace.call_count,
             created_at=namespace.created_at.isoformat(),
             updated_at=namespace.updated_at.isoformat() if namespace.updated_at else None,
@@ -245,7 +245,7 @@ async def list_namespaces(
                 description=ns.description,
                 create_endpoint=ns.create_endpoint,
                 run_endpoint=ns.run_endpoint,
-                network_whitelist=ns.network_whitelist,
+                network_allowlist=ns.network_allowlist,
                 call_count=ns.call_count,
                 created_at=ns.created_at.isoformat(),
                 updated_at=ns.updated_at.isoformat() if ns.updated_at else None,
@@ -284,7 +284,7 @@ async def get_namespace(
             description=namespace.description,
             create_endpoint=namespace.create_endpoint,
             run_endpoint=namespace.run_endpoint,
-            network_whitelist=namespace.network_whitelist,
+            network_allowlist=namespace.network_allowlist,
             call_count=namespace.call_count,
             created_at=namespace.created_at.isoformat(),
             updated_at=namespace.updated_at.isoformat() if namespace.updated_at else None,
@@ -315,7 +315,7 @@ async def update_namespace(
             namespace_id=namespace.id,
             account_id=account.id,
             description=request.description,
-            network_whitelist=request.network_whitelist,
+            network_allowlist=request.network_allowlist,
         )
         await db.commit()
 
@@ -325,7 +325,7 @@ async def update_namespace(
             description=namespace.description,
             create_endpoint=namespace.create_endpoint,
             run_endpoint=namespace.run_endpoint,
-            network_whitelist=namespace.network_whitelist,
+            network_allowlist=namespace.network_allowlist,
             call_count=namespace.call_count,
             created_at=namespace.created_at.isoformat(),
             updated_at=namespace.updated_at.isoformat() if namespace.updated_at else None,

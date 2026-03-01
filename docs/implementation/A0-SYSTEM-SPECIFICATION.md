@@ -76,7 +76,7 @@ This is the **master specification** for the MCPWorks A0 implementation. It cons
                                     │  │ Code Sandbox (A0)           │  │
                                     │  │ • nsjail isolation          │  │
                                     │  │ • Seccomp ALLOWLIST         │  │
-                                    │  │ • Egress proxy (whitelist)  │  │
+                                    │  │ • Egress proxy (allowlist)  │  │
                                     │  │ • cgroups v2 limits         │  │
                                     │  └─────────────────────────────┘  │
                                     │                                   │
@@ -124,7 +124,7 @@ This is the **master specification** for the MCPWorks A0 implementation. It cons
 | **Subdomain Pattern** | `{ns}.{create\|run}.mcpworks.io` | Clean separation of concerns |
 | **Tool Naming** | Dot notation (`service.function`) | Modern, readable, unique |
 | **Function Versioning** | Immutable versions | Audit trail, rollback capability |
-| **Network Control** | Per-tier whitelist | Tier-based security |
+| **Network Control** | Per-tier allowlist | Tier-based security |
 | **Sandbox Isolation** | nsjail + seccomp ALLOWLIST | Defense in depth |
 | **Monorepo** | Single repository | LLM-friendly development |
 | **SOC 2 Prep** | Audit tables from day one | Future compliance ready |
@@ -139,7 +139,7 @@ Account (existing)
 │   ├── Service[]
 │   │   └── Function[]
 │   │       └── FunctionVersion[] (immutable)
-│   └── network_whitelist[]
+│   └── network_allowlist[]
 ├── APIKey[]
 ├── Subscription
 └── UsageRecord (per billing period)
@@ -187,7 +187,7 @@ POST   /v1/api-keys           Create API key
 DELETE /v1/api-keys/{id}      Revoke API key
 GET    /v1/namespaces         List namespaces
 POST   /v1/namespaces         Create namespace
-PATCH  /v1/namespaces/{name}  Update namespace (whitelist)
+PATCH  /v1/namespaces/{name}  Update namespace (allowlist)
 GET    /v1/usage              Get usage stats
 GET    /v1/audit/logs         Get audit logs
 ```
@@ -242,7 +242,7 @@ Layer 3: Filesystem Isolation
 Layer 4: Network Isolation
 ├── Network namespace (isolated)
 ├── Egress proxy only
-├── Per-tier whitelist enforcement
+├── Per-tier allowlist enforcement
 └── Blocked metadata services
 
 Layer 5: Resource Limits (cgroups v2)
@@ -264,7 +264,7 @@ Layer 6: Syscall Filtering (seccomp)
 - [ ] Aggregate cgroup limits set
 - [ ] API key hashing (bcrypt)
 - [ ] Rate limiting per account
-- [ ] Egress proxy enforces whitelist
+- [ ] Egress proxy enforces allowlist
 - [ ] Input validation on all endpoints
 - [ ] Audit logging operational
 
@@ -288,7 +288,7 @@ Layer 6: Syscall Filtering (seccomp)
 ### Phase 3: Code Sandbox Backend (Week 3-4)
 - nsjail installation + configuration
 - Seccomp allowlist policy
-- Egress proxy with whitelist
+- Egress proxy with allowlist
 - Execution wrapper
 
 ### Phase 4: Execution MCP Server (Week 4-5)

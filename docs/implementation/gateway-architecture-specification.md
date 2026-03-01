@@ -103,7 +103,7 @@ The Gateway is the **single entrypoint** for all MCPWorks requests. It handles:
                                     │  │ Code Sandbox (A0)           │  │
                                     │  │ • nsjail isolation          │  │
                                     │  │ • Seccomp ALLOWLIST         │  │
-                                    │  │ • Egress proxy (whitelist)  │  │
+                                    │  │ • Egress proxy (allowlist)  │  │
                                     │  └─────────────────────────────┘  │
                                     │                                   │
                                     │  ┌─────────────────────────────┐  │
@@ -1249,8 +1249,8 @@ register_backend(SandboxBackend())
 | `QUOTA_EXCEEDED` | 429 | -32005 | Monthly limit exceeded |
 | `EXECUTION_ERROR` | 500 | -32006 | Function execution failed |
 | `VALIDATION_ERROR` | 400 | -32602 | Invalid input data |
-| `NETWORK_BLOCKED` | 403 | -32007 | Egress to non-whitelisted host |
-| `WHITELIST_RATE_LIMITED` | 429 | -32008 | Whitelist changed too frequently |
+| `NETWORK_BLOCKED` | 403 | -32007 | Egress to non-allowlisted host |
+| `ALLOWLIST_RATE_LIMITED` | 429 | -32008 | Allowlist changed too frequently |
 
 ### 9.2 Error Response Format
 
