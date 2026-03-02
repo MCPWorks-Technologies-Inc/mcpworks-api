@@ -246,6 +246,15 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
 .pie-label.clickable:hover { color: #8dd4ff; text-decoration: underline; }
 .pie-val { color: var(--text-3); font-family: var(--mono); font-size: 11px; }
 .pie-empty-state { display: flex; align-items: center; gap: 12px; padding: 14px 0 6px; color: var(--text-3); font-size: 12px; font-family: var(--sans); }
+.tut-step { border: 1px solid var(--border-1); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; transition: opacity 0.2s, border-color 0.2s; }
+.tut-step.tut-locked { opacity: 0.4; pointer-events: none; }
+.tut-step.tut-active { border-color: var(--accent); }
+.tut-step.tut-done { border-color: var(--green); opacity: 0.7; }
+.tut-step-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--text-1); }
+.tut-num { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.tut-done .tut-num { background: var(--green); }
+.tut-step-body { padding: 0 18px 18px; }
+.tut-done .tut-step-body { display: none; }
 </style>
 </head>
 <body>
@@ -263,7 +272,7 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
 
   <div id="login-section">
     <div class="login-wrapper">
-      <div class="login-card">
+      <div class="login-card" id="signin-view">
         <h2>Sign in</h2>
         <div id="login-error" class="error-msg hidden"></div>
         <a href="/v1/auth/oauth/google/login?redirect_uri=/console" class="btn btn-block" style="background:#fff;color:#111;gap:8px;margin-bottom:8px;text-decoration:none;">
@@ -278,6 +287,30 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
         <input id="login-email" type="email" placeholder="Email">
         <input id="login-password" type="password" placeholder="Password">
         <button class="btn btn-primary btn-block" onclick="doLogin()">Login</button>
+        <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text-3)">Don't have an account? <a href="#" onclick="toggleAuthView('register'); return false;" style="color:var(--link);text-decoration:none;">Create one</a></div>
+      </div>
+      <div class="login-card hidden" id="register-view">
+        <h2>Create Account</h2>
+        <div id="register-error" class="error-msg hidden"></div>
+        <div id="register-success" class="hidden" style="background:rgba(74,222,128,0.08);border:1px solid var(--green);border-radius:8px;padding:14px;margin-bottom:14px;color:var(--green);font-size:13px;"></div>
+        <a href="/v1/auth/oauth/google/login?redirect_uri=/console" class="btn btn-block" style="background:#fff;color:#111;gap:8px;margin-bottom:8px;text-decoration:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Sign up with Google
+        </a>
+        <a href="/v1/auth/oauth/github/login?redirect_uri=/console" class="btn btn-block" style="background:var(--bg-3);color:#fff;gap:8px;margin-bottom:12px;text-decoration:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Sign up with GitHub
+        </a>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;border-top:1px solid var(--border-2)"></div><span style="color:var(--text-3);font-size:12px;">or</span><div style="flex:1;border-top:1px solid var(--border-2)"></div></div>
+        <input id="register-name" type="text" placeholder="Name (optional)">
+        <input id="register-email" type="email" placeholder="Email">
+        <input id="register-password" type="password" placeholder="Password (min 8 chars)">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);margin:8px 0 14px;cursor:pointer;">
+          <input type="checkbox" id="register-tos">
+          I accept the <a href="/v1/legal/terms" target="_blank" style="color:var(--link);text-decoration:none;">Terms of Service</a> and <a href="/v1/legal/privacy" target="_blank" style="color:var(--link);text-decoration:none;">Privacy Policy</a>
+        </label>
+        <button class="btn btn-primary btn-block" onclick="doRegister()">Create Account</button>
+        <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text-3)">Already have an account? <a href="#" onclick="toggleAuthView('signin'); return false;" style="color:var(--link);text-decoration:none;">Sign in</a></div>
       </div>
     </div>
   </div>
@@ -402,6 +435,59 @@ async function doLogin() {
   }
 }
 
+function toggleAuthView(view) {
+  const signin = document.getElementById('signin-view');
+  const register = document.getElementById('register-view');
+  if (view === 'register') {
+    signin.classList.add('hidden');
+    register.classList.remove('hidden');
+  } else {
+    register.classList.add('hidden');
+    signin.classList.remove('hidden');
+  }
+}
+
+async function doRegister() {
+  const name = document.getElementById('register-name').value || null;
+  const email = document.getElementById('register-email').value;
+  const password = document.getElementById('register-password').value;
+  const acceptTos = document.getElementById('register-tos').checked;
+  const errEl = document.getElementById('register-error');
+  const successEl = document.getElementById('register-success');
+  errEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+  if (!acceptTos) {
+    errEl.textContent = 'You must accept the Terms of Service to create an account';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name, accept_tos: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.detail?.message || data.detail || 'Registration failed';
+      throw new Error(msg);
+    }
+    if (data.access_token) {
+      TOKEN = data.access_token;
+      USER_EMAIL = email;
+      localStorage.setItem('mcpworks_token', TOKEN);
+      localStorage.setItem('mcpworks_email', email);
+      showDashboard(email);
+    } else {
+      successEl.textContent = data.message || 'Account created. You will be notified when your account is approved.';
+      successEl.classList.remove('hidden');
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
 function doLogout() {
   TOKEN = null;
   USER_EMAIL = null;
@@ -411,6 +497,7 @@ function doLogout() {
   document.getElementById('user-info').classList.add('hidden');
   document.getElementById('usage-strip').classList.add('hidden');
   document.getElementById('login-section').classList.remove('hidden');
+  toggleAuthView('signin');
   document.getElementById('login-email').value = '';
   document.getElementById('login-password').value = '';
   document.getElementById('login-error').classList.add('hidden');
@@ -418,6 +505,9 @@ function doLogout() {
 
 document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+document.getElementById('register-password').addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+document.getElementById('register-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('register-password').focus(); });
+document.getElementById('register-name').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('register-email').focus(); });
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(`${API}${path}`, {
@@ -544,8 +634,13 @@ async function loadNamespaces() {
   setBreadcrumb([{ label: 'Namespaces' }]);
   setInsights(null);
   try {
-    const data = await apiFetch('/v1/namespaces?page=1&page_size=100');
+    const [data, keysData] = await Promise.all([
+      apiFetch('/v1/namespaces?page=1&page_size=100'),
+      apiFetch('/v1/users/me/api-keys'),
+    ]);
     const ns = data.namespaces || [];
+    const keys = keysData.items || [];
+    if (!ns.length && !keys.length) { showGettingStarted(); return; }
     if (!ns.length) { c.innerHTML = emptyState('{ }', 'No namespaces yet', 'Create one via the MCP server or REST API'); return; }
     c.innerHTML = `<table><thead><tr><th>Namespace</th><th>Description</th><th>Calls</th><th>Created</th></tr></thead><tbody>${ns.map((n, i) => `
       <tr class="clickable stagger" style="--i:${i}" onclick="loadNamespace('${esc(n.name)}')">
@@ -555,6 +650,137 @@ async function loadNamespaces() {
         <td class="cell-muted">${fmtDate(n.created_at)}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+let _tutorialNs = null;
+let _tutorialKey = null;
+
+function showGettingStarted() {
+  const c = document.getElementById('content');
+  setBreadcrumb([{ label: 'Getting Started' }]);
+  setInsights(null);
+  _tutorialNs = null;
+  _tutorialKey = null;
+  c.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-title" style="margin-bottom:4px">Welcome to mcpworks</div>
+      <div style="color:var(--text-2);font-size:13px;margin-bottom:24px">Let's get you set up in 3 steps.</div>
+
+      <div id="tut-step-1" class="tut-step tut-active">
+        <div class="tut-step-header"><span class="tut-num">1</span> Create a namespace</div>
+        <div class="tut-step-body">
+          <div style="color:var(--text-2);font-size:13px;margin-bottom:12px">A namespace groups your services and functions under a unique subdomain.</div>
+          <div id="tut-step-1-error" class="error-msg hidden" style="margin-bottom:10px"></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px">
+            <div style="flex:1"><input id="tut-ns-name" type="text" placeholder="my-namespace" style="width:100%"></div>
+            <div style="flex:1"><input id="tut-ns-desc" type="text" placeholder="Description (optional)" style="width:100%"></div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="tutCreateNamespace()">Create Namespace</button>
+        </div>
+      </div>
+
+      <div id="tut-step-2" class="tut-step tut-locked">
+        <div class="tut-step-header"><span class="tut-num">2</span> Create an API key</div>
+        <div class="tut-step-body">
+          <div style="color:var(--text-2);font-size:13px;margin-bottom:12px">You'll need an API key to authenticate from Claude Code or the REST API.</div>
+          <div id="tut-step-2-error" class="error-msg hidden" style="margin-bottom:10px"></div>
+          <div style="margin-bottom:10px"><input id="tut-key-name" type="text" placeholder="Key name (e.g. my-cli-key)" style="width:100%"></div>
+          <button class="btn btn-primary btn-sm" onclick="tutCreateKey()">Create API Key</button>
+          <div id="tut-key-reveal" class="hidden" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div id="tut-step-3" class="tut-step tut-locked">
+        <div class="tut-step-header"><span class="tut-num">3</span> Connect from Claude Code</div>
+        <div class="tut-step-body">
+          <div style="color:var(--text-2);font-size:13px;margin-bottom:12px">Add this to your <code style="background:var(--bg-0);padding:1px 5px;border-radius:4px;font-size:12px">.mcp.json</code> or Claude Code settings:</div>
+          <div id="tut-mcp-config"></div>
+        </div>
+      </div>
+
+      <div id="tut-done" class="hidden" style="text-align:center;margin-top:24px">
+        <button class="btn btn-primary" onclick="loadStats(); loadNamespaces();">Go to Dashboard</button>
+      </div>
+    </div>`;
+  document.getElementById('tut-ns-name').focus();
+  document.getElementById('tut-ns-name').addEventListener('keydown', e => { if (e.key === 'Enter') tutCreateNamespace(); });
+}
+
+async function tutCreateNamespace() {
+  const name = document.getElementById('tut-ns-name').value.trim();
+  const description = document.getElementById('tut-ns-desc').value.trim() || null;
+  const errEl = document.getElementById('tut-step-1-error');
+  errEl.classList.add('hidden');
+  if (!name) { errEl.textContent = 'Namespace name is required'; errEl.classList.remove('hidden'); return; }
+  try {
+    const body = { name };
+    if (description) body.description = description;
+    _tutorialNs = await apiFetch('/v1/namespaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    document.getElementById('tut-step-1').classList.remove('tut-active');
+    document.getElementById('tut-step-1').classList.add('tut-done');
+    document.getElementById('tut-step-2').classList.remove('tut-locked');
+    document.getElementById('tut-step-2').classList.add('tut-active');
+    document.getElementById('tut-key-name').focus();
+    document.getElementById('tut-key-name').addEventListener('keydown', e => { if (e.key === 'Enter') tutCreateKey(); });
+    loadStats();
+  } catch (e) {
+    const msg = e.message || 'Failed to create namespace';
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+  }
+}
+
+async function tutCreateKey() {
+  const name = document.getElementById('tut-key-name').value.trim() || null;
+  const errEl = document.getElementById('tut-step-2-error');
+  errEl.classList.add('hidden');
+  try {
+    const body = { name, scopes: ['read', 'write', 'execute'] };
+    if (_tutorialNs?.id) body.namespace_id = _tutorialNs.id;
+    const result = await apiFetch('/v1/users/me/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    _tutorialKey = result.key;
+    document.getElementById('tut-key-reveal').classList.remove('hidden');
+    document.getElementById('tut-key-reveal').innerHTML = `<div class="key-reveal">
+      <div class="key-reveal-label">Copy this key now &mdash; it won't be shown again</div>
+      <div class="key-reveal-row"><code>${esc(_tutorialKey)}</code><button class="btn btn-copy btn-sm" onclick="copyText('${esc(_tutorialKey)}',this)">copy</button></div>
+    </div>`;
+    document.getElementById('tut-step-2').classList.remove('tut-active');
+    document.getElementById('tut-step-2').classList.add('tut-done');
+    document.getElementById('tut-step-3').classList.remove('tut-locked');
+    document.getElementById('tut-step-3').classList.add('tut-active');
+    tutRenderConfig();
+    document.getElementById('tut-done').classList.remove('hidden');
+    loadStats();
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to create API key';
+    errEl.classList.remove('hidden');
+  }
+}
+
+function tutRenderConfig() {
+  const nsName = _tutorialNs?.name || 'my-namespace';
+  const config = {
+    mcpServers: {
+      [`mcpworks-${nsName}`]: {
+        url: `https://${nsName}.create.mcpworks.io/mcp`,
+        headers: { Authorization: `Bearer ${_tutorialKey || 'YOUR_API_KEY'}` }
+      }
+    }
+  };
+  const json = JSON.stringify(config, null, 2);
+  document.getElementById('tut-mcp-config').innerHTML = `<div style="position:relative">
+    <pre class="schema-block" style="margin:0"><code class="language-json">${esc(json)}</code></pre>
+    <button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(json))},this)">copy</button>
+  </div>`;
+  hljs.highlightAll();
 }
 
 async function loadNamespace(nsName) {
