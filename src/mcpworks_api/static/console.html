@@ -794,6 +794,49 @@ async function loadNamespace(nsName) {
     ]);
     const svcs = svcData.services || [];
     setInsights(svcs.length > 1 ? renderPieChart(svcs, 'name', 'call_count', s => `loadFunctions('${esc(nsName)}','${esc(s.name)}')`) : null);
+
+    const allFnDetails = (await Promise.all(svcs.map(s =>
+      apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(s.name)}/functions`)
+        .then(d => (d.functions || []).map(f => ({ ...f, service: s.name })))
+        .catch(() => [])
+    ))).flat();
+    const fnDetails = await Promise.all(allFnDetails.map(f =>
+      apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services/${encodeURIComponent(f.service)}/functions/${encodeURIComponent(f.name)}`)
+        .catch(() => null)
+    ));
+    const requiredEnvMap = {};
+    const optionalEnvMap = {};
+    for (const fn of fnDetails) {
+      if (!fn?.active_version_details) continue;
+      const av = fn.active_version_details;
+      const fnLabel = fn.name;
+      for (const v of (av.required_env || [])) { if (!requiredEnvMap[v]) requiredEnvMap[v] = []; requiredEnvMap[v].push(fnLabel); }
+      for (const v of (av.optional_env || [])) { if (!optionalEnvMap[v]) optionalEnvMap[v] = []; optionalEnvMap[v].push(fnLabel); }
+    }
+    const requiredKeys = Object.keys(requiredEnvMap).sort();
+    const optionalKeys = Object.keys(optionalEnvMap).sort();
+    const allEnvKeys = [...new Set([...requiredKeys, ...optionalKeys])].sort();
+
+    const mcpConfig = { mcpServers: {} };
+    const serverKey = `mcpworks-${nsName}`;
+    mcpConfig.mcpServers[serverKey] = { url: `https://${nsName}.create.mcpworks.io/mcp`, headers: { Authorization: 'Bearer YOUR_API_KEY' } };
+    if (allEnvKeys.length) {
+      mcpConfig.mcpServers[serverKey].headers['X-MCPWorks-Env'] = allEnvKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
+    }
+    const mcpJson = JSON.stringify(mcpConfig, null, 2);
+
+    let envHtml = '';
+    if (requiredKeys.length || optionalKeys.length) {
+      const rows = [];
+      for (const k of requiredKeys) rows.push(`<tr><td><code style="color:var(--text-1);font-size:12px">${esc(k)}</code></td><td><span class="tag" style="background:rgba(248,113,113,0.12);color:var(--danger)">required</span></td><td class="cell-dim" style="font-size:12px">${requiredEnvMap[k].map(n => esc(n)).join(', ')}</td></tr>`);
+      for (const k of optionalKeys) {
+        if (requiredKeys.includes(k)) continue;
+        rows.push(`<tr><td><code style="color:var(--text-1);font-size:12px">${esc(k)}</code></td><td><span class="tag" style="background:rgba(74,222,128,0.12);color:var(--green)">optional</span></td><td class="cell-dim" style="font-size:12px">${optionalEnvMap[k].map(n => esc(n)).join(', ')}</td></tr>`);
+      }
+      envHtml = `<div class="section-label" style="margin-top:18px">Environment Variables</div>
+        <table><thead><tr><th>Variable</th><th>Type</th><th>Used by</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    }
+
     const svcHtml = !svcs.length ? '<div style="padding:16px;color:var(--text-3)">No services</div>' : `
       <table><thead><tr><th>Service</th><th>Description</th><th>Functions</th><th>Calls</th><th>Created</th></tr></thead><tbody>${svcs.map((s, i) => `
         <tr class="clickable stagger" style="--i:${i}" onclick="loadFunctions('${esc(nsName)}','${esc(s.name)}')">
@@ -808,7 +851,14 @@ async function loadNamespace(nsName) {
       ${ns.description ? `<div class="detail-desc">${esc(ns.description)}</div>` : ''}
       <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
       ${ns.network_allowlist?.length ? `<div class="detail-meta">Allowlist: <span>${ns.network_allowlist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
+      <div class="section-label" style="margin-top:18px">MCP Configuration</div>
+      <div style="position:relative">
+        <pre class="schema-block" style="margin:0"><code class="language-json">${esc(mcpJson)}</code></pre>
+        <button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(mcpJson))},this)">copy</button>
+      </div>
+      ${envHtml}
       <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}`;
+    hljs.highlightAll();
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }
 
