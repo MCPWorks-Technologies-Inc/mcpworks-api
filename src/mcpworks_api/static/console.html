@@ -285,6 +285,39 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
 .config-tab-panel { display: none; }
 .config-tab-panel.active { display: block; }
 .config-tab-hint { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+
+.onboarding-wrap { max-width: 640px; margin: 0 auto; padding: 32px 0; animation: fadeUp 0.3s ease-out; }
+.onboarding-wrap h2 { font-family: var(--sans); font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.onboarding-wrap .onboarding-sub { color: var(--text-2); font-size: 14px; margin-bottom: 24px; }
+.tos-iframe { width: 100%; height: 400px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--bg-1); }
+.tos-accept-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13px; color: var(--text-2); }
+.tos-accept-row input[type="checkbox"] { accent-color: var(--accent); }
+
+.pricing-toggle-wrap { display: flex; justify-content: center; margin-bottom: 24px; }
+.pricing-toggle { display: inline-flex; background: var(--bg-2); border-radius: 8px; padding: 3px; border: 1px solid var(--border-1); }
+.pricing-toggle-opt { padding: 6px 20px; border-radius: 6px; border: none; background: transparent; color: var(--text-3); font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.pricing-toggle-opt.active { background: var(--accent); color: #fff; }
+
+.pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+@media (max-width: 900px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
+.pricing-card { background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); padding: 24px 20px; display: flex; flex-direction: column; transition: border-color 0.2s, box-shadow 0.2s; }
+.pricing-card:hover { border-color: var(--border-2); }
+.pricing-card.recommended { border-color: var(--accent); box-shadow: 0 0 24px var(--accent-glow), 0 0 0 1px var(--accent); }
+.pricing-tier { font-family: var(--sans); font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.pricing-price { font-family: var(--sans); font-size: 32px; font-weight: 700; line-height: 1.1; }
+.pricing-interval { font-size: 13px; color: var(--text-3); font-weight: 400; }
+.pricing-annual-note { font-size: 12px; color: var(--green); margin-top: 4px; min-height: 18px; }
+.pricing-features { list-style: none; margin: 16px 0; flex: 1; }
+.pricing-features li { font-size: 13px; color: var(--text-2); padding: 3px 0; }
+.pricing-features li::before { content: '\2713'; color: var(--green); margin-right: 8px; font-weight: 700; }
+.pricing-card .btn { margin-top: auto; }
+.pricing-current-badge { display: inline-block; padding: 6px 18px; border-radius: 8px; background: var(--bg-3); color: var(--text-2); font-size: 13px; font-weight: 500; text-align: center; width: 100%; margin-top: auto; }
+
+.settings-section { margin-bottom: 28px; }
+.settings-section-title { font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--text-1); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.settings-field { display: flex; align-items: baseline; padding: 8px 0; border-bottom: 1px solid rgba(31, 41, 55, 0.4); }
+.settings-field-label { width: 160px; flex-shrink: 0; font-size: 13px; color: var(--text-3); font-family: var(--sans); }
+.settings-field-value { font-size: 13px; color: var(--text-1); }
 </style>
 </head>
 <body>
@@ -296,6 +329,7 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
     <div id="user-info" class="user-bar hidden">
       <span id="tier-badge" class="tier-badge hidden"></span>
       <span id="user-email" class="user-email"></span>
+      <button class="btn btn-ghost btn-sm" onclick="showSettings()">settings</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">logout</button>
     </div>
   </header>
@@ -396,6 +430,7 @@ const API = window.location.origin;
 
 let cachedNamespaces = [];
 let pendingKeyBanner = null;
+let CURRENT_USER = null;
 
 function toggleInsights() {
   const d = document.getElementById('insights-drawer');
@@ -415,19 +450,35 @@ function setInsights(html) {
 }
 
 (function handleOAuthReturn() {
-  if (!window.location.hash) return false;
-  const hp = new URLSearchParams(window.location.hash.substring(1));
-  const ht = hp.get('access_token');
-  if (!ht) return false;
-  TOKEN = ht;
-  localStorage.setItem('mcpworks_token', ht);
-  history.replaceState(null, '', window.location.pathname);
-  fetch(`${API}/v1/users/me`, { headers: { 'Authorization': `Bearer ${ht}` } })
-    .then(r => r.ok ? r.json() : Promise.reject())
-    .then(u => { USER_EMAIL = u.email; localStorage.setItem('mcpworks_email', u.email); showDashboard(u.email); })
-    .catch(() => showDashboard(''));
-  return true;
-})() || (TOKEN && USER_EMAIL && showDashboard(USER_EMAIL));
+  if (window.location.hash) {
+    const hp = new URLSearchParams(window.location.hash.substring(1));
+    const ht = hp.get('access_token');
+    if (ht) {
+      TOKEN = ht;
+      localStorage.setItem('mcpworks_token', ht);
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }
+  if (TOKEN) initSession();
+})();
+
+async function initSession() {
+  try {
+    const user = await apiFetch('/v1/users/me');
+    CURRENT_USER = user;
+    USER_EMAIL = user.email;
+    localStorage.setItem('mcpworks_email', user.email);
+    if (!user.tos_accepted_at) {
+      showOnboarding(user);
+    } else {
+      showDashboard(user.email);
+    }
+  } catch (e) {
+    if (e.message !== 'Unauthorized') {
+      showDashboard(USER_EMAIL || '');
+    }
+  }
+}
 
 function showDashboard(email) {
   document.getElementById('login-section').classList.add('hidden');
@@ -458,7 +509,7 @@ async function doLogin() {
     USER_EMAIL = email;
     localStorage.setItem('mcpworks_token', TOKEN);
     localStorage.setItem('mcpworks_email', email);
-    showDashboard(email);
+    initSession();
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
@@ -507,7 +558,7 @@ async function doRegister() {
       USER_EMAIL = email;
       localStorage.setItem('mcpworks_token', TOKEN);
       localStorage.setItem('mcpworks_email', email);
-      showDashboard(email);
+      initSession();
     } else {
       successEl.textContent = data.message || 'Account created. You will be notified when your account is approved.';
       successEl.classList.remove('hidden');
@@ -593,7 +644,10 @@ async function loadStats() {
     const used = usageData.executions_count;
     const limit = usageData.executions_limit;
     document.getElementById('usage-text').textContent = isUnlimited ? `${used} executions` : `${used} / ${limit}`;
-    document.getElementById('usage-tier').textContent = usageData.tier.replace('_', ' ');
+    const tierLabel = usageData.tier.replace('_', ' ');
+    document.getElementById('usage-tier').innerHTML = usageData.tier === 'free'
+      ? tierLabel + ' <a href="#" onclick="showPlans(); return false;" style="color:var(--link);text-decoration:none;font-size:12px;margin-left:4px">Upgrade</a>'
+      : tierLabel;
     const fill = document.getElementById('usage-fill');
     const pct = isUnlimited ? 0 : Math.min((used / limit) * 100, 100);
     fill.style.width = '0%';
@@ -656,6 +710,211 @@ function renderPieChart(items, labelKey, valueKey, onClickFn) {
     leg.push(`<div class="pie-legend-item"><span class="pie-dot" style="background:${col}"></span>${labelHtml}<span class="pie-val">${v} (${p}%)</span></div>`);
   });
   return `<div class="pie-wrap"><svg width="80" height="80" viewBox="0 0 80 80">${segs.join('')}<text x="${CX}" y="${CY}" text-anchor="middle" dominant-baseline="central" fill="var(--text-1)" font-family="var(--sans)" font-size="13" font-weight="700">${total}</text></svg><div class="pie-legend">${leg.join('')}</div></div>`;
+}
+
+function showOnboarding(user) {
+  document.getElementById('login-section').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('user-info').classList.remove('hidden');
+  document.getElementById('user-email').textContent = user.email;
+  document.querySelector('.stats-grid').classList.add('hidden');
+  document.getElementById('usage-strip').classList.add('hidden');
+  document.getElementById('insights-drawer').classList.add('hidden');
+  setBreadcrumb([{ label: 'Welcome' }]);
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="onboarding-wrap" id="onboarding">
+    <div id="onboarding-step-1">
+      <h2>Terms of Service</h2>
+      <div class="onboarding-sub">Please review and accept our terms to continue.</div>
+      <iframe class="tos-iframe" src="/v1/legal/terms"></iframe>
+      <div class="tos-accept-row">
+        <input type="checkbox" id="onboard-tos-check">
+        <label for="onboard-tos-check">I accept the <a href="/v1/legal/terms" target="_blank" style="color:var(--link)">Terms of Service</a> and <a href="/v1/legal/privacy" target="_blank" style="color:var(--link)">Privacy Policy</a></label>
+      </div>
+      <button class="btn btn-primary" style="margin-top:16px;width:100%" id="onboard-tos-btn" onclick="acceptTos()" disabled>Accept & Continue</button>
+    </div>
+    <div id="onboarding-step-2" class="hidden">
+      <h2>Choose a Plan</h2>
+      <div class="onboarding-sub">Pick the plan that fits your needs. You can change anytime.</div>
+      ${renderPlanSelection('onboarding')}
+    </div>
+  </div>`;
+  document.getElementById('onboard-tos-check').addEventListener('change', function() {
+    document.getElementById('onboard-tos-btn').disabled = !this.checked;
+  });
+}
+
+async function acceptTos() {
+  const btn = document.getElementById('onboard-tos-btn');
+  btn.disabled = true;
+  btn.textContent = 'Accepting\u2026';
+  try {
+    const user = await apiFetch('/v1/users/me/accept-tos', { method: 'POST' });
+    CURRENT_USER = user;
+    document.getElementById('onboarding-step-1').classList.add('hidden');
+    document.getElementById('onboarding-step-2').classList.remove('hidden');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Accept & Continue';
+    alert('Failed to accept ToS: ' + e.message);
+  }
+}
+
+const PLAN_DATA = [
+  { tier: 'free', name: 'Free', monthly: 0, annual: 0, executions: '100 / mo', features: ['Community support', '30s timeout', '1 namespace'], cta: 'free' },
+  { tier: 'builder', name: 'Builder', monthly: 49, annual: 490, executions: '1,000 / mo', features: ['Email support', '60s timeout', '5 namespaces'], recommended: true },
+  { tier: 'pro', name: 'Pro', monthly: 149, annual: 1490, executions: '10,000 / mo', features: ['Priority support', '120s timeout', '25 namespaces'] },
+  { tier: 'enterprise', name: 'Enterprise', monthly: 499, annual: 4990, executions: 'Unlimited', features: ['Dedicated support', '300s timeout', 'Unlimited namespaces'] },
+];
+
+function renderPlanSelection(context) {
+  const currentTier = CURRENT_USER?.effective_tier || CURRENT_USER?.tier || 'free';
+  let h = `<div class="pricing-toggle-wrap">
+    <div class="pricing-toggle">
+      <button class="pricing-toggle-opt active" onclick="togglePricingInterval('monthly')">Monthly</button>
+      <button class="pricing-toggle-opt" onclick="togglePricingInterval('annual')">Annual</button>
+    </div>
+  </div>
+  <div class="pricing-grid" id="pricing-grid">`;
+  for (const p of PLAN_DATA) {
+    const isCurrent = context !== 'onboarding' && p.tier === currentTier;
+    const rec = p.recommended && !isCurrent ? ' recommended' : '';
+    let ctaHtml;
+    if (isCurrent) {
+      ctaHtml = `<div class="pricing-current-badge">Current Plan</div>`;
+    } else if (p.tier === 'free' && context === 'onboarding') {
+      ctaHtml = `<button class="btn btn-ghost btn-block" onclick="finishOnboarding()">Continue with Free</button>`;
+    } else if (p.tier === 'free') {
+      ctaHtml = '';
+    } else {
+      const label = context === 'onboarding' ? `Choose ${p.name}` : 'Upgrade';
+      ctaHtml = `<button class="btn btn-primary btn-block" onclick="selectPlan('${p.tier}','monthly')">${label}</button>`;
+    }
+    h += `<div class="pricing-card${rec}" data-tier="${p.tier}">
+      <div class="pricing-tier">${p.name}</div>
+      <div><span class="pricing-price" data-monthly="${p.monthly}" data-annual="${p.annual}">$${p.monthly}</span><span class="pricing-interval" data-monthly="/mo" data-annual="/yr"> /mo</span></div>
+      <div class="pricing-annual-note" data-monthly="" data-annual="${p.annual ? 'Save $' + (p.monthly * 12 - p.annual) + '/yr' : ''}">&nbsp;</div>
+      <div style="font-size:12px;color:var(--text-3);margin:8px 0">${p.executions} executions</div>
+      <ul class="pricing-features">${p.features.map(f => `<li>${f}</li>`).join('')}</ul>
+      ${ctaHtml}
+    </div>`;
+  }
+  h += '</div>';
+  if (context === 'onboarding') {
+    h += `<div style="text-align:center;margin-top:16px"><a href="#" onclick="finishOnboarding(); return false;" style="color:var(--text-3);font-size:13px;text-decoration:none">Skip for now</a></div>`;
+  }
+  return h;
+}
+
+function togglePricingInterval(interval) {
+  document.querySelectorAll('.pricing-toggle-opt').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase() === interval);
+  });
+  document.querySelectorAll('.pricing-price').forEach(el => {
+    el.textContent = '$' + el.dataset[interval];
+  });
+  document.querySelectorAll('.pricing-interval').forEach(el => {
+    el.textContent = el.dataset[interval];
+  });
+  document.querySelectorAll('.pricing-annual-note').forEach(el => {
+    const note = el.dataset[interval];
+    el.innerHTML = note || '&nbsp;';
+  });
+  document.querySelectorAll('.pricing-card .btn-primary').forEach(btn => {
+    if (btn.onclick) {
+      const tier = btn.closest('.pricing-card').dataset.tier;
+      btn.setAttribute('onclick', `selectPlan('${tier}','${interval}')`);
+    }
+  });
+}
+
+async function selectPlan(tier, interval) {
+  try {
+    const origin = window.location.origin;
+    const result = await apiFetch('/v1/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tier: tier,
+        interval: interval,
+        success_url: origin + '/console',
+        cancel_url: origin + '/console',
+      }),
+    });
+    window.location.href = result.checkout_url;
+  } catch (e) {
+    alert('Failed to start checkout: ' + e.message);
+  }
+}
+
+function finishOnboarding() {
+  document.querySelector('.stats-grid').classList.remove('hidden');
+  document.getElementById('insights-drawer').classList.remove('hidden');
+  showDashboard(CURRENT_USER?.email || USER_EMAIL || '');
+}
+
+function showPlans() {
+  setBreadcrumb([{ label: 'Plans' }]);
+  setInsights(null);
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="detail-section">
+    <div class="detail-title" style="margin-bottom:4px">Plans & Pricing</div>
+    <div style="color:var(--text-2);font-size:13px;margin-bottom:24px">Choose the plan that fits your needs.</div>
+    ${renderPlanSelection('upgrade')}
+  </div>`;
+}
+
+async function showSettings() {
+  setBreadcrumb([{ label: 'Settings' }]);
+  setInsights(null);
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading settings</div>';
+  try {
+    const [user, usage] = await Promise.all([
+      apiFetch('/v1/users/me'),
+      apiFetch('/v1/account/usage'),
+    ]);
+    CURRENT_USER = user;
+    const tier = user.effective_tier || user.tier;
+    const isPaid = tier !== 'free';
+    c.innerHTML = `<div class="detail-section">
+      <div class="detail-title" style="margin-bottom:24px">Settings</div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Profile</div>
+        <div class="settings-field"><span class="settings-field-label">Email</span><span class="settings-field-value">${esc(user.email)}</span></div>
+        <div class="settings-field"><span class="settings-field-label">Name</span><span class="settings-field-value">${esc(user.name || '\u2014')}</span></div>
+        <div class="settings-field"><span class="settings-field-label">Member since</span><span class="settings-field-value">${fmtDate(user.created_at)}</span></div>
+        <div class="settings-field"><span class="settings-field-label">Email verified</span><span class="settings-field-value">${user.email_verified ? 'Yes' : 'No'}</span></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Plan & Billing</div>
+        <div class="settings-field"><span class="settings-field-label">Current plan</span><span class="settings-field-value"><span class="tier-badge tier-${tier}">${tier}</span></span></div>
+        <div class="settings-field"><span class="settings-field-label">Usage this period</span><span class="settings-field-value">${usage.executions_count} / ${usage.executions_limit === -1 ? '\u221e' : usage.executions_limit} executions</span></div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          ${isPaid ? `<button class="btn btn-ghost btn-sm" onclick="openBillingPortal()">Manage Billing</button>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="showPlans()">${isPaid ? 'Change Plan' : 'Upgrade Plan'}</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Legal</div>
+        <div class="settings-field"><span class="settings-field-label">ToS accepted</span><span class="settings-field-value">${user.tos_accepted_at ? fmtDate(user.tos_accepted_at) : 'Not accepted'}</span></div>
+        <div style="margin-top:8px;font-size:13px"><a href="/v1/legal/terms" target="_blank" style="color:var(--link);text-decoration:none;margin-right:16px">Terms of Service</a><a href="/v1/legal/privacy" target="_blank" style="color:var(--link);text-decoration:none">Privacy Policy</a></div>
+      </div>
+    </div>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function openBillingPortal() {
+  try {
+    const origin = window.location.origin;
+    const result = await apiFetch(`/v1/subscriptions/portal?return_url=${encodeURIComponent(origin + '/console')}`, { method: 'POST' });
+    window.location.href = result.portal_url;
+  } catch (e) {
+    alert('Failed to open billing portal: ' + e.message);
+  }
 }
 
 async function loadNamespaces() {
