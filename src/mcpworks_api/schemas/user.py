@@ -27,7 +27,11 @@ class UserProfile(BaseModel):
     )
     tier: str = Field(
         ...,
-        description="Subscription tier (free, founder, founder_pro, enterprise)",
+        description="Subscription tier (free, builder, pro, enterprise)",
+    )
+    effective_tier: str | None = Field(
+        default=None,
+        description="Effective tier after applying admin overrides",
     )
     status: str = Field(
         ...,

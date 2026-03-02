@@ -63,7 +63,7 @@ class TestCreateSubscription:
         response = await client.post(
             "/v1/subscriptions",
             json={
-                "tier": "founder",
+                "tier": "builder",
                 "success_url": "https://example.com/success",
                 "cancel_url": "https://example.com/cancel",
             },
@@ -94,7 +94,7 @@ class TestCreateSubscription:
             "/v1/subscriptions",
             headers=headers,
             json={
-                "tier": "founder",
+                "tier": "builder",
                 "success_url": "https://example.com/success",
                 "cancel_url": "https://example.com/cancel",
             },
@@ -152,7 +152,7 @@ class TestGetCurrentSubscription:
             email=f"sub_found_{user_id}@example.com",
             password_hash="test_hash",
             name="Sub Test User",
-            tier="founder",
+            tier="builder",
             status="active",
         )
         db.add(user)
@@ -161,7 +161,7 @@ class TestGetCurrentSubscription:
         now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
-            tier="founder",
+            tier="builder",
             status=SubscriptionStatus.ACTIVE.value,
             stripe_subscription_id="sub_test123",
             stripe_customer_id="cus_test123",
@@ -178,10 +178,10 @@ class TestGetCurrentSubscription:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["tier"] == "founder"
+        assert data["tier"] == "builder"
         assert data["status"] == "active"
         assert data["cancel_at_period_end"] is False
-        assert data["monthly_executions"] == 1_000  # founder tier limit per PRICING.md
+        assert data["monthly_executions"] == 2_500  # builder tier limit per PRICING.md v5.0.0
 
     @pytest.mark.asyncio
     async def test_get_subscription_no_auth(self, client: AsyncClient):
@@ -232,7 +232,7 @@ class TestCancelSubscription:
             email=f"cancel_done_{user_id}@example.com",
             password_hash="test_hash",
             name="Cancel Test User",
-            tier="founder",
+            tier="builder",
             status="active",
         )
         db.add(user)
@@ -241,7 +241,7 @@ class TestCancelSubscription:
         now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
-            tier="founder",
+            tier="builder",
             status=SubscriptionStatus.CANCELLED.value,
             stripe_subscription_id="sub_cancelled",
             stripe_customer_id="cus_test123",
@@ -342,7 +342,7 @@ class TestStripeWebhook:
                     "object": {
                         "metadata": {
                             "user_id": str(user_id),
-                            "tier": "founder",
+                            "tier": "builder",
                         },
                         "subscription": "sub_new123",
                         "customer": "cus_new123",

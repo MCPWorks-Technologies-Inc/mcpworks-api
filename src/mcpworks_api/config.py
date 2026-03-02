@@ -57,12 +57,15 @@ class Settings(BaseSettings):
             return None
         return v.replace("\\n", "\n")
 
-    # Stripe - A0-SYSTEM-SPECIFICATION.md tier pricing
+    # Stripe - PRICING.md v5.0.0 Value Ladder
     stripe_secret_key: str = Field(default="sk_test_placeholder")
     stripe_webhook_secret: str = Field(default="whsec_placeholder")
-    stripe_price_founder: str = Field(default="price_founder_placeholder")  # $29/mo
-    stripe_price_founder_pro: str = Field(default="price_founder_pro_placeholder")  # $59/mo
-    stripe_price_enterprise: str = Field(default="price_enterprise_placeholder")  # $129+/mo
+    stripe_price_builder_monthly: str = Field(default="price_builder_monthly_placeholder")
+    stripe_price_builder_annual: str = Field(default="price_builder_annual_placeholder")
+    stripe_price_pro_monthly: str = Field(default="price_pro_monthly_placeholder")
+    stripe_price_pro_annual: str = Field(default="price_pro_annual_placeholder")
+    stripe_price_enterprise_monthly: str = Field(default="price_enterprise_monthly_placeholder")
+    stripe_price_enterprise_annual: str = Field(default="price_enterprise_annual_placeholder")
 
     # Observability
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -93,11 +96,11 @@ class Settings(BaseSettings):
     resend_from_email: str = Field(default="noreply@mcpworks.io")
     email_provider: str = Field(default="resend")
 
-    # Tier Execution Limits (monthly) - per PRICING.md
+    # Tier Execution Limits (monthly) - per PRICING.md v5.0.0
     tier_executions_free: int = Field(default=100)
-    tier_executions_founder: int = Field(default=1_000)
-    tier_executions_founder_pro: int = Field(default=10_000)
-    tier_executions_enterprise: int = Field(default=100_000)  # ORDER-019: was unlimited
+    tier_executions_builder: int = Field(default=2_500)
+    tier_executions_pro: int = Field(default=15_000)
+    tier_executions_enterprise: int = Field(default=100_000)
 
     # Sandbox
     sandbox_dev_mode: bool = Field(

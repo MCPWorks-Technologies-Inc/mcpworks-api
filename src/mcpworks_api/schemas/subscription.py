@@ -10,8 +10,13 @@ class CreateSubscriptionRequest(BaseModel):
 
     tier: str = Field(
         ...,
-        description="Target subscription tier: founder, founder_pro, or enterprise",
-        pattern="^(founder|founder_pro|enterprise)$",
+        description="Target subscription tier: builder, pro, or enterprise",
+        pattern="^(builder|pro|enterprise)$",
+    )
+    interval: str = Field(
+        default="monthly",
+        description="Billing interval: monthly or annual",
+        pattern="^(monthly|annual)$",
     )
     success_url: str = Field(
         ...,
@@ -59,12 +64,25 @@ class SubscriptionInfo(BaseModel):
         ...,
         description="Whether subscription will cancel at period end",
     )
+    interval: str | None = Field(
+        default=None,
+        description="Billing interval: monthly or annual",
+    )
     monthly_executions: int = Field(
         ...,
-        description="Monthly execution limit for this tier (-1 = unlimited)",
+        description="Monthly execution limit for this tier",
     )
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PortalSessionResponse(BaseModel):
+    """Response for customer portal session creation."""
+
+    portal_url: str = Field(
+        ...,
+        description="Stripe Customer Portal URL to redirect user to",
+    )
 
 
 class CancelSubscriptionResponse(BaseModel):

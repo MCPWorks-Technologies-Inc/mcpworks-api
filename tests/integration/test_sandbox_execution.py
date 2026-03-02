@@ -23,7 +23,7 @@ def mock_account():
     """Create a mock account for execution."""
     account = MagicMock()
     account.id = uuid.uuid4()
-    account.tier = "founder"
+    account.tier = "builder"
     return account
 
 

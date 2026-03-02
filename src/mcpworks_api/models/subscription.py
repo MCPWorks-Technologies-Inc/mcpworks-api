@@ -27,26 +27,26 @@ class SubscriptionStatus(str, Enum):
 class SubscriptionTier(str, Enum):
     """Subscription tier with monthly execution limits.
 
-    Per PRICING.md:
+    Per PRICING.md v5.0.0 (Value Ladder):
     - free ($0): 100 executions/month
-    - founder ($29/mo): 1,000 executions/month
-    - founder_pro ($59/mo): 10,000 executions/month
-    - enterprise ($129+/mo): Unlimited
+    - builder ($49/mo): 2,500 executions/month
+    - pro ($149/mo): 15,000 executions/month
+    - enterprise ($499/mo): 100,000 executions/month
     """
 
     FREE = "free"
-    FOUNDER = "founder"
-    FOUNDER_PRO = "founder_pro"
+    BUILDER = "builder"
+    PRO = "pro"
     ENTERPRISE = "enterprise"
 
     @property
     def monthly_executions(self) -> int:
-        """Get monthly execution limit for this tier. -1 means unlimited."""
+        """Get monthly execution limit for this tier."""
         limits = {
             SubscriptionTier.FREE: 100,
-            SubscriptionTier.FOUNDER: 1_000,
-            SubscriptionTier.FOUNDER_PRO: 10_000,
-            SubscriptionTier.ENTERPRISE: -1,  # Unlimited
+            SubscriptionTier.BUILDER: 2_500,
+            SubscriptionTier.PRO: 15_000,
+            SubscriptionTier.ENTERPRISE: 100_000,
         }
         return limits.get(self, 100)
 
@@ -102,6 +102,12 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
         Boolean,
         default=False,
         nullable=False,
+    )
+
+    interval: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        default="monthly",
     )
 
     # Relationships

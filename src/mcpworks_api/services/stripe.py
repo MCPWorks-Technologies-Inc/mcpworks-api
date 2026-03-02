@@ -21,32 +21,39 @@ from mcpworks_api.models import (
 WEBHOOK_IDEMPOTENCY_PREFIX = "stripe:webhook:processed:"
 WEBHOOK_IDEMPOTENCY_TTL = 86400  # 24 hours - Stripe retries for up to 3 days
 
-# Tier to Stripe price ID mapping
-TIER_PRICE_MAP: dict[str, str] = {}
+TIER_PRICE_MAP: dict[str, dict[str, str]] = {}
 
 
-def get_tier_price_map() -> dict[str, str]:
+def get_tier_price_map() -> dict[str, dict[str, str]]:
     """Get tier to price ID mapping from settings.
 
-    Per A0-SYSTEM-SPECIFICATION.md:
-    - founder: $29/mo
-    - founder_pro: $59/mo
-    - enterprise: $129+/mo
+    Per PRICING.md v5.0.0 (Value Ladder):
+    - builder: $49/mo or $490/yr
+    - pro: $149/mo or $1,490/yr
+    - enterprise: $499/mo or $4,990/yr
     """
     settings = get_settings()
     return {
-        "founder": settings.stripe_price_founder,
-        "founder_pro": settings.stripe_price_founder_pro,
-        "enterprise": settings.stripe_price_enterprise,
+        "builder": {
+            "monthly": settings.stripe_price_builder_monthly,
+            "annual": settings.stripe_price_builder_annual,
+        },
+        "pro": {
+            "monthly": settings.stripe_price_pro_monthly,
+            "annual": settings.stripe_price_pro_annual,
+        },
+        "enterprise": {
+            "monthly": settings.stripe_price_enterprise_monthly,
+            "annual": settings.stripe_price_enterprise_annual,
+        },
     }
 
 
-# Monthly execution limits per tier (for reference, primarily enforced by BillingMiddleware)
 TIER_EXECUTIONS = {
     "free": 100,
-    "founder": 1_000,
-    "founder_pro": 10_000,
-    "enterprise": -1,  # Unlimited
+    "builder": 2_500,
+    "pro": 15_000,
+    "enterprise": 100_000,
 }
 
 
@@ -132,6 +139,7 @@ class StripeService:
         self,
         user_id: uuid.UUID,
         tier: str,
+        interval: str,
         success_url: str,
         cancel_url: str,
     ) -> dict[str, Any]:
@@ -139,7 +147,8 @@ class StripeService:
 
         Args:
             user_id: User upgrading subscription
-            tier: Target tier (founder, founder_pro, enterprise)
+            tier: Target tier (builder, pro, enterprise)
+            interval: Billing interval (monthly, annual)
             success_url: URL to redirect on success
             cancel_url: URL to redirect on cancel
 
@@ -147,36 +156,41 @@ class StripeService:
             Dict with checkout session URL and ID
 
         Raises:
-            ValueError: If tier is invalid or user not found
+            ValueError: If tier/interval is invalid or user not found
         """
-        if tier not in ["founder", "founder_pro", "enterprise"]:
-            raise ValueError(f"Invalid tier: {tier}. Must be founder, founder_pro, or enterprise")
+        if tier not in ["builder", "pro", "enterprise"]:
+            raise ValueError(f"Invalid tier: {tier}. Must be builder, pro, or enterprise")
+        if interval not in ["monthly", "annual"]:
+            raise ValueError(f"Invalid interval: {interval}. Must be monthly or annual")
 
-        # Get price ID for tier - check configuration BEFORE calling Stripe
         price_map = get_tier_price_map()
-        price_id = price_map.get(tier)
+        tier_prices = price_map.get(tier)
+        if not tier_prices:
+            raise ValueError(f"Unknown tier: {tier}")
+        price_id = tier_prices.get(interval)
         if not price_id or price_id.endswith("_placeholder"):
-            raise ValueError(f"Stripe price not configured for tier: {tier}")
+            raise ValueError(f"Stripe price not configured for tier: {tier} ({interval})")
 
-        # Get user
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None:
             raise ValueError(f"User {user_id} not found")
 
-        # Get or create Stripe customer
         customer_id = await self._get_or_create_customer(user)
 
-        # Create checkout session
         session = stripe.checkout.Session.create(
             customer=customer_id,
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
             success_url=success_url,
             cancel_url=cancel_url,
+            allow_promotion_codes=True,
+            automatic_tax={"enabled": True},
+            billing_address_collection="required",
             metadata={
                 "user_id": str(user_id),
                 "tier": tier,
+                "interval": interval,
             },
         )
 
@@ -184,6 +198,49 @@ class StripeService:
             "checkout_url": session.url,
             "session_id": session.id,
         }
+
+    async def create_portal_session(
+        self,
+        user_id: uuid.UUID,
+        return_url: str,
+    ) -> dict[str, Any]:
+        """Create a Stripe Customer Portal session for self-service management.
+
+        Args:
+            user_id: User requesting portal access
+            return_url: URL to redirect when user exits portal
+
+        Returns:
+            Dict with portal session URL
+
+        Raises:
+            ValueError: If no subscription or customer found
+        """
+        result = await self.db.execute(select(Subscription).where(Subscription.user_id == user_id))
+        subscription = result.scalar_one_or_none()
+
+        if not subscription or not subscription.stripe_customer_id:
+            raise ValueError("No Stripe customer found for this user")
+
+        session = stripe.billing_portal.Session.create(
+            customer=subscription.stripe_customer_id,
+            return_url=return_url,
+        )
+
+        return {"portal_url": session.url}
+
+    def _price_id_to_tier(self, price_id: str) -> tuple[str, str] | None:
+        """Reverse-map a Stripe Price ID to (tier, interval).
+
+        Returns:
+            Tuple of (tier, interval) or None if not found
+        """
+        price_map = get_tier_price_map()
+        for tier, intervals in price_map.items():
+            for interval, pid in intervals.items():
+                if pid == price_id:
+                    return (tier, interval)
+        return None
 
     async def _get_or_create_customer(self, user: User) -> str:
         """Get existing Stripe customer or create new one.
@@ -288,18 +345,16 @@ class StripeService:
 
         user_id = uuid.UUID(user_id_str)
 
-        # Handle subscription purchase
         tier = metadata.get("tier")
+        interval = metadata.get("interval", "monthly")
         subscription_id = session.get("subscription")
         customer_id = session.get("customer")
 
         if not subscription_id:
             return
 
-        # Get subscription details from Stripe
         stripe_sub = stripe.Subscription.retrieve(subscription_id)
 
-        # Create or update our subscription record
         result = await self.db.execute(select(Subscription).where(Subscription.user_id == user_id))
         subscription = result.scalar_one_or_none()
 
@@ -314,6 +369,7 @@ class StripeService:
             subscription.current_period_start = period_start
             subscription.current_period_end = period_end
             subscription.cancel_at_period_end = False
+            subscription.interval = interval
         else:
             subscription = Subscription(
                 user_id=user_id,
@@ -323,10 +379,10 @@ class StripeService:
                 stripe_customer_id=customer_id,
                 current_period_start=period_start,
                 current_period_end=period_end,
+                interval=interval,
             )
             self.db.add(subscription)
 
-        # Update user tier
         await self.db.execute(update(User).where(User.id == user_id).values(tier=tier))
 
         await self.db.commit()
@@ -338,12 +394,15 @@ class StripeService:
         pass
 
     async def _handle_subscription_updated(self, subscription_data: dict[str, Any]) -> None:
-        """Handle customer.subscription.updated event."""
+        """Handle customer.subscription.updated event.
+
+        Syncs tier from Stripe Price ID so Customer Portal plan changes
+        are reflected in our database.
+        """
         stripe_sub_id = subscription_data["id"]
         status = subscription_data["status"]
         cancel_at_period_end = subscription_data.get("cancel_at_period_end", False)
 
-        # Find our subscription record
         result = await self.db.execute(
             select(Subscription).where(Subscription.stripe_subscription_id == stripe_sub_id)
         )
@@ -352,7 +411,6 @@ class StripeService:
         if not subscription:
             return
 
-        # Map Stripe status to our status
         status_map = {
             "active": SubscriptionStatus.ACTIVE.value,
             "past_due": SubscriptionStatus.PAST_DUE.value,
@@ -364,11 +422,23 @@ class StripeService:
         subscription.status = new_status
         subscription.cancel_at_period_end = cancel_at_period_end
 
-        # Update period dates
         period_start = datetime.fromtimestamp(subscription_data["current_period_start"], tz=UTC)
         period_end = datetime.fromtimestamp(subscription_data["current_period_end"], tz=UTC)
         subscription.current_period_start = period_start
         subscription.current_period_end = period_end
+
+        items = subscription_data.get("items", {}).get("data", [])
+        if items:
+            price_id = items[0].get("price", {}).get("id")
+            if price_id:
+                tier_info = self._price_id_to_tier(price_id)
+                if tier_info:
+                    tier, interval = tier_info
+                    subscription.tier = tier
+                    subscription.interval = interval
+                    await self.db.execute(
+                        update(User).where(User.id == subscription.user_id).values(tier=tier)
+                    )
 
         await self.db.commit()
 
@@ -451,7 +521,6 @@ class StripeService:
         if subscription.status == SubscriptionStatus.CANCELLED.value:
             raise ValueError("Subscription already cancelled")
 
-        # Cancel at period end in Stripe
         stripe.Subscription.modify(
             subscription.stripe_subscription_id,
             cancel_at_period_end=True,

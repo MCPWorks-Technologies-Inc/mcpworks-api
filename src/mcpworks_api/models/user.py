@@ -1,6 +1,6 @@
 """User model - account holder who can authenticate and use platform services."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -19,11 +19,11 @@ if TYPE_CHECKING:
 
 
 class UserTier(str, Enum):
-    """User subscription tier per A0-SYSTEM-SPECIFICATION.md."""
+    """User subscription tier per PRICING.md v5.0.0 (Value Ladder)."""
 
     FREE = "free"
-    FOUNDER = "founder"
-    FOUNDER_PRO = "founder_pro"
+    BUILDER = "builder"
+    PRO = "pro"
     ENTERPRISE = "enterprise"
 
 
@@ -95,6 +95,19 @@ class User(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
+    tier_override: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    tier_override_reason: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    tier_override_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # ORDER-008: ToS consent tracking
     tos_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -149,6 +162,16 @@ class User(Base, UUIDMixin, TimestampMixin):
     def is_active(self) -> bool:
         """Check if user account is active."""
         return self.status == UserStatus.ACTIVE.value
+
+    @property
+    def effective_tier(self) -> str:
+        """Get effective tier, respecting override if set and not expired."""
+        if self.tier_override:
+            if self.tier_override_expires_at is None:
+                return self.tier_override
+            if self.tier_override_expires_at > datetime.now(UTC):
+                return self.tier_override
+        return self.tier
 
     @property
     def tier_enum(self) -> UserTier:

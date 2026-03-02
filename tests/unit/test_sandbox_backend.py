@@ -19,8 +19,8 @@ class TestExecutionTier:
     def test_tier_values(self):
         """Test tier enum values."""
         assert ExecutionTier.FREE.value == "free"
-        assert ExecutionTier.FOUNDER.value == "founder"
-        assert ExecutionTier.FOUNDER_PRO.value == "founder_pro"
+        assert ExecutionTier.BUILDER.value == "builder"
+        assert ExecutionTier.PRO.value == "pro"
         assert ExecutionTier.ENTERPRISE.value == "enterprise"
 
     def test_tier_config_exists_for_all_tiers(self):
@@ -44,9 +44,9 @@ class TestTierConfig:
         assert config["memory_mb"] == 128
         assert config["network_hosts"] == 0  # No network access
 
-    def test_founder_tier_limits(self):
-        """Test founder tier has moderate limits."""
-        config = TIER_CONFIG[ExecutionTier.FOUNDER]
+    def test_builder_tier_limits(self):
+        """Test builder tier has moderate limits."""
+        config = TIER_CONFIG[ExecutionTier.BUILDER]
         assert config["timeout_sec"] == 30
         assert config["memory_mb"] == 256
         assert config["network_hosts"] == 5
@@ -61,18 +61,18 @@ class TestTierConfig:
     def test_tier_progression(self):
         """Test limits increase with tier."""
         free = TIER_CONFIG[ExecutionTier.FREE]
-        founder = TIER_CONFIG[ExecutionTier.FOUNDER]
-        pro = TIER_CONFIG[ExecutionTier.FOUNDER_PRO]
+        builder = TIER_CONFIG[ExecutionTier.BUILDER]
+        pro = TIER_CONFIG[ExecutionTier.PRO]
         enterprise = TIER_CONFIG[ExecutionTier.ENTERPRISE]
 
         # Timeout increases
-        assert free["timeout_sec"] < founder["timeout_sec"]
-        assert founder["timeout_sec"] < pro["timeout_sec"]
+        assert free["timeout_sec"] < builder["timeout_sec"]
+        assert builder["timeout_sec"] < pro["timeout_sec"]
         assert pro["timeout_sec"] < enterprise["timeout_sec"]
 
         # Memory increases
-        assert free["memory_mb"] < founder["memory_mb"]
-        assert founder["memory_mb"] < pro["memory_mb"]
+        assert free["memory_mb"] < builder["memory_mb"]
+        assert builder["memory_mb"] < pro["memory_mb"]
         assert pro["memory_mb"] < enterprise["memory_mb"]
 
 
@@ -150,10 +150,10 @@ class TestSandboxBackend:
 
         # Mock account with tier
         account = MagicMock()
-        account.tier = "founder"
+        account.tier = "builder"
 
         config = backend._get_tier_config(account)
-        assert config == TIER_CONFIG[ExecutionTier.FOUNDER]
+        assert config == TIER_CONFIG[ExecutionTier.BUILDER]
 
     def test_get_tier_config_default(self):
         """Test default tier config when account has no tier."""
