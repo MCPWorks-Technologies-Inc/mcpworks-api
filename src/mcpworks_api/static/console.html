@@ -277,6 +277,14 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
 .modal-box label strong { color: var(--text-1); }
 .modal-box input { margin-bottom: 16px; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+.config-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.config-tab { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border-1); background: transparent; color: var(--text-3); font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+.config-tab:hover { color: var(--text-2); border-color: var(--border-2); }
+.config-tab.active { background: var(--accent-sub); color: var(--link); border-color: var(--accent); }
+.config-tab-panel { display: none; }
+.config-tab-panel.active { display: block; }
+.config-tab-hint { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -713,9 +721,8 @@ function showGettingStarted() {
       </div>
 
       <div id="tut-step-3" class="tut-step tut-locked">
-        <div class="tut-step-header"><span class="tut-num">3</span> Connect from Claude Code</div>
+        <div class="tut-step-header"><span class="tut-num">3</span> Connect your AI assistant</div>
         <div class="tut-step-body">
-          <div style="color:var(--text-2);font-size:13px;margin-bottom:12px">Add this to your <code style="background:var(--bg-0);padding:1px 5px;border-radius:4px;font-size:12px">.mcp.json</code> or Claude Code settings:</div>
           <div id="tut-mcp-config"></div>
         </div>
       </div>
@@ -787,21 +794,52 @@ async function tutCreateKey() {
   }
 }
 
+function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix) {
+  idPrefix = idPrefix || 'cfg';
+  const serverKey = `mcpworks-${nsName}`;
+  const baseUrl = `https://${nsName}.create.mcpworks.io/mcp`;
+  const buildCfg = (urlField) => {
+    const c = { mcpServers: {} };
+    c.mcpServers[serverKey] = { [urlField]: baseUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    if (envKeys && envKeys.length) c.mcpServers[serverKey].headers['X-MCPWorks-Env'] = envKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
+    return JSON.stringify(c, null, 2);
+  };
+  const claudeJson = buildCfg('url');
+  const cursorJson = buildCfg('url');
+  const windsurfJson = buildCfg('serverUrl');
+  const clients = [
+    { id: 'claude', label: 'Claude Code', hint: '.mcp.json', json: claudeJson, cli: `claude mcp add ${serverKey} --transport streamable-http ${baseUrl}` },
+    { id: 'cursor', label: 'Cursor', hint: '.cursor/mcp.json', json: cursorJson },
+    { id: 'windsurf', label: 'Windsurf', hint: '~/.codeium/windsurf/mcp_config.json', json: windsurfJson },
+  ];
+  let h = `<div id="${idPrefix}-tabs"><div class="config-tabs">`;
+  clients.forEach((t, i) => { h += `<button class="config-tab${i === 0 ? ' active' : ''}" data-tab="${t.id}" onclick="switchConfigTab('${idPrefix}','${t.id}')">${t.label}</button>`; });
+  h += '</div>';
+  clients.forEach((t, i) => {
+    h += `<div id="${idPrefix}-${t.id}" class="config-tab-panel${i === 0 ? ' active' : ''}">`;
+    h += `<div class="config-tab-hint">Add to <code style="background:var(--bg-1);padding:1px 5px;border-radius:4px;font-size:12px">${esc(t.hint)}</code></div>`;
+    h += `<div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
+    h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(t.json))},this)">copy</button></div>`;
+    if (t.cli) {
+      h += `<div style="margin-top:10px;font-size:12px;color:var(--text-3)">Or via CLI:</div>`;
+      h += `<div style="position:relative;margin-top:4px"><pre class="schema-block" style="margin:0"><code class="language-bash">${esc(t.cli)}</code></pre>`;
+      h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(t.cli))},this)">copy</button></div>`;
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function switchConfigTab(prefix, tabId) {
+  const container = document.getElementById(prefix + '-tabs');
+  container.querySelectorAll('.config-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  container.querySelectorAll('.config-tab-panel').forEach(p => p.classList.toggle('active', p.id === `${prefix}-${tabId}`));
+}
+
 function tutRenderConfig() {
   const nsName = _tutorialNs?.name || 'my-namespace';
-  const config = {
-    mcpServers: {
-      [`mcpworks-${nsName}`]: {
-        url: `https://${nsName}.create.mcpworks.io/mcp`,
-        headers: { Authorization: `Bearer ${_tutorialKey || 'YOUR_API_KEY'}` }
-      }
-    }
-  };
-  const json = JSON.stringify(config, null, 2);
-  document.getElementById('tut-mcp-config').innerHTML = `<div style="position:relative">
-    <pre class="schema-block" style="margin:0"><code class="language-json">${esc(json)}</code></pre>
-    <button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(json))},this)">copy</button>
-  </div>`;
+  document.getElementById('tut-mcp-config').innerHTML = renderMcpConfigTabs(nsName, _tutorialKey || 'YOUR_API_KEY', [], 'tut');
   hljs.highlightAll();
 }
 
@@ -839,14 +877,6 @@ async function loadNamespace(nsName) {
     const optionalKeys = Object.keys(optionalEnvMap).sort();
     const allEnvKeys = [...new Set([...requiredKeys, ...optionalKeys])].sort();
 
-    const mcpConfig = { mcpServers: {} };
-    const serverKey = `mcpworks-${nsName}`;
-    mcpConfig.mcpServers[serverKey] = { url: `https://${nsName}.create.mcpworks.io/mcp`, headers: { Authorization: 'Bearer YOUR_API_KEY' } };
-    if (allEnvKeys.length) {
-      mcpConfig.mcpServers[serverKey].headers['X-MCPWorks-Env'] = allEnvKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
-    }
-    const mcpJson = JSON.stringify(mcpConfig, null, 2);
-
     let envHtml = '';
     if (requiredKeys.length || optionalKeys.length) {
       const rows = [];
@@ -874,10 +904,7 @@ async function loadNamespace(nsName) {
       <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
       ${ns.network_allowlist?.length ? `<div class="detail-meta">Allowlist: <span>${ns.network_allowlist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
       <div class="section-label" style="margin-top:18px">MCP Configuration</div>
-      <div style="position:relative">
-        <pre class="schema-block" style="margin:0"><code class="language-json">${esc(mcpJson)}</code></pre>
-        <button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(mcpJson))},this)">copy</button>
-      </div>
+      ${renderMcpConfigTabs(nsName, 'YOUR_API_KEY', allEnvKeys, 'ns')}
       ${envHtml}
       <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}
       <div class="danger-zone">
