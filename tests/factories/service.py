@@ -50,7 +50,7 @@ class AgentServiceFactory(ServiceFactory):
     url = "http://mcpworks-agent:8000"
     health_check_url = "http://mcpworks-agent:8000/health"
     credit_cost = Decimal("5.00")
-    tier_required = "founder"
+    tier_required = "builder"
 
 
 class InactiveServiceFactory(ServiceFactory):

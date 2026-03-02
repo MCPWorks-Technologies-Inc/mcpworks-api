@@ -36,12 +36,11 @@ class ExecutionTier(str, Enum):
     """Execution tier for resource limits."""
 
     FREE = "free"
-    FOUNDER = "founder"
-    FOUNDER_PRO = "founder_pro"
+    BUILDER = "builder"
+    PRO = "pro"
     ENTERPRISE = "enterprise"
 
 
-# Tier configuration: resource limits per tier
 TIER_CONFIG = {
     ExecutionTier.FREE: {
         "timeout_sec": 10,
@@ -49,14 +48,14 @@ TIER_CONFIG = {
         "max_pids": 16,
         "network_hosts": 0,
     },
-    ExecutionTier.FOUNDER: {
+    ExecutionTier.BUILDER: {
         "timeout_sec": 30,
         "memory_mb": 256,
         "max_pids": 32,
         "network_hosts": 5,
     },
-    ExecutionTier.FOUNDER_PRO: {
-        "timeout_sec": 60,
+    ExecutionTier.PRO: {
+        "timeout_sec": 90,
         "memory_mb": 512,
         "max_pids": 64,
         "network_hosts": 25,
@@ -69,8 +68,7 @@ TIER_CONFIG = {
     },
 }
 
-# Default tier for accounts without explicit tier
-DEFAULT_TIER = ExecutionTier.FOUNDER
+DEFAULT_TIER = ExecutionTier.FREE
 
 # Dangerous patterns to check (defense-in-depth; seccomp is the real protection)
 DANGEROUS_PATTERNS = [

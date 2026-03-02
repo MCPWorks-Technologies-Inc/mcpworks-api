@@ -41,7 +41,7 @@ We collect personal information only when it is necessary to provide and operate
 |------|---------|-------------|-----------|
 | Email address | Account identification, login, transactional communications (e.g., billing receipts, security alerts) | Contract performance; PIPEDA consent at registration | Duration of account + 30 days after deletion request |
 | Password hash (argon2) | Authentication. We never store your plaintext password. | Contract performance | Duration of account; deleted upon account deletion |
-| Account tier (free, founder, founder_pro, enterprise) | Subscription management and enforcement of usage limits | Contract performance | Duration of account + 90 days for billing records |
+| Account tier (free, builder, pro, enterprise) | Subscription management and enforcement of usage limits | Contract performance | Duration of account + 90 days for billing records |
 | Account status (active, suspended, deleted) | Service administration | Contract performance | Duration of account + 90 days |
 | Email verification status | Account security and communications integrity | Legitimate interest (security) | Duration of account |
 

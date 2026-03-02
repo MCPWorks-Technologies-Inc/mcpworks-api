@@ -33,10 +33,10 @@ class ActiveUserFactory(UserFactory):
     email_verified = True
 
 
-class FounderProUserFactory(UserFactory):
-    """Factory for creating founder_pro tier users."""
+class ProUserFactory(UserFactory):
+    """Factory for creating pro tier users."""
 
-    tier = UserTier.FOUNDER_PRO.value
+    tier = UserTier.PRO.value
     status = UserStatus.ACTIVE.value
     email_verified = True
 

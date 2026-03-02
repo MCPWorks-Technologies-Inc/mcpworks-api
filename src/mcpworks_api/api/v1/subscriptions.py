@@ -13,6 +13,7 @@ from mcpworks_api.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutSessionResponse,
     CreateSubscriptionRequest,
+    PortalSessionResponse,
     SubscriptionInfo,
     WebhookResponse,
 )
@@ -38,7 +39,7 @@ async def create_subscription(
     """Create a Stripe Checkout session for subscription upgrade.
 
     FR-BILL-001: Integrate with Stripe for subscription management.
-    FR-BILL-002: Support founder, founder_pro, enterprise tiers.
+    FR-BILL-002: Support builder, pro, enterprise tiers with monthly/annual billing.
     """
     stripe_service = StripeService(db)
 
@@ -46,6 +47,7 @@ async def create_subscription(
         result = await stripe_service.create_checkout_session(
             user_id=uuid.UUID(user_id),
             tier=body.tier,
+            interval=body.interval,
             success_url=body.success_url,
             cancel_url=body.cancel_url,
         )
@@ -92,6 +94,7 @@ async def get_current_subscription(
         current_period_start=subscription.current_period_start,
         current_period_end=subscription.current_period_end,
         cancel_at_period_end=subscription.cancel_at_period_end,
+        interval=subscription.interval,
         monthly_executions=subscription.monthly_executions,
     )
 
@@ -137,6 +140,40 @@ async def cancel_subscription(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "CANNOT_CANCEL", "message": error_msg},
+        )
+
+
+@router.post(
+    "/portal",
+    response_model=PortalSessionResponse,
+    responses={
+        200: {"description": "Portal session created"},
+        400: {"description": "No Stripe customer found"},
+        401: {"description": "Not authenticated"},
+    },
+)
+async def create_portal_session(
+    user_id: CurrentUserId,
+    return_url: str = "https://mcpworks.io/console",
+    db: AsyncSession = Depends(get_db),
+) -> PortalSessionResponse:
+    """Create a Stripe Customer Portal session for self-service management.
+
+    Allows users to update payment methods, view invoices, and manage
+    their subscription directly in Stripe's hosted portal.
+    """
+    stripe_service = StripeService(db)
+
+    try:
+        result = await stripe_service.create_portal_session(
+            user_id=uuid.UUID(user_id),
+            return_url=return_url,
+        )
+        return PortalSessionResponse(portal_url=result["portal_url"])
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "NO_CUSTOMER", "message": str(e)},
         )
 
 

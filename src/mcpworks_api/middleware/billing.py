@@ -30,13 +30,12 @@ class BillingMiddleware(BaseHTTPMiddleware):
     - Credit balance (future)
     """
 
-    # Tier limits (executions per month) - per PRICING.md
-    # ORDER-019: Enterprise capped at 100K (was unlimited, financial liability)
+    # Tier limits (executions per month) - per PRICING.md v5.0.0 Value Ladder
     TIER_LIMITS: dict[str, int] = {
-        "free": 100,  # Free tier: 100 executions/month
-        "founder": 1_000,  # Founder ($29/mo): 1,000 executions/month
-        "founder_pro": 10_000,  # Founder Pro ($59/mo): 10,000 executions/month
-        "enterprise": 100_000,  # Founder Enterprise ($129/mo): 100,000 executions/month
+        "free": 100,
+        "builder": 2_500,
+        "pro": 15_000,
+        "enterprise": 100_000,
     }
 
     # Default limit for unknown tiers
@@ -113,7 +112,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
         Returns:
             Tuple of (current_usage, limit).
         """
-        tier = getattr(account, "tier", "free")
+        tier = getattr(account, "effective_tier", None) or getattr(account, "tier", "free")
         limit = self.TIER_LIMITS.get(tier, self.DEFAULT_LIMIT)
 
         async with get_redis_context() as redis:

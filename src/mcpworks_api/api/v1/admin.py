@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid as uuid_module
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -690,6 +691,12 @@ async def get_user(
         "email": user.email,
         "name": user.name,
         "tier": user.tier,
+        "effective_tier": user.effective_tier,
+        "tier_override": user.tier_override,
+        "tier_override_reason": user.tier_override_reason,
+        "tier_override_expires_at": (
+            user.tier_override_expires_at.isoformat() if user.tier_override_expires_at else None
+        ),
         "status": user.status,
         "email_verified": user.email_verified,
         "rejection_reason": user.rejection_reason,
@@ -787,6 +794,126 @@ async def unsuspend_user(
         "user_id": str(user.id),
         "status": "active",
         "message": f"User {user.email} has been unsuspended",
+    }
+
+
+class TierOverrideRequest(BaseModel):
+    tier: str = Field(
+        ...,
+        description="Tier to grant: builder, pro, or enterprise",
+        pattern="^(builder|pro|enterprise)$",
+    )
+    reason: str = Field(
+        ...,
+        description="Reason for the override (required)",
+        min_length=3,
+        max_length=255,
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        description="When the override expires (null = indefinite)",
+    )
+
+
+class TierOverrideClearRequest(BaseModel):
+    reason: str = Field(
+        ...,
+        description="Reason for clearing the override",
+        min_length=3,
+        max_length=255,
+    )
+
+
+@router.post("/users/{user_id}/tier-override")
+async def set_tier_override(
+    user_id: str,
+    body: TierOverrideRequest,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Set a tier override on a user (e.g., grant free pro access)."""
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.tier_override = body.tier
+    user.tier_override_reason = body.reason
+    user.tier_override_expires_at = body.expires_at
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="tier_override_set",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={
+            "target_email": user.email,
+            "tier_override": body.tier,
+            "reason": body.reason,
+            "expires_at": body.expires_at.isoformat() if body.expires_at else None,
+        },
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    return {
+        "user_id": str(user.id),
+        "tier": user.tier,
+        "tier_override": user.tier_override,
+        "effective_tier": user.effective_tier,
+        "tier_override_reason": user.tier_override_reason,
+        "tier_override_expires_at": (
+            user.tier_override_expires_at.isoformat() if user.tier_override_expires_at else None
+        ),
+    }
+
+
+@router.delete("/users/{user_id}/tier-override")
+async def clear_tier_override(
+    user_id: str,
+    admin_id: AdminUserId,
+    body: TierOverrideClearRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Clear a tier override, reverting to subscription-based tier."""
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.tier_override:
+        raise HTTPException(status_code=409, detail="No tier override to clear")
+
+    old_override = user.tier_override
+    reason = body.reason if body else "No reason provided"
+
+    user.tier_override = None
+    user.tier_override_reason = None
+    user.tier_override_expires_at = None
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="tier_override_cleared",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={
+            "target_email": user.email,
+            "previous_override": old_override,
+            "reason": reason,
+        },
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    return {
+        "user_id": str(user.id),
+        "tier": user.tier,
+        "tier_override": None,
+        "effective_tier": user.effective_tier,
     }
 
 

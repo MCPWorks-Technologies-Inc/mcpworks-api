@@ -50,24 +50,24 @@ class TestBillingMiddlewareTierLimits:
     def test_tier_limits_defined(self, billing_middleware):
         """Test that all expected tiers have limits."""
         assert "free" in billing_middleware.TIER_LIMITS
-        assert "founder" in billing_middleware.TIER_LIMITS
-        assert "founder_pro" in billing_middleware.TIER_LIMITS
+        assert "builder" in billing_middleware.TIER_LIMITS
+        assert "pro" in billing_middleware.TIER_LIMITS
         assert "enterprise" in billing_middleware.TIER_LIMITS
 
     def test_free_tier_limit(self, billing_middleware):
         """Test free tier limit is 100 per PRICING.md."""
         assert billing_middleware.TIER_LIMITS["free"] == 100
 
-    def test_founder_tier_limit(self, billing_middleware):
-        """Test founder tier limit is 1,000 per PRICING.md."""
-        assert billing_middleware.TIER_LIMITS["founder"] == 1_000
+    def test_builder_tier_limit(self, billing_middleware):
+        """Test builder tier limit is 2,500 per PRICING.md v5.0.0."""
+        assert billing_middleware.TIER_LIMITS["builder"] == 2_500
 
-    def test_founder_pro_tier_limit(self, billing_middleware):
-        """Test founder_pro tier limit is 10,000 per PRICING.md."""
-        assert billing_middleware.TIER_LIMITS["founder_pro"] == 10_000
+    def test_pro_tier_limit(self, billing_middleware):
+        """Test pro tier limit is 15,000 per PRICING.md v5.0.0."""
+        assert billing_middleware.TIER_LIMITS["pro"] == 15_000
 
     def test_enterprise_tier_limit(self, billing_middleware):
-        """Test enterprise tier is capped at 100,000 per ORDER-019."""
+        """Test enterprise tier is capped at 100,000."""
         assert billing_middleware.TIER_LIMITS["enterprise"] == 100_000
 
     def test_default_limit(self, billing_middleware):
@@ -240,9 +240,9 @@ class TestBillingMiddlewareCheckQuota:
             assert limit == 100  # PRICING.md: 100/mo free tier
 
     @pytest.mark.asyncio
-    async def test_check_quota_founder_tier(self, billing_middleware):
-        """Test quota check for founder tier."""
-        account = MockAccount(tier="founder")
+    async def test_check_quota_builder_tier(self, billing_middleware):
+        """Test quota check for builder tier."""
+        account = MockAccount(tier="builder")
 
         with patch("mcpworks_api.middleware.billing.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
@@ -252,7 +252,7 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 500
-            assert limit == 1_000  # PRICING.md: 1,000/mo founder tier
+            assert limit == 2_500  # PRICING.md v5.0.0: 2,500/mo builder tier
 
     @pytest.mark.asyncio
     async def test_check_quota_zero_usage(self, billing_middleware):

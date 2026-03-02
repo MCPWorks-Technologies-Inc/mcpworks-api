@@ -27,12 +27,12 @@ class UsageResponse(BaseModel):
     )
     executions_limit: int = Field(
         ...,
-        description="Maximum executions allowed per billing period (-1 = unlimited)",
+        description="Maximum executions allowed per billing period",
         examples=[100],
     )
     executions_remaining: int = Field(
         ...,
-        description="Remaining executions this period (-1 = unlimited)",
+        description="Remaining executions this period",
         examples=[58],
     )
     billing_period_start: datetime = Field(
@@ -46,7 +46,7 @@ class UsageResponse(BaseModel):
     tier: str = Field(
         ...,
         description="Current subscription tier",
-        examples=["free", "founder", "founder_pro", "enterprise"],
+        examples=["free", "builder", "pro", "enterprise"],
     )
 
 
@@ -82,13 +82,13 @@ async def get_usage(
 
     Execution limits by tier:
     - Free: 100/month
-    - Founder: 1,000/month
-    - Founder Pro: 10,000/month
-    - Enterprise: Unlimited
+    - Builder: 2,500/month
+    - Pro: 15,000/month
+    - Enterprise: 100,000/month
     """
-    # Get user tier
-    result = await db.execute(select(User.tier).where(User.id == uuid.UUID(user_id)))
-    tier = result.scalar_one_or_none() or "free"
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    tier = user.effective_tier if user else "free"
 
     # Get limit for tier
     limit = BillingMiddleware.TIER_LIMITS.get(tier, BillingMiddleware.DEFAULT_LIMIT)
@@ -105,8 +105,7 @@ async def get_usage(
         # Redis unavailable - return 0 usage (fail-open)
         usage = 0
 
-    # Calculate remaining (-1 means unlimited)
-    remaining = -1 if limit == -1 else max(0, limit - usage)
+    remaining = max(0, limit - usage)
 
     # Get billing period
     period_start, period_end = _get_billing_period()
