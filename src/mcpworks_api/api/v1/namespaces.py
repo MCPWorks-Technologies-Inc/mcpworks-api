@@ -4,16 +4,21 @@ Provides REST endpoints for managing namespaces, services, and functions.
 Complements the MCP interface for use by the web dashboard and CLI.
 """
 
+from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from mcpworks_api.dependencies import get_current_user_id, require_scope
 from mcpworks_api.models import Account
+from mcpworks_api.models.api_key import APIKey
+from mcpworks_api.models.function import Function
+from mcpworks_api.models.namespace_service import NamespaceService as NamespaceServiceModel
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import (
     NamespaceServiceManager,
@@ -66,6 +71,17 @@ class NamespaceListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class NamespaceDeletedResponse(BaseModel):
+    """Response after soft-deleting a namespace."""
+
+    name: str
+    deleted_at: str
+    recovery_until: str
+    affected_services: int
+    affected_functions: int
+    affected_api_keys: int
 
 
 class CreateServiceRequest(BaseModel):
@@ -336,19 +352,59 @@ async def update_namespace(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.delete("/{namespace_name}", status_code=204, dependencies=[Depends(require_scope("write"))])
+@router.delete(
+    "/{namespace_name}",
+    response_model=NamespaceDeletedResponse,
+    status_code=200,
+    dependencies=[Depends(require_scope("write"))],
+)
 async def delete_namespace(
     namespace_name: str,
     db: AsyncSession = Depends(get_db),
     account: Account = Depends(get_current_account),
-) -> None:
-    """Delete a namespace and all its services/functions."""
+) -> NamespaceDeletedResponse:
+    """Soft-delete a namespace (recoverable for 30 days)."""
     service = NamespaceServiceManager(db)
 
     try:
         namespace = await service.get_by_name(namespace_name, account.id)
-        await service.delete(namespace.id, account.id)
+
+        svc_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(NamespaceServiceModel)
+                .where(NamespaceServiceModel.namespace_id == namespace.id)
+            )
+        ).scalar() or 0
+
+        fn_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(Function)
+                .join(NamespaceServiceModel, Function.service_id == NamespaceServiceModel.id)
+                .where(NamespaceServiceModel.namespace_id == namespace.id)
+            )
+        ).scalar() or 0
+
+        key_count = (
+            await db.execute(
+                select(func.count()).select_from(APIKey).where(APIKey.namespace_id == namespace.id)
+            )
+        ).scalar() or 0
+
+        deleted_ns = await service.delete(namespace.id, account.id)
         await db.commit()
+
+        recovery_until = deleted_ns.deleted_at + timedelta(days=30)
+
+        return NamespaceDeletedResponse(
+            name=deleted_ns.name,
+            deleted_at=deleted_ns.deleted_at.isoformat(),
+            recovery_until=recovery_until.isoformat(),
+            affected_services=svc_count,
+            affected_functions=fn_count,
+            affected_api_keys=key_count,
+        )
     except NotFoundError:
         raise HTTPException(status_code=404, detail=f"Namespace '{namespace_name}' not found")
     except ForbiddenError:

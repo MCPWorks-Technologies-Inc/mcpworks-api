@@ -2,7 +2,7 @@
 
 import builtins
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,9 +51,16 @@ class NamespaceServiceManager:
             ConflictError: If namespace name already exists.
             ValidationError: If name format is invalid.
         """
-        # Check if namespace already exists
         existing = await self.db.execute(select(Namespace).where(Namespace.name == name.lower()))
-        if existing.scalar_one_or_none():
+        found = existing.scalar_one_or_none()
+        if found:
+            if found.deleted_at is not None:
+                recovery_until = found.deleted_at + timedelta(days=30)
+                raise ConflictError(
+                    f"Namespace '{name}' was deleted and is in a 30-day recovery period "
+                    f"until {recovery_until.strftime('%Y-%m-%d')}. "
+                    f"Contact support to restore or wait for the recovery period to expire."
+                )
             raise ConflictError(f"Namespace '{name}' already exists")
 
         # Create namespace
@@ -93,7 +100,7 @@ class NamespaceServiceManager:
         """
         result = await self.db.execute(
             select(Namespace)
-            .where(Namespace.id == namespace_id)
+            .where(Namespace.id == namespace_id, Namespace.deleted_at.is_(None))
             .options(selectinload(Namespace.services))
         )
         namespace = result.scalar_one_or_none()
@@ -136,7 +143,7 @@ class NamespaceServiceManager:
         """
         result = await self.db.execute(
             select(Namespace)
-            .where(Namespace.name == name.lower())
+            .where(Namespace.name == name.lower(), Namespace.deleted_at.is_(None))
             .options(selectinload(Namespace.services))
         )
         namespace = result.scalar_one_or_none()
@@ -173,17 +180,17 @@ class NamespaceServiceManager:
         Returns:
             Tuple of (namespaces list, total count).
         """
-        # Get total count of owned
         count_result = await self.db.execute(
-            select(func.count()).select_from(Namespace).where(Namespace.account_id == account_id)
+            select(func.count())
+            .select_from(Namespace)
+            .where(Namespace.account_id == account_id, Namespace.deleted_at.is_(None))
         )
         owned_total = count_result.scalar() or 0
 
-        # Get owned namespaces
         offset = (page - 1) * page_size
         result = await self.db.execute(
             select(Namespace)
-            .where(Namespace.account_id == account_id)
+            .where(Namespace.account_id == account_id, Namespace.deleted_at.is_(None))
             .order_by(Namespace.name)
             .offset(offset)
             .limit(page_size)
@@ -196,9 +203,11 @@ class NamespaceServiceManager:
             shared_count_result = await self.db.execute(
                 select(func.count())
                 .select_from(NamespaceShare)
+                .join(Namespace, NamespaceShare.namespace_id == Namespace.id)
                 .where(
                     NamespaceShare.user_id == user_id,
                     NamespaceShare.status == ShareStatus.ACCEPTED.value,
+                    Namespace.deleted_at.is_(None),
                 )
             )
             shared_total = shared_count_result.scalar() or 0
@@ -210,6 +219,7 @@ class NamespaceServiceManager:
                     .where(
                         NamespaceShare.user_id == user_id,
                         NamespaceShare.status == ShareStatus.ACCEPTED.value,
+                        Namespace.deleted_at.is_(None),
                     )
                     .order_by(Namespace.name)
                 )
@@ -280,22 +290,30 @@ class NamespaceServiceManager:
         self,
         namespace_id: uuid.UUID,
         account_id: uuid.UUID,
-    ) -> None:
-        """Delete a namespace.
+    ) -> "Namespace":
+        """Soft-delete a namespace.
 
-        This will cascade delete all services and functions within.
+        Sets deleted_at timestamp. Children (services, functions, API keys)
+        remain in the database but become inaccessible because all queries
+        filter on Namespace.deleted_at IS NULL.
+
+        Recoverable for 30 days after deletion.
 
         Args:
             namespace_id: The namespace UUID.
             account_id: The account ID for access control.
+
+        Returns:
+            The soft-deleted namespace.
 
         Raises:
             NotFoundError: If namespace not found.
             ForbiddenError: If account doesn't own the namespace.
         """
         namespace = await self.get_by_id(namespace_id, account_id)
-        await self.db.delete(namespace)
+        namespace.deleted_at = datetime.now(UTC)
         await self.db.flush()
+        return namespace
 
 
 class NamespaceServiceService:

@@ -86,6 +86,11 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # Relationships
     account: Mapped["Account"] = relationship(
         "Account",
