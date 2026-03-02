@@ -45,6 +45,10 @@ class UserProfile(BaseModel):
         ...,
         description="Account creation timestamp",
     )
+    tos_accepted_at: datetime | None = Field(
+        default=None,
+        description="When Terms of Service were accepted",
+    )
 
 
 class ApiKeySummary(BaseModel):

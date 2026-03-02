@@ -1,11 +1,13 @@
 """User endpoints - profile and account management."""
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api.api.v1.legal import LEGAL_VERSION
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import (
     ApiKeyNotFoundError,
@@ -61,9 +63,55 @@ async def get_current_user(
         email=user.email,
         name=user.name,
         tier=user.tier,
+        effective_tier=user.effective_tier,
         status=user.status,
         email_verified=user.email_verified,
         created_at=user.created_at,
+        tos_accepted_at=user.tos_accepted_at,
+    )
+
+
+@router.post(
+    "/me/accept-tos",
+    response_model=UserProfile,
+    responses={
+        200: {"description": "ToS accepted (or already accepted)"},
+        401: {"description": "Not authenticated or token expired"},
+    },
+)
+async def accept_tos(
+    user_id: CurrentUserId,
+    db: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    """Accept the current Terms of Service.
+
+    Idempotent — if ToS were already accepted, returns profile as-is.
+    """
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "USER_NOT_FOUND", "message": "User not found"},
+        )
+
+    if user.tos_accepted_at is None:
+        user.tos_accepted_at = datetime.now(UTC)
+        user.tos_version = LEGAL_VERSION
+        await db.commit()
+        await db.refresh(user)
+
+    return UserProfile(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        tier=user.tier,
+        effective_tier=user.effective_tier,
+        status=user.status,
+        email_verified=user.email_verified,
+        created_at=user.created_at,
+        tos_accepted_at=user.tos_accepted_at,
     )
 
 
