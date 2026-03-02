@@ -30,11 +30,11 @@ class BillingMiddleware(BaseHTTPMiddleware):
     - Credit balance (future)
     """
 
-    # Tier limits (executions per month) - per PRICING.md v5.0.0 Value Ladder
+    # Tier limits (executions per month) - per PRICING.md v5.1.0 Value Ladder
     TIER_LIMITS: dict[str, int] = {
         "free": 100,
         "builder": 2_500,
-        "pro": 15_000,
+        "pro": 25_000,
         "enterprise": 100_000,
     }
 

@@ -63,8 +63,8 @@ class TestBillingMiddlewareTierLimits:
         assert billing_middleware.TIER_LIMITS["builder"] == 2_500
 
     def test_pro_tier_limit(self, billing_middleware):
-        """Test pro tier limit is 15,000 per PRICING.md v5.0.0."""
-        assert billing_middleware.TIER_LIMITS["pro"] == 15_000
+        """Test pro tier limit is 25,000 per PRICING.md v5.1.0."""
+        assert billing_middleware.TIER_LIMITS["pro"] == 25_000
 
     def test_enterprise_tier_limit(self, billing_middleware):
         """Test enterprise tier is capped at 100,000."""

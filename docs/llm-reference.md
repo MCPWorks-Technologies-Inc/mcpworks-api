@@ -214,15 +214,15 @@ Usage: `make_function(service="x", name="y", backend="code_sandbox", template="h
 | Tier | Price | Executions |
 |------|-------|------------|
 | free | $0 | 100 |
-| founder | $29 | 1,000 |
-| founder_pro | $59 | 10,000 |
-| enterprise | $129 | 100,000 |
+| builder | $29 | 2,500 |
+| pro | $149 | 25,000 |
+| enterprise | $499 | 100,000 |
 
 ### Sandbox Resources (per execution)
 
-| Resource | free | founder | founder_pro | enterprise |
-|----------|------|---------|-------------|------------|
-| Timeout | 10s | 30s | 60s | 300s |
+| Resource | free | builder | pro | enterprise |
+|----------|------|---------|-----|------------|
+| Timeout | 10s | 30s | 90s | 300s |
 | Memory | 128 MB | 256 MB | 512 MB | 2048 MB |
 | Max PIDs | 16 | 32 | 64 | 128 |
 | Network hosts | 0 | 5 | 25 | unlimited |

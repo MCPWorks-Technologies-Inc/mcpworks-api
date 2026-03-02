@@ -27,10 +27,10 @@ class SubscriptionStatus(str, Enum):
 class SubscriptionTier(str, Enum):
     """Subscription tier with monthly execution limits.
 
-    Per PRICING.md v5.0.0 (Value Ladder):
+    Per PRICING.md v5.1.0 (Value Ladder):
     - free ($0): 100 executions/month
-    - builder ($49/mo): 2,500 executions/month
-    - pro ($149/mo): 15,000 executions/month
+    - builder ($29/mo): 2,500 executions/month
+    - pro ($149/mo): 25,000 executions/month
     - enterprise ($499/mo): 100,000 executions/month
     """
 
@@ -45,7 +45,7 @@ class SubscriptionTier(str, Enum):
         limits = {
             SubscriptionTier.FREE: 100,
             SubscriptionTier.BUILDER: 2_500,
-            SubscriptionTier.PRO: 15_000,
+            SubscriptionTier.PRO: 25_000,
             SubscriptionTier.ENTERPRISE: 100_000,
         }
         return limits.get(self, 100)

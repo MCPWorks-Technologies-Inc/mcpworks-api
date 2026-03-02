@@ -105,10 +105,10 @@ Free-tier accounts with no API activity for 180 consecutive days may have their 
 
 ### 5.5 Resource Limits by Tier
 
-| Resource | Free ($0) | Builder ($49) | Pro ($149) | Enterprise ($499+) |
+| Resource | Free ($0) | Builder ($29) | Pro ($149) | Enterprise ($499+) |
 |----------|-----------|---------------|------------|---------------------|
-| Functions | 5 | 25 | Unlimited | Unlimited |
-| Executions/month | 100 | 2,500 | 15,000 | 100,000 (fair use) |
+| Functions | 5 | Unlimited | Unlimited | Unlimited |
+| Executions/month | 100 | 2,500 | 25,000 | 100,000 (fair use) |
 | Namespaces | 1 | 3 | Unlimited | Unlimited |
 | Sandbox timeout | 10s | 30s | 90s | 300s |
 | Sandbox memory | 128 MB | 256 MB | 512 MB | 2 GB |

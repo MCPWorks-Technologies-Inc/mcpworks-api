@@ -27,8 +27,8 @@ TIER_PRICE_MAP: dict[str, dict[str, str]] = {}
 def get_tier_price_map() -> dict[str, dict[str, str]]:
     """Get tier to price ID mapping from settings.
 
-    Per PRICING.md v5.0.0 (Value Ladder):
-    - builder: $49/mo or $490/yr
+    Per PRICING.md v5.1.0 (Value Ladder):
+    - builder: $29/mo or $290/yr
     - pro: $149/mo or $1,490/yr
     - enterprise: $499/mo or $4,990/yr
     """
@@ -52,7 +52,7 @@ def get_tier_price_map() -> dict[str, dict[str, str]]:
 TIER_EXECUTIONS = {
     "free": 100,
     "builder": 2_500,
-    "pro": 15_000,
+    "pro": 25_000,
     "enterprise": 100_000,
 }
 

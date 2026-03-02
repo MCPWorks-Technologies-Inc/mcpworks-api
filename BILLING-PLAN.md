@@ -9,11 +9,11 @@ The mcpworks-api has a working Stripe integration built for the old Founder pric
 | | Old Name | New Name | Old Price | New Price | Old Exec/mo | New Exec/mo |
 |-|----------|----------|-----------|-----------|-------------|-------------|
 | Free | free | free | $0 | $0 | 100 | 100 |
-| Paid 1 | founder | **builder** | $29 | **$49** | 1,000 | **2,500** |
-| Paid 2 | founder_pro | **pro** | $59 | **$149** | 10,000 | **15,000** |
+| Paid 1 | founder | **builder** | $29 | **$29** | 1,000 | **2,500** |
+| Paid 2 | founder_pro | **pro** | $59 | **$149** | 10,000 | **25,000** |
 | Paid 3 | enterprise | enterprise | $129 | **$499** | 100,000 | 100,000 |
 
-Annual: pay 10, get 12 → $490 / $1,490 / $4,990 per year.
+Annual: pay 10, get 12 → $290 / $1,490 / $4,990 per year.
 
 ## Pre-deploy: Stripe Dashboard Setup
 
