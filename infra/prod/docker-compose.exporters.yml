@@ -1,0 +1,32 @@
+services:
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: mcpworks-node-exporter
+    restart: unless-stopped
+    ports:
+      - "${PROD_VPC_IP:-0.0.0.0}:9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    network_mode: host
+    pid: host
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: mcpworks-promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - promtail-positions:/tmp/positions
+    command: -config.file=/etc/promtail/config.yml
+
+volumes:
+  promtail-positions:

@@ -160,52 +160,31 @@ ssh root@159.203.30.199 "cd /opt/mcpworks && \
 curl https://api.mcpworks.io/v1/health
 ```
 
-### Secrets Management (Infisical)
+### Secrets Management
 
-**Status:** Self-hosted Infisical on mgmt droplet (`mcpworks-mgmt`, TOR1 VPC).
+**Current:** All secrets live in the prod droplet `.env` file, backed up locally to `infra/prod/.env` (gitignored). JWT keys mounted from `./keys/`.
 
-**Architecture:**
-- Infisical runs on the mgmt droplet (VPC-only, no public IP)
-- API container has Infisical CLI installed in the Docker image
-- `scripts/start.sh` wraps uvicorn with `infisical run` when `INFISICAL_TOKEN` is set
-- Falls back to direct env vars if Infisical is not configured (backwards-compatible)
+**Infrastructure-as-code:** `infra/` (future mgmt droplet configs, monitoring, exporters, provisioning scripts)
 
-**Access:**
-```bash
-# SSH tunnel to Infisical UI
-cd ~/dev/mcpworks.io/mcpworks-infra
-./scripts/tunnel.sh <mgmt-vpc-ip> <prod-public-ip>
-# Then open http://localhost:9080
-```
+### Management Droplet (Planned — Not Yet Deployed)
 
-**Prod droplet `.env` (only 3 bootstrap values):**
-- `INFISICAL_TOKEN` — machine identity universal auth token
-- `INFISICAL_PROJECT_ID` — Infisical project identifier
-- `POSTGRES_PASSWORD` — needed by postgres container directly
+Future infrastructure for centralized monitoring and secrets management.
 
-**All other secrets** (SECRET_KEY, STRIPE_*, OAUTH_*, RESEND_*) are stored in Infisical and injected at API startup via `infisical run`.
-
-**JWT keys** — still mounted as files from `./keys/` (unchanged).
-
-**Infrastructure-as-code:** `~/dev/mcpworks.io/mcpworks-infra/` (private repo)
-
-### Management Droplet
-
-| Property | Value |
-|----------|-------|
+| Property | Planned Value |
+|----------|---------------|
 | **Name** | mcpworks-mgmt |
 | **Region** | TOR1 (Toronto) |
 | **Size** | s-1vcpu-2gb |
 | **Access** | VPC-only, SSH via jump through prod |
 | **Services** | Infisical (:9080), Grafana (:3000), Prometheus (:9090), Loki (:3100), Uptime Kuma (:3001) |
 
+Configs ready in `infra/mgmt/`. When deployed:
 ```bash
 # SSH to mgmt via jump host
 ssh -J root@<prod-public-ip> root@<mgmt-vpc-ip>
 
 # SSH tunnels for all mgmt services
-cd ~/dev/mcpworks.io/mcpworks-infra
-./scripts/tunnel.sh <mgmt-vpc-ip> <prod-public-ip>
+./infra/scripts/tunnel.sh <mgmt-vpc-ip> <prod-public-ip>
 ```
 
 ### Quick Commands
@@ -625,6 +604,10 @@ mcpworks-api/
 │   ├── load/
 │   └── fixtures/
 │
+├── infra/                      # Infrastructure provisioning & monitoring
+│   ├── mgmt/                   # Mgmt droplet configs (planned, not yet deployed)
+│   ├── prod/                   # Prod exporters (node-exporter, promtail)
+│   └── scripts/                # Tunnel, provisioning, migration scripts
 ├── alembic/                    # Database migrations
 ├── CLAUDE.md                   # This file
 ├── README.md                   # Project overview

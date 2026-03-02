@@ -1,0 +1,125 @@
+services:
+  infisical:
+    image: infisical/infisical:latest
+    container_name: mgmt-infisical
+    restart: unless-stopped
+    mem_limit: 384m
+    ports:
+      - "127.0.0.1:9080:8080"
+    environment:
+      - ENCRYPTION_KEY=${INFISICAL_ENCRYPTION_KEY}
+      - AUTH_SECRET=${INFISICAL_AUTH_SECRET}
+      - DB_CONNECTION_URI=postgres://infisical:${INFISICAL_DB_PASSWORD}@infisical-db:5432/infisical
+      - REDIS_URL=redis://infisical-redis:6379
+      - SITE_URL=http://localhost:9080
+    depends_on:
+      infisical-db:
+        condition: service_healthy
+      infisical-redis:
+        condition: service_healthy
+    networks:
+      - mgmt-net
+
+  infisical-db:
+    image: postgres:14-alpine
+    container_name: mgmt-infisical-db
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      - POSTGRES_USER=infisical
+      - POSTGRES_PASSWORD=${INFISICAL_DB_PASSWORD}
+      - POSTGRES_DB=infisical
+    volumes:
+      - infisical-db-data:/var/lib/postgresql/data
+    networks:
+      - mgmt-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical -d infisical"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  infisical-redis:
+    image: redis:7-alpine
+    container_name: mgmt-infisical-redis
+    restart: unless-stopped
+    mem_limit: 64m
+    networks:
+      - mgmt-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mgmt-grafana
+    restart: unless-stopped
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - mgmt-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mgmt-prometheus
+    restart: unless-stopped
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    networks:
+      - mgmt-net
+
+  loki:
+    image: grafana/loki:latest
+    container_name: mgmt-loki
+    restart: unless-stopped
+    mem_limit: 256m
+    ports:
+      - "0.0.0.0:3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - mgmt-net
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: mgmt-uptime-kuma
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    networks:
+      - mgmt-net
+
+volumes:
+  infisical-db-data:
+  grafana-data:
+  prometheus-data:
+  loki-data:
+  uptime-kuma-data:
+
+networks:
+  mgmt-net:
+    driver: bridge
