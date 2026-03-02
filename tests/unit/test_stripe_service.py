@@ -21,8 +21,8 @@ class TestTierExecutions:
         assert TIER_EXECUTIONS["builder"] == 2_500
 
     def test_pro_tier_executions(self):
-        """Test pro tier has 15,000 executions/month."""
-        assert TIER_EXECUTIONS["pro"] == 15_000
+        """Test pro tier has 25,000 executions/month."""
+        assert TIER_EXECUTIONS["pro"] == 25_000
 
     def test_enterprise_tier_executions(self):
         """Test enterprise tier has 100,000 executions/month."""

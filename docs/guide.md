@@ -626,9 +626,9 @@ Call the `_env_status` tool (available on run endpoints in tool mode via `?mode=
 | Tier | Price | Executions/Month |
 |------|-------|------------------|
 | **Free** | $0 | 100 |
-| **Founder** | $29/mo | 1,000 |
-| **Founder Pro** | $59/mo | 10,000 |
-| **Enterprise** | $129/mo | 100,000 |
+| **Builder** | $29/mo | 2,500 |
+| **Pro** | $149/mo | 25,000 |
+| **Enterprise** | $499/mo | 100,000 |
 
 New accounts start on the free tier.
 
@@ -658,9 +658,9 @@ Usage resets at the start of each calendar month.
 
 Resource limits vary by tier:
 
-| Resource | Free | Founder | Founder Pro | Enterprise |
-|----------|------|---------|-------------|------------|
-| **Timeout** | 10 sec | 30 sec | 60 sec | 300 sec |
+| Resource | Free | Builder | Pro | Enterprise |
+|----------|------|---------|-----|------------|
+| **Timeout** | 10 sec | 30 sec | 90 sec | 300 sec |
 | **Memory** | 128 MB | 256 MB | 512 MB | 2048 MB |
 | **Max PIDs** | 16 | 32 | 64 | 128 |
 | **Network hosts** | 0 (none) | 5 | 25 | Unlimited |

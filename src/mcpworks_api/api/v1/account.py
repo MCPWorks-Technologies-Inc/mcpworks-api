@@ -83,7 +83,7 @@ async def get_usage(
     Execution limits by tier:
     - Free: 100/month
     - Builder: 2,500/month
-    - Pro: 15,000/month
+    - Pro: 25,000/month
     - Enterprise: 100,000/month
     """
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))

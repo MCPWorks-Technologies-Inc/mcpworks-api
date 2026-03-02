@@ -96,10 +96,10 @@ class Settings(BaseSettings):
     resend_from_email: str = Field(default="noreply@mcpworks.io")
     email_provider: str = Field(default="resend")
 
-    # Tier Execution Limits (monthly) - per PRICING.md v5.0.0
+    # Tier Execution Limits (monthly) - per PRICING.md v5.1.0
     tier_executions_free: int = Field(default=100)
     tier_executions_builder: int = Field(default=2_500)
-    tier_executions_pro: int = Field(default=15_000)
+    tier_executions_pro: int = Field(default=25_000)
     tier_executions_enterprise: int = Field(default=100_000)
 
     # Sandbox
