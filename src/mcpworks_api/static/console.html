@@ -370,11 +370,7 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
         <input id="register-name" type="text" placeholder="Name (optional)">
         <input id="register-email" type="email" placeholder="Email">
         <input id="register-password" type="password" placeholder="Password (min 8 chars)">
-        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);margin:8px 0 14px;cursor:pointer;">
-          <input type="checkbox" id="register-tos">
-          I accept the <a href="/v1/legal/terms" target="_blank" style="color:var(--link);text-decoration:none;">Terms of Service</a> and <a href="/v1/legal/privacy" target="_blank" style="color:var(--link);text-decoration:none;">Privacy Policy</a>
-        </label>
-        <button class="btn btn-primary btn-block" onclick="doRegister()">Create Account</button>
+        <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="doRegister()">Create Account</button>
         <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text-3)">Already have an account? <a href="#" onclick="toggleAuthView('signin'); return false;" style="color:var(--link);text-decoration:none;">Sign in</a></div>
       </div>
     </div>
@@ -533,21 +529,15 @@ async function doRegister() {
   const name = document.getElementById('register-name').value || null;
   const email = document.getElementById('register-email').value;
   const password = document.getElementById('register-password').value;
-  const acceptTos = document.getElementById('register-tos').checked;
   const errEl = document.getElementById('register-error');
   const successEl = document.getElementById('register-success');
   errEl.classList.add('hidden');
   successEl.classList.add('hidden');
-  if (!acceptTos) {
-    errEl.textContent = 'You must accept the Terms of Service to create an account';
-    errEl.classList.remove('hidden');
-    return;
-  }
   try {
     const res = await fetch(`${API}/v1/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name, accept_tos: true }),
+      body: JSON.stringify({ email, password, name }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
