@@ -796,19 +796,22 @@ async function tutCreateKey() {
 
 function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix) {
   idPrefix = idPrefix || 'cfg';
-  const serverKey = `mcpworks-${nsName}`;
-  const baseUrl = `https://${nsName}.create.mcpworks.io/mcp`;
+  const createKey = `mcpworks-${nsName}`;
+  const runKey = `mcpworks-${nsName}-run`;
+  const createUrl = `https://${nsName}.create.mcpworks.io/mcp`;
+  const runUrl = `https://${nsName}.run.mcpworks.io/mcp`;
   const buildCfg = (urlField) => {
     const c = { mcpServers: {} };
-    c.mcpServers[serverKey] = { [urlField]: baseUrl, headers: { Authorization: `Bearer ${apiKey}` } };
-    if (envKeys && envKeys.length) c.mcpServers[serverKey].headers['X-MCPWorks-Env'] = envKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
+    c.mcpServers[createKey] = { [urlField]: createUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    c.mcpServers[runKey] = { [urlField]: runUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    if (envKeys && envKeys.length) c.mcpServers[runKey].headers['X-MCPWorks-Env'] = envKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
     return JSON.stringify(c, null, 2);
   };
   const claudeJson = buildCfg('url');
   const cursorJson = buildCfg('url');
   const windsurfJson = buildCfg('serverUrl');
   const clients = [
-    { id: 'claude', label: 'Claude Code', hint: '.mcp.json', json: claudeJson, cli: `claude mcp add ${serverKey} --transport streamable-http ${baseUrl}` },
+    { id: 'claude', label: 'Claude Code', hint: '.mcp.json', json: claudeJson, cli: `claude mcp add ${createKey} --transport streamable-http ${createUrl} && claude mcp add ${runKey} --transport streamable-http ${runUrl}` },
     { id: 'cursor', label: 'Cursor', hint: '.cursor/mcp.json', json: cursorJson },
     { id: 'windsurf', label: 'Windsurf', hint: '~/.codeium/windsurf/mcp_config.json', json: windsurfJson },
   ];
