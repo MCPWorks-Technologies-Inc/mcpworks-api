@@ -16,7 +16,7 @@ Before the legal language begins, here is what you can count on:
 2. **We never train on your code.** Your functions, inputs, and outputs are never used to train AI or machine learning models.
 3. **Your data is portable.** You can export your functions, metadata, and execution history at any time.
 4. **No surprise bills.** Hard caps, not overages. When you hit your limit, executions pause. Your card is not charged extra.
-5. **Founder pricing is locked.** If you sign up during the Founder period, your price is locked for 730 days after Standard pricing begins.
+5. **Pricing is clear and public.** Current pricing is always published at mcpworks.io/pricing with no hidden fees.
 6. **We tell you before things change.** Material changes to these terms require 30 days notice.
 7. **You can leave anytime.** Cancel your account, export your data, and walk away. No exit fees.
 
@@ -74,13 +74,7 @@ If a payment fails, we will retry for up to 7 days. If payment is not resolved w
 
 We offer a 14-day money-back guarantee on your first payment only. To request a refund, contact support@mcpworks.io within 14 days of your first charge. No prorated refunds are provided for annual subscriptions cancelled mid-term, except as described in Section 15 (Amendments).
 
-### 4.5 Founder Pricing Lock
-
-If you create a paid account during the Founder pricing period (currently active), your subscription **price** is locked for 730 days (2 years) after Standard pricing takes effect. This lock applies to the price of your tier only. Resource limits (functions, executions, sandbox resources) may be adjusted with 60 days written notice before your next renewal.
-
-After the 730-day lock expires, your subscription will transition to the then-current Standard pricing at your next renewal. We will provide 60 days notice before this transition.
-
-### 4.6 Upgrades and Downgrades
+### 4.5 Upgrades and Downgrades
 
 Upgrades take effect immediately and are prorated for the remainder of the billing period. Downgrades take effect at the start of the next billing period.
 
@@ -111,17 +105,17 @@ Free-tier accounts with no API activity for 180 consecutive days may have their 
 
 ### 5.5 Resource Limits by Tier
 
-| Resource | Free | Founder ($29) | Founder Pro ($59) | Enterprise ($129) |
-|----------|------|---------------|-------------------|-------------------|
-| Functions | 5 | 25 | 100 | 100,000 |
-| Executions/month | 100 | 1,000 | 10,000 | 100,000 |
-| Namespaces | 1 | 3 | 10 | 100,000 |
-| Sandbox timeout | 10s | 30s | 60s | 300s |
+| Resource | Free ($0) | Builder ($49) | Pro ($149) | Enterprise ($499+) |
+|----------|-----------|---------------|------------|---------------------|
+| Functions | 5 | 25 | Unlimited | Unlimited |
+| Executions/month | 100 | 2,500 | 15,000 | 100,000 (fair use) |
+| Namespaces | 1 | 3 | Unlimited | Unlimited |
+| Sandbox timeout | 10s | 30s | 90s | 300s |
 | Sandbox memory | 128 MB | 256 MB | 512 MB | 2 GB |
-| Sandbox CPU time | 5s | 15s | 30s | 120s |
+| Sandbox CPU time | 5s | 15s | 45s | 120s |
 | Concurrent executions | 1 | 3 | 10 | 50 |
 
-Enterprise limits above represent the current operational maximum. Custom arrangements are available by contacting enterprise@mcpworks.io.
+Enterprise tier operates under a fair use policy. Accounts consistently exceeding 100,000 executions/month will be contacted to discuss custom pricing. Custom arrangements are available by contacting enterprise@mcpworks.io.
 
 ---
 
@@ -201,9 +195,9 @@ We will access or inspect your code only in the following circumstances:
 
 ## 8. Service Levels
 
-### 8.1 Free, Founder, and Founder Pro Tiers
+### 8.1 Free, Builder, and Pro Tiers
 
-We do not offer service level commitments for Free, Founder, or Founder Pro tiers. We aim for high availability but make no guarantees. We will provide reasonable notice of planned maintenance.
+We do not offer service level commitments for Free, Builder, or Pro tiers. We aim for high availability but make no guarantees. We will provide reasonable notice of planned maintenance.
 
 ### 8.2 Enterprise Tier SLA
 
