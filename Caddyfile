@@ -20,10 +20,15 @@ api.mcpworks.io {
         health_timeout 5s
     }
 
-    # Security headers
+    # Allow same-origin framing for legal docs (onboarding ToS iframe)
+    @legal path /v1/legal/*
+    @notlegal not path /v1/legal/*
+    header @legal X-Frame-Options SAMEORIGIN
+    header @notlegal X-Frame-Options DENY
+
+    # Security headers (all responses)
     header {
         X-Content-Type-Options nosniff
-        X-Frame-Options DENY
         Referrer-Policy strict-origin-when-cross-origin
         -Server
     }
