@@ -290,9 +290,9 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
 .onboarding-wrap h2 { font-family: var(--sans); font-size: 22px; font-weight: 700; margin-bottom: 6px; }
 .onboarding-wrap .onboarding-sub { color: var(--text-2); font-size: 14px; margin-bottom: 24px; }
 .tos-iframe { width: 100%; height: 400px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--bg-1); }
-.tos-accept-row { margin-top: 16px; font-size: 13px; color: var(--text-2); line-height: 1.5; }
-.tos-accept-row input[type="checkbox"] { accent-color: var(--accent); vertical-align: middle; margin-right: 8px; }
-.tos-accept-row label { cursor: pointer; }
+.tos-accept-row { margin-top: 16px; font-size: 13px; color: var(--text-2); }
+.tos-accept-row label { cursor: pointer; display: flex; align-items: center; gap: 8px; line-height: 1.5; }
+.tos-accept-row input[type="checkbox"] { accent-color: var(--accent); flex-shrink: 0; width: 16px; height: 16px; }
 
 .pricing-toggle-wrap { display: flex; justify-content: center; margin-bottom: 24px; }
 .pricing-toggle { display: inline-flex; background: var(--bg-2); border-radius: 8px; padding: 3px; border: 1px solid var(--border-1); }
@@ -719,8 +719,7 @@ function showOnboarding(user) {
       <div class="onboarding-sub">Please review and accept our terms to continue.</div>
       <iframe class="tos-iframe" src="/v1/legal/terms"></iframe>
       <div class="tos-accept-row">
-        <input type="checkbox" id="onboard-tos-check">
-        <label for="onboard-tos-check">I accept the <a href="/v1/legal/terms" target="_blank" style="color:var(--link)">Terms of Service</a> and <a href="/v1/legal/privacy" target="_blank" style="color:var(--link)">Privacy Policy</a></label>
+        <label><input type="checkbox" id="onboard-tos-check"> I accept the <a href="/v1/legal/terms" target="_blank" style="color:var(--link)">Terms of Service</a> and <a href="/v1/legal/privacy" target="_blank" style="color:var(--link)">Privacy Policy</a></label>
       </div>
       <button class="btn btn-primary" style="margin-top:16px;width:100%" id="onboard-tos-btn" onclick="acceptTos()" disabled>Accept & Continue</button>
     </div>
