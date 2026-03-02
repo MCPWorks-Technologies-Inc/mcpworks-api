@@ -11,7 +11,7 @@ import structlog
 from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
@@ -228,18 +228,15 @@ def create_app() -> FastAPI:
         """Serve the admin dashboard HTML page."""
         return HTMLResponse(content=_admin_html_path.read_text())
 
-    # ORDER-009/010: Onboarding page (register, login, .mcp.json config generator)
-    _onboarding_html_path = Path(__file__).parent / "static" / "onboarding.html"
+    @app.get("/register", include_in_schema=False)
+    async def register_page() -> RedirectResponse:
+        """Redirect to console (registration is now inline)."""
+        return RedirectResponse(url="/console", status_code=302)
 
-    @app.get("/register", response_class=HTMLResponse, include_in_schema=False)
-    async def register_page() -> HTMLResponse:
-        """Serve the registration/onboarding page."""
-        return HTMLResponse(content=_onboarding_html_path.read_text())
-
-    @app.get("/login", response_class=HTMLResponse, include_in_schema=False)
-    async def login_page() -> HTMLResponse:
-        """Serve the login page (same SPA, different initial screen)."""
-        return HTMLResponse(content=_onboarding_html_path.read_text())
+    @app.get("/login", include_in_schema=False)
+    async def login_page() -> RedirectResponse:
+        """Redirect to console (login is now inline)."""
+        return RedirectResponse(url="/console", status_code=302)
 
     # Client console (account dashboard)
     _console_html_path = Path(__file__).parent / "static" / "console.html"
