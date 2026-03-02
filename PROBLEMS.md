@@ -72,9 +72,9 @@ Full rename completed across all source, templates, tests, and documentation. On
 - **Docs:** ~110 instances across 7 doc files + "agentic service(s)" terminology cleanup
 - **DB migration:** `alembic/versions/20260301_000001_rename_whitelist_to_allowlist.py` (pre-existing)
 
-**Note — legacy gateway docs archival not yet done:**
-- Move `specs/001-api-gateway-mvp/` → `specs/archive/001-api-gateway-mvp/`
-- Move `docs/implementation/gateway-architecture-specification.md` → `docs/archive/gateway-architecture-specification.md`
+**Legacy gateway docs archived:**
+- `specs/001-api-gateway-mvp/` → `specs/archive/001-api-gateway-mvp/`
+- `docs/implementation/gateway-architecture-specification.md` → `docs/archive/gateway-architecture-specification.md`
 
 ---
 

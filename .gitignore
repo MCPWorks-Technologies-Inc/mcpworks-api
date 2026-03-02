@@ -83,3 +83,15 @@ logs/
 
 # Alembic
 alembic/versions/*.pyc
+
+# Production secrets backup (keys and env live on server only)
+infra/prod/.env
+infra/prod/keys/
+
+# Scratch / temp files
+smoketest-output.json
+TEST_PROMPT.md
+_create_function.sh
+
+# Claude Code local settings
+.claude/settings.json
