@@ -108,8 +108,9 @@ jobs:
             echo "Rebuilding Docker image..."
             docker compose -f docker-compose.prod.yml build api
 
-            echo "Restarting API container..."
+            echo "Restarting API and Caddy containers..."
             docker compose -f docker-compose.prod.yml up -d api
+            docker compose -f docker-compose.prod.yml restart caddy
 
             # Wait for health check
             echo "Waiting for health check..."
