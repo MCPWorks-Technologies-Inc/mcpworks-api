@@ -457,6 +457,7 @@ function setInsights(html) {
     }
   }
   if (TOKEN) initSession();
+  else if (window.location.hash === '#register') toggleAuthView('register');
 })();
 
 async function initSession() {
