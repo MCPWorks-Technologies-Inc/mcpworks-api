@@ -51,17 +51,6 @@ async def register(
     Creates a new user with pending_approval status.
     Admin must approve before user can log in.
     """
-    if not body.accept_tos:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "TOS_NOT_ACCEPTED",
-                "message": "You must accept the Terms of Service to register",
-                "terms_url": "https://api.mcpworks.io/v1/legal/terms",
-                "privacy_url": "https://api.mcpworks.io/v1/legal/privacy",
-            },
-        )
-
     ip_address = _get_client_ip(request)
     user_agent = request.headers.get("User-Agent")
 
@@ -74,7 +63,7 @@ async def register(
             name=body.name,
             ip_address=ip_address,
             user_agent=user_agent,
-            accept_tos=True,
+            accept_tos=body.accept_tos,
         )
         await db.commit()
     except EmailExistsError as e:
