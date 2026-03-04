@@ -98,6 +98,9 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
 
         host = request.headers.get("host", "").lower()
 
+        if host == f"api.{self.domain}" or host.startswith(f"api.{self.domain}:"):
+            return await call_next(request)
+
         # Handle local development
         if self._is_local_host(host):
             namespace = request.query_params.get("namespace", "default")
