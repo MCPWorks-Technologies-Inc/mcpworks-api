@@ -500,7 +500,7 @@ async function doLogin() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail?.message || data.detail || 'Login failed');
+      throw new Error(Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('. ') : data.detail?.message || data.detail || 'Login failed');
     }
     const data = await res.json();
     TOKEN = data.access_token;
@@ -542,7 +542,7 @@ async function doRegister() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = data.detail?.message || data.detail || 'Registration failed';
+      const msg = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('. ') : data.detail?.message || data.detail || 'Registration failed';
       throw new Error(msg);
     }
     if (data.access_token) {
