@@ -1110,6 +1110,18 @@ searchInput.addEventListener('focus', () => {
   }
 });
 
+searchResults.addEventListener('click', (e) => {
+  const hit = e.target.closest('.search-hit');
+  if (!hit) return;
+  const type = hit.dataset.type;
+  searchResults.classList.add('hidden');
+  searchInput.value = '';
+  if (type === 'user') loadUser(hit.dataset.id);
+  else if (type === 'namespace') loadNamespace(hit.dataset.name);
+  else if (type === 'service') loadFunctions(hit.dataset.ns, hit.dataset.name);
+  else if (type === 'function') loadFunction(hit.dataset.ns, hit.dataset.svc, hit.dataset.name);
+});
+
 async function doSearch(q) {
   try {
     const data = await apiFetch(`/v1/admin/search?q=${encodeURIComponent(q)}`);
@@ -1125,7 +1137,7 @@ async function doSearch(q) {
     if (data.users.length) {
       html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Users</span></div>';
       html += data.users.map(u => `
-        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('user','${esc(u.id)}')">
+        <div class="search-hit px-3 py-2 clickable" style="border-bottom:1px solid #111827;" data-type="user" data-id="${esc(u.id)}">
           <div class="text-blue-400 text-sm font-medium">${esc(u.email)}</div>
           <div class="text-gray-500 text-xs">${esc(u.name || '')} · <span class="status-${u.status}">${esc(u.status)}</span> · ${esc(u.tier)}</div>
         </div>
@@ -1135,7 +1147,7 @@ async function doSearch(q) {
     if (data.namespaces.length) {
       html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Namespaces</span></div>';
       html += data.namespaces.map(ns => `
-        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('namespace','${esc(ns.name)}')">
+        <div class="search-hit px-3 py-2 clickable" style="border-bottom:1px solid #111827;" data-type="namespace" data-name="${esc(ns.name)}">
           <div class="text-blue-400 text-sm font-medium">${esc(ns.name)}</div>
           <div class="text-gray-500 text-xs">${esc(ns.owner_email || '')} · ${ns.call_count ?? 0} calls</div>
         </div>
@@ -1145,7 +1157,7 @@ async function doSearch(q) {
     if (data.services.length) {
       html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Services</span></div>';
       html += data.services.map(svc => `
-        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('service','${esc(svc.namespace)}','${esc(svc.name)}')">
+        <div class="search-hit px-3 py-2 clickable" style="border-bottom:1px solid #111827;" data-type="service" data-ns="${esc(svc.namespace)}" data-name="${esc(svc.name)}">
           <div class="text-blue-400 text-sm font-medium">${esc(svc.name)}</div>
           <div class="text-gray-500 text-xs">${esc(svc.namespace || '')} · ${svc.call_count ?? 0} calls</div>
         </div>
@@ -1155,7 +1167,7 @@ async function doSearch(q) {
     if (data.functions.length) {
       html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Functions</span></div>';
       html += data.functions.map(fn => `
-        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('function','${esc(fn.namespace)}','${esc(fn.service)}','${esc(fn.name)}')">
+        <div class="search-hit px-3 py-2 clickable" style="border-bottom:1px solid #111827;" data-type="function" data-ns="${esc(fn.namespace)}" data-svc="${esc(fn.service)}" data-name="${esc(fn.name)}">
           <div class="text-blue-400 text-sm font-medium">${esc(fn.name)}</div>
           <div class="text-gray-500 text-xs">${esc(fn.namespace || '')}/${esc(fn.service || '')} · ${fn.call_count ?? 0} calls</div>
         </div>
@@ -1167,15 +1179,6 @@ async function doSearch(q) {
   } catch (e) {
     console.error('Search failed', e);
   }
-}
-
-function searchNav(type, ...args) {
-  searchResults.classList.add('hidden');
-  searchInput.value = '';
-  if (type === 'user') loadUser(args[0]);
-  else if (type === 'namespace') loadNamespace(args[0]);
-  else if (type === 'service') loadFunctions(args[0], args[1]);
-  else if (type === 'function') loadFunction(args[0], args[1], args[2]);
 }
 
 function fmtDate(iso) {
