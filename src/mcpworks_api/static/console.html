@@ -1052,8 +1052,8 @@ function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix) {
   const runUrl = `https://${nsName}.run.mcpworks.io/mcp`;
   const buildCfg = (urlField) => {
     const c = { mcpServers: {} };
-    c.mcpServers[createKey] = { [urlField]: createUrl, headers: { Authorization: `Bearer ${apiKey}` } };
-    c.mcpServers[runKey] = { [urlField]: runUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    c.mcpServers[createKey] = { type: 'http', [urlField]: createUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    c.mcpServers[runKey] = { type: 'http', [urlField]: runUrl, headers: { Authorization: `Bearer ${apiKey}` } };
     if (envKeys && envKeys.length) c.mcpServers[runKey].headers['X-MCPWorks-Env'] = envKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
     return JSON.stringify(c, null, 2);
   };
@@ -1072,11 +1072,11 @@ function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix) {
     h += `<div id="${idPrefix}-${t.id}" class="config-tab-panel${i === 0 ? ' active' : ''}">`;
     h += `<div class="config-tab-hint">Add to <code style="background:var(--bg-1);padding:1px 5px;border-radius:4px;font-size:12px">${esc(t.hint)}</code></div>`;
     h += `<div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
-    h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(t.json))},this)">copy</button></div>`;
+    h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" data-copy="${esc(t.json)}" onclick="copyText(this.dataset.copy,this)">copy</button></div>`;
     if (t.cli) {
       h += `<div style="margin-top:10px;font-size:12px;color:var(--text-3)">Or via CLI:</div>`;
       h += `<div style="position:relative;margin-top:4px"><pre class="schema-block" style="margin:0"><code class="language-bash">${esc(t.cli)}</code></pre>`;
-      h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(${esc(JSON.stringify(t.cli))},this)">copy</button></div>`;
+      h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" data-copy="${esc(t.cli)}" onclick="copyText(this.dataset.copy,this)">copy</button></div>`;
     }
     h += '</div>';
   });
