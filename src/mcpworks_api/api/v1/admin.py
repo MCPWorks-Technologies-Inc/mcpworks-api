@@ -31,6 +31,97 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+@router.get("/search")
+async def search(
+    q: str,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Search across users, namespaces, services, and functions."""
+    term = f"%{q.strip().lower()}%"
+    if len(q.strip()) < 2:
+        return {"users": [], "namespaces": [], "services": [], "functions": []}
+
+    users_q = (
+        select(User)
+        .where(func.lower(User.email).like(term) | func.lower(User.name).like(term))
+        .order_by(User.created_at.desc())
+        .limit(10)
+    )
+    users_rows = (await db.execute(users_q)).scalars().all()
+    users = [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "name": u.name,
+            "tier": u.tier,
+            "status": u.status,
+        }
+        for u in users_rows
+    ]
+
+    ns_q = (
+        select(Namespace)
+        .options(selectinload(Namespace.account).selectinload(Account.user))
+        .where(func.lower(Namespace.name).like(term))
+        .order_by(Namespace.created_at.desc())
+        .limit(10)
+    )
+    ns_rows = (await db.execute(ns_q)).scalars().all()
+    namespaces = [
+        {
+            "name": ns.name,
+            "owner_email": ns.account.user.email if ns.account and ns.account.user else None,
+            "call_count": ns.call_count,
+        }
+        for ns in ns_rows
+    ]
+
+    svc_q = (
+        select(NamespaceService)
+        .options(selectinload(NamespaceService.namespace))
+        .where(func.lower(NamespaceService.name).like(term))
+        .order_by(NamespaceService.created_at.desc())
+        .limit(10)
+    )
+    svc_rows = (await db.execute(svc_q)).scalars().all()
+    services = [
+        {
+            "name": svc.name,
+            "namespace": svc.namespace.name if svc.namespace else None,
+            "call_count": svc.call_count,
+        }
+        for svc in svc_rows
+    ]
+
+    fn_q = (
+        select(Function)
+        .options(
+            selectinload(Function.service).selectinload(NamespaceService.namespace),
+        )
+        .where(func.lower(Function.name).like(term))
+        .order_by(Function.created_at.desc())
+        .limit(10)
+    )
+    fn_rows = (await db.execute(fn_q)).scalars().all()
+    functions = [
+        {
+            "name": fn.name,
+            "service": fn.service.name if fn.service else None,
+            "namespace": fn.service.namespace.name if fn.service and fn.service.namespace else None,
+            "call_count": fn.call_count,
+        }
+        for fn in fn_rows
+    ]
+
+    return {
+        "users": users,
+        "namespaces": namespaces,
+        "services": services,
+        "functions": functions,
+    }
+
+
 @router.get("/stats")
 async def get_stats(
     _admin: AdminUserId,
