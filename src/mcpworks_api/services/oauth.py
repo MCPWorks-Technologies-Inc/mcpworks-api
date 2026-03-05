@@ -85,7 +85,7 @@ class OAuthService:
                     email=email.lower(),
                     password_hash=None,
                     name=name,
-                    tier="free",
+                    tier="builder",
                     status="active",
                     email_verified=True,
                 )
