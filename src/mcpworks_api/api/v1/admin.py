@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from mcpworks_api.config import get_settings
 from mcpworks_api.core.database import get_db
 from mcpworks_api.dependencies import AdminUserId
 from mcpworks_api.models import (
@@ -918,7 +919,7 @@ async def delete_user_account(
     if body.confirm_email != user.email:
         raise HTTPException(status_code=422, detail="Email confirmation does not match")
 
-    if user.is_admin:
+    if user.email in get_settings().admin_emails:
         raise HTTPException(status_code=403, detail="Cannot delete admin accounts")
 
     email = user.email
