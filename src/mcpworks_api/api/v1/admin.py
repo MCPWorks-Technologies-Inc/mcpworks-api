@@ -892,7 +892,7 @@ class DeleteAccountRequest(BaseModel):
     confirm_email: str = Field(..., description="Must match user email to confirm deletion")
 
 
-@router.delete("/users/{user_id}")
+@router.post("/users/{user_id}/delete")
 async def delete_user_account(
     user_id: str,
     body: DeleteAccountRequest,
