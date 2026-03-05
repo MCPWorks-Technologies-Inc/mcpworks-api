@@ -66,7 +66,7 @@ class TestAuthServiceRegister:
         )
 
         assert user.email == unique_email
-        assert user.tier == "free"
+        assert user.tier == "builder"
         assert user.status == "pending_verification"
         assert user.email_verified is False
         assert user.verification_token is not None
