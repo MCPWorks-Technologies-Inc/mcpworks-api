@@ -72,20 +72,6 @@ async def register(
             detail=e.to_dict(),
         )
 
-    if access_token:
-        return {
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "name": user.name,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-            },
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "expires_in": expires_in,
-        }
-
     return {
         "user": {
             "id": str(user.id),
@@ -93,8 +79,10 @@ async def register(
             "name": user.name,
             "created_at": user.created_at.isoformat() if user.created_at else None,
         },
-        "status": "pending_approval",
-        "message": "Your account has been created and is awaiting admin approval. You will be notified when your account is activated.",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": expires_in,
     }
 
 
