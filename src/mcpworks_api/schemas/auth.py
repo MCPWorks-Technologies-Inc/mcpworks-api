@@ -188,6 +188,31 @@ class LogoutAllRequest(BaseModel):
     pass  # No body needed, user identified by JWT
 
 
+class VerifyEmailRequest(BaseModel):
+    """Request body for POST /auth/verify-email."""
+
+    pin: str = Field(
+        ...,
+        description="6-digit verification PIN sent to email",
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+    )
+
+
+class ResendVerificationResponse(BaseModel):
+    """Response body for POST /auth/resend-verification."""
+
+    message: str = Field(
+        ...,
+        description="Status message",
+    )
+    resends_remaining: int = Field(
+        ...,
+        description="Number of resend attempts remaining",
+    )
+
+
 class CreateApiKeyRequest(BaseModel):
     """Request body for POST /auth/api-keys."""
 

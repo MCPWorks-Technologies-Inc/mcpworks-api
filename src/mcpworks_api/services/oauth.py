@@ -55,7 +55,7 @@ class OAuthService:
                 select(User).where(User.id == existing_oauth.user_id)
             )
             user = user_result.scalar_one()
-            if user.status == "pending_approval":
+            if user.status in ("pending_approval", "pending_verification"):
                 user.status = "active"
                 user.email_verified = True
                 await self._log_oauth_event(
@@ -67,7 +67,7 @@ class OAuthService:
             user = user_result.scalar_one_or_none()
 
             if user:
-                if user.status == "pending_approval":
+                if user.status in ("pending_approval", "pending_verification"):
                     user.status = "active"
                     user.email_verified = True
                 oauth_account = OAuthAccount(

@@ -5,14 +5,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import (
+    AlreadyVerifiedError,
     EmailExistsError,
     InvalidApiKeyError,
     InvalidCredentialsError,
     InvalidTokenError,
+    InvalidVerificationPinError,
     RateLimitExceededError,
     TokenExpiredError,
+    VerificationAttemptsExceededError,
+    VerificationPinExpiredError,
+    VerificationResendLimitError,
 )
-from mcpworks_api.dependencies import require_active_status
+from mcpworks_api.dependencies import get_current_user_id, require_active_status
 from mcpworks_api.middleware.rate_limit import check_auth_rate_limit
 from mcpworks_api.schemas.auth import (
     ApiKeyInfo,
@@ -23,8 +28,10 @@ from mcpworks_api.schemas.auth import (
     RefreshRequest,
     RefreshResponse,
     RegisterRequest,
+    ResendVerificationResponse,
     TokenRequest,
     TokenResponse,
+    VerifyEmailRequest,
 )
 from mcpworks_api.services.auth import AuthService
 
@@ -77,12 +84,14 @@ async def register(
             "id": str(user.id),
             "email": user.email,
             "name": user.name,
+            "status": user.status,
             "created_at": user.created_at.isoformat() if user.created_at else None,
         },
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": expires_in,
+        "email_verification_required": True,
     }
 
 
@@ -273,6 +282,103 @@ async def create_api_key(
             last_used_at=api_key.last_used_at,
         ),
         raw_key=raw_key,
+    )
+
+
+@router.post(
+    "/verify-email",
+    responses={
+        200: {"description": "Email verified successfully"},
+        400: {"description": "Invalid or expired PIN"},
+        409: {"description": "Email already verified"},
+        429: {"description": "Too many attempts"},
+    },
+)
+async def verify_email(
+    request: Request,
+    body: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Verify email address with 6-digit PIN.
+
+    Activates the account upon successful verification.
+    """
+    import uuid as uuid_module
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent")
+
+    auth_service = AuthService(db)
+
+    try:
+        user = await auth_service.verify_email_pin(
+            user_id=uuid_module.UUID(user_id),
+            pin=body.pin,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        await db.commit()
+    except AlreadyVerifiedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.to_dict())
+    except VerificationPinExpiredError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.to_dict())
+    except VerificationAttemptsExceededError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.to_dict())
+    except InvalidVerificationPinError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.to_dict())
+
+    return {
+        "message": "Email verified successfully",
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "status": user.status,
+            "email_verified": user.email_verified,
+        },
+    }
+
+
+@router.post(
+    "/resend-verification",
+    response_model=ResendVerificationResponse,
+    responses={
+        200: {"description": "Verification PIN resent"},
+        409: {"description": "Email already verified"},
+        429: {"description": "Resend limit reached"},
+    },
+)
+async def resend_verification(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+) -> ResendVerificationResponse:
+    """Resend verification PIN to user's email.
+
+    Maximum 5 resends allowed per registration.
+    """
+    import uuid as uuid_module
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent")
+
+    auth_service = AuthService(db)
+
+    try:
+        resends_remaining = await auth_service.resend_verification_pin(
+            user_id=uuid_module.UUID(user_id),
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        await db.commit()
+    except AlreadyVerifiedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.to_dict())
+    except VerificationResendLimitError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.to_dict())
+
+    return ResendVerificationResponse(
+        message="Verification PIN sent to your email",
+        resends_remaining=resends_remaining,
     )
 
 

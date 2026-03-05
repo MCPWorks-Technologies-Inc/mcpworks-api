@@ -1,6 +1,8 @@
 """Authentication service - API key validation and JWT token management."""
 
 import asyncio
+import hashlib
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -10,14 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.config import get_settings
 from mcpworks_api.core.exceptions import (
+    AlreadyVerifiedError,
     ApiKeyNotFoundError,
     EmailExistsError,
     ForbiddenError,
     InvalidApiKeyError,
     InvalidCredentialsError,
     InvalidTokenError,
+    InvalidVerificationPinError,
     NotFoundError,
     UserNotFoundError,
+    VerificationAttemptsExceededError,
+    VerificationPinExpiredError,
+    VerificationResendLimitError,
 )
 from mcpworks_api.core.security import (
     check_needs_rehash,
@@ -265,6 +272,13 @@ class AuthService:
                 details={"reason": reason},
             )
 
+    @staticmethod
+    def _generate_pin() -> tuple[str, str]:
+        """Generate a 6-digit PIN and its SHA-256 hash."""
+        pin = f"{secrets.randbelow(1_000_000):06d}"
+        pin_hash = hashlib.sha256(pin.encode()).hexdigest()
+        return pin, pin_hash
+
     async def register_user(
         self,
         email: str,
@@ -276,8 +290,8 @@ class AuthService:
     ) -> tuple[User, str | None, str | None, int | None]:
         """Register a new user.
 
-        Email/password registrations enter pending_approval status.
-        No JWT tokens are issued until admin approves the account.
+        Email/password registrations enter pending_verification status.
+        A 6-digit PIN is emailed; account activates on verification.
 
         Args:
             email: User's email address.
@@ -288,7 +302,6 @@ class AuthService:
 
         Returns:
             Tuple of (user, access_token, refresh_token, expires_in_seconds)
-            Tokens are None for pending_approval accounts.
 
         Raises:
             EmailExistsError: If email is already registered.
@@ -299,13 +312,19 @@ class AuthService:
         if existing:
             raise EmailExistsError()
 
+        pin, pin_hash = self._generate_pin()
+
         user = User(
             email=email.lower(),
             password_hash=hash_password(password),
             name=name,
             tier="free",
-            status="active",
+            status="pending_verification",
             email_verified=False,
+            verification_token=pin_hash,
+            verification_pin_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            verification_attempts=0,
+            verification_resend_count=0,
             tos_accepted_at=datetime.now(UTC) if accept_tos else None,
             tos_version="1.0.0" if accept_tos else None,
         )
@@ -325,11 +344,11 @@ class AuthService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            event_data={"email": user.email, "status": "active"},
+            event_data={"email": user.email, "status": "pending_verification"},
         )
         self.db.add(audit_log)
 
-        asyncio.create_task(self._send_registration_emails(user.email, name))
+        asyncio.create_task(self._send_verification_pin(user.email, name, pin))
 
         access_token = create_access_token(
             user_id=str(user.id),
@@ -344,20 +363,151 @@ class AuthService:
 
         return user, access_token, refresh_token, expires_in
 
-    @staticmethod
-    async def _send_registration_emails(email: str, name: str | None) -> None:
-        try:
-            from mcpworks_api.services.email import (
-                send_admin_new_registration_email,
-                send_registration_pending_email,
-            )
+    async def verify_email_pin(
+        self,
+        user_id: uuid.UUID,
+        pin: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> User:
+        """Verify a user's email with the 6-digit PIN.
 
-            await send_registration_pending_email(email, name)
-            settings = get_settings()
-            for admin_email in settings.admin_emails:
-                await send_admin_new_registration_email(admin_email, email, name)
+        Raises:
+            UserNotFoundError: If user not found.
+            AlreadyVerifiedError: If already verified.
+            VerificationPinExpiredError: If PIN has expired.
+            VerificationAttemptsExceededError: If too many failed attempts.
+            InvalidVerificationPinError: If PIN is wrong.
+        """
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise UserNotFoundError()
+
+        if user.email_verified:
+            raise AlreadyVerifiedError()
+
+        if not user.verification_token or not user.verification_pin_expires_at:
+            raise VerificationPinExpiredError()
+
+        if user.verification_attempts >= 5:
+            raise VerificationAttemptsExceededError()
+
+        if datetime.now(UTC) >= user.verification_pin_expires_at:
+            raise VerificationPinExpiredError()
+
+        pin_hash = hashlib.sha256(pin.encode()).hexdigest()
+        if pin_hash != user.verification_token:
+            user.verification_attempts += 1
+            audit_log = AuditLog(
+                user_id=user.id,
+                action=AuditAction.AUTH_FAILED.value,
+                resource_type="user",
+                resource_id=user.id,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                event_data={
+                    "reason": "invalid_verification_pin",
+                    "attempts": user.verification_attempts,
+                },
+            )
+            self.db.add(audit_log)
+            raise InvalidVerificationPinError()
+
+        user.email_verified = True
+        user.status = "active"
+        user.verification_token = None
+        user.verification_pin_expires_at = None
+        user.verification_attempts = 0
+
+        audit_log = AuditLog(
+            user_id=user.id,
+            action=AuditAction.USER_LOGIN.value,
+            resource_type="user",
+            resource_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_data={"method": "email_verification", "email": user.email},
+        )
+        self.db.add(audit_log)
+
+        asyncio.create_task(self._send_welcome_after_verification(user.email, user.name))
+
+        return user
+
+    async def resend_verification_pin(
+        self,
+        user_id: uuid.UUID,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> int:
+        """Resend a new verification PIN.
+
+        Returns:
+            Number of resends remaining.
+
+        Raises:
+            UserNotFoundError: If user not found.
+            AlreadyVerifiedError: If already verified.
+            VerificationResendLimitError: If max resends reached.
+        """
+        max_resends = 5
+
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise UserNotFoundError()
+
+        if user.email_verified:
+            raise AlreadyVerifiedError()
+
+        if user.verification_resend_count >= max_resends:
+            raise VerificationResendLimitError()
+
+        pin, pin_hash = self._generate_pin()
+
+        user.verification_token = pin_hash
+        user.verification_pin_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        user.verification_attempts = 0
+        user.verification_resend_count += 1
+
+        audit_log = AuditLog(
+            user_id=user.id,
+            action=AuditAction.USER_LOGIN.value,
+            resource_type="user",
+            resource_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_data={
+                "method": "resend_verification_pin",
+                "resend_count": user.verification_resend_count,
+            },
+        )
+        self.db.add(audit_log)
+
+        asyncio.create_task(self._send_verification_pin(user.email, user.name, pin))
+
+        return max_resends - user.verification_resend_count
+
+    @staticmethod
+    async def _send_verification_pin(email: str, name: str | None, pin: str) -> None:
+        try:
+            from mcpworks_api.services.email import send_verification_pin_email
+
+            await send_verification_pin_email(email, name, pin)
         except Exception:
-            logger.warning("registration_email_failed", email=email)
+            logger.warning("verification_pin_email_failed", email=email)
+
+    @staticmethod
+    async def _send_welcome_after_verification(email: str, name: str | None) -> None:
+        try:
+            from mcpworks_api.services.email import send_welcome_email
+
+            await send_welcome_email(email, name)
+        except Exception:
+            logger.warning("welcome_email_failed", email=email)
 
     async def login_user(
         self,
@@ -402,7 +552,7 @@ class AuthService:
             await self._log_auth_failure(user.id, ip_address, user_agent, "Account rejected")
             raise InvalidCredentialsError(message="Account has not been approved")
 
-        if user.status != "active":
+        if user.status not in ("active", "pending_verification"):
             await self._log_auth_failure(user.id, ip_address, user_agent, "User inactive")
             raise InvalidCredentialsError(message="User account is not active")
 
