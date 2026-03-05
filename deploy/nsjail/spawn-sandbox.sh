@@ -125,6 +125,11 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
 fi
 
+# Free tier: isolate network namespace (no veth/routes = no egress)
+if [ "${TIER}" = "free" ]; then
+    NSJAIL_ARGS+=(--clone_newnet)
+fi
+
 # Execute nsjail with tier-specific overrides
 "${NSJAIL}" \
     "${NSJAIL_ARGS[@]}" \

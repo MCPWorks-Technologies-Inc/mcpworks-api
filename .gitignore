@@ -95,3 +95,6 @@ _create_function.sh
 
 # Claude Code local settings
 .claude/settings.json
+
+# Claude Code local settings (may contain tokens in permissions)
+.claude/settings.local.json
