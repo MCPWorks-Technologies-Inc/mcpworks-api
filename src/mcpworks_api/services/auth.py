@@ -304,7 +304,7 @@ class AuthService:
             password_hash=hash_password(password),
             name=name,
             tier="free",
-            status="pending_approval",
+            status="active",
             email_verified=False,
             tos_accepted_at=datetime.now(UTC) if accept_tos else None,
             tos_version="1.0.0" if accept_tos else None,
@@ -325,13 +325,24 @@ class AuthService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            event_data={"email": user.email, "status": "pending_approval"},
+            event_data={"email": user.email, "status": "active"},
         )
         self.db.add(audit_log)
 
         asyncio.create_task(self._send_registration_emails(user.email, name))
 
-        return user, None, None, None
+        access_token = create_access_token(
+            user_id=str(user.id),
+            scopes=["read", "write", "execute"],
+            additional_claims={
+                "tier": user.tier,
+                "email": user.email,
+            },
+        )
+        refresh_token = create_refresh_token(user_id=str(user.id))
+        expires_in = get_settings().jwt_access_token_expire_minutes * 60
+
+        return user, access_token, refresh_token, expires_in
 
     @staticmethod
     async def _send_registration_emails(email: str, name: str | None) -> None:
@@ -386,10 +397,6 @@ class AuthService:
         if not verify_password(password, user.password_hash):
             await self._log_auth_failure(user.id, ip_address, user_agent, "Invalid password")
             raise InvalidCredentialsError()
-
-        if user.status == "pending_approval":
-            await self._log_auth_failure(user.id, ip_address, user_agent, "Pending approval")
-            raise InvalidCredentialsError(message="Account is awaiting admin approval")
 
         if user.status == "rejected":
             await self._log_auth_failure(user.id, ip_address, user_agent, "Account rejected")
