@@ -33,6 +33,7 @@ tailwind.config = {
   tr:hover td { background: #1f2937; }
   .clickable { cursor: pointer; }
   .clickable:hover { color: #60a5fa; }
+  #search-results .clickable:hover { background: #111827; color: inherit; }
   .breadcrumb { color: #6b7280; font-size: 14px; }
   .breadcrumb a { color: #60a5fa; text-decoration: none; }
   .breadcrumb a:hover { text-decoration: underline; }
@@ -112,6 +113,18 @@ tailwind.config = {
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-lg font-bold text-white font-display">MCPWorks <span class="text-blue-500">admin</span></h1>
     <div id="user-info" class="text-sm text-gray-400 hidden"></div>
+  </div>
+
+  <!-- Search -->
+  <div id="search-section" class="hidden mb-6">
+    <div class="relative max-w-2xl mx-auto">
+      <div style="position:relative;">
+        <input id="search-input" type="text" placeholder="Search users, namespaces, services, functions…"
+          class="block w-full" style="padding:12px 16px 12px 42px;font-size:15px;border-radius:10px;background:#1f2937;border:1px solid #374151;">
+        <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);pointer-events:none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+      <div id="search-results" class="hidden" style="position:absolute;top:100%;left:0;right:0;z-index:40;margin-top:4px;background:#1f2937;border:1px solid #374151;border-radius:10px;max-height:420px;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.5);"></div>
+    </div>
   </div>
 
   <!-- Login -->
@@ -195,6 +208,7 @@ async function doLogin() {
 
     document.getElementById('login-section').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('search-section').classList.remove('hidden');
     document.getElementById('user-info').classList.remove('hidden');
     document.getElementById('user-info').textContent = email;
 
@@ -223,6 +237,7 @@ async function apiFetch(path) {
     TOKEN = null;
     document.getElementById('login-section').classList.remove('hidden');
     document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('search-section').classList.add('hidden');
     document.getElementById('login-error').textContent = 'Session expired or access denied';
     document.getElementById('login-error').classList.remove('hidden');
     throw new Error('Unauthorized');
@@ -1064,6 +1079,103 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = String(s);
   return d.innerHTML;
+}
+
+// --- Search ---
+
+let _searchTimer = null;
+const searchInput = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(_searchTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { searchResults.classList.add('hidden'); return; }
+  _searchTimer = setTimeout(() => doSearch(q), 250);
+});
+
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { searchInput.value = ''; searchResults.classList.add('hidden'); }
+});
+
+document.addEventListener('click', (e) => {
+  if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+    searchResults.classList.add('hidden');
+  }
+});
+
+searchInput.addEventListener('focus', () => {
+  if (searchInput.value.trim().length >= 2 && searchResults.innerHTML) {
+    searchResults.classList.remove('hidden');
+  }
+});
+
+async function doSearch(q) {
+  try {
+    const data = await apiFetch(`/v1/admin/search?q=${encodeURIComponent(q)}`);
+    const total = data.users.length + data.namespaces.length + data.services.length + data.functions.length;
+    if (total === 0) {
+      searchResults.innerHTML = '<div class="p-4 text-gray-500 text-sm">No results found.</div>';
+      searchResults.classList.remove('hidden');
+      return;
+    }
+
+    let html = '';
+
+    if (data.users.length) {
+      html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Users</span></div>';
+      html += data.users.map(u => `
+        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('user','${esc(u.id)}')">
+          <div class="text-blue-400 text-sm font-medium">${esc(u.email)}</div>
+          <div class="text-gray-500 text-xs">${esc(u.name || '')} · <span class="status-${u.status}">${esc(u.status)}</span> · ${esc(u.tier)}</div>
+        </div>
+      `).join('');
+    }
+
+    if (data.namespaces.length) {
+      html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Namespaces</span></div>';
+      html += data.namespaces.map(ns => `
+        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('namespace','${esc(ns.name)}')">
+          <div class="text-blue-400 text-sm font-medium">${esc(ns.name)}</div>
+          <div class="text-gray-500 text-xs">${esc(ns.owner_email || '')} · ${ns.call_count ?? 0} calls</div>
+        </div>
+      `).join('');
+    }
+
+    if (data.services.length) {
+      html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Services</span></div>';
+      html += data.services.map(svc => `
+        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('service','${esc(svc.namespace)}','${esc(svc.name)}')">
+          <div class="text-blue-400 text-sm font-medium">${esc(svc.name)}</div>
+          <div class="text-gray-500 text-xs">${esc(svc.namespace || '')} · ${svc.call_count ?? 0} calls</div>
+        </div>
+      `).join('');
+    }
+
+    if (data.functions.length) {
+      html += '<div class="px-3 pt-3 pb-1"><span class="text-gray-500 text-xs font-semibold uppercase tracking-wide" style="font-family:\'Space Grotesk\',sans-serif;">Functions</span></div>';
+      html += data.functions.map(fn => `
+        <div class="px-3 py-2 clickable" style="border-bottom:1px solid #111827;" onclick="searchNav('function','${esc(fn.namespace)}','${esc(fn.service)}','${esc(fn.name)}')">
+          <div class="text-blue-400 text-sm font-medium">${esc(fn.name)}</div>
+          <div class="text-gray-500 text-xs">${esc(fn.namespace || '')}/${esc(fn.service || '')} · ${fn.call_count ?? 0} calls</div>
+        </div>
+      `).join('');
+    }
+
+    searchResults.innerHTML = html;
+    searchResults.classList.remove('hidden');
+  } catch (e) {
+    console.error('Search failed', e);
+  }
+}
+
+function searchNav(type, ...args) {
+  searchResults.classList.add('hidden');
+  searchInput.value = '';
+  if (type === 'user') loadUser(args[0]);
+  else if (type === 'namespace') loadNamespace(args[0]);
+  else if (type === 'service') loadFunctions(args[0], args[1]);
+  else if (type === 'function') loadFunction(args[0], args[1], args[2]);
 }
 
 function fmtDate(iso) {
