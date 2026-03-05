@@ -499,6 +499,8 @@ async function loadUser(userId) {
         <button class="btn" style="padding:8px 16px;background:#991b1b;margin-left:8px;" onclick="rejectUserPrompt('${esc(u.id)}','${esc(u.email)}')">Reject</button>
       `;
     }
+    const deleteBtn = `<button class="btn-danger" style="margin-left:12px;" onclick="deleteAccountPrompt('${esc(u.id)}','${esc(u.email)}')">Delete Account</button>`;
+    actionsHtml += deleteBtn;
 
     let namespacesHtml = '<div class="text-gray-500 text-sm">No namespaces.</div>';
     if (u.namespaces && u.namespaces.length > 0) {
@@ -613,6 +615,28 @@ async function unsuspendUser(userId) {
     });
     if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
     loadUser(userId); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+function deleteAccountPrompt(userId, email) {
+  const typed = prompt(`PERMANENT: Delete ${email} and ALL their data?\n\nType the email address to confirm:`);
+  if (typed === null) return;
+  if (typed !== email) { alert('Email did not match. Deletion cancelled.'); return; }
+  deleteAccount(userId, email);
+}
+
+async function deleteAccount(userId, email) {
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm_email: email }),
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    const data = await res.json();
+    const r = data.resources_deleted || {};
+    alert(`Account deleted: ${data.email}\n\nResources removed:\n  Namespaces: ${r.namespaces}\n  Services: ${r.services}\n  Functions: ${r.functions}`);
+    loadStats(); loadUsers();
   } catch (e) { alert('Error: ' + e.message); }
 }
 

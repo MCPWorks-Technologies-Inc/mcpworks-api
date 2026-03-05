@@ -888,6 +888,94 @@ async def unsuspend_user(
     }
 
 
+class DeleteAccountRequest(BaseModel):
+    confirm_email: str = Field(..., description="Must match user email to confirm deletion")
+
+
+@router.delete("/users/{user_id}")
+async def delete_user_account(
+    user_id: str,
+    body: DeleteAccountRequest,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Permanently delete a user and all associated resources (GDPR Art. 17)."""
+    result = await db.execute(
+        select(User)
+        .where(User.id == uuid_module.UUID(user_id))
+        .options(
+            selectinload(User.account)
+            .selectinload(Account.namespaces)
+            .selectinload(Namespace.services)
+            .selectinload(NamespaceService.functions),
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if body.confirm_email != user.email:
+        raise HTTPException(status_code=422, detail="Email confirmation does not match")
+
+    if user.is_admin:
+        raise HTTPException(status_code=403, detail="Cannot delete admin accounts")
+
+    email = user.email
+    uid = str(user.id)
+
+    ns_count = 0
+    svc_count = 0
+    fn_count = 0
+    if user.account:
+        for ns in user.account.namespaces or []:
+            ns_count += 1
+            for svc in ns.services or []:
+                svc_count += 1
+                fn_count += len(svc.functions) if svc.functions else 0
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="user_account_deleted",
+        resource_type="user",
+        resource_id=uuid_module.UUID(uid),
+        event_data={
+            "deleted_email": email,
+            "namespaces_deleted": ns_count,
+            "services_deleted": svc_count,
+            "functions_deleted": fn_count,
+            "reason": "GDPR right to erasure / admin action",
+        },
+    )
+    db.add(audit_log)
+
+    await db.delete(user)
+    await db.commit()
+
+    asyncio.create_task(_fire_approval_security_event(admin_id, uid, email, "account_deleted"))
+
+    logger.info(
+        "user_account_deleted",
+        user_id=uid,
+        email=email,
+        namespaces=ns_count,
+        services=svc_count,
+        functions=fn_count,
+        admin_id=admin_id,
+    )
+
+    return {
+        "deleted": True,
+        "user_id": uid,
+        "email": email,
+        "resources_deleted": {
+            "namespaces": ns_count,
+            "services": svc_count,
+            "functions": fn_count,
+        },
+    }
+
+
 class TierOverrideRequest(BaseModel):
     tier: str = Field(
         ...,
