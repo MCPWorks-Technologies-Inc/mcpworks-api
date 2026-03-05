@@ -32,7 +32,7 @@ class TestExecutionTier:
             assert "timeout_sec" in config
             assert "memory_mb" in config
             assert "max_pids" in config
-            assert "network_hosts" in config
+            assert "network" in config
 
 
 class TestTierConfig:
@@ -43,21 +43,21 @@ class TestTierConfig:
         config = TIER_CONFIG[ExecutionTier.FREE]
         assert config["timeout_sec"] == 10
         assert config["memory_mb"] == 128
-        assert config["network_hosts"] == 0  # No network access
+        assert config["network"] is False
 
     def test_builder_tier_limits(self):
         """Test builder tier has moderate limits."""
         config = TIER_CONFIG[ExecutionTier.BUILDER]
         assert config["timeout_sec"] == 30
         assert config["memory_mb"] == 256
-        assert config["network_hosts"] == 5
+        assert config["network"] is True
 
     def test_enterprise_tier_limits(self):
         """Test enterprise tier has generous limits."""
         config = TIER_CONFIG[ExecutionTier.ENTERPRISE]
         assert config["timeout_sec"] == 300
         assert config["memory_mb"] == 2048
-        assert config["network_hosts"] == -1  # Unlimited
+        assert config["network"] is True
 
     def test_tier_progression(self):
         """Test limits increase with tier."""
@@ -146,22 +146,20 @@ class TestSandboxBackend:
         assert backend._dev_mode is False
 
     def test_get_tier_config_with_account(self):
-        """Test tier config retrieval."""
+        """Test tier config retrieval via account.user.effective_tier."""
         backend = SandboxBackend(dev_mode=True)
 
-        # Mock account with tier
         account = MagicMock()
-        account.tier = "builder"
+        account.user.effective_tier = "builder"
 
         config = backend._get_tier_config(account)
         assert config == TIER_CONFIG[ExecutionTier.BUILDER]
 
     def test_get_tier_config_default(self):
-        """Test default tier config when account has no tier."""
+        """Test default tier config when account has no user."""
         backend = SandboxBackend(dev_mode=True)
 
-        account = MagicMock()
-        account.tier = None
+        account = MagicMock(spec=[])
 
         config = backend._get_tier_config(account)
         assert config == TIER_CONFIG[DEFAULT_TIER]
@@ -171,7 +169,7 @@ class TestSandboxBackend:
         backend = SandboxBackend(dev_mode=True)
 
         account = MagicMock()
-        account.tier = "invalid_tier"
+        account.user.effective_tier = "invalid_tier"
 
         config = backend._get_tier_config(account)
         assert config == TIER_CONFIG[DEFAULT_TIER]

@@ -46,25 +46,25 @@ TIER_CONFIG = {
         "timeout_sec": 10,
         "memory_mb": 128,
         "max_pids": 16,
-        "network_hosts": 0,
+        "network": False,
     },
     ExecutionTier.BUILDER: {
         "timeout_sec": 30,
         "memory_mb": 256,
         "max_pids": 32,
-        "network_hosts": 5,
+        "network": True,
     },
     ExecutionTier.PRO: {
         "timeout_sec": 90,
         "memory_mb": 512,
         "max_pids": 64,
-        "network_hosts": 25,
+        "network": True,
     },
     ExecutionTier.ENTERPRISE: {
         "timeout_sec": 300,
         "memory_mb": 2048,
         "max_pids": 128,
-        "network_hosts": -1,  # Unlimited
+        "network": True,
     },
 }
 
@@ -141,9 +141,9 @@ class SandboxBackend(Backend):
         Returns:
             Tier configuration dict.
         """
-        # Try to get tier from account
-        tier_value = getattr(account, "tier", None) or DEFAULT_TIER.value
-
+        tier_value = DEFAULT_TIER.value
+        if hasattr(account, "user") and account.user is not None:
+            tier_value = account.user.effective_tier
         try:
             tier = ExecutionTier(tier_value)
         except ValueError:
@@ -352,8 +352,9 @@ class SandboxBackend(Backend):
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))
             (exec_dir / "user_code.py").write_text(code)
 
-            # Get tier and namespace from account
-            tier = getattr(account, "tier", DEFAULT_TIER.value)
+            tier = DEFAULT_TIER.value
+            if hasattr(account, "user") and account.user is not None:
+                tier = account.user.effective_tier
             namespace = getattr(account, "namespace", "sandbox") or "sandbox"
 
             # ORDER-003: Generate execution token via file (never env var or /proc)

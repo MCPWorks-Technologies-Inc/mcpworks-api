@@ -12,6 +12,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
+from mcpworks_api.backends.sandbox import TIER_CONFIG, ExecutionTier
 from mcpworks_api.core.exceptions import NotFoundError
 from mcpworks_api.mcp.env_passthrough import check_required_env, filter_env_for_function
 from mcpworks_api.mcp.protocol import (
@@ -62,6 +63,30 @@ class RunMCPHandler:
         self.namespace_service = NamespaceServiceManager(db)
         self.function_service = FunctionService(db)
         self._namespace: Namespace | None = None
+
+    def _get_tier_config(self) -> dict:
+        """Get sandbox tier config for the current user's effective tier."""
+        tier_str = self.account.user.effective_tier
+        try:
+            tier = ExecutionTier(tier_str)
+        except ValueError:
+            tier = ExecutionTier.FREE
+        return TIER_CONFIG[tier]
+
+    def _tier_notice(self) -> str:
+        """Build a terse sandbox constraint notice for tool descriptions."""
+        tier_str = self.account.user.effective_tier
+        cfg = self._get_tier_config()
+        parts = [
+            f"\n\nSandbox limits ({tier_str} tier): timeout={cfg['timeout_sec']}s, memory={cfg['memory_mb']}MB."
+        ]
+        if not cfg["network"]:
+            parts.append(
+                "Network: BLOCKED. All outbound connections (requests, httpx, urllib, sockets) will fail. Upgrade to Builder tier for network access."
+            )
+        else:
+            parts.append("Network: available.")
+        return " ".join(parts)
 
     async def _get_namespace(self) -> Namespace:
         """Get and cache the current namespace (with execute share access)."""
@@ -120,6 +145,7 @@ class RunMCPHandler:
         if self.mode == "code":
             return self._get_code_mode_tools()
 
+        tier_notice = self._tier_notice()
         namespace = await self._get_namespace_for_read()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
@@ -132,6 +158,8 @@ class RunMCPHandler:
                 desc += f"\n\nRequired env: {', '.join(version.required_env)}"
             if version.optional_env:
                 desc += f"\nOptional env: {', '.join(version.optional_env)}"
+
+            desc += tier_notice
 
             tools.append(
                 MCPTool(
@@ -151,9 +179,9 @@ class RunMCPHandler:
 
         return tools
 
-    @staticmethod
-    def _get_code_mode_tools() -> list[MCPTool]:
+    def _get_code_mode_tools(self) -> list[MCPTool]:
         """Return single execute tool for code-mode."""
+        tier_notice = self._tier_notice()
         return [
             MCPTool(
                 name="execute",
@@ -161,7 +189,7 @@ class RunMCPHandler:
                     "Execute Python code in a sandbox with access to all namespace functions.\n"
                     "Discover available functions: import functions; print(functions.__doc__)\n"
                     "Call a function: from functions import hello; result = hello(name='World')\n"
-                    "Set `result = ...` to return data to the conversation."
+                    "Set `result = ...` to return data to the conversation." + tier_notice
                 ),
                 inputSchema={
                     "type": "object",

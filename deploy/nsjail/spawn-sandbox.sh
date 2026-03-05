@@ -35,6 +35,7 @@ CGROUP_PARENT="/sys/fs/cgroup/mcpworks"
 EXEC_DIR="$(dirname "${CODE_PATH}")"
 
 # Tier resource limits: timeout_sec memory_mb max_pids tmpfs_size_mb
+# Names must match Python ExecutionTier enum: free, builder, pro, enterprise
 case "${TIER}" in
     free)
         TIMEOUT=10
@@ -42,14 +43,14 @@ case "${TIER}" in
         PIDS=16
         TMPFS_SIZE=5
         ;;
-    founder)
+    builder)
         TIMEOUT=30
         MEMORY=256
         PIDS=32
         TMPFS_SIZE=20
         ;;
-    founder_pro)
-        TIMEOUT=60
+    pro)
+        TIMEOUT=90
         MEMORY=512
         PIDS=64
         TMPFS_SIZE=50
@@ -61,11 +62,11 @@ case "${TIER}" in
         TMPFS_SIZE=200
         ;;
     *)
-        # Default to founder tier
-        TIMEOUT=30
-        MEMORY=256
-        PIDS=32
-        TMPFS_SIZE=20
+        # Unknown tier — fall back to free (most restrictive)
+        TIMEOUT=10
+        MEMORY=128
+        PIDS=16
+        TMPFS_SIZE=5
         ;;
 esac
 

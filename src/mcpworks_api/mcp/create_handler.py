@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api.backends.sandbox import TIER_CONFIG, ExecutionTier
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from mcpworks_api.mcp.protocol import (
     JSONRPCRequest,
@@ -105,9 +106,28 @@ class CreateMCPHandler:
             request_id,
         )
 
-    @classmethod
-    def get_tools(cls) -> list[MCPTool]:
-        """Return static list of management tools."""
+    def _tier_notice(self) -> str:
+        """Build a terse sandbox constraint notice for tool descriptions."""
+        tier_str = self.account.user.effective_tier
+        try:
+            tier = ExecutionTier(tier_str)
+        except ValueError:
+            tier = ExecutionTier.FREE
+        cfg = TIER_CONFIG[tier]
+        parts = [
+            f"Sandbox limits ({tier_str} tier): timeout={cfg['timeout_sec']}s, memory={cfg['memory_mb']}MB."
+        ]
+        if not cfg["network"]:
+            parts.append(
+                "Network: BLOCKED — code using requests/httpx/urllib/sockets will fail at runtime. Upgrade to Builder for network access."
+            )
+        else:
+            parts.append("Network: available.")
+        return " ".join(parts)
+
+    def get_tools(self) -> list[MCPTool]:
+        """Return static list of management tools with tier-aware descriptions."""
+        tier_notice = self._tier_notice()
         return [
             MCPTool(
                 name="make_namespace",
@@ -169,7 +189,7 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="make_function",
-                description="Create a new function in a service",
+                description="Create a new function in a service. " + tier_notice,
                 inputSchema={
                     "type": "object",
                     "properties": {

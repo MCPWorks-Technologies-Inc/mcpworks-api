@@ -237,7 +237,10 @@ async def list_tools() -> list[Tool]:
                 return []
 
             if endpoint_type == EndpointType.CREATE:
-                return _to_sdk_tools(CreateMCPHandler.get_tools())
+                handler = CreateMCPHandler(
+                    namespace=namespace, account=account, db=db, api_key=api_key
+                )
+                return _to_sdk_tools(handler.get_tools())
             else:
                 run_mode = request.query_params.get("mode", "code")
                 handler = RunMCPHandler(
