@@ -1,5 +1,6 @@
 """Unit tests for the Code Execution Sandbox Backend."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -344,3 +345,28 @@ class TestSandboxCodeWrapping:
         assert "try:" in wrapped
         assert "except" in wrapped
         assert "traceback" in wrapped
+
+
+class TestSpawnSandboxNetworkIsolation:
+    """Tests for free-tier network isolation via clone_newnet in spawn-sandbox.sh."""
+
+    SPAWN_SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "nsjail" / "spawn-sandbox.sh"
+
+    def test_spawn_script_exists(self):
+        assert self.SPAWN_SCRIPT.exists(), f"spawn-sandbox.sh not found at {self.SPAWN_SCRIPT}"
+
+    def test_free_tier_gets_clone_newnet(self):
+        """Free tier must add --clone_newnet to isolate network namespace."""
+        content = self.SPAWN_SCRIPT.read_text()
+        assert "--clone_newnet" in content
+        assert "TIER" in content
+        idx_free_check = content.index('"free"')
+        idx_clone = content.index("--clone_newnet")
+        assert idx_free_check < idx_clone, "--clone_newnet should follow the free tier check"
+
+    def test_paid_tiers_no_clone_newnet_by_default(self):
+        """Paid tiers should not get --clone_newnet (they use host network + iptables)."""
+        content = self.SPAWN_SCRIPT.read_text()
+        assert content.count("--clone_newnet") == 1, (
+            "--clone_newnet should appear exactly once (only in the free-tier conditional)"
+        )
