@@ -46,7 +46,7 @@ _QUICKSTART_HTML = """\
 
 <div class="step">
 <p><span class="step-num">Step 1:</span> Create your account <span class="time">(1 min)</span></p>
-<p>Go to <a href="/register">/register</a> and sign up with your email. You'll get 100 free executions/month.</p>
+<p>Go to <a href="/register">/register</a> and sign up with your email. You'll get the Builder plan free — 2,500 executions/month.</p>
 </div>
 
 <div class="step">

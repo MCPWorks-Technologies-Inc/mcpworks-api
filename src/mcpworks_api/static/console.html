@@ -773,6 +773,10 @@ function renderPlanSelection(context) {
     let ctaHtml;
     if (isCurrent) {
       ctaHtml = `<div class="pricing-current-badge">Current Plan</div>`;
+    } else if (p.tier === 'builder' && context === 'onboarding') {
+      ctaHtml = `<button class="btn btn-primary btn-block" onclick="finishOnboarding()">Get Started Free</button>`;
+    } else if (p.tier === 'builder') {
+      ctaHtml = `<div class="pricing-current-badge" style="background:rgba(74,222,128,0.1);color:var(--green)">Included Free</div>`;
     } else if (p.tier === 'free' && context === 'onboarding') {
       ctaHtml = `<button class="btn btn-ghost btn-block" onclick="finishOnboarding()">Continue with Free</button>`;
     } else if (p.tier === 'free') {
@@ -781,10 +785,13 @@ function renderPlanSelection(context) {
       const label = context === 'onboarding' ? `Choose ${p.name}` : 'Upgrade';
       ctaHtml = `<button class="btn btn-primary btn-block" onclick="selectPlan('${p.tier}','monthly')">${label}</button>`;
     }
+    const priceHtml = p.tier === 'builder'
+      ? `<span class="pricing-price" data-monthly="${p.monthly}" data-annual="${p.annual}" style="text-decoration:line-through;opacity:0.5">$${p.monthly}</span><span class="pricing-interval" data-monthly="/mo" data-annual="/yr" style="text-decoration:line-through;opacity:0.5"> /mo</span><span style="color:var(--green);font-weight:600;margin-left:8px;font-size:18px;">Free</span>`
+      : `<span class="pricing-price" data-monthly="${p.monthly}" data-annual="${p.annual}">$${p.monthly}</span><span class="pricing-interval" data-monthly="/mo" data-annual="/yr"> /mo</span>`;
     h += `<div class="pricing-card${rec}" data-tier="${p.tier}">
       <div class="pricing-tier">${p.name}</div>
-      <div><span class="pricing-price" data-monthly="${p.monthly}" data-annual="${p.annual}">$${p.monthly}</span><span class="pricing-interval" data-monthly="/mo" data-annual="/yr"> /mo</span></div>
-      <div class="pricing-annual-note" data-monthly="" data-annual="${p.annual ? 'Save $' + (p.monthly * 12 - p.annual) + '/yr' : ''}">&nbsp;</div>
+      <div>${priceHtml}</div>
+      <div class="pricing-annual-note" data-monthly="" data-annual="${p.annual && p.tier !== 'builder' ? 'Save $' + (p.monthly * 12 - p.annual) + '/yr' : ''}">&nbsp;</div>
       <div style="font-size:12px;color:var(--text-3);margin:8px 0">${p.executions} executions</div>
       <ul class="pricing-features">${p.features.map(f => `<li>${f}</li>`).join('')}</ul>
       ${ctaHtml}

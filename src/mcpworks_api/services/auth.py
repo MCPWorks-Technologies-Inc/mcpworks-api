@@ -318,7 +318,7 @@ class AuthService:
             email=email.lower(),
             password_hash=hash_password(password),
             name=name,
-            tier="free",
+            tier="builder",
             status="pending_verification",
             email_verified=False,
             verification_token=pin_hash,
