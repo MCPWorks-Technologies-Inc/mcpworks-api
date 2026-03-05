@@ -200,6 +200,16 @@ async def send_account_rejected_email(
     )
 
 
+async def send_verification_pin_email(email: str, name: str | None = None, pin: str = "") -> None:
+    await send_email(
+        to=email,
+        email_type="verification_pin",
+        subject="MCPWorks - Your Verification Code",
+        template_name="verification_pin.html",
+        template_vars={"name": name or email.split("@")[0], "pin": pin},
+    )
+
+
 async def send_account_suspended_email(
     email: str, name: str | None = None, reason: str | None = None
 ) -> None:

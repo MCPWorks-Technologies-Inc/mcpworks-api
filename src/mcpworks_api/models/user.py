@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Index, String
+from sqlalchemy import Boolean, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -31,6 +31,7 @@ class UserStatus(str, Enum):
     """User account status."""
 
     ACTIVE = "active"
+    PENDING_VERIFICATION = "pending_verification"
     PENDING_APPROVAL = "pending_approval"
     REJECTED = "rejected"
     SUSPENDED = "suspended"
@@ -88,6 +89,22 @@ class User(Base, UUIDMixin, TimestampMixin):
     verification_token: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+    )
+    verification_pin_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    verification_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    verification_resend_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
 
     rejection_reason: Mapped[str | None] = mapped_column(

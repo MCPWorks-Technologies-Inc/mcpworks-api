@@ -188,6 +188,47 @@ class RateLimitExceededError(MCPWorksException):
         self.retry_after = retry_after
 
 
+# Email Verification Errors
+class InvalidVerificationPinError(MCPWorksException):
+    """Raised when verification PIN is incorrect."""
+
+    error_code = "INVALID_PIN"
+    status_code = 400
+    message = "Invalid verification PIN"
+
+
+class VerificationPinExpiredError(MCPWorksException):
+    """Raised when verification PIN has expired."""
+
+    error_code = "PIN_EXPIRED"
+    status_code = 400
+    message = "Verification PIN has expired. Please request a new one."
+
+
+class VerificationAttemptsExceededError(MCPWorksException):
+    """Raised when too many PIN attempts have been made."""
+
+    error_code = "PIN_ATTEMPTS_EXCEEDED"
+    status_code = 429
+    message = "Too many failed attempts. Please request a new PIN."
+
+
+class VerificationResendLimitError(MCPWorksException):
+    """Raised when max resend count reached."""
+
+    error_code = "RESEND_LIMIT_EXCEEDED"
+    status_code = 429
+    message = "Maximum verification email resend limit reached"
+
+
+class AlreadyVerifiedError(MCPWorksException):
+    """Raised when email is already verified."""
+
+    error_code = "ALREADY_VERIFIED"
+    status_code = 409
+    message = "Email is already verified"
+
+
 # Validation Errors (422)
 class ValidationError(MCPWorksException):
     """Raised for input validation errors."""

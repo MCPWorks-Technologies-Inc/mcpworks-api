@@ -183,6 +183,15 @@ async def require_active_status(
             detail={"error": "USER_NOT_FOUND", "message": "User account not found"},
         )
 
+    if user_status == "pending_verification":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "PENDING_VERIFICATION",
+                "message": "Email verification required. Check your inbox for the verification PIN.",
+            },
+        )
+
     if user_status == "pending_approval":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -1,6 +1,7 @@
 """Integration tests for authentication endpoints - TDD tests written FIRST."""
 
-from datetime import UTC, timedelta
+import hashlib
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -285,7 +286,7 @@ class TestUserRegistration:
     """Tests for POST /v1/auth/register endpoint."""
 
     async def test_register_success(self, client: AsyncClient, db):  # noqa: ARG002
-        """Valid registration should return 201 with access token."""
+        """Valid registration should return 201 with pending_verification status."""
         response = await client.post(
             "/v1/auth/register",
             json={
@@ -301,9 +302,11 @@ class TestUserRegistration:
         assert "user" in data
         assert data["user"]["email"] == "newuser@example.com"
         assert data["user"]["name"] == "New User"
+        assert data["user"]["status"] == "pending_verification"
         assert "access_token" in data
         assert "refresh_token" in data
         assert data["token_type"] == "bearer"
+        assert data["email_verification_required"] is True
 
     async def test_register_duplicate_email(self, client: AsyncClient, db, make_user):
         """Duplicate email should return 409 with EMAIL_EXISTS error."""
@@ -624,3 +627,148 @@ class TestApiKeyManagement:
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestEmailVerification:
+    """Tests for email verification endpoints."""
+
+    async def test_verify_email_success(self, client: AsyncClient, db, make_user):
+        """Valid PIN should verify email and activate account."""
+        pin = "654321"
+        pin_hash = hashlib.sha256(pin.encode()).hexdigest()
+
+        user = make_user(
+            email="verify@example.com",
+            status="pending_verification",
+            email_verified=False,
+        )
+        user.verification_token = pin_hash
+        user.verification_pin_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        user.verification_attempts = 0
+        user.verification_resend_count = 0
+        db.add(user)
+        await db.commit()
+
+        access_token = create_access_token(str(user.id))
+
+        response = await client.post(
+            "/v1/auth/verify-email",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"pin": pin},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Email verified successfully"
+        assert data["user"]["status"] == "active"
+        assert data["user"]["email_verified"] is True
+
+    async def test_verify_email_wrong_pin(self, client: AsyncClient, db, make_user):
+        """Wrong PIN should return 400."""
+        pin_hash = hashlib.sha256(b"654321").hexdigest()
+
+        user = make_user(
+            email="wrongpin@example.com",
+            status="pending_verification",
+            email_verified=False,
+        )
+        user.verification_token = pin_hash
+        user.verification_pin_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        user.verification_attempts = 0
+        user.verification_resend_count = 0
+        db.add(user)
+        await db.commit()
+
+        access_token = create_access_token(str(user.id))
+
+        response = await client.post(
+            "/v1/auth/verify-email",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"pin": "000000"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"] == "INVALID_PIN"
+
+    async def test_verify_email_no_auth(self, client: AsyncClient):
+        """Verify without auth should return 401."""
+        response = await client.post(
+            "/v1/auth/verify-email",
+            json={"pin": "123456"},
+        )
+        assert response.status_code == 401
+
+    async def test_resend_verification_success(self, client: AsyncClient, db, make_user):
+        """Resend should return 200 with remaining count."""
+        pin_hash = hashlib.sha256(b"654321").hexdigest()
+
+        user = make_user(
+            email="resend@example.com",
+            status="pending_verification",
+            email_verified=False,
+        )
+        user.verification_token = pin_hash
+        user.verification_pin_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        user.verification_attempts = 0
+        user.verification_resend_count = 0
+        db.add(user)
+        await db.commit()
+
+        access_token = create_access_token(str(user.id))
+
+        response = await client.post(
+            "/v1/auth/resend-verification",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["resends_remaining"] == 4
+
+    async def test_resend_verification_limit(self, client: AsyncClient, db, make_user):
+        """Exceeding resend limit should return 429."""
+        pin_hash = hashlib.sha256(b"654321").hexdigest()
+
+        user = make_user(
+            email="resendlimit@example.com",
+            status="pending_verification",
+            email_verified=False,
+        )
+        user.verification_token = pin_hash
+        user.verification_pin_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        user.verification_attempts = 0
+        user.verification_resend_count = 5
+        db.add(user)
+        await db.commit()
+
+        access_token = create_access_token(str(user.id))
+
+        response = await client.post(
+            "/v1/auth/resend-verification",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 429
+        assert response.json()["error"] == "RESEND_LIMIT_EXCEEDED"
+
+    async def test_pending_verification_blocks_protected_endpoints(
+        self, client: AsyncClient, db, make_user
+    ):
+        """Pending verification user should get 403 on protected endpoints."""
+        user = make_user(
+            email="blocked@example.com",
+            status="pending_verification",
+        )
+        db.add(user)
+        await db.commit()
+
+        access_token = create_access_token(str(user.id))
+
+        response = await client.get(
+            "/v1/users/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["error"] == "PENDING_VERIFICATION"

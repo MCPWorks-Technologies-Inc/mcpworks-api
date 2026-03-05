@@ -1,16 +1,22 @@
 """Unit tests for AuthService."""
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from mcpworks_api.core.exceptions import (
+    AlreadyVerifiedError,
     ApiKeyNotFoundError,
     EmailExistsError,
     InvalidApiKeyError,
     InvalidCredentialsError,
+    InvalidVerificationPinError,
     UserNotFoundError,
+    VerificationAttemptsExceededError,
+    VerificationPinExpiredError,
+    VerificationResendLimitError,
 )
 from mcpworks_api.core.security import hash_password
 from mcpworks_api.models import APIKey, User
@@ -50,7 +56,7 @@ class TestAuthServiceRegister:
 
     @pytest.mark.asyncio
     async def test_register_user_basic(self, db):
-        """Test registering a new user (active with tokens)."""
+        """Test registering a new user (pending_verification with tokens)."""
         auth_service = AuthService(db)
         unique_email = f"newuser-{uuid.uuid4().hex[:8]}@example.com"
 
@@ -61,7 +67,10 @@ class TestAuthServiceRegister:
 
         assert user.email == unique_email
         assert user.tier == "free"
-        assert user.status == "active"
+        assert user.status == "pending_verification"
+        assert user.email_verified is False
+        assert user.verification_token is not None
+        assert user.verification_pin_expires_at is not None
         assert access_token is not None
         assert refresh_token is not None
         assert expires_in is not None
@@ -448,6 +457,116 @@ class TestAuthServiceApiKeyRevoke:
             await auth_service.revoke_api_key(test_user.id, api_key.id)
 
         assert "already revoked" in str(exc_info.value)
+
+
+class TestAuthServiceEmailVerification:
+    """Tests for AuthService email verification."""
+
+    @pytest.fixture
+    async def unverified_user(self, db):
+        """Create an unverified user with a known PIN."""
+        pin = "123456"
+        pin_hash = hashlib.sha256(pin.encode()).hexdigest()
+        user = User(
+            email=f"unverified-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("testpassword123"),
+            name="Unverified User",
+            tier="free",
+            status="pending_verification",
+            email_verified=False,
+            verification_token=pin_hash,
+            verification_pin_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            verification_attempts=0,
+            verification_resend_count=0,
+        )
+        db.add(user)
+        await db.flush()
+        return user, pin
+
+    @pytest.mark.asyncio
+    async def test_verify_email_success(self, db, unverified_user):
+        """Test successful PIN verification activates user."""
+        user, pin = unverified_user
+        auth_service = AuthService(db)
+
+        verified_user = await auth_service.verify_email_pin(user.id, pin)
+
+        assert verified_user.email_verified is True
+        assert verified_user.status == "active"
+        assert verified_user.verification_token is None
+
+    @pytest.mark.asyncio
+    async def test_verify_email_wrong_pin(self, db, unverified_user):
+        """Test wrong PIN increments attempts and raises error."""
+        user, _pin = unverified_user
+        auth_service = AuthService(db)
+
+        with pytest.raises(InvalidVerificationPinError):
+            await auth_service.verify_email_pin(user.id, "000000")
+
+        assert user.verification_attempts == 1
+
+    @pytest.mark.asyncio
+    async def test_verify_email_too_many_attempts(self, db, unverified_user):
+        """Test exceeding max attempts raises error."""
+        user, _pin = unverified_user
+        user.verification_attempts = 5
+        auth_service = AuthService(db)
+
+        with pytest.raises(VerificationAttemptsExceededError):
+            await auth_service.verify_email_pin(user.id, "123456")
+
+    @pytest.mark.asyncio
+    async def test_verify_email_expired_pin(self, db, unverified_user):
+        """Test expired PIN raises error."""
+        user, pin = unverified_user
+        user.verification_pin_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        auth_service = AuthService(db)
+
+        with pytest.raises(VerificationPinExpiredError):
+            await auth_service.verify_email_pin(user.id, pin)
+
+    @pytest.mark.asyncio
+    async def test_verify_email_already_verified(self, db, test_user):
+        """Test verifying already-verified user raises error."""
+        test_user.email_verified = True
+        auth_service = AuthService(db)
+
+        with pytest.raises(AlreadyVerifiedError):
+            await auth_service.verify_email_pin(test_user.id, "123456")
+
+    @pytest.mark.asyncio
+    async def test_resend_verification_success(self, db, unverified_user):
+        """Test resending PIN updates token and returns remaining count."""
+        user, _pin = unverified_user
+        old_token = user.verification_token
+        auth_service = AuthService(db)
+
+        remaining = await auth_service.resend_verification_pin(user.id)
+
+        assert remaining == 4
+        assert user.verification_resend_count == 1
+        assert user.verification_token != old_token
+        assert user.verification_attempts == 0
+
+    @pytest.mark.asyncio
+    async def test_resend_verification_limit(self, db, unverified_user):
+        """Test resend limit raises error."""
+        user, _pin = unverified_user
+        user.verification_resend_count = 5
+        auth_service = AuthService(db)
+
+        with pytest.raises(VerificationResendLimitError):
+            await auth_service.resend_verification_pin(user.id)
+
+    @pytest.mark.asyncio
+    async def test_resend_verification_already_verified(self, db, test_user):
+        """Test resending for verified user raises error."""
+        test_user.email_verified = True
+        auth_service = AuthService(db)
+
+        with pytest.raises(AlreadyVerifiedError):
+            await auth_service.resend_verification_pin(test_user.id)
 
 
 class TestAuthServiceTokenExchange:

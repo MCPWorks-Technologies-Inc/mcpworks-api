@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Verify Your Email</h1>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Hi {{ name }},
+</p>
+<p style="margin:0 0 24px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Enter this code to verify your email address and activate your MCPWorks account:
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+<tr>
+<td align="center" style="padding:16px 0 24px 0;">
+<span style="font-size:36px;font-weight:700;letter-spacing:8px;color:#18181b;font-family:'Courier New',monospace;">{{ pin }}</span>
+</td>
+</tr>
+</table>
+<p style="margin:0 0 8px 0;color:#71717a;font-size:13px;">
+This code expires in 10 minutes.
+</p>
+<p style="margin:0;color:#71717a;font-size:13px;">
+If you did not create this account, you can safely ignore this email.
+</p>
+{% endblock %}
