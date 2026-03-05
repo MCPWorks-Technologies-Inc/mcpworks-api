@@ -627,12 +627,17 @@ function deleteAccountPrompt(userId, email) {
 
 async function deleteAccount(userId, email) {
   try {
-    const res = await fetch(`${API}/v1/admin/users/${userId}`, {
-      method: 'DELETE',
+    const res = await fetch(`${API}/v1/admin/users/${userId}/delete`, {
+      method: 'POST',
       headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirm_email: email }),
     });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    if (!res.ok) {
+      const d = await res.json().catch(()=>({}));
+      const msg = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || 'Failed');
+      alert(msg);
+      return;
+    }
     const data = await res.json();
     const r = data.resources_deleted || {};
     alert(`Account deleted: ${data.email}\n\nResources removed:\n  Namespaces: ${r.namespaces}\n  Services: ${r.services}\n  Functions: ${r.functions}`);
