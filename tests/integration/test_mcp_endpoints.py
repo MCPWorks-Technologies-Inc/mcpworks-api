@@ -474,7 +474,8 @@ class TestRunMCPHandler:
 
         # Check tool schema
         tool = next(t for t in tools if t["name"] == expected_name)
-        assert tool["description"] == function.description
+        assert tool["description"].startswith(function.description)
+        assert "Sandbox limits" in tool["description"]
         assert tool["inputSchema"] == version.input_schema
 
     async def test_tools_call_invalid_format(
