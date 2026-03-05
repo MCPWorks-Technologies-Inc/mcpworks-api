@@ -521,6 +521,8 @@ def main():
             result = exec_globals['output']
         elif callable(exec_globals.get('main')):
             result = exec_globals['main'](input_data)
+        elif callable(exec_globals.get('handler')):
+            result = exec_globals['handler'](input_data, {{}})
 
     except Exception as e:
         success = False

@@ -78,6 +78,15 @@ Full rename completed across all source, templates, tests, and documentation. On
 
 ---
 
+### ~~PROBLEM-010: MCP `make_function` Convention Not Documented — `handler()` Silently Fails~~
+
+**Filed:** 2026-03-05
+**Status:** RESOLVED (2026-03-05)
+
+Sandbox wrapper now recognizes `handler(input, context)` as a valid entry point (called with empty dict context). The `make_function` tool description for the `code` field now documents all four recognized patterns: `main(input)`, `handler(input, context)`, top-level `result`, top-level `output`.
+
+---
+
 ## Resolved Issues
 
 ### ~~PROBLEM-005: MCP Run Server Tools Not Discoverable / Returning Null~~

@@ -202,7 +202,7 @@ class CreateMCPHandler:
                         },
                         "code": {
                             "type": "string",
-                            "description": "Function code (for code_sandbox)",
+                            "description": "Function code (for code_sandbox). Use def main(input): to define the entry point. Also supports handler(input, context), or top-level result/output variables.",
                         },
                         "config": {
                             "type": "object",
