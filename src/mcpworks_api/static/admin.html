@@ -550,7 +550,8 @@ async function loadUser(userId) {
             ${u.name ? `<p class="text-gray-400 text-sm mt-1">${esc(u.name)}</p>` : ''}
           </div>
           <div class="flex items-center gap-3">
-            <span class="tag">${esc(u.tier)}</span>
+            <span class="tag">${esc(u.effective_tier || u.tier)}</span>
+            ${u.tier_override ? `<span class="text-yellow-400 text-xs">override</span>` : ''}
             <span class="status-${u.status}" style="font-weight:600;">${esc(u.status)}</span>
           </div>
         </div>
@@ -560,6 +561,30 @@ async function loadUser(userId) {
           <tr><td><p style="margin:0;color:#f87171;font-size:13px;"><strong>Suspension reason:</strong> ${esc(u.rejection_reason)}</p></td></tr>
           </table>
         ` : ''}
+
+        <div class="card p-4 mb-6">
+          <h3 class="text-gray-300 font-medium mb-3" style="font-size:13px;">Plan</h3>
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="text-gray-500 text-sm">Base: <span class="text-gray-300">${esc(u.tier)}</span></span>
+            <span class="text-gray-500 text-sm">Effective: <span class="text-white font-medium">${esc(u.effective_tier || u.tier)}</span></span>
+            ${u.tier_override ? `
+              <span class="text-yellow-400 text-xs" style="background:#422006;padding:2px 8px;border-radius:4px;">Override: ${esc(u.tier_override)}</span>
+              ${u.tier_override_reason ? `<span class="text-gray-500 text-xs">(${esc(u.tier_override_reason)})</span>` : ''}
+              ${u.tier_override_expires_at ? `<span class="text-gray-500 text-xs">expires ${fmtDate(u.tier_override_expires_at)}</span>` : ''}
+            ` : ''}
+          </div>
+          <div class="flex items-center gap-2 mt-3">
+            <select id="tier-select" style="background:#030712;border:1px solid #374151;color:#fff;padding:6px 10px;border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;">
+              <option value="">Change plan…</option>
+              <option value="free" ${(u.effective_tier || u.tier) === 'free' ? 'disabled' : ''}>Free</option>
+              <option value="builder" ${(u.effective_tier || u.tier) === 'builder' ? 'disabled' : ''}>Builder</option>
+              <option value="pro" ${(u.effective_tier || u.tier) === 'pro' ? 'disabled' : ''}>Pro</option>
+              <option value="enterprise" ${(u.effective_tier || u.tier) === 'enterprise' ? 'disabled' : ''}>Enterprise</option>
+            </select>
+            <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="setTierOverride('${esc(u.id)}')">Apply</button>
+            ${u.tier_override ? `<button class="btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="clearTierOverride('${esc(u.id)}')">Clear Override</button>` : ''}
+          </div>
+        </div>
 
         <div class="grid grid-cols-4 gap-4 mb-6">
           <div class="card p-3 text-center"><div class="stat-num text-base">${u.namespace_count}</div><div class="stat-label" style="font-size:10px;">Namespaces</div></div>
@@ -615,6 +640,47 @@ async function unsuspendUser(userId) {
     });
     if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
     loadUser(userId); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function setTierOverride(userId) {
+  const sel = document.getElementById('tier-select');
+  const tier = sel.value;
+  if (!tier) { alert('Select a plan first.'); return; }
+  const reason = prompt(`Reason for changing plan to ${tier}:`);
+  if (reason === null) return;
+  if (!reason || reason.length < 3) { alert('Reason is required (min 3 chars).'); return; }
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/tier-override`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier, reason }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(()=>({}));
+      alert(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || 'Failed'));
+      return;
+    }
+    loadUser(userId);
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function clearTierOverride(userId) {
+  const reason = prompt('Reason for clearing the override:');
+  if (reason === null) return;
+  if (!reason || reason.length < 3) { alert('Reason is required (min 3 chars).'); return; }
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/clear-tier-override`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(()=>({}));
+      alert(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || 'Failed'));
+      return;
+    }
+    loadUser(userId);
   } catch (e) { alert('Error: ' + e.message); }
 }
 

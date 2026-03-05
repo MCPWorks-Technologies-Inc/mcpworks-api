@@ -1096,6 +1096,17 @@ async def clear_tier_override(
     }
 
 
+@router.post("/users/{user_id}/clear-tier-override")
+async def clear_tier_override_post(
+    user_id: str,
+    admin_id: AdminUserId,
+    body: TierOverrideClearRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """POST variant of clear_tier_override for browser compatibility."""
+    return await clear_tier_override(user_id, admin_id, body, db)
+
+
 async def _fire_approval_security_event(
     admin_id: str, user_id: str, email: str, action: str
 ) -> None:
