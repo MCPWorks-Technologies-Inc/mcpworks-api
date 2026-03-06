@@ -233,6 +233,11 @@ def create_app() -> FastAPI:
         """Redirect to console (registration is now inline)."""
         return RedirectResponse(url="/console#register", status_code=302)
 
+    @app.get("/onboarding", include_in_schema=False)
+    async def onboarding_page() -> RedirectResponse:
+        """Redirect to console."""
+        return RedirectResponse(url="/console", status_code=302)
+
     @app.get("/login", include_in_schema=False)
     async def login_page() -> RedirectResponse:
         """Redirect to console (login is now inline)."""
