@@ -394,10 +394,10 @@ def compress_logs(logs, max_tokens=500):
     "ipv6": "Yes",
     "backups": "Weekly automated backups",
     "monitoring": "Basic monitoring included",
-    "tier": "founder_pro",
+    "tier": "pro",
     "executions_count": 1500,
-    "executions_limit": 10000,
-    "executions_remaining": 8500
+    "executions_limit": 250000,
+    "executions_remaining": 248500
 }
 ```
 

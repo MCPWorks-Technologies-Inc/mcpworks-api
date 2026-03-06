@@ -92,7 +92,7 @@ class User(Base):
     id: Mapped[uuid.UUID]
     email: Mapped[str]
     password_hash: Mapped[str]
-    tier: Mapped[str]  # free, founder, founder_pro, enterprise
+    tier: Mapped[str]  # free, builder, pro, enterprise
 
 # ADD relationship
     namespaces: Mapped[list["Namespace"]] = relationship(

@@ -213,10 +213,10 @@ Usage: `make_function(service="x", name="y", backend="code_sandbox", template="h
 
 | Tier | Price | Executions |
 |------|-------|------------|
-| free | $0 | 100 |
-| builder | $29 | 2,500 |
-| pro | $149 | 25,000 |
-| enterprise | $499 | 100,000 |
+| free | $0 | 1,000 |
+| builder | $29 | 25,000 |
+| pro | $149 | 250,000 |
+| enterprise | $499 | 1,000,000 |
 
 ### Sandbox Resources (per execution)
 

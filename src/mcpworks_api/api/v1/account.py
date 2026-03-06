@@ -81,10 +81,10 @@ async def get_usage(
     Usage is tracked per calendar month.
 
     Execution limits by tier:
-    - Free: 100/month
-    - Builder: 2,500/month
-    - Pro: 25,000/month
-    - Enterprise: 100,000/month
+    - Free: 1,000/month
+    - Builder: 25,000/month
+    - Pro: 250,000/month
+    - Enterprise: 1,000,000/month
     """
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()

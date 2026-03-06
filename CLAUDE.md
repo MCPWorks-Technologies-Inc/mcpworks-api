@@ -339,10 +339,10 @@ cat docs/implementation/guidance/mcp-token-optimization.md
 **Subscription Tiers:**
 | Tier | Price | Executions/Month |
 |------|-------|------------------|
-| Free | $0 | 100 |
-| Founder | $29/mo | 1,000 |
-| Founder Pro | $59/mo | 10,000 |
-| Founder Enterprise | $129+/mo | Unlimited |
+| Free | $0 | 1,000 |
+| Builder | $29/mo | 25,000 |
+| Pro | $149/mo | 250,000 |
+| Enterprise | $499+/mo | 1,000,000 |
 
 **Usage Check Pattern:**
 ```python
