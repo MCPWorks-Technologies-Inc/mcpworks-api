@@ -27,11 +27,11 @@ class SubscriptionStatus(str, Enum):
 class SubscriptionTier(str, Enum):
     """Subscription tier with monthly execution limits.
 
-    Per PRICING.md v5.1.0 (Value Ladder):
-    - free ($0): 100 executions/month
-    - builder ($29/mo): 2,500 executions/month
-    - pro ($149/mo): 25,000 executions/month
-    - enterprise ($499/mo): 100,000 executions/month
+    Per PRICING.md v5.2.0:
+    - free ($0): 1,000 executions/month
+    - builder ($29/mo): 25,000 executions/month
+    - pro ($149/mo): 250,000 executions/month
+    - enterprise ($499/mo): 1,000,000 executions/month
     """
 
     FREE = "free"
@@ -43,12 +43,12 @@ class SubscriptionTier(str, Enum):
     def monthly_executions(self) -> int:
         """Get monthly execution limit for this tier."""
         limits = {
-            SubscriptionTier.FREE: 100,
-            SubscriptionTier.BUILDER: 2_500,
-            SubscriptionTier.PRO: 25_000,
-            SubscriptionTier.ENTERPRISE: 100_000,
+            SubscriptionTier.FREE: 1_000,
+            SubscriptionTier.BUILDER: 25_000,
+            SubscriptionTier.PRO: 250_000,
+            SubscriptionTier.ENTERPRISE: 1_000_000,
         }
-        return limits.get(self, 100)
+        return limits.get(self, 1_000)
 
 
 class Subscription(Base, UUIDMixin, TimestampMixin):

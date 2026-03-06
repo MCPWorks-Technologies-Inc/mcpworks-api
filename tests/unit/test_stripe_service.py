@@ -13,20 +13,20 @@ class TestTierExecutions:
     """Tests for tier execution limit configuration per PRICING.md."""
 
     def test_free_tier_executions(self):
-        """Test free tier has 100 executions/month."""
-        assert TIER_EXECUTIONS["free"] == 100
+        """Test free tier has 1,000 executions/month per PRICING.md v5.2.0."""
+        assert TIER_EXECUTIONS["free"] == 1_000
 
     def test_builder_tier_executions(self):
-        """Test builder tier has 2,500 executions/month."""
-        assert TIER_EXECUTIONS["builder"] == 2_500
+        """Test builder tier has 25,000 executions/month per PRICING.md v5.2.0."""
+        assert TIER_EXECUTIONS["builder"] == 25_000
 
     def test_pro_tier_executions(self):
-        """Test pro tier has 25,000 executions/month."""
-        assert TIER_EXECUTIONS["pro"] == 25_000
+        """Test pro tier has 250,000 executions/month per PRICING.md v5.2.0."""
+        assert TIER_EXECUTIONS["pro"] == 250_000
 
     def test_enterprise_tier_executions(self):
-        """Test enterprise tier has 100,000 executions/month."""
-        assert TIER_EXECUTIONS["enterprise"] == 100_000
+        """Test enterprise tier has 1,000,000 executions/month per PRICING.md v5.2.0."""
+        assert TIER_EXECUTIONS["enterprise"] == 1_000_000
 
 
 class TestCreateCheckoutSession:
