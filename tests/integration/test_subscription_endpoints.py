@@ -181,7 +181,7 @@ class TestGetCurrentSubscription:
         assert data["tier"] == "builder"
         assert data["status"] == "active"
         assert data["cancel_at_period_end"] is False
-        assert data["monthly_executions"] == 2_500  # builder tier limit per PRICING.md v5.0.0
+        assert data["monthly_executions"] == 25_000  # builder tier limit per PRICING.md v5.2.0
 
     @pytest.mark.asyncio
     async def test_get_subscription_no_auth(self, client: AsyncClient):

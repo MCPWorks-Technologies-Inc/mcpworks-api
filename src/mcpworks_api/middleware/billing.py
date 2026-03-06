@@ -30,16 +30,16 @@ class BillingMiddleware(BaseHTTPMiddleware):
     - Credit balance (future)
     """
 
-    # Tier limits (executions per month) - per PRICING.md v5.1.0 Value Ladder
+    # Tier limits (executions per month) - per PRICING.md v5.2.0
     TIER_LIMITS: dict[str, int] = {
-        "free": 100,
-        "builder": 2_500,
-        "pro": 25_000,
-        "enterprise": 100_000,
+        "free": 1_000,
+        "builder": 25_000,
+        "pro": 250_000,
+        "enterprise": 1_000_000,
     }
 
     # Default limit for unknown tiers
-    DEFAULT_LIMIT = 100
+    DEFAULT_LIMIT = 1_000
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request and track usage.

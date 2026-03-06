@@ -165,7 +165,7 @@ async function loadDashboard() {
             document.getElementById('usage-count').textContent = u.executions_used ?? u.executions_count ?? 0;
             document.getElementById('usage-limit').textContent = u.executions_limit ?? '-';
             const count = u.executions_used ?? u.executions_count ?? 0;
-            const limit = u.executions_limit ?? 100;
+            const limit = u.executions_limit ?? 1000;
             const pct = limit > 0 ? Math.min(100, (count / limit) * 100) : 0;
             document.getElementById('usage-bar').style.width = pct + '%';
             if (pct > 90) document.getElementById('usage-bar').classList.replace('bg-blue-600', 'bg-red-400');

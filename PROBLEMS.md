@@ -87,6 +87,15 @@ Sandbox wrapper now recognizes `handler(input, context)` as a valid entry point 
 
 ---
 
+### ~~TODO-001: Update Tier Execution Limits (Pricing v5.2.0)~~
+
+**Filed:** 2026-03-05
+**Status:** RESOLVED (2026-03-06)
+
+Updated all execution limits 10x across billing middleware, config, Stripe service, subscription model, console pricing UI, quickstart page, dashboard, ToS, and all tests. Concurrency limits updated in ToS. Rate limits per-minute not yet enforced in code (only documented).
+
+---
+
 ## Resolved Issues
 
 ### ~~PROBLEM-005: MCP Run Server Tools Not Discoverable / Returning Null~~

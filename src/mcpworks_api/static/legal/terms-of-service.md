@@ -108,14 +108,14 @@ Free-tier accounts with no API activity for 180 consecutive days may have their 
 | Resource | Free ($0) | Builder ($29) | Pro ($149) | Enterprise ($499+) |
 |----------|-----------|---------------|------------|---------------------|
 | Functions | 5 | Unlimited | Unlimited | Unlimited |
-| Executions/month | 100 | 2,500 | 25,000 | 100,000 (fair use) |
+| Executions/month | 1,000 | 25,000 | 250,000 | 1,000,000 (fair use) |
 | Namespaces | 1 | 3 | Unlimited | Unlimited |
 | Sandbox timeout | 10s | 30s | 90s | 300s |
 | Sandbox memory | 128 MB | 256 MB | 512 MB | 2 GB |
 | Sandbox CPU time | 5s | 15s | 45s | 120s |
-| Concurrent executions | 1 | 3 | 10 | 50 |
+| Concurrent executions | 2 | 5 | 15 | 50 |
 
-Enterprise tier operates under a fair use policy. Accounts consistently exceeding 100,000 executions/month will be contacted to discuss custom pricing. Custom arrangements are available by contacting enterprise@mcpworks.io.
+Enterprise tier operates under a fair use policy. Accounts consistently exceeding 100,000 executions/day will be contacted to discuss custom pricing. Custom arrangements are available by contacting enterprise@mcpworks.io.
 
 ---
 

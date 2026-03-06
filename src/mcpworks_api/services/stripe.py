@@ -50,10 +50,10 @@ def get_tier_price_map() -> dict[str, dict[str, str]]:
 
 
 TIER_EXECUTIONS = {
-    "free": 100,
-    "builder": 2_500,
-    "pro": 25_000,
-    "enterprise": 100_000,
+    "free": 1_000,
+    "builder": 25_000,
+    "pro": 250_000,
+    "enterprise": 1_000_000,
 }
 
 
