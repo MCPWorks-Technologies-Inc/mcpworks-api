@@ -682,7 +682,11 @@ async function apiFetch(path, opts = {}) {
     throw new Error('Unauthorized');
   }
   if (res.status === 204) return null;
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    const msg = typeof d.detail === 'string' ? d.detail : Array.isArray(d.detail) ? d.detail.map(e => e.msg).join('. ') : d.message || `API error ${res.status}`;
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -1081,7 +1085,7 @@ function showGettingStarted() {
 }
 
 async function tutCreateNamespace() {
-  const name = document.getElementById('tut-ns-name').value.trim();
+  const name = document.getElementById('tut-ns-name').value.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
   const description = document.getElementById('tut-ns-desc').value.trim() || null;
   const errEl = document.getElementById('tut-step-1-error');
   errEl.classList.add('hidden');
