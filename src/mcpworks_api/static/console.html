@@ -373,6 +373,15 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
         <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="doRegister()">Create Account</button>
         <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text-3)">Already have an account? <a href="#" onclick="toggleAuthView('signin'); return false;" style="color:var(--link);text-decoration:none;">Sign in</a></div>
       </div>
+      <div class="login-card hidden" id="verify-view">
+        <h2>Verify Your Email</h2>
+        <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Enter the 6-digit PIN sent to <strong id="verify-email-display"></strong></p>
+        <div id="verify-error" class="error-msg hidden"></div>
+        <div id="verify-success" class="hidden" style="background:rgba(74,222,128,0.08);border:1px solid var(--green);border-radius:8px;padding:14px;margin-bottom:14px;color:var(--green);font-size:13px;"></div>
+        <input id="verify-pin" type="text" placeholder="000000" maxlength="6" style="text-align:center;font-size:24px;letter-spacing:8px;font-weight:600;" autocomplete="one-time-code">
+        <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="doVerifyPin()">Verify</button>
+        <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text-3)">Didn't receive it? <a href="#" onclick="doResendPin(); return false;" style="color:var(--link);text-decoration:none;">Resend PIN</a></div>
+      </div>
     </div>
   </div>
 
@@ -462,7 +471,27 @@ function setInsights(html) {
 
 async function initSession() {
   try {
-    const user = await apiFetch('/v1/users/me');
+    const res = await fetch(`${API}/v1/users/me`, {
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (res.status === 403) {
+      const data = await res.json().catch(() => ({}));
+      if (data.detail?.error === 'PENDING_VERIFICATION') {
+        showVerifyScreen(USER_EMAIL || localStorage.getItem('mcpworks_email') || '');
+        return;
+      }
+      doLogout();
+      document.getElementById('login-error').textContent = data.detail?.message || 'Access denied';
+      document.getElementById('login-error').classList.remove('hidden');
+      return;
+    }
+    if (res.status === 401) {
+      doLogout();
+      document.getElementById('login-error').textContent = 'Session expired';
+      document.getElementById('login-error').classList.remove('hidden');
+      return;
+    }
+    const user = await res.json();
     CURRENT_USER = user;
     USER_EMAIL = user.email;
     localStorage.setItem('mcpworks_email', user.email);
@@ -472,9 +501,7 @@ async function initSession() {
       showDashboard(user.email);
     }
   } catch (e) {
-    if (e.message !== 'Unauthorized') {
-      showDashboard(USER_EMAIL || '');
-    }
+    showDashboard(USER_EMAIL || '');
   }
 }
 
@@ -517,12 +544,68 @@ async function doLogin() {
 function toggleAuthView(view) {
   const signin = document.getElementById('signin-view');
   const register = document.getElementById('register-view');
-  if (view === 'register') {
-    signin.classList.add('hidden');
-    register.classList.remove('hidden');
-  } else {
-    register.classList.add('hidden');
-    signin.classList.remove('hidden');
+  const verify = document.getElementById('verify-view');
+  signin.classList.add('hidden');
+  register.classList.add('hidden');
+  verify.classList.add('hidden');
+  if (view === 'register') register.classList.remove('hidden');
+  else if (view === 'verify') verify.classList.remove('hidden');
+  else signin.classList.remove('hidden');
+}
+
+function showVerifyScreen(email) {
+  document.getElementById('login-section').classList.remove('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('verify-email-display').textContent = email;
+  document.getElementById('verify-pin').value = '';
+  document.getElementById('verify-error').classList.add('hidden');
+  document.getElementById('verify-success').classList.add('hidden');
+  toggleAuthView('verify');
+  document.getElementById('verify-pin').focus();
+}
+
+async function doVerifyPin() {
+  const pin = document.getElementById('verify-pin').value.trim();
+  const errEl = document.getElementById('verify-error');
+  errEl.classList.add('hidden');
+  if (!pin || pin.length !== 6) { errEl.textContent = 'Enter the 6-digit PIN'; errEl.classList.remove('hidden'); return; }
+  try {
+    const res = await fetch(`${API}/v1/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail?.message || data.detail || data.message || 'Verification failed');
+    }
+    if (data.access_token) {
+      TOKEN = data.access_token;
+      localStorage.setItem('mcpworks_token', TOKEN);
+    }
+    initSession();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+async function doResendPin() {
+  const errEl = document.getElementById('verify-error');
+  const successEl = document.getElementById('verify-success');
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch(`${API}/v1/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail?.message || data.detail || 'Failed to resend');
+    successEl.textContent = data.message || 'New PIN sent. Check your inbox.';
+    successEl.classList.remove('hidden');
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
   }
 }
 
@@ -550,7 +633,11 @@ async function doRegister() {
       USER_EMAIL = email;
       localStorage.setItem('mcpworks_token', TOKEN);
       localStorage.setItem('mcpworks_email', email);
-      initSession();
+      if (data.email_verification_required) {
+        showVerifyScreen(email);
+      } else {
+        initSession();
+      }
     } else {
       successEl.textContent = data.message || 'Account created. You will be notified when your account is approved.';
       successEl.classList.remove('hidden');
@@ -581,6 +668,7 @@ document.getElementById('login-email').addEventListener('keydown', e => { if (e.
 document.getElementById('register-password').addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
 document.getElementById('register-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('register-password').focus(); });
 document.getElementById('register-name').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('register-email').focus(); });
+document.getElementById('verify-pin').addEventListener('keydown', e => { if (e.key === 'Enter') doVerifyPin(); });
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(`${API}${path}`, {
