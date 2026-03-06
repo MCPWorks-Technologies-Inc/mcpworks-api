@@ -202,13 +202,13 @@ POST   /graphql               Full schema access
 
 ## Tier Limits
 
-| Limit | Free | Founder | Founder Pro | Enterprise |
-|-------|------|---------|-------------|------------|
-| **Price** | $0 | $29/mo | $59/mo | $129+/mo |
+| Limit | Free | Builder | Pro | Enterprise |
+|-------|------|---------|-----|------------|
+| **Price** | $0 | $29/mo | $149/mo | $499+/mo |
 | **Namespaces** | 1 | 3 | 10 | Unlimited |
 | **Functions** | 5 | 25 | 100 | Unlimited |
-| **Executions/mo** | 500 | 10,000 | 50,000 | Unlimited |
-| **Execution time** | 10s | 30s | 60s | 300s |
+| **Executions/mo** | 1,000 | 25,000 | 250,000 | 1,000,000 |
+| **Execution time** | 10s | 30s | 90s | 300s |
 | **Memory** | 128MB | 256MB | 512MB | 2GB |
 | **Network hosts** | ❌ | 5 | 25 | Unlimited |
 | **Versions kept** | 10 | 50 | 100 | Unlimited |

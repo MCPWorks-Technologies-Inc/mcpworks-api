@@ -50,7 +50,7 @@ These were built correctly from the start and won't need rework:
 
 ### 4. Sandbox Concurrency
 
-**Current:** nsjail sandboxes run on the API container itself (privileged, `SYS_ADMIN` caps). Each execution allocates up to 512MB RAM (Founder Pro tier) with 64 PIDs (`backends/sandbox.py:45-70`).
+**Current:** nsjail sandboxes run on the API container itself (privileged, `SYS_ADMIN` caps). Each execution allocates up to 512MB RAM (Pro tier) with 64 PIDs (`backends/sandbox.py:45-70`).
 
 **Problem:** On a 4GB droplet with Postgres, Redis, Caddy, and the API all co-resident, realistic concurrent sandbox capacity is 10-20 executions. At 500 customers, peak concurrent demand could be 50-250.
 
@@ -281,9 +281,9 @@ async def check_quota(account_id: str, tier: str) -> bool:
 | 3 | Dedicated worker droplet (8GB) | ~80 | $48 |
 | 4 | 2 worker droplets (8GB each) | ~160 | $96 |
 
-**Capacity math** (Founder Pro tier worst case: 512MB per sandbox):
+**Capacity math** (Pro tier worst case: 512MB per sandbox):
 - 8GB droplet, ~6GB usable after OS: 6,000 / 512 ≈ 12 concurrent max at peak memory
-- But most executions are Free/Founder tier (128-256MB), and most finish in <10s
+- But most executions are Free/Builder tier (128-256MB), and most finish in <10s
 - Realistic sustained concurrency: ~40 per 8GB box (weighted average ~200MB per sandbox)
 
 **Task queue architecture (Phase 3):**

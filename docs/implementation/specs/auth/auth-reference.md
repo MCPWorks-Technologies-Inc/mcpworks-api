@@ -50,7 +50,7 @@ Access tokens are JSON Web Tokens signed with ES256 (ECDSA P-256).
   "mcpworks": {
     "tier": "pro",
     "user_id": "usr_01HZXK4M8QWERTY12345ABC",
-    "executions_limit": 10000
+    "executions_limit": 250000
   }
 }
 ```

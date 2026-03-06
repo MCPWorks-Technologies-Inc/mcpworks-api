@@ -102,7 +102,7 @@ Create a function 'summarize' with required_env OPENAI_API_KEY
 
 **End card**:
 > "MCPWorks — Code Sandbox for AI Assistants"
-> "mcpworks.io | 100 free executions/month"
+> "mcpworks.io | 1,000 free executions/month"
 
 ## Post-Production
 

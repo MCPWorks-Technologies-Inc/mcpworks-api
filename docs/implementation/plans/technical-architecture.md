@@ -216,8 +216,8 @@ class HostingProvider(ABC):
      "server_id": "droplet-12345",
      "ip_address": "192.0.2.1",
      "ssh_key": "[key data]",
-     "tier": "founder_pro",
-     "executions_remaining": 8500
+     "tier": "pro",
+     "executions_remaining": 248500
    }
    ```
 

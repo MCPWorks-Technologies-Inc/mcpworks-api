@@ -197,7 +197,7 @@ CREATE INDEX idx_api_keys_hash ON api_keys(key_hash);
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-    tier VARCHAR(20) NOT NULL CHECK (tier IN ('free', 'founder', 'founder_pro', 'enterprise')),
+    tier VARCHAR(20) NOT NULL CHECK (tier IN ('free', 'builder', 'pro', 'enterprise')),
     status VARCHAR(20) NOT NULL CHECK (status IN ('active', 'cancelled', 'past_due', 'trialing')),
     stripe_subscription_id VARCHAR(255) UNIQUE,
     stripe_customer_id VARCHAR(255),
@@ -294,7 +294,7 @@ CREATE TABLE workflow_templates (
     mcp_input_schema JSONB NOT NULL,
     preview_image_url TEXT,
     usage_count INTEGER DEFAULT 0,
-    tier_required VARCHAR(20) DEFAULT 'free' CHECK (tier_required IN ('free', 'founder', 'founder_pro', 'enterprise')),
+    tier_required VARCHAR(20) DEFAULT 'free' CHECK (tier_required IN ('free', 'builder', 'pro', 'enterprise')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -405,14 +405,14 @@ Authorization: Bearer {jwt_token}
   "created_at": "2025-01-15T10:30:00Z",
   "email_verified": true,
   "subscription": {
-    "tier": "founder",
+    "tier": "builder",
     "status": "active",
     "current_period_end": "2025-02-15T10:30:00Z"
   },
   "usage": {
     "executions_count": 847,
-    "executions_limit": 1000,
-    "executions_remaining": 153
+    "executions_limit": 25000,
+    "executions_remaining": 24153
   }
 }
 ```
@@ -477,10 +477,10 @@ Authorization: Bearer {api_key}
   "billing_period_start": "2025-01-01T00:00:00Z",
   "billing_period_end": "2025-01-31T23:59:59Z",
   "executions_count": 847,
-  "executions_limit": 1000,
-  "executions_remaining": 153,
-  "usage_percentage": 84.7,
-  "tier": "founder"
+  "executions_limit": 25000,
+  "executions_remaining": 24153,
+  "usage_percentage": 3.4,
+  "tier": "builder"
 }
 ```
 
@@ -503,15 +503,15 @@ Authorization: Bearer {jwt_token}
       "billing_period_start": "2025-01-01T00:00:00Z",
       "billing_period_end": "2025-01-31T23:59:59Z",
       "executions_count": 847,
-      "executions_limit": 1000,
-      "tier": "founder"
+      "executions_limit": 25000,
+      "tier": "builder"
     },
     {
       "billing_period_start": "2024-12-01T00:00:00Z",
       "billing_period_end": "2024-12-31T23:59:59Z",
       "executions_count": 923,
-      "executions_limit": 1000,
-      "tier": "founder"
+      "executions_limit": 25000,
+      "tier": "builder"
     }
   ],
   "total": 12
@@ -533,7 +533,7 @@ Authorization: Bearer {jwt_token}
 **Request:**
 ```json
 {
-  "tier": "founder",
+  "tier": "builder",
   "payment_method_id": "pm_abc123"
 }
 ```
@@ -543,14 +543,14 @@ Authorization: Bearer {jwt_token}
 {
   "subscription": {
     "id": "sub_xyz789",
-    "tier": "founder",
+    "tier": "builder",
     "status": "active",
     "current_period_start": "2025-01-15T10:30:00Z",
     "current_period_end": "2025-02-15T10:30:00Z",
     "stripe_subscription_id": "sub_stripe123"
   },
   "usage_limits": {
-    "executions_per_month": 1000,
+    "executions_per_month": 25000,
     "max_functions": 25
   }
 }
@@ -568,14 +568,14 @@ Authorization: Bearer {jwt_token}
 ```json
 {
   "id": "sub_xyz789",
-  "tier": "founder",
+  "tier": "builder",
   "status": "active",
   "current_period_start": "2025-01-15T10:30:00Z",
   "current_period_end": "2025-02-15T10:30:00Z",
   "cancel_at_period_end": false,
   "limits": {
     "max_functions": 25,
-    "max_executions_per_month": 1000
+    "max_executions_per_month": 25000
   }
 }
 ```
@@ -591,7 +591,7 @@ Authorization: Bearer {jwt_token}
 **Request:**
 ```json
 {
-  "tier": "founder_pro"
+  "tier": "pro"
 }
 ```
 
@@ -600,14 +600,14 @@ Authorization: Bearer {jwt_token}
 {
   "subscription": {
     "id": "sub_xyz789",
-    "tier": "founder_pro",
+    "tier": "pro",
     "status": "active",
     "current_period_start": "2025-01-15T10:30:00Z",
     "current_period_end": "2025-02-15T10:30:00Z"
   },
-  "prorated_charge_usd": 30.00,
+  "prorated_charge_usd": 120.00,
   "new_limits": {
-    "executions_per_month": 10000,
+    "executions_per_month": 250000,
     "max_functions": 100
   }
 }
@@ -626,7 +626,7 @@ Authorization: Bearer {jwt_token}
 {
   "subscription": {
     "id": "sub_xyz789",
-    "tier": "founder",
+    "tier": "builder",
     "status": "active",
     "cancel_at_period_end": true,
     "current_period_end": "2025-02-15T10:30:00Z"
@@ -984,7 +984,7 @@ Authorization: Bearer {api_key}
       "name": "text",
       "type": "first_party",
       "endpoint": "https://text.mcpworks.io",
-      "tier_required": "founder",
+      "tier_required": "builder",
       "description": "Document analysis and text processing"
     },
     {
@@ -997,8 +997,8 @@ Authorization: Bearer {api_key}
   ],
   "user": {
     "id": "usr_123",
-    "tier": "founder",
-    "executions_remaining": 153
+    "tier": "builder",
+    "executions_remaining": 24153
   }
 }
 ```
@@ -1045,7 +1045,7 @@ MCPWorks uses **monthly subscription billing** with usage limits per tier. No cr
 
 ### How It Works
 
-1. User subscribes to a tier (Free, Founder, Founder Pro, Enterprise)
+1. User subscribes to a tier (Free, Builder, Pro, Enterprise)
 2. Each tier has monthly execution limits
 3. Usage is tracked per billing period
 4. Soft limits: warn at 80%, pause at 100% (or prompt upgrade)
@@ -1095,10 +1095,10 @@ async def increment_usage(user_id: UUID) -> None:
 
 | Tier | Executions/Month | Functions | Price |
 |------|------------------|-----------|-------|
-| Free | 100 | 5 | $0 |
-| Founder | 1,000 | 25 | $29/mo |
-| Founder Pro | 10,000 | 100 | $59/mo |
-| Enterprise | Unlimited | Unlimited | $129+/mo |
+| Free | 1,000 | 5 | $0 |
+| Builder | 25,000 | 25 | $29/mo |
+| Pro | 250,000 | 100 | $149/mo |
+| Enterprise | 1,000,000 | Unlimited | $499+/mo |
 
 ---
 
@@ -1285,7 +1285,7 @@ Used for web interface access.
 {
   "sub": "usr_abc123",
   "email": "user@example.com",
-  "tier": "founder",
+  "tier": "builder",
   "exp": 1642252800,
   "iat": 1642252800
 }
@@ -1369,27 +1369,27 @@ All security-relevant events logged:
 
 #### Free Tier ($0/month)
 - 5 functions maximum
-- 100 executions/month
+- 1,000 executions/month
 - Community support (GitHub Discussions)
 - Code Sandbox backend included
 
-#### Founder Tier ($29/month)
+#### Builder Tier ($29/month)
 - 25 functions
-- 1,000 executions/month
+- 25,000 executions/month
 - Email support (48h response)
 - Function templates library
 - All backends included
 
-#### Founder Pro Tier ($59/month)
+#### Pro Tier ($149/month)
 - 100 functions
-- 10,000 executions/month
+- 250,000 executions/month
 - Priority email support (24h response)
 - Advanced function templates
 - Custom integrations
 
-#### Enterprise Tier ($129+/month)
+#### Enterprise Tier ($499+/month)
 - Unlimited functions
-- Unlimited executions
+- 1,000,000 executions
 - Dedicated support (4h response)
 - SOC 2 compliance reports
 - Custom SLA
@@ -2246,9 +2246,9 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     api_rate_limit_per_hour: int = 1000
-    execution_rate_limit_free: int = 100
-    execution_rate_limit_founder: int = 1000
-    execution_rate_limit_founder_pro: int = 10000
+    execution_rate_limit_free: int = 1000
+    execution_rate_limit_builder: int = 25000
+    execution_rate_limit_pro: int = 250000
 
     # Observability
     sentry_dsn: str | None = None

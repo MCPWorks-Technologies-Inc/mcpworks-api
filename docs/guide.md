@@ -65,7 +65,7 @@ Currently supported: `code_sandbox` (secure Python execution via nsjail). Future
 
 ### 1. Create Your Account
 
-Register at `https://api.mcpworks.io/register` with your email. You get 100 free function executions per month.
+Register at `https://api.mcpworks.io/register` with your email. You get 1,000 free function executions per month.
 
 ### 2. Get Your API Key
 
@@ -625,10 +625,10 @@ Call the `_env_status` tool (available on run endpoints in tool mode via `?mode=
 
 | Tier | Price | Executions/Month |
 |------|-------|------------------|
-| **Free** | $0 | 100 |
-| **Builder** | $29/mo | 2,500 |
-| **Pro** | $149/mo | 25,000 |
-| **Enterprise** | $499/mo | 100,000 |
+| **Free** | $0 | 1,000 |
+| **Builder** | $29/mo | 25,000 |
+| **Pro** | $149/mo | 250,000 |
+| **Enterprise** | $499+/mo | 1,000,000 |
 
 New accounts start on the free tier.
 
@@ -643,9 +643,9 @@ When you hit your monthly limit, run endpoint calls return HTTP 429 with:
 ```json
 {
   "code": "QUOTA_EXCEEDED",
-  "message": "Monthly execution limit (100) exceeded",
-  "usage": 100,
-  "limit": 100,
+  "message": "Monthly execution limit (1000) exceeded",
+  "usage": 1000,
+  "limit": 1000,
   "tier": "free"
 }
 ```

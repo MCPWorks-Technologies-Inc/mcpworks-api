@@ -48,7 +48,7 @@ This specification defines the complete implementation of the Code Execution San
 ```
 1. Request arrives at Gateway
    POST /v1/sandbox/execute
-   { "code": "...", "input": {...}, "tier": "founder" }
+   { "code": "...", "input": {...}, "tier": "builder" }
 
 2. Gateway validates request
    - Authentication (API key validation)
@@ -186,16 +186,16 @@ gidmap {
 # These are baseline limits; actual limits set via cgroup before nsjail spawn
 
 # Wall-clock time limit (seconds) - CRITICAL for DoS prevention
-# Overridden per-tier: Free=10s, Founder=30s, Pro=60s, Enterprise=300s
+# Overridden per-tier: Free=10s, Builder=30s, Pro=90s, Enterprise=300s
 time_limit: 30
 
 # Virtual memory limit (MB)
-# Overridden per-tier: Free=128MB, Founder=256MB, Pro=512MB, Enterprise=2GB
+# Overridden per-tier: Free=128MB, Builder=256MB, Pro=512MB, Enterprise=2GB
 rlimit_as_type: HARD
 rlimit_as: 256
 
 # CPU time limit (seconds) - total CPU time across all cores
-# Overridden per-tier: Free=5s, Founder=15s, Pro=30s, Enterprise=120s
+# Overridden per-tier: Free=5s, Builder=15s, Pro=30s, Enterprise=120s
 rlimit_cpu_type: HARD
 rlimit_cpu: 15
 
@@ -401,36 +401,36 @@ INPUT_PATH="$4"
 # Tier-specific limits
 declare -A MEMORY_LIMITS=(
     ["free"]="134217728"        # 128MB
-    ["founder"]="268435456"     # 256MB
-    ["founder_pro"]="536870912" # 512MB
+    ["builder"]="268435456"     # 256MB
+    ["pro"]="536870912"         # 512MB
     ["enterprise"]="2147483648" # 2GB
 )
 
 declare -A TIME_LIMITS=(
     ["free"]="10"
-    ["founder"]="30"
-    ["founder_pro"]="60"
+    ["builder"]="30"
+    ["pro"]="90"
     ["enterprise"]="300"
 )
 
 declare -A CPU_LIMITS=(
     ["free"]="5000 100000"      # 5% of one CPU
-    ["founder"]="15000 100000"  # 15% of one CPU
-    ["founder_pro"]="30000 100000" # 30% of one CPU
+    ["builder"]="15000 100000"  # 15% of one CPU
+    ["pro"]="30000 100000"     # 30% of one CPU
     ["enterprise"]="100000 100000" # 100% of one CPU
 )
 
 declare -A PID_LIMITS=(
     ["free"]="16"
-    ["founder"]="32"
-    ["founder_pro"]="64"
+    ["builder"]="32"
+    ["pro"]="64"
     ["enterprise"]="128"
 )
 
 declare -A NETWORK_HOSTS=(
     ["free"]="0"
-    ["founder"]="5"
-    ["founder_pro"]="25"
+    ["builder"]="5"
+    ["pro"]="25"
     ["enterprise"]="unlimited"
 )
 
@@ -890,8 +890,8 @@ The egress proxy controls all outbound network access from sandboxes. It enforce
 │  │                                                                      │   │
 │  │  Allowlist by tier:                                                  │   │
 │  │  - Free: NONE (no network access)                                   │   │
-│  │  - Founder: 5 user-configured hosts                                 │   │
-│  │  - Founder Pro: 25 user-configured hosts                            │   │
+│  │  - Builder: 5 user-configured hosts                                  │   │
+│  │  - Pro: 25 user-configured hosts                                    │   │
 │  │  - Enterprise: Unlimited (or blocklist mode)                        │   │
 │  └────────────────────────────────────┬─────────────────────────────────┘   │
 │                                       │                                     │
@@ -1010,8 +1010,8 @@ redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=T
 # Tier-based host limits
 TIER_LIMITS = {
     "free": 0,
-    "founder": 5,
-    "founder_pro": 25,
+    "builder": 5,
+    "pro": 25,
     "enterprise": -1,  # Unlimited
 }
 
@@ -1162,7 +1162,7 @@ Response:
 {
     "status": "ok",
     "hosts": ["api.stripe.com", "api.openai.com", "*.shopify.com", "hooks.slack.com"],
-    "tier": "founder_pro",
+    "tier": "pro",
     "max_hosts": 25,
     "used": 4
 }
@@ -2150,16 +2150,16 @@ async def execute_code(
 
 ### Complete Tier Comparison
 
-| Resource | Free | Founder | Founder Pro | Enterprise |
-|----------|------|---------|-------------|------------|
-| **Execution time (wall)** | 10s | 30s | 60s | 300s |
+| Resource | Free | Builder | Pro | Enterprise |
+|----------|------|---------|-----|------------|
+| **Execution time (wall)** | 10s | 30s | 90s | 300s |
 | **CPU time** | 5s | 15s | 30s | 120s |
 | **Memory** | 128MB | 256MB | 512MB | 2GB |
 | **Max PIDs** | 16 | 32 | 64 | 128 |
 | **Max file size** | 10MB | 10MB | 10MB | 10MB |
 | **Max open files** | 64 | 64 | 64 | 128 |
 | **Network hosts** | None | 5 | 25 | Unlimited |
-| **Concurrent executions** | 1 | 3 | 10 | 50 |
+| **Concurrent executions** | 2 | 5 | 15 | 50 |
 | **Executions/month** | 100 | 1,000 | 10,000 | Unlimited |
 
 ### Aggregate Host Limits
@@ -2286,7 +2286,7 @@ Layer 7: Monitoring
     "timestamp": "2026-02-09T12:00:00.000Z",
     "execution_id": "exec-abc123",
     "account_id": "acct-xyz789",
-    "tier": "founder",
+    "tier": "builder",
     "action": "execute_complete",
     "success": true,
     "duration_ms": 1234,

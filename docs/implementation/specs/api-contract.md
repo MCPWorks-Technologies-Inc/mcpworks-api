@@ -151,8 +151,8 @@ POST /v1/auth/token
   "user": {
     "user_id": "usr_abc123def456",
     "email": "user@example.com",
-    "tier": "founder_pro",
-    "executions_remaining": 8500
+    "tier": "pro",
+    "executions_remaining": 248500
   },
   "key_info": {
     "key_id": "k1",
@@ -332,10 +332,10 @@ GET /v1/account/usage
   "billing_period_start": "2025-11-01T00:00:00Z",
   "billing_period_end": "2025-11-30T23:59:59Z",
   "executions_count": 1500,
-  "executions_limit": 10000,
-  "executions_remaining": 8500,
-  "usage_percentage": 15.0,
-  "tier": "founder_pro"
+  "executions_limit": 250000,
+  "executions_remaining": 248500,
+  "usage_percentage": 0.6,
+  "tier": "pro"
 }
 ```
 
@@ -757,8 +757,8 @@ All errors follow this format:
   "error": "usage_limit_exceeded",
   "message": "Execution limit reached for current billing period",
   "details": {
-    "executions_count": 10000,
-    "executions_limit": 10000,
+    "executions_count": 250000,
+    "executions_limit": 250000,
     "resets_at": "2025-12-01T00:00:00Z"
   },
   "request_id": "req_xyz789"

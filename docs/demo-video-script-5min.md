@@ -292,7 +292,7 @@ Browser → `https://www.mcpworks.io/pricing` or overlay graphic.
 - Show pricing table
 - End card: **mcpworks.io** logo centered, tagline below:
   **"Code Sandbox for AI Assistants"**
-- Subtitle: `100 free executions/month — no credit card`
+- Subtitle: `1,000 free executions/month — no credit card`
 
 ---
 
