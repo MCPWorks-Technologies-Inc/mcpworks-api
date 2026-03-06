@@ -370,6 +370,7 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
         <input id="register-name" type="text" placeholder="Name (optional)">
         <input id="register-email" type="email" placeholder="Email">
         <input id="register-password" type="password" placeholder="Password (min 8 chars)">
+        <div style="margin-top:10px;font-size:13px;color:var(--text-2)"><label><input type="checkbox" id="register-newsletter" checked> Keep me updated on product news</label></div>
         <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="doRegister()">Create Account</button>
         <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text-3)">Already have an account? <a href="#" onclick="toggleAuthView('signin'); return false;" style="color:var(--link);text-decoration:none;">Sign in</a></div>
       </div>
@@ -633,6 +634,9 @@ async function doRegister() {
       USER_EMAIL = email;
       localStorage.setItem('mcpworks_token', TOKEN);
       localStorage.setItem('mcpworks_email', email);
+      if (document.getElementById('register-newsletter')?.checked) {
+        subscribeNewsletter(email);
+      }
       if (data.email_verification_required) {
         showVerifyScreen(email);
       } else {
@@ -814,6 +818,9 @@ function showOnboarding(user) {
       <div class="tos-accept-row">
         <label><input type="checkbox" id="onboard-tos-check"> I accept the <a href="/v1/legal/terms" target="_blank" style="color:var(--link)">Terms of Service</a> and <a href="/v1/legal/privacy" target="_blank" style="color:var(--link)">Privacy Policy</a></label>
       </div>
+      <div class="tos-accept-row" style="margin-top:8px">
+        <label><input type="checkbox" id="onboard-newsletter" checked> Keep me updated on product news and releases</label>
+      </div>
       <button class="btn btn-primary" style="margin-top:16px;width:100%" id="onboard-tos-btn" onclick="acceptTos()" disabled>Accept & Continue</button>
     </div>
     <div id="onboarding-step-2" class="hidden">
@@ -827,6 +834,14 @@ function showOnboarding(user) {
   });
 }
 
+async function subscribeNewsletter(email) {
+  try {
+    const form = new FormData();
+    form.append('email', email);
+    await fetch('https://buttondown.com/api/emails/embed-subscribe/mcpworks', { method: 'POST', body: form });
+  } catch (_) {}
+}
+
 async function acceptTos() {
   const btn = document.getElementById('onboard-tos-btn');
   btn.disabled = true;
@@ -834,6 +849,9 @@ async function acceptTos() {
   try {
     const user = await apiFetch('/v1/users/me/accept-tos', { method: 'POST' });
     CURRENT_USER = user;
+    if (document.getElementById('onboard-newsletter')?.checked && CURRENT_USER?.email) {
+      subscribeNewsletter(CURRENT_USER.email);
+    }
     document.getElementById('onboarding-step-1').classList.add('hidden');
     document.getElementById('onboarding-step-2').classList.remove('hidden');
   } catch (e) {
