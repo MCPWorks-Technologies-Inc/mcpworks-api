@@ -1038,8 +1038,9 @@ async function loadNamespaces() {
     const ns = data.namespaces || [];
     const keys = keysData.items || [];
     if (!ns.length && !keys.length) { showGettingStarted(); return; }
-    if (!ns.length) { c.innerHTML = emptyState('{ }', 'No namespaces yet', 'Create one via the MCP server or REST API'); return; }
-    c.innerHTML = `<table><thead><tr><th>Namespace</th><th>Description</th><th>Calls</th><th>Created</th></tr></thead><tbody>${ns.map((n, i) => `
+    if (!ns.length) { c.innerHTML = emptyState('{ }', 'No namespaces yet', '<button class="btn btn-primary btn-sm" onclick="openCreateNsModal()">Create Namespace</button>'); return; }
+    c.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openCreateNsModal()">+ Create Namespace</button></div>
+      <table><thead><tr><th>Namespace</th><th>Description</th><th>Calls</th><th>Created</th></tr></thead><tbody>${ns.map((n, i) => `
       <tr class="clickable stagger" style="--i:${i}" onclick="loadNamespace('${esc(n.name)}')">
         <td class="cell-name">${esc(n.name)}</td>
         <td class="cell-dim">${esc(n.description || '\u2014')}</td>
@@ -1627,6 +1628,47 @@ function showVersionDiff() {
   diffArea.innerHTML = html;
 }
 
+function openCreateNsModal() {
+  document.getElementById('createNsName').value = '';
+  document.getElementById('createNsDesc').value = '';
+  document.getElementById('createNsError').classList.add('hidden');
+  document.getElementById('createNsBtn').disabled = false;
+  document.getElementById('createNsBtn').textContent = 'Create';
+  document.getElementById('createNsModal').classList.add('open');
+  setTimeout(() => document.getElementById('createNsName').focus(), 100);
+}
+function closeCreateNsModal() {
+  document.getElementById('createNsModal').classList.remove('open');
+}
+async function confirmCreateNamespace() {
+  const nameInput = document.getElementById('createNsName');
+  const descInput = document.getElementById('createNsDesc');
+  const errEl = document.getElementById('createNsError');
+  const btn = document.getElementById('createNsBtn');
+  const name = nameInput.value.trim().toLowerCase();
+  if (!name) { errEl.textContent = 'Name is required'; errEl.classList.remove('hidden'); return; }
+  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(name)) {
+    errEl.textContent = 'Must be lowercase letters, numbers, and hyphens (2-63 chars, no leading/trailing hyphen)';
+    errEl.classList.remove('hidden'); return;
+  }
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Creating\u2026';
+  try {
+    const body = { name };
+    if (descInput.value.trim()) body.description = descInput.value.trim();
+    await apiFetch('/v1/namespaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    closeCreateNsModal();
+    loadNamespaces();
+    loadStats();
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to create namespace';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Create';
+  }
+}
+
 let _deleteNsTarget = '';
 function openDeleteModal(nsName, svcCount, fnCount) {
   _deleteNsTarget = nsName;
@@ -1663,6 +1705,21 @@ async function confirmDeleteNamespace() {
   }
 }
 </script>
+<div id="createNsModal" class="modal-backdrop" onclick="if(event.target===this)closeCreateNsModal()">
+  <div class="modal-box">
+    <h3 style="color:var(--text-1)">Create Namespace</h3>
+    <div class="modal-warn">A namespace groups your services and functions under a unique subdomain.</div>
+    <div id="createNsError" class="error-msg hidden" style="margin-bottom:12px"></div>
+    <label>Name</label>
+    <input id="createNsName" type="text" placeholder="my-namespace" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')confirmCreateNamespace()">
+    <label>Description <span style="color:var(--text-3)">(optional)</span></label>
+    <input id="createNsDesc" type="text" placeholder="What this namespace is for" autocomplete="off" onkeydown="if(event.key==='Enter')confirmCreateNamespace()">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeCreateNsModal()">Cancel</button>
+      <button id="createNsBtn" class="btn btn-primary" onclick="confirmCreateNamespace()">Create</button>
+    </div>
+  </div>
+</div>
 <div id="deleteNsModal" class="modal-backdrop" onclick="if(event.target===this)closeDeleteModal()">
   <div class="modal-box">
     <h3>Delete Namespace</h3>
