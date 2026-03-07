@@ -176,9 +176,10 @@ ALLOW {
    * ══════════════════════════════════════════════════════════════════════ */
   socket,
   connect,
-  /* bind, listen, accept, accept4 — REMOVED: sandbox only needs outbound
-   * connections (connect). Allowing bind+listen enables port hijacking
-   * (SECURITY_AUDIT.md FINDING-02). */
+  bind,                /* needed by glibc DNS resolver internals */
+  /* listen, accept, accept4 — REMOVED: sandbox cannot create TCP servers.
+   * bind alone cannot accept connections without listen+accept.
+   * Prevents port hijacking (SECURITY_AUDIT.md FINDING-02). */
   sendto,
   recvfrom,
   sendmsg,
