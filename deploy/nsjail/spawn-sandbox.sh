@@ -157,10 +157,11 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
 fi
 
-# Free tier: isolate network namespace (no veth/routes = no egress)
-if [ "${TIER}" = "free" ]; then
-    NSJAIL_ARGS+=(--clone_newnet)
-fi
+# NOTE: Free tier network isolation was intended via --clone_newnet, but
+# nsjail has no CLI flag to override clone_newnet:false from the config.
+# Only --disable_clone_newnet exists (inverse). Free tier already blocks
+# network via iptables UID rules. Full isolation would require a separate
+# config file with clone_newnet:true + veth pair for controlled egress.
 
 # Execute nsjail with tier-specific overrides
 "${NSJAIL}" \
