@@ -30,12 +30,9 @@ MAX_OUTPUT_JSON_BYTES = 1024 * 1024  # 1 MB total output
 
 
 def run():
-    # ORDER-003: Read execution token if present, then delete the file.
-    # Token is never in env vars, only available momentarily via file.
-    exec_token = None
+    # ORDER-003: Delete execution token file if present.
+    # Token is never exposed to user code (SECURITY_AUDIT.md FINDING-03).
     try:
-        with open(TOKEN_PATH) as f:
-            exec_token = f.read().strip()
         import os
 
         os.unlink(TOKEN_PATH)
@@ -84,7 +81,7 @@ def run():
     success = True
 
     try:
-        exec_globals = {"input_data": input_data, "__name__": "__main__", "_exec_token": exec_token}
+        exec_globals = {"input_data": input_data, "__name__": "__main__"}
         exec(code, exec_globals)
 
         # Get result: check explicit variable, then callable main()
