@@ -39,6 +39,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Generate fake /proc files (same as spawn-sandbox.sh)
+cat > "${WORKSPACE}/.fake_cpuinfo" <<'CPUINFO'
+processor	: 0
+vendor_id	: MCPWorks
+model name	: Virtual CPU
+cpu MHz		: 2000.000
+cache size	: 4096 KB
+cpu cores	: 1
+flags		: fpu sse sse2 ssse3 sse4_1 sse4_2 avx
+CPUINFO
+
+MEMORY_KB=$(( MEMORY * 1024 ))
+cat > "${WORKSPACE}/.fake_meminfo" <<MEMINFO
+MemTotal:       ${MEMORY_KB} kB
+MemFree:        ${MEMORY_KB} kB
+MemAvailable:   ${MEMORY_KB} kB
+MEMINFO
+
+cat > "${WORKSPACE}/.fake_version" <<'VERSION'
+Linux version 0.0.0 (sandbox)
+VERSION
+
+mkdir -p "${WORKSPACE}/.fake_proc_net"
+
 # Chown workspace to UID 65534 (matches sandbox uidmap)
 chown -R 65534:65534 "${WORKSPACE}"
 
@@ -59,6 +83,12 @@ NSJAIL_ARGS=(
     --rlimit_nofile 64
     --hostname "smoketest"
 )
+
+# Overlay fake /proc files (matches spawn-sandbox.sh)
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net:/proc/net")
 
 # Run under aggregate cgroup if available
 CGROUP_PARENT="/sys/fs/cgroup/mcpworks"
