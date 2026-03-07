@@ -128,6 +128,14 @@ class OAuthService:
 
         if is_new_user:
             asyncio.create_task(self._send_welcome_email(user.email, name))
+            asyncio.create_task(
+                self._send_registration_discord_alert(
+                    user.email,
+                    name,
+                    ip_address,
+                    user_agent,
+                )
+            )
 
         return user, access_token, refresh_token, expires_in, is_new_user
 
@@ -161,6 +169,17 @@ class OAuthService:
             await send_welcome_email(email, name)
         except Exception:
             logger.warning("welcome_email_failed", email=email)
+
+    @staticmethod
+    async def _send_registration_discord_alert(
+        email: str, name: str | None, ip_address: str | None, user_agent: str | None
+    ) -> None:
+        try:
+            from mcpworks_api.services.discord_alerts import send_new_account_alert
+
+            await send_new_account_alert(email, name, ip_address, user_agent)
+        except Exception:
+            logger.warning("registration_discord_alert_failed", email=email)
 
     @staticmethod
     async def _fire_oauth_security_event(

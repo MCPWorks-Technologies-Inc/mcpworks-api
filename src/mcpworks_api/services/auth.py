@@ -349,6 +349,14 @@ class AuthService:
         self.db.add(audit_log)
 
         asyncio.create_task(self._send_verification_pin(user.email, name, pin))
+        asyncio.create_task(
+            self._send_registration_discord_alert(
+                user.email,
+                name,
+                ip_address,
+                user_agent,
+            )
+        )
 
         access_token = create_access_token(
             user_id=str(user.id),
@@ -499,6 +507,17 @@ class AuthService:
             await send_verification_pin_email(email, name, pin)
         except Exception:
             logger.warning("verification_pin_email_failed", email=email)
+
+    @staticmethod
+    async def _send_registration_discord_alert(
+        email: str, name: str | None, ip_address: str | None, user_agent: str | None
+    ) -> None:
+        try:
+            from mcpworks_api.services.discord_alerts import send_new_account_alert
+
+            await send_new_account_alert(email, name, ip_address, user_agent)
+        except Exception:
+            logger.warning("registration_discord_alert_failed", email=email)
 
     @staticmethod
     async def _send_welcome_after_verification(email: str, name: str | None) -> None:

@@ -230,3 +230,27 @@ async def send_account_unsuspended_email(email: str, name: str | None = None) ->
         template_name="account_unsuspended.html",
         template_vars={"name": name or email.split("@")[0]},
     )
+
+
+async def send_admin_impersonation_email(
+    admin_email: str,
+    target_email: str,
+    ip_address: str,
+    user_agent: str,
+    timestamp: str,
+) -> None:
+    settings = get_settings()
+    for recipient in settings.admin_emails:
+        await send_email(
+            to=recipient,
+            email_type="admin_impersonation",
+            subject=f"MCPWorks - Impersonation Alert: {admin_email} → {target_email}",
+            template_name="admin_impersonation.html",
+            template_vars={
+                "admin_email": admin_email,
+                "target_email": target_email,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "timestamp": timestamp,
+            },
+        )
