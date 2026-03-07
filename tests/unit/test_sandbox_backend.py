@@ -346,25 +346,23 @@ class TestSandboxCodeWrapping:
 
 
 class TestSpawnSandboxNetworkIsolation:
-    """Tests for free-tier network isolation via clone_newnet in spawn-sandbox.sh."""
+    """Tests for spawn-sandbox.sh network isolation configuration."""
 
     SPAWN_SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "nsjail" / "spawn-sandbox.sh"
 
     def test_spawn_script_exists(self):
         assert self.SPAWN_SCRIPT.exists(), f"spawn-sandbox.sh not found at {self.SPAWN_SCRIPT}"
 
-    def test_free_tier_gets_clone_newnet(self):
-        """Free tier must add --clone_newnet to isolate network namespace."""
+    def test_no_invalid_clone_newnet_flag(self):
+        """--clone_newnet is not a valid nsjail CLI flag (only --disable_clone_newnet exists)."""
         content = self.SPAWN_SCRIPT.read_text()
-        assert "--clone_newnet" in content
-        assert "TIER" in content
-        idx_free_check = content.index('"free"')
-        idx_clone = content.index("--clone_newnet")
-        assert idx_free_check < idx_clone, "--clone_newnet should follow the free tier check"
-
-    def test_paid_tiers_no_clone_newnet_by_default(self):
-        """Paid tiers should not get --clone_newnet (they use host network + iptables)."""
-        content = self.SPAWN_SCRIPT.read_text()
-        assert content.count("--clone_newnet") == 1, (
-            "--clone_newnet should appear exactly once (only in the free-tier conditional)"
+        assert "NSJAIL_ARGS+=(--clone_newnet)" not in content, (
+            "--clone_newnet is not a valid nsjail flag and would crash the sandbox"
         )
+
+    def test_proc_overlays_present(self):
+        """Fake /proc files should be bind-mounted for host info obfuscation."""
+        content = self.SPAWN_SCRIPT.read_text()
+        assert ".fake_cpuinfo:/proc/cpuinfo" in content
+        assert ".fake_meminfo:/proc/meminfo" in content
+        assert ".fake_version:/proc/version" in content
