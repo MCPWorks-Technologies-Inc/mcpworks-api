@@ -95,6 +95,22 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
         iptables -A OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65534 -j REJECT
         echo "Blocked sandbox (uid 65534) → localhost (127.0.0.0/8)"
 
+        # Block entire Docker bridge network (prevents SSRF to API via its
+        # Docker IP and to Caddy proxy — see SECURITY_AUDIT.md FINDING-01)
+        DOCKER_SUBNET=$(ip route | awk '/172\.[0-9]+\.0\.0/ {print $1}')
+        if [ -n "${DOCKER_SUBNET}" ]; then
+            iptables -C OUTPUT -d "${DOCKER_SUBNET}" -m owner --uid-owner 65534 -j REJECT 2>/dev/null || \
+            iptables -A OUTPUT -d "${DOCKER_SUBNET}" -m owner --uid-owner 65534 -j REJECT
+            echo "Blocked sandbox (uid 65534) → Docker subnet (${DOCKER_SUBNET})"
+        else
+            # Fallback: block common Docker bridge ranges
+            for SUBNET in 172.16.0.0/12 10.0.0.0/8; do
+                iptables -C OUTPUT -d "${SUBNET}" -m owner --uid-owner 65534 -j REJECT 2>/dev/null || \
+                iptables -A OUTPUT -d "${SUBNET}" -m owner --uid-owner 65534 -j REJECT
+            done
+            echo "Blocked sandbox (uid 65534) → Docker subnets (172.16.0.0/12, 10.0.0.0/8)"
+        fi
+
         # Rate limit outbound TCP connections (20/sec burst 50)
         iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
             -m hashlimit --hashlimit-above 20/sec --hashlimit-burst 50 \

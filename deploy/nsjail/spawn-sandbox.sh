@@ -105,6 +105,28 @@ if [ -f "${EXEC_DIR}/.sandbox_env.json" ]; then
     rm -f "${EXEC_DIR}/.sandbox_env.json"
 fi
 
+# Generate fake /proc files to hide host details (SECURITY_AUDIT.md FINDING-02)
+cat > "${WORKSPACE}/.fake_cpuinfo" <<'CPUINFO'
+processor	: 0
+vendor_id	: MCPWorks
+model name	: Virtual CPU
+cpu MHz		: 2000.000
+cache size	: 4096 KB
+cpu cores	: 1
+flags		: fpu sse sse2 ssse3 sse4_1 sse4_2 avx
+CPUINFO
+
+MEMORY_KB=$(( MEMORY * 1024 ))
+cat > "${WORKSPACE}/.fake_meminfo" <<MEMINFO
+MemTotal:       ${MEMORY_KB} kB
+MemFree:        ${MEMORY_KB} kB
+MemAvailable:   ${MEMORY_KB} kB
+MEMINFO
+
+cat > "${WORKSPACE}/.fake_version" <<'VERSION'
+Linux version 0.0.0 (sandbox)
+VERSION
+
 # Chown workspace to UID 65534 (required for outside_id: 65534 mapping)
 chown -R 65534:65534 "${WORKSPACE}"
 
@@ -118,6 +140,11 @@ NSJAIL_ARGS=(
     --rlimit_nproc "${PIDS}"
     --hostname "${NAMESPACE}"
 )
+
+# Overlay fake /proc files to hide host details
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 
 # ORDER-002: Run under aggregate cgroup if available
 if [ -d "${CGROUP_PARENT}" ]; then

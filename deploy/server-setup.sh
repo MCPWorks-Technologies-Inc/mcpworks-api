@@ -176,15 +176,31 @@ else
     echo "    WARNING: cgroup v2 not detected. nsjail cgroup limits may not work."
 fi
 
-# ── 10. ORDER-006: iptables — block sandbox UID from DB/Redis ─────────────
-echo ">>> Configuring iptables to isolate sandbox from DB/Redis..."
-# Block UID 65534 (sandbox user) from reaching PostgreSQL and Redis.
+# ── 10. ORDER-006: iptables — block sandbox UID from internal services ────
+echo ">>> Configuring iptables to isolate sandbox network..."
+# Block UID 65534 (sandbox user) from reaching internal services.
 # These rules are idempotent: -C checks if rule exists before -A adds it.
+
+# Block specific service ports (defense-in-depth alongside container rules)
 for PORT in 5432 6379; do
     iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --dport "${PORT}" -j DROP 2>/dev/null || \
         iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --dport "${PORT}" -j DROP
     echo "    Blocked UID 65534 -> port ${PORT}"
 done
+
+# Block Docker bridge subnets (prevents SSRF to API, Caddy, and all
+# internal containers — see SECURITY_AUDIT.md FINDING-01)
+for SUBNET in 172.16.0.0/12 10.0.0.0/8; do
+    iptables -C OUTPUT -d "${SUBNET}" -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -d "${SUBNET}" -m owner --uid-owner 65534 -j DROP
+    echo "    Blocked UID 65534 -> ${SUBNET}"
+done
+
+# Block cloud metadata endpoint
+iptables -C OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
+    iptables -A OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j DROP
+echo "    Blocked UID 65534 -> 169.254.169.254 (metadata)"
+
 # Persist across reboots
 if command -v iptables-save &>/dev/null; then
     iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
