@@ -9,13 +9,13 @@ from typing import Any
 
 import structlog
 from authlib.integrations.starlette_client import OAuth
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from mcpworks_api.api.v1 import router as v1_router
 from mcpworks_api.config import get_settings
-from mcpworks_api.core.database import close_db, init_db
+from mcpworks_api.core.database import close_db, get_db, init_db
 from mcpworks_api.core.redis import close_redis, init_redis
 from mcpworks_api.mcp.transport import MCPTransportMiddleware, session_manager
 from mcpworks_api.middleware import (
@@ -220,12 +220,38 @@ def create_app() -> FastAPI:
         """Return minimal OAuth protected resource metadata."""
         return {"resource": "https://mcpworks.io"}
 
-    # Admin HTML page
+    # Admin HTML page — restricted to api.mcpworks.io + requires admin auth
     _admin_html_path = Path(__file__).parent / "static" / "admin.html"
+    _admin_domains = {"api.mcpworks.io"}
 
-    @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-    async def admin_page() -> HTMLResponse:
-        """Serve the admin dashboard HTML page."""
+    @app.get("/admin", include_in_schema=False)
+    async def admin_page(request: Request):
+        """Serve the admin dashboard — domain-restricted and auth-gated."""
+        host = request.headers.get("host", "").lower().split(":")[0]
+        is_local = host in ("localhost", "127.0.0.1", "0.0.0.0")
+        if not is_local and host not in _admin_domains:
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+        from mcpworks_api.dependencies import get_current_user_id, require_admin
+
+        try:
+            authorization = request.headers.get("authorization")
+            user_id = await get_current_user_id(authorization)
+            db_gen = get_db()
+            db = await db_gen.__anext__()
+            try:
+                await require_admin(user_id, db)
+            finally:
+                await db_gen.aclose()
+        except Exception:
+            return HTMLResponse(
+                content='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin</title></head>'
+                "<body><h3>Admin Login Required</h3>"
+                "<p>Authenticate with a valid admin token to access this page.</p>"
+                "</body></html>",
+                status_code=401,
+            )
+
         return HTMLResponse(content=_admin_html_path.read_text())
 
     @app.get("/register", include_in_schema=False)
