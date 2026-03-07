@@ -2,11 +2,11 @@
 
 import asyncio
 import uuid as uuid_module
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1108,6 +1108,99 @@ async def clear_tier_override_post(
     return await clear_tier_override(user_id, admin_id, body, db)
 
 
+@router.post("/users/{user_id}/impersonate")
+async def impersonate_user(
+    user_id: str,
+    request: Request,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Generate a short-lived access token to log in as another user."""
+    from datetime import timedelta
+
+    from mcpworks_api.core.security import create_access_token
+
+    target_uid = uuid_module.UUID(user_id)
+
+    if str(target_uid) == admin_id:
+        raise HTTPException(status_code=422, detail="Cannot impersonate yourself")
+
+    result = await db.execute(select(User).where(User.id == target_uid))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.email in get_settings().admin_emails:
+        raise HTTPException(status_code=403, detail="Cannot impersonate admin accounts")
+
+    admin_result = await db.execute(select(User.email).where(User.id == admin_id))
+    admin_email = admin_result.scalar_one()
+
+    ip_address = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.headers.get("X-Real-IP")
+        or (request.client.host if request.client else "unknown")
+    )
+    user_agent = request.headers.get("User-Agent", "unknown")
+
+    token = create_access_token(
+        user_id=str(user.id),
+        expires_delta=timedelta(hours=1),
+        additional_claims={"impersonated_by": admin_id},
+    )
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="user_impersonated",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={
+            "target_email": user.email,
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+        },
+    )
+    db.add(audit_log)
+    await db.commit()
+
+    asyncio.create_task(
+        _fire_approval_security_event(admin_id, str(user.id), user.email, "impersonated")
+    )
+    asyncio.create_task(
+        _send_impersonation_email(
+            admin_email,
+            user.email,
+            ip_address,
+            user_agent,
+        )
+    )
+    asyncio.create_task(
+        _send_impersonation_discord_alert(
+            admin_email,
+            user.email,
+            ip_address,
+            user_agent,
+        )
+    )
+
+    logger.info(
+        "admin_impersonate",
+        admin_id=admin_id,
+        admin_email=admin_email,
+        target_user=str(user.id),
+        target_email=user.email,
+        ip_address=ip_address,
+    )
+
+    return {
+        "access_token": token,
+        "user_id": str(user.id),
+        "email": user.email,
+        "expires_in": 3600,
+    }
+
+
 async def _fire_approval_security_event(
     admin_id: str, user_id: str, email: str, action: str
 ) -> None:
@@ -1161,6 +1254,40 @@ async def _send_unsuspension_email(email: str, name: str | None) -> None:
         await send_account_unsuspended_email(email, name)
     except Exception as e:
         logger.warning("unsuspension_email_failed", error=str(e))
+
+
+async def _send_impersonation_email(
+    admin_email: str, target_email: str, ip_address: str, user_agent: str
+) -> None:
+    try:
+        from mcpworks_api.services.email import send_admin_impersonation_email
+
+        await send_admin_impersonation_email(
+            admin_email=admin_email,
+            target_email=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        )
+    except Exception as e:
+        logger.warning("impersonation_email_failed", error=str(e))
+
+
+async def _send_impersonation_discord_alert(
+    admin_email: str, target_email: str, ip_address: str, user_agent: str
+) -> None:
+    try:
+        from mcpworks_api.services.discord_alerts import send_impersonation_alert
+
+        await send_impersonation_alert(
+            admin_email=admin_email,
+            target_email=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        )
+    except Exception as e:
+        logger.warning("impersonation_discord_alert_failed", error=str(e))
 
 
 # --- Namespace Shares (admin) ---

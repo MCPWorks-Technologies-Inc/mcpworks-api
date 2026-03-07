@@ -499,6 +499,8 @@ async function loadUser(userId) {
         <button class="btn" style="padding:8px 16px;background:#991b1b;margin-left:8px;" onclick="rejectUserPrompt('${esc(u.id)}','${esc(u.email)}')">Reject</button>
       `;
     }
+    const loginAsBtn = `<button class="btn" style="background:#7c3aed;margin-left:12px;" onclick="impersonateUser('${esc(u.id)}','${esc(u.email)}')">Login As</button>`;
+    actionsHtml += loginAsBtn;
     const deleteBtn = `<button class="btn-danger" style="margin-left:12px;" onclick="deleteAccountPrompt('${esc(u.id)}','${esc(u.email)}')">Delete Account</button>`;
     actionsHtml += deleteBtn;
 
@@ -640,6 +642,19 @@ async function unsuspendUser(userId) {
     });
     if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
     loadUser(userId); loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function impersonateUser(userId, email) {
+  if (!confirm(`Login as ${email}?\n\nThis will open the console in a new tab with a 1-hour session. This action is audited.`)) return;
+  try {
+    const res = await fetch(`${API}/v1/admin/users/${userId}/impersonate`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); alert(d.detail || 'Failed'); return; }
+    const data = await res.json();
+    window.open(`/console#access_token=${data.access_token}`, '_blank');
   } catch (e) { alert('Error: ' + e.message); }
 }
 

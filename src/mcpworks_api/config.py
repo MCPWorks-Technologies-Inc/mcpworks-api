@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     tier_executions_pro: int = Field(default=250_000)
     tier_executions_enterprise: int = Field(default=1_000_000)
 
+    # Discord Alerts
+    discord_alert_webhook_url: str = Field(default="")
+
     # Sandbox
     sandbox_dev_mode: bool = Field(
         default=True,
