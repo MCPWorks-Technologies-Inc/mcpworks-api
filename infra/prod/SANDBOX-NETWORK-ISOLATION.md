@@ -31,13 +31,13 @@ Runs every time the API container starts. Resolves IPs dynamically via Docker DN
 
 | Rule | Target | Action |
 |------|--------|--------|
-| Postgres IP:5432 | Resolved via `getent hosts postgres` | REJECT |
-| Redis IP:6379 | Resolved via `getent hosts redis` | REJECT |
-| 169.254.169.254 | Cloud metadata | REJECT |
-| 127.0.0.0/8 | Localhost (API on :8000) | REJECT |
-| Docker subnet | Auto-detected from `ip route` or fallback 172.16.0.0/12 + 10.0.0.0/8 | REJECT |
-| UDP (non-DNS) | All UDP except port 53 | REJECT |
-| TCP SYN | Rate limited 20/sec burst 50 | REJECT on exceed |
+| Postgres IP:5432 | Resolved via `getent hosts postgres` | DROP |
+| Redis IP:6379 | Resolved via `getent hosts redis` | DROP |
+| 169.254.169.254 | Cloud metadata | DROP |
+| 127.0.0.0/8 | Localhost (API on :8000) | DROP |
+| Docker subnet | Auto-detected from `ip route` or fallback 172.16.0.0/12 + 10.0.0.0/8 | DROP |
+| UDP (non-DNS) | All UDP except port 53 | DROP |
+| TCP SYN | Rate limited 20/sec burst 50 | DROP on exceed |
 
 ### Layer 2: Host setup (`deploy/server-setup.sh`)
 
