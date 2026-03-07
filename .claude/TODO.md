@@ -18,14 +18,16 @@ Resolved by overlaying fake/empty mounts on sensitive /proc entries:
 
 ---
 
-## Remaining: /proc/mounts leakage
+## Remaining: /proc/net and /proc/mounts leakage
 
 **Priority:** Low
 
-`/proc/mounts` still shows the full mount table including overlay layer paths
-and volume mounts. Low information value compared to the items above but could
-reveal directory structure. Consider overlaying with a fake mounts file showing
-only `/sandbox` and `/tmp`.
+- `/proc/net` cannot be overlaid — nsjail `move_mount()` rejects overlays on
+  procfs subdirectories (both tmpfs and bind-mount). Mitigated by iptables
+  UID-based rules. Full fix requires `clone_newnet: true` + veth pair.
+- `/proc/mounts` still shows the full mount table including overlay layer paths
+  and volume mounts. Low information value but could reveal directory structure.
+  Consider overlaying with a fake mounts file showing only `/sandbox` and `/tmp`.
 
 ## Remaining: Full network namespace isolation
 

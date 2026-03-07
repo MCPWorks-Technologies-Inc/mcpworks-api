@@ -61,7 +61,6 @@ cat > "${WORKSPACE}/.fake_version" <<'VERSION'
 Linux version 0.0.0 (sandbox)
 VERSION
 
-mkdir -p "${WORKSPACE}/.fake_proc_net"
 
 # Chown workspace to UID 65534 (matches sandbox uidmap)
 chown -R 65534:65534 "${WORKSPACE}"
@@ -88,7 +87,6 @@ NSJAIL_ARGS=(
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net:/proc/net")
 
 # Run under aggregate cgroup if available
 CGROUP_PARENT="/sys/fs/cgroup/mcpworks"
