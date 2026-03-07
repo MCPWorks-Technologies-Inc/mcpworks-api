@@ -1,9 +1,10 @@
 """Pydantic schemas for authentication endpoints."""
 
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -29,6 +30,15 @@ class RegisterRequest(BaseModel):
         default=False,
         description="Must be true to accept Terms of Service and Privacy Policy",
     )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def sanitize_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = re.sub(r"<[^>]*>", "", str(v))
+        v = v.strip()
+        return v if v else None
 
 
 class RegisterResponse(BaseModel):
@@ -232,6 +242,15 @@ class CreateApiKeyRequest(BaseModel):
         ge=1,
         le=365,
     )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def sanitize_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = re.sub(r"<[^>]*>", "", str(v))
+        v = v.strip()
+        return v if v else None
 
 
 class ApiKeyInfo(BaseModel):

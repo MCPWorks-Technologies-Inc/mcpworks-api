@@ -1,5 +1,6 @@
 """Pydantic schemas for user-related endpoints."""
 
+import re
 import uuid
 from datetime import datetime
 
@@ -170,6 +171,15 @@ class CreateApiKeyRequest(BaseModel):
         ge=1,
         le=730,  # Max 2 years
     )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def sanitize_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = re.sub(r"<[^>]*>", "", str(v))
+        v = v.strip()
+        return v if v else None
 
     @field_validator("scopes")
     @classmethod

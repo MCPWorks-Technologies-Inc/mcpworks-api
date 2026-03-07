@@ -252,7 +252,11 @@ def create_app() -> FastAPI:
                 status_code=401,
             )
 
-        return HTMLResponse(content=_admin_html_path.read_text())
+        csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+        return HTMLResponse(
+            content=_admin_html_path.read_text(),
+            headers={"Content-Security-Policy": csp, "X-Content-Type-Options": "nosniff"},
+        )
 
     @app.get("/register", include_in_schema=False)
     async def register_page() -> RedirectResponse:
