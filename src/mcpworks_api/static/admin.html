@@ -372,12 +372,12 @@ async function loadPendingApprovals() {
     section.classList.remove('hidden');
     count.textContent = users.length + ' pending';
     body.innerHTML = users.map(u => `<tr>
-      <td>${u.email}</td>
-      <td>${u.name || '<span class="text-gray-500">—</span>'}</td>
+      <td>${esc(u.email)}</td>
+      <td>${u.name ? esc(u.name) : '<span class="text-gray-500">—</span>'}</td>
       <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
       <td>
-        <button class="btn" style="padding:4px 12px;font-size:12px;" onclick="approveUser('${u.id}')">Approve</button>
-        <button class="btn" style="padding:4px 12px;font-size:12px;background:#991b1b;margin-left:4px;" onclick="rejectUserPrompt('${u.id}','${u.email}')">Reject</button>
+        <button class="btn" style="padding:4px 12px;font-size:12px;" onclick="approveUser('${esc(u.id)}')">Approve</button>
+        <button class="btn" style="padding:4px 12px;font-size:12px;background:#991b1b;margin-left:4px;" onclick="rejectUserPrompt('${esc(u.id)}','${esc(u.email)}')">Reject</button>
       </td>
     </tr>`).join('');
   } catch (e) { console.error('Failed to load pending approvals', e); }
