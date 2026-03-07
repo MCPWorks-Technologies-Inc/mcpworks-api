@@ -21,6 +21,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Auth endpoints - stricter limits to prevent brute force
         "auth_failure": {"limit": 5, "window": 60},  # 5 failures per minute per IP
         "auth_attempt": {"limit": 20, "window": 60},  # 20 attempts per minute per IP
+        "registration": {"limit": 3, "window": 3600},  # 3 registrations per hour per IP
         # General API - per user
         "user_request": {"limit": 1000, "window": 3600},  # 1000 per hour per user
         # Unauthenticated - per IP
@@ -38,6 +39,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Check if this is an auth endpoint
         if request.url.path.startswith("/v1/auth"):
+            # Registration gets its own strict limit (3/hour per IP)
+            if (
+                request.url.path == "/v1/auth/register"
+                and request.method == "POST"
+                and await self._check_registration_limit(client_ip)
+            ):
+                return self._rate_limit_response(
+                    limit=self.LIMITS["registration"]["limit"],
+                    window="1 hour",
+                    retry_after=900,
+                )
+
             # Check auth attempt limit (overall attempts)
             is_limited, remaining = await self._check_auth_rate_limit(client_ip)
             if is_limited:
@@ -59,7 +72,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Track auth failures for rate limiting
-        if request.url.path == "/v1/auth/token" and response.status_code == 401:
+        if request.url.path in ("/v1/auth/token", "/v1/auth/login") and response.status_code == 401:
             await self._record_auth_failure(client_ip)
             # ORDER-022: Log auth failure as security event
             asyncio.create_task(
@@ -119,6 +132,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         async with get_redis_context() as redis:
             limiter = RateLimiter(redis)
             await limiter.is_rate_limited(key, config["limit"], config["window"])
+
+    async def _check_registration_limit(self, client_ip: str) -> bool:
+        """Check if client has exceeded registration rate limit."""
+        config = self.LIMITS["registration"]
+        key = f"ratelimit:register:{client_ip}"
+
+        async with get_redis_context() as redis:
+            limiter = RateLimiter(redis)
+            is_limited, _ = await limiter.is_rate_limited(key, config["limit"], config["window"])
+
+        return is_limited
 
     async def _check_auth_failure_limit(self, client_ip: str) -> bool:
         """Check if client has exceeded auth failure limit.
