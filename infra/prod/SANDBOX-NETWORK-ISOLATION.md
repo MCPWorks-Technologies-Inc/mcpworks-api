@@ -94,13 +94,18 @@ irrelevant to code execution (SECURITY_AUDIT.md FINDING-02).
 
 | Path | Real content | What sandbox sees |
 |------|-------------|-------------------|
-| `/proc/net/*` | Full TCP/UDP connection table, routing | Empty directory (tmpfs overlay) |
+| `/proc/net/*` | Full TCP/UDP connection table, routing | **Not overlaid** (nsjail limitation, see below) |
 | `/proc/cpuinfo` | DigitalOcean, CPU model, core count | "Virtual CPU", 1 core |
 | `/proc/meminfo` | Host RAM (4 GB) | Tier memory limit only (e.g., 256 MB) |
 | `/proc/version` | Kernel version + build info | `Linux version 0.0.0 (sandbox)` |
 
 **Implementation:**
-- `/proc/net` — empty read-only tmpfs mounted over procfs entry (`python.cfg`)
+- `/proc/net` — **cannot be overlaid**. nsjail's `move_mount()` rejects both
+  tmpfs and bind-mount overlays on procfs subdirectories. This is a known
+  limitation of the pinned nsjail commit (`d20ea0a58ab5`). The information is
+  read-only and network-level threats are mitigated by iptables UID-based rules.
+  Full network namespace isolation (`clone_newnet: true` + veth) would eliminate
+  this entirely (see TODO).
 - `/proc/cpuinfo`, `/proc/version` — static fake files generated in workspace,
   bind-mounted read-only via `--bindmount_ro` (`spawn-sandbox.sh`)
 - `/proc/meminfo` — tier-aware fake (uses `$MEMORY` from tier config),
