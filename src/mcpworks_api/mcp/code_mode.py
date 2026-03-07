@@ -137,16 +137,27 @@ def _generate_init(
 
 _REGISTRY_SOURCE = '''\
 """Internal call tracking for billing metadata."""
+import os as _os
 
+_CALL_LOG_PATH = "/sandbox/.call_log"
 _call_log: list[str] = []
 
 
 def _track_call(function_name: str) -> None:
     _call_log.append(function_name)
+    try:
+        with open(_CALL_LOG_PATH, "a") as _f:
+            _f.write(function_name + "\\n")
+    except Exception:
+        pass
 
 
 def _get_call_log() -> list[str]:
-    return list(_call_log)
+    try:
+        with open(_CALL_LOG_PATH) as _f:
+            return [ln.strip() for ln in _f if ln.strip()]
+    except Exception:
+        return list(_call_log)
 '''
 
 

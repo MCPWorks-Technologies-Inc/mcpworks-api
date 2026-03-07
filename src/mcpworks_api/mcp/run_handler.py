@@ -523,8 +523,16 @@ _CALL_LOG_CAPTURE_SNIPPET = """
 # --- MCPWorks: capture call log for billing ---
 try:
     import sys as _sys, json as _json
-    from functions._registry import _get_call_log as _gcl
-    _log = _gcl()
+    _log = []
+    try:
+        with open("/sandbox/.call_log") as _clf:
+            _log = [_ln.strip() for _ln in _clf if _ln.strip()]
+    except Exception:
+        try:
+            from functions._registry import _get_call_log as _gcl
+            _log = _gcl()
+        except Exception:
+            pass
     if _log:
         _sys.stderr.write("\\n__MCPWORKS_CALL_LOG__:" + _json.dumps(_log) + "\\n")
 except Exception:
