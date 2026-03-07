@@ -6,6 +6,53 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+RESERVED_NAMESPACE_NAMES: frozenset[str] = frozenset(
+    {
+        "admin",
+        "api",
+        "app",
+        "auth",
+        "billing",
+        "blog",
+        "cdn",
+        "console",
+        "create",
+        "dashboard",
+        "dev",
+        "docs",
+        "ftp",
+        "git",
+        "grafana",
+        "help",
+        "internal",
+        "login",
+        "mail",
+        "manage",
+        "mcpworks",
+        "monitor",
+        "ns",
+        "null",
+        "ops",
+        "portal",
+        "prometheus",
+        "proxy",
+        "redis",
+        "register",
+        "root",
+        "run",
+        "sandbox",
+        "smtp",
+        "staging",
+        "static",
+        "status",
+        "support",
+        "system",
+        "test",
+        "undefined",
+        "www",
+    }
+)
+
 
 class NamespaceBase(BaseModel):
     """Base namespace fields."""
@@ -27,13 +74,16 @@ class NamespaceBase(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """Validate namespace name follows DNS rules."""
+        """Validate namespace name follows DNS rules and is not reserved."""
+        v = v.lower()
         if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", v):
             raise ValueError(
                 "Namespace name must be lowercase alphanumeric with hyphens, "
                 "starting and ending with alphanumeric character"
             )
-        return v.lower()
+        if v in RESERVED_NAMESPACE_NAMES:
+            raise ValueError(f"Namespace name '{v}' is reserved")
+        return v
 
 
 class NamespaceCreate(NamespaceBase):
