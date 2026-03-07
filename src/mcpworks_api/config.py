@@ -75,7 +75,14 @@ class Settings(BaseSettings):
     )
 
     # Security
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "https://mcpworks.io",
+            "https://www.mcpworks.io",
+            "https://api.mcpworks.io",
+        ]
+    )
 
     # Rate Limiting
     rate_limit_auth_failures_per_minute: int = Field(default=5, ge=1, le=60)

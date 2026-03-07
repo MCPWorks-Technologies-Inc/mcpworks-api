@@ -51,6 +51,11 @@ class NamespaceServiceManager:
             ConflictError: If namespace name already exists.
             ValidationError: If name format is invalid.
         """
+        from mcpworks_api.schemas.namespace import RESERVED_NAMESPACE_NAMES
+
+        if name.lower() in RESERVED_NAMESPACE_NAMES:
+            raise ValueError(f"Namespace name '{name}' is reserved")
+
         existing = await self.db.execute(select(Namespace).where(Namespace.name == name.lower()))
         found = existing.scalar_one_or_none()
         if found:

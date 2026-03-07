@@ -8,13 +8,13 @@ from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from mcpworks_api.dependencies import get_current_user_id, require_scope
+from mcpworks_api.dependencies import require_active_status, require_scope
 from mcpworks_api.models import Account
 from mcpworks_api.models.api_key import APIKey
 from mcpworks_api.models.function import Function
@@ -41,6 +41,16 @@ class CreateNamespaceRequest(BaseModel):
     )
     description: str | None = Field(None, max_length=500)
     network_allowlist: list[str] | None = Field(None, description="List of allowed IPs/CIDRs")
+
+    @field_validator("name")
+    @classmethod
+    def reject_reserved_names(cls, v: str) -> str:
+        from mcpworks_api.schemas.namespace import RESERVED_NAMESPACE_NAMES
+
+        v = v.lower()
+        if v in RESERVED_NAMESPACE_NAMES:
+            raise ValueError(f"Namespace name '{v}' is reserved")
+        return v
 
 
 class UpdateNamespaceRequest(BaseModel):
@@ -182,15 +192,15 @@ class FunctionListResponse(BaseModel):
 # Dependency to get authenticated account
 async def get_current_account(
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(require_active_status),
 ) -> Account:
     """Get current account from authenticated user.
 
-    Validates JWT token and retrieves the associated account.
+    Validates JWT token, enforces active status (blocks unverified/suspended),
+    and retrieves the associated account.
     """
     from sqlalchemy import select
 
-    # Get account by user_id from JWT
     result = await db.execute(select(Account).where(Account.user_id == user_id))
     account = result.scalar_one_or_none()
     if not account:
