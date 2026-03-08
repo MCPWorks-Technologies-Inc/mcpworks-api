@@ -224,6 +224,33 @@ def create_app() -> FastAPI:
     _admin_html_path = Path(__file__).parent / "static" / "admin.html"
     _admin_domains = {"api.mcpworks.io"}
 
+    _admin_login_html = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin Login</title>'
+        "<style>body{font-family:system-ui;background:#0f172a;color:#e2e8f0;display:flex;"
+        "justify-content:center;align-items:center;height:100vh;margin:0}"
+        "form{background:#1e293b;padding:2rem;border-radius:8px;width:320px}"
+        "h3{margin:0 0 1rem;color:#fff}input{width:100%;padding:10px;margin:8px 0;"
+        "border:1px solid #334155;border-radius:4px;background:#0f172a;color:#e2e8f0;"
+        "box-sizing:border-box}button{width:100%;padding:10px;background:#3b82f6;"
+        "color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;margin-top:8px}"
+        "button:hover{background:#2563eb}.err{color:#f87171;font-size:13px;margin-top:8px;display:none}"
+        '</style></head><body><form onsubmit="return doLogin()">'
+        '<h3>Admin Login</h3><input id="e" type="email" placeholder="Email" required>'
+        '<input id="p" type="password" placeholder="Password" required>'
+        '<button type="submit">Login</button><div class="err" id="err"></div></form>'
+        "<script>"
+        "async function doLogin(){var err=document.getElementById('err');"
+        "err.style.display='none';try{var r=await fetch('/v1/auth/login',"
+        "{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({email:document.getElementById('e').value,"
+        "password:document.getElementById('p').value})});"
+        "if(!r.ok){err.textContent='Invalid credentials';err.style.display='block';return false}"
+        "var d=await r.json();document.cookie='_admin_token='+d.access_token"
+        "+';path=/admin;SameSite=Strict;Secure';location.reload()}"
+        "catch(e){err.textContent='Login failed';err.style.display='block'}return false}"
+        "</script></body></html>"
+    )
+
     @app.get("/admin", include_in_schema=False)
     async def admin_page(request: Request):
         """Serve the admin dashboard — domain-restricted and auth-gated."""
@@ -234,8 +261,13 @@ def create_app() -> FastAPI:
 
         from mcpworks_api.dependencies import get_current_user_id, require_admin
 
+        authorization = request.headers.get("authorization")
+        if not authorization:
+            token_cookie = request.cookies.get("_admin_token")
+            if token_cookie:
+                authorization = f"Bearer {token_cookie}"
+
         try:
-            authorization = request.headers.get("authorization")
             user_id = await get_current_user_id(authorization)
             db_gen = get_db()
             db = await db_gen.__anext__()
@@ -244,13 +276,7 @@ def create_app() -> FastAPI:
             finally:
                 await db_gen.aclose()
         except Exception:
-            return HTMLResponse(
-                content='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin</title></head>'
-                "<body><h3>Admin Login Required</h3>"
-                "<p>Authenticate with a valid admin token to access this page.</p>"
-                "</body></html>",
-                status_code=401,
-            )
+            return HTMLResponse(content=_admin_login_html)
 
         csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
         return HTMLResponse(
