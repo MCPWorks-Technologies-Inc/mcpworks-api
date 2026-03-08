@@ -128,8 +128,9 @@ def _harden_sandbox():
     if hasattr(signal, "setitimer"):
         signal.setitimer = lambda *_a: (0.0, 0.0)
 
-    # FINDING-18: Block subprocess and os.exec*/os.system/os.popen.
+    # FINDING-18 + F-29: Block subprocess, os.exec*/os.system/os.popen, AND posix module.
     import os
+    import posix
     import types
 
     def _blocked(*_a, **_kw):
@@ -156,9 +157,27 @@ def _harden_sandbox():
         "spawnvpe",
         "posix_spawn",
         "posix_spawnp",
+        "fork",
+        "forkpty",
     ):
         if hasattr(os, attr):
             setattr(os, attr, _blocked)
+
+    # F-29: Block posix module — same C functions as os.* but not wrapped by os.
+    for attr in (
+        "system",
+        "popen",
+        "execv",
+        "execve",
+        "fork",
+        "forkpty",
+        "spawnv",
+        "spawnve",
+        "posix_spawn",
+        "posix_spawnp",
+    ):
+        if hasattr(posix, attr):
+            setattr(posix, attr, _blocked)
 
     # Poison subprocess module — must happen BEFORE freezing sys.modules
     _fake_subprocess = types.ModuleType("subprocess")
@@ -173,6 +192,20 @@ def _harden_sandbox():
     _fake_subprocess.STDOUT = -2
     _fake_subprocess.DEVNULL = -3
     sys.modules["subprocess"] = _fake_subprocess
+
+    # F-30: Poison _posixsubprocess — the C extension that subprocess.Popen
+    # uses for fork_exec. Even if real subprocess is recovered, it can't spawn.
+    _fake_posixsub = types.ModuleType("_posixsubprocess")
+    _fake_posixsub.fork_exec = _blocked
+    sys.modules["_posixsubprocess"] = _fake_posixsub
+
+    # F-31: Disable gc.get_objects/get_referrers/get_referents — prevents
+    # scanning the GC heap to recover real built-in functions.
+    import gc
+
+    gc.get_objects = _blocked
+    gc.get_referrers = _blocked
+    gc.get_referents = _blocked
 
     # FINDING-22 + F-25: Poison ctypes — eliminates libc.system(), dup2(),
     # PyFrame_LocalsToFast(), and all direct C function calls.
@@ -320,6 +353,11 @@ def _harden_sandbox():
     # `import ctypes` gets the poisoned stub. Direct sys.modules manipulation
     # via dict.__setitem__ is a known C-level bypass that requires ctypes
     # (chicken-and-egg with _ctypes.so removed from disk via bind-mount).
+    # F-30: Use __slots__ class to avoid closure leak of _real_import.
+    # Previous closure-based _guarded_import leaked via __closure__[1].cell_contents.
+    # F-28 note: object.__getattribute__ can still recover _f from __slots__,
+    # but _posixsubprocess is poisoned and posix.system is blocked, so
+    # recovering __import__ alone doesn't enable shell access.
     _POISONED_MODULES = frozenset(
         {
             "ctypes",
@@ -328,19 +366,30 @@ def _harden_sandbox():
             "ctypes.macholib",
             "_ctypes",
             "_ctypes_test",
+            "_posixsubprocess",
         }
     )
-    _real_import = builtins.__import__
 
-    def _guarded_import(name, *args, **kwargs):
-        if name in _POISONED_MODULES:
-            existing = sys.modules.get(name)
-            if existing is not None:
-                return existing
-            raise ImportError(f"Module {name} is not available in sandbox")
-        return _real_import(name, *args, **kwargs)
+    class _GuardedImport:
+        __slots__ = ("_f",)
 
-    builtins.__import__ = _guarded_import
+        def __init__(self, f):
+            object.__setattr__(self, "_f", f)
+
+        def __call__(self, name, *args, **kwargs):
+            if name in _POISONED_MODULES:
+                existing = sys.modules.get(name)
+                if existing is not None:
+                    return existing
+                raise ImportError(f"Module {name} is not available in sandbox")
+            return object.__getattribute__(self, "_f")(name, *args, **kwargs)
+
+        def __getattribute__(self, name):
+            if name == "_f":
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
+
+    builtins.__import__ = _GuardedImport(builtins.__import__)
 
 
 def run():
