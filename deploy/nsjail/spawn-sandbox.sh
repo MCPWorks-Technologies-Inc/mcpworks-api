@@ -150,6 +150,13 @@ NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 
+# FINDING-25: Hide _ctypes C extension .so files from sandbox.
+# sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
+# Bind-mounting empty files over the .so makes the C extension un-importable.
+touch "${WORKSPACE}/.empty"
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes.cpython-311-x86_64-linux-gnu.so")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes_test.cpython-311-x86_64-linux-gnu.so")
+
 # ORDER-002: Run under aggregate cgroup if available
 if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_mem_parent "${CGROUP_PARENT}")
