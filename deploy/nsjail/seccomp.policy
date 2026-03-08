@@ -22,7 +22,8 @@
  * Allowed but restricted by other layers:
  *   - clone/clone3: Allowed (Python threading); nsjail blocks CLONE_NEW*
  *   - socket/connect: Allowed; iptables restricts egress
- *   - execve: Allowed; nsjail chroot limits what can be executed
+ *   - execve: BLOCKED — nsjail uses execveat via exec_fd:true instead
+ *   - execveat: Allowed (needed by nsjail exec_fd); not exposed via Python stdlib
  *   - prctl: Allowed; dangerous ops need CAP_SYS_ADMIN (dropped)
  *
  * Maintenance:
@@ -123,8 +124,11 @@ ALLOW {
    * ══════════════════════════════════════════════════════════════════════ */
   clone,               /* Fork/thread creation — nsjail restricts flags */
   clone3,              /* Modern clone — nsjail restricts flags */
-  execve,              /* Execute programs — chroot limits available binaries */
-  execveat,
+  /* execve: REMOVED — blocked at kernel level. nsjail uses execveat
+   * (via exec_fd:true) to launch Python. Once Python is running, no
+   * process can exec another binary. posix.system, subprocess, /bin/sh
+   * all fail with SIGSYS regardless of Python-level bypass attempts. */
+  execveat,            /* Used by nsjail exec_fd; not callable from Python */
   wait4,               /* Wait for child processes */
   waitid,
   exit,
@@ -274,7 +278,8 @@ ALLOW {
   /* ══════════════════════════════════════════════════════════════════════
    * x86_64 specific
    * ══════════════════════════════════════════════════════════════════════ */
-  vfork,               /* Used by subprocess in some cases */
+  /* vfork: REMOVED — only used by subprocess (poisoned). Without execve
+   * allowed, fork+exec is impossible anyway. */
   restart_syscall      /* Required for signal restart */
 }
 

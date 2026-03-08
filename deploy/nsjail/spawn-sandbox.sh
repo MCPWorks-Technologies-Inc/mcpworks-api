@@ -181,9 +181,13 @@ fi
 # F-16: Free tier network isolation is handled by iptables UID rules:
 # UID 65534 → all outbound DROP. No clone_newnet needed.
 
-# Execute nsjail with tier-specific overrides
+# Execute nsjail with tier-specific overrides.
+# --execute_fd: use execveat(fd) instead of execve(path), required because
+# seccomp blocks execve. This prevents any shell execution (posix.system,
+# subprocess, /bin/sh) at the kernel level after Python starts.
 "${NSJAIL}" \
     "${NSJAIL_ARGS[@]}" \
+    --execute_fd \
     -- \
     /usr/local/bin/python3 -S /opt/mcpworks/bin/execute.py
 

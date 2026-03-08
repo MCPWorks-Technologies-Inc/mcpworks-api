@@ -96,8 +96,10 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
 fi
 
-# Execute
+# Execute (--execute_fd needed because seccomp blocks execve;
+# nsjail uses execveat(fd) instead, matching exec_fd:true in config)
 "${NSJAIL}" \
     "${NSJAIL_ARGS[@]}" \
+    --execute_fd \
     -- \
     /usr/local/bin/python3 "${PYTHON_ARGS[@]}"
