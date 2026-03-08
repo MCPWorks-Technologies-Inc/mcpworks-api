@@ -65,86 +65,88 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
         echo "WARNING: Sandbox packages not found"
     fi
 
-    # Block sandbox processes from reaching internal Docker services.
-    # Sandbox shares the container network (clone_newnet: false) so it
-    # can reach the internet, but we block access to postgres and redis.
+    # F-16: UID-based network isolation for sandbox tiers.
+    #
+    # Two UIDs are used to distinguish free vs paid sandbox executions:
+    #   UID 65534 (nobody)  = free tier  → ALL outbound blocked
+    #   UID 65533 (sandbox) = paid tiers → outbound allowed, internal blocked
+    #
+    # spawn-sandbox.sh overrides the nsjail UID mapping for paid tiers.
     if command -v iptables >/dev/null 2>&1; then
+
+        # === FREE TIER (UID 65534): Block ALL outbound traffic ===
+        # No internet, no DNS, no nothing. Complete network isolation.
+        iptables -C OUTPUT -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65534 -j DROP
+        echo "Blocked ALL outbound for free tier (uid 65534)"
+
+        # === PAID TIERS (UID 65533): Block internal, allow internet ===
+
         # Resolve internal service IPs from Docker DNS
         POSTGRES_IP=$(getent hosts postgres 2>/dev/null | awk '{print $1}')
         REDIS_IP=$(getent hosts redis 2>/dev/null | awk '{print $1}')
 
         if [ -n "${POSTGRES_IP}" ]; then
-            iptables -C OUTPUT -d "${POSTGRES_IP}" -p tcp --dport 5432 -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-            iptables -A OUTPUT -d "${POSTGRES_IP}" -p tcp --dport 5432 -m owner --uid-owner 65534 -j DROP
-            echo "Blocked sandbox (uid 65534) → postgres (${POSTGRES_IP}:5432)"
+            iptables -C OUTPUT -d "${POSTGRES_IP}" -p tcp --dport 5432 -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+            iptables -A OUTPUT -d "${POSTGRES_IP}" -p tcp --dport 5432 -m owner --uid-owner 65533 -j DROP
+            echo "Blocked paid sandbox (uid 65533) -> postgres (${POSTGRES_IP}:5432)"
         fi
 
         if [ -n "${REDIS_IP}" ]; then
-            iptables -C OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-            iptables -A OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65534 -j DROP
-            echo "Blocked sandbox (uid 65534) → redis (${REDIS_IP}:6379)"
+            iptables -C OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+            iptables -A OUTPUT -d "${REDIS_IP}" -p tcp --dport 6379 -m owner --uid-owner 65533 -j DROP
+            echo "Blocked paid sandbox (uid 65533) -> redis (${REDIS_IP}:6379)"
         fi
 
-        # Block cloud metadata endpoint (DO/AWS/GCP SSRF vector)
-        iptables -C OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-        iptables -A OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j DROP
-        echo "Blocked sandbox (uid 65534) → metadata (169.254.169.254)"
+        iptables -C OUTPUT -d 169.254.169.254 -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -d 169.254.169.254 -m owner --uid-owner 65533 -j DROP
+        echo "Blocked paid sandbox (uid 65533) -> metadata (169.254.169.254)"
 
-        # Block localhost (prevents SSRF to API on :8000)
-        iptables -C OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-        iptables -A OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65534 -j DROP
-        echo "Blocked sandbox (uid 65534) → localhost (127.0.0.0/8)"
+        iptables -C OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -d 127.0.0.0/8 -m owner --uid-owner 65533 -j DROP
+        echo "Blocked paid sandbox (uid 65533) -> localhost (127.0.0.0/8)"
 
-        # Block entire Docker bridge network (prevents SSRF to API via its
-        # Docker IP and to Caddy proxy — see SECURITY_AUDIT.md FINDING-01)
         DOCKER_SUBNET=$(ip route | awk '/172\.[0-9]+\.0\.0/ {print $1}')
         if [ -n "${DOCKER_SUBNET}" ]; then
-            iptables -C OUTPUT -d "${DOCKER_SUBNET}" -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-            iptables -A OUTPUT -d "${DOCKER_SUBNET}" -m owner --uid-owner 65534 -j DROP
-            echo "Blocked sandbox (uid 65534) → Docker subnet (${DOCKER_SUBNET})"
+            iptables -C OUTPUT -d "${DOCKER_SUBNET}" -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+            iptables -A OUTPUT -d "${DOCKER_SUBNET}" -m owner --uid-owner 65533 -j DROP
+            echo "Blocked paid sandbox (uid 65533) -> Docker subnet (${DOCKER_SUBNET})"
         else
-            # Fallback: block common Docker bridge ranges
             for SUBNET in 172.16.0.0/12 10.0.0.0/8; do
-                iptables -C OUTPUT -d "${SUBNET}" -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-                iptables -A OUTPUT -d "${SUBNET}" -m owner --uid-owner 65534 -j DROP
+                iptables -C OUTPUT -d "${SUBNET}" -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+                iptables -A OUTPUT -d "${SUBNET}" -m owner --uid-owner 65533 -j DROP
             done
-            echo "Blocked sandbox (uid 65534) → Docker subnets (172.16.0.0/12, 10.0.0.0/8)"
+            echo "Blocked paid sandbox (uid 65533) -> Docker subnets (172.16.0.0/12, 10.0.0.0/8)"
         fi
 
-        # FINDING-09/16: Block sandbox from reaching *.mcpworks.io (prevents
-        # self-registration with XSS payloads and API abuse from sandbox code).
-        # Resolve our own public IPs and block them.
         OUR_IPS=$(getent hosts api.mcpworks.io 2>/dev/null | awk '{print $1}')
         for IP in ${OUR_IPS}; do
-            iptables -C OUTPUT -d "${IP}" -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
-            iptables -A OUTPUT -d "${IP}" -m owner --uid-owner 65534 -j DROP
-            echo "Blocked sandbox (uid 65534) → mcpworks API (${IP})"
+            iptables -C OUTPUT -d "${IP}" -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
+            iptables -A OUTPUT -d "${IP}" -m owner --uid-owner 65533 -j DROP
+            echo "Blocked paid sandbox (uid 65533) -> mcpworks API (${IP})"
         done
 
-        # Rate limit outbound TCP connections (10/sec burst 20 — tightened for F-16)
-        iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+        iptables -C OUTPUT -m owner --uid-owner 65533 -p tcp --syn \
             -m hashlimit --hashlimit-above 10/sec --hashlimit-burst 20 \
             --hashlimit-name sandbox_rate --hashlimit-mode srcip -j DROP 2>/dev/null || \
-        iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+        iptables -A OUTPUT -m owner --uid-owner 65533 -p tcp --syn \
             -m hashlimit --hashlimit-above 10/sec --hashlimit-burst 20 \
             --hashlimit-name sandbox_rate --hashlimit-mode srcip -j DROP
-        echo "Rate limited sandbox (uid 65534) outbound TCP (10/sec burst 20)"
+        echo "Rate limited paid sandbox (uid 65533) outbound TCP (10/sec burst 20)"
 
-        # Log new outbound connections from sandbox (FINDING-16: audit trail)
-        iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+        iptables -C OUTPUT -m owner --uid-owner 65533 -p tcp --syn \
             -m limit --limit 5/min --limit-burst 10 \
             -j LOG --log-prefix "SANDBOX_EGRESS: " --log-level info 2>/dev/null || \
-        iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+        iptables -A OUTPUT -m owner --uid-owner 65533 -p tcp --syn \
             -m limit --limit 5/min --limit-burst 10 \
             -j LOG --log-prefix "SANDBOX_EGRESS: " --log-level info
-        echo "Logging sandbox (uid 65534) outbound connections"
+        echo "Logging paid sandbox (uid 65533) outbound connections"
 
-        # Allow DNS (UDP 53) but block other UDP
-        iptables -C OUTPUT -m owner --uid-owner 65534 -p udp --dport 53 -j ACCEPT 2>/dev/null || \
-        iptables -A OUTPUT -m owner --uid-owner 65534 -p udp --dport 53 -j ACCEPT
-        iptables -C OUTPUT -m owner --uid-owner 65534 -p udp -j DROP 2>/dev/null || \
-        iptables -A OUTPUT -m owner --uid-owner 65534 -p udp -j DROP
-        echo "Allowed sandbox (uid 65534) DNS, blocked other UDP"
+        iptables -C OUTPUT -m owner --uid-owner 65533 -p udp --dport 53 -j ACCEPT 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65533 -p udp --dport 53 -j ACCEPT
+        iptables -C OUTPUT -m owner --uid-owner 65533 -p udp -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65533 -p udp -j DROP
+        echo "Allowed paid sandbox (uid 65533) DNS, blocked other UDP"
     else
         echo "Warning: iptables not available, sandbox can reach internal services"
     fi
