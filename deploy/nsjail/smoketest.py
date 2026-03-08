@@ -668,7 +668,14 @@ def run_all(json_output: bool = False) -> int:
             "failed": failed,
             "results": results,
         }
-        print(json.dumps(output, indent=2))
+        json_str = json.dumps(output, indent=2)
+        print(json_str)
+        sys.stdout.flush()
+        try:
+            with open("/sandbox/smoketest-output.json", "w") as f:
+                f.write(json_str)
+        except OSError:
+            pass
     else:
         print(f"\n{'=' * 70}")
         print(f"  {passed}/{total} passed, {failed} failed")
