@@ -660,6 +660,8 @@ def run_all(json_output: bool = False) -> int:
                 print(f"  FAIL  {import_name:<30s} {desc:<40s} ({e})")
 
     total = passed + failed
+    sys.stderr.write(f"SMOKETEST: {passed}/{total} passed, {failed} failed\n")
+    sys.stderr.flush()
 
     if json_output:
         output = {
@@ -669,13 +671,20 @@ def run_all(json_output: bool = False) -> int:
             "results": results,
         }
         json_str = json.dumps(output, indent=2)
-        print(json_str)
-        sys.stdout.flush()
         try:
             with open("/sandbox/smoketest-output.json", "w") as f:
                 f.write(json_str)
-        except OSError:
-            pass
+            sys.stderr.write(f"SMOKETEST: wrote {len(json_str)} bytes to output file\n")
+        except OSError as e:
+            sys.stderr.write(f"SMOKETEST: file write failed: {e}\n")
+        sys.stderr.flush()
+        try:
+            sys.stdout.write(json_str + "\n")
+            sys.stdout.flush()
+            sys.stderr.write("SMOKETEST: stdout write ok\n")
+        except OSError as e:
+            sys.stderr.write(f"SMOKETEST: stdout write failed: {e}\n")
+        sys.stderr.flush()
     else:
         print(f"\n{'=' * 70}")
         print(f"  {passed}/{total} passed, {failed} failed")
