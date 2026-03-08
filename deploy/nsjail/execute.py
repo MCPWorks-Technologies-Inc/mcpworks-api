@@ -303,54 +303,40 @@ def _harden_sandbox():
     io.open = _RestrictedIoOpen(_real_io_open)
     del _real_io_open
 
-    # FINDING-20 + F-22: Freeze sys.modules with dict.__setitem__ bypass fix.
-    # The Round 6 bypass used dict.__setitem__(sys.modules, key, value) to
-    # call the parent class method directly. We override __class__ to prevent
-    # type introspection and add update()/setdefault() guards.
-    _frozen_keys = frozenset(sys.modules.keys())
-
-    class _FrozenModules(dict):
-        def __setitem__(self, key, value):
-            if key in _frozen_keys:
-                return
-            dict.__setitem__(self, key, value)
-
-        def __delitem__(self, key):
-            if key in _frozen_keys:
-                return
-            dict.__delitem__(self, key)
-
-        def pop(self, key, *args):
-            if key in _frozen_keys:
-                return self.get(key)
-            return dict.pop(self, key, *args)
-
-        def update(self, *args, **kwargs):
-            merged = dict(*args, **kwargs)
-            for k, v in merged.items():
-                self[k] = v
-
-        def setdefault(self, key, default=None):
-            if key in _frozen_keys:
-                return self.get(key)
-            return dict.setdefault(self, key, default)
-
-    _fm = _FrozenModules(sys.modules)
-    sys.modules = _fm
-
-    # Patch dict.__setitem__ bypass: rebind the C-level type pointer so
-    # dict.__setitem__(_fm, ...) routes through our override.
-    # We do this by removing the direct dict.__setitem__ path from the
-    # instance's type. Since Python resolves methods via MRO, and our
-    # class overrides __setitem__, the only bypass is calling
-    # dict.__setitem__ explicitly. We block that by hiding the frozen_keys
-    # reference inside the class (already done via closure) and ensuring
-    # the check cannot be skipped.
+    # FINDING-20 + F-22: Protect poisoned modules from being restored.
     #
-    # Note: dict.__setitem__(sys.modules, key, val) STILL works at the C level.
-    # This is a fundamental Python limitation. The real security boundary
-    # is nsjail+seccomp. With ctypes poisoned, attackers cannot call
-    # PyFrame_LocalsToFast or libc.system to exploit the bypass.
+    # Previous approach used _FrozenModules (dict subclass replacing sys.modules)
+    # but this broke C extension imports (asyncio, _asyncio, etc.) because
+    # CPython's interp->modules pointer doesn't update when sys.modules is
+    # reassigned from Python code — C extensions use PyImport_GetModuleDict()
+    # which reads the stale pointer.
+    #
+    # New approach: hook builtins.__import__ to block re-import of poisoned
+    # modules. The poisoned stubs remain in sys.modules. User code calling
+    # `import ctypes` gets the poisoned stub. Direct sys.modules manipulation
+    # via dict.__setitem__ is a known C-level bypass that requires ctypes
+    # (chicken-and-egg with _ctypes.so removed from disk via bind-mount).
+    _POISONED_MODULES = frozenset(
+        {
+            "ctypes",
+            "ctypes.util",
+            "ctypes.wintypes",
+            "ctypes.macholib",
+            "_ctypes",
+            "_ctypes_test",
+        }
+    )
+    _real_import = builtins.__import__
+
+    def _guarded_import(name, *args, **kwargs):
+        if name in _POISONED_MODULES:
+            existing = sys.modules.get(name)
+            if existing is not None:
+                return existing
+            raise ImportError(f"Module {name} is not available in sandbox")
+        return _real_import(name, *args, **kwargs)
+
+    builtins.__import__ = _guarded_import
 
 
 def run():
