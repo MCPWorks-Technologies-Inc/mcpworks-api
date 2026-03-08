@@ -35,6 +35,7 @@ class ExecutionResult:
     error_type: str | None = None
     execution_time_ms: int | None = None
     resource_usage: dict[str, Any] | None = None
+    call_log: list[str] = field(default_factory=list)
 
 
 @dataclass

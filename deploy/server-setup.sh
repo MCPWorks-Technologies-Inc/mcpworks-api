@@ -201,6 +201,31 @@ iptables -C OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j DROP 2>/dev/
     iptables -A OUTPUT -d 169.254.169.254 -m owner --uid-owner 65534 -j DROP
 echo "    Blocked UID 65534 -> 169.254.169.254 (metadata)"
 
+# FINDING-09/16: Block sandbox from reaching *.mcpworks.io
+OUR_IPS=$(getent hosts api.mcpworks.io 2>/dev/null | awk '{print $1}')
+for IP in ${OUR_IPS}; do
+    iptables -C OUTPUT -d "${IP}" -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
+        iptables -A OUTPUT -d "${IP}" -m owner --uid-owner 65534 -j DROP
+    echo "    Blocked UID 65534 -> ${IP} (mcpworks API)"
+done
+
+# Log + rate-limit outbound connections from sandbox (FINDING-16)
+iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+    -m hashlimit --hashlimit-above 10/sec --hashlimit-burst 20 \
+    --hashlimit-name sandbox_rate --hashlimit-mode srcip -j DROP 2>/dev/null || \
+iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+    -m hashlimit --hashlimit-above 10/sec --hashlimit-burst 20 \
+    --hashlimit-name sandbox_rate --hashlimit-mode srcip -j DROP
+echo "    Rate limited UID 65534 outbound TCP (10/sec burst 20)"
+
+iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+    -m limit --limit 5/min --limit-burst 10 \
+    -j LOG --log-prefix "SANDBOX_EGRESS: " --log-level info 2>/dev/null || \
+iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+    -m limit --limit 5/min --limit-burst 10 \
+    -j LOG --log-prefix "SANDBOX_EGRESS: " --log-level info
+echo "    Logging UID 65534 outbound connections"
+
 # Persist across reboots
 if command -v iptables-save &>/dev/null; then
     iptables-save > /etc/iptables/rules.v4 2>/dev/null || true

@@ -111,14 +111,33 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
             echo "Blocked sandbox (uid 65534) → Docker subnets (172.16.0.0/12, 10.0.0.0/8)"
         fi
 
-        # Rate limit outbound TCP connections (20/sec burst 50)
+        # FINDING-09/16: Block sandbox from reaching *.mcpworks.io (prevents
+        # self-registration with XSS payloads and API abuse from sandbox code).
+        # Resolve our own public IPs and block them.
+        OUR_IPS=$(getent hosts api.mcpworks.io 2>/dev/null | awk '{print $1}')
+        for IP in ${OUR_IPS}; do
+            iptables -C OUTPUT -d "${IP}" -m owner --uid-owner 65534 -j DROP 2>/dev/null || \
+            iptables -A OUTPUT -d "${IP}" -m owner --uid-owner 65534 -j DROP
+            echo "Blocked sandbox (uid 65534) → mcpworks API (${IP})"
+        done
+
+        # Rate limit outbound TCP connections (10/sec burst 20 — tightened for F-16)
         iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
-            -m hashlimit --hashlimit-above 20/sec --hashlimit-burst 50 \
+            -m hashlimit --hashlimit-above 10/sec --hashlimit-burst 20 \
             --hashlimit-name sandbox_rate --hashlimit-mode srcip -j DROP 2>/dev/null || \
         iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
-            -m hashlimit --hashlimit-above 20/sec --hashlimit-burst 50 \
+            -m hashlimit --hashlimit-above 10/sec --hashlimit-burst 20 \
             --hashlimit-name sandbox_rate --hashlimit-mode srcip -j DROP
-        echo "Rate limited sandbox (uid 65534) outbound TCP (20/sec burst 50)"
+        echo "Rate limited sandbox (uid 65534) outbound TCP (10/sec burst 20)"
+
+        # Log new outbound connections from sandbox (FINDING-16: audit trail)
+        iptables -C OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+            -m limit --limit 5/min --limit-burst 10 \
+            -j LOG --log-prefix "SANDBOX_EGRESS: " --log-level info 2>/dev/null || \
+        iptables -A OUTPUT -m owner --uid-owner 65534 -p tcp --syn \
+            -m limit --limit 5/min --limit-burst 10 \
+            -j LOG --log-prefix "SANDBOX_EGRESS: " --log-level info
+        echo "Logging sandbox (uid 65534) outbound connections"
 
         # Allow DNS (UDP 53) but block other UDP
         iptables -C OUTPUT -m owner --uid-owner 65534 -p udp --dport 53 -j ACCEPT 2>/dev/null || \
