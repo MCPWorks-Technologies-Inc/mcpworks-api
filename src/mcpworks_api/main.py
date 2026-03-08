@@ -278,7 +278,7 @@ def create_app() -> FastAPI:
         except Exception:
             return HTMLResponse(content=_admin_login_html)
 
-        csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+        csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
         return HTMLResponse(
             content=_admin_html_path.read_text(),
             headers={"Content-Security-Policy": csp, "X-Content-Type-Options": "nosniff"},
