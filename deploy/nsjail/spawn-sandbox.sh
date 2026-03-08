@@ -131,8 +131,16 @@ VERSION
 # procfs subdirectories (both tmpfs and bind-mount). /proc/net is read-only
 # and iptables rules prevent actual network access to internal services.
 
-# Chown workspace to UID 65534 (required for outside_id: 65534 mapping)
-chown -R 65534:65534 "${WORKSPACE}"
+# F-16: UID-based network isolation.
+# Free tier runs as UID 65534 (all outbound blocked by iptables).
+# Paid tiers run as UID 65533 (outbound allowed, internal services blocked).
+if [ "${TIER}" = "free" ]; then
+    SANDBOX_UID=65534
+else
+    SANDBOX_UID=65533
+fi
+
+chown -R "${SANDBOX_UID}:${SANDBOX_UID}" "${WORKSPACE}"
 
 # Build nsjail arguments
 NSJAIL_ARGS=(
@@ -144,6 +152,12 @@ NSJAIL_ARGS=(
     --rlimit_nproc "${PIDS}"
     --hostname "${NAMESPACE}"
 )
+
+# Override UID/GID mapping for paid tiers (config defaults to 65534)
+if [ "${SANDBOX_UID}" -ne 65534 ]; then
+    NSJAIL_ARGS+=(--uid_mapping "65534:${SANDBOX_UID}:1")
+    NSJAIL_ARGS+=(--gid_mapping "65534:${SANDBOX_UID}:1")
+fi
 
 # Overlay fake /proc files to hide host details
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
@@ -164,11 +178,8 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
 fi
 
-# NOTE: Free tier network isolation was intended via --clone_newnet, but
-# nsjail has no CLI flag to override clone_newnet:false from the config.
-# Only --disable_clone_newnet exists (inverse). Free tier already blocks
-# network via iptables UID rules. Full isolation would require a separate
-# config file with clone_newnet:true + veth pair for controlled egress.
+# F-16: Free tier network isolation is handled by iptables UID rules:
+# UID 65534 → all outbound DROP. No clone_newnet needed.
 
 # Execute nsjail with tier-specific overrides
 "${NSJAIL}" \
