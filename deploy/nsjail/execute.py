@@ -60,21 +60,35 @@ def _harden_sandbox():
     """
     import signal
 
-    # FINDING-17: Block stack frame traversal.
-    # F-22 fix: use a class-based callable instead of a closure to prevent
-    # __closure__[0].cell_contents extraction of _real_getframe.
+    # FINDING-17 + F-27: Block stack frame traversal for user code.
+    # F-22: class-based callable (no __closure__ to extract).
+    # F-26: __getattribute__ blocks direct _f access.
+    # F-27: Allow _getframe(depth>0) from stdlib (collections.namedtuple needs
+    # _getframe(1) for module detection — blocking it breaks socket, urllib,
+    # ssl, pathlib, asyncio, dataclasses, and all networking packages).
+    _STDLIB_PREFIXES = ("/usr/local/lib/", "/usr/lib/")
     _real_getframe = sys._getframe
 
     class _RestrictedGetframe:
         __slots__ = ("_f",)
 
         def __init__(self, f):
-            self._f = f
+            object.__setattr__(self, "_f", f)
 
         def __call__(self, depth=0):
+            _f = object.__getattribute__(self, "_f")
+            # +1 to all depths: skip this wrapper's own stack frame
             if depth > 0:
+                caller = _f(1)  # actual caller of sys._getframe()
+                if caller.f_code.co_filename.startswith(_STDLIB_PREFIXES):
+                    return _f(depth + 1)
                 raise RuntimeError("Access to caller frames is restricted")
-            return self._f(0)
+            return _f(1)
+
+        def __getattribute__(self, name):
+            if name == "_f":
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
 
     sys._getframe = _RestrictedGetframe(_real_getframe)
     del _real_getframe
@@ -82,20 +96,27 @@ def _harden_sandbox():
         sys._current_frames = lambda: {}
 
     # FINDING-19: Block signal handler overrides.
-    # F-22 fix: class-based callable, no closure to extract.
+    # F-22: class-based callable (no closure). F-26: __getattribute__ guard.
     _real_signal = signal.signal
 
     class _RestrictedSignal:
         __slots__ = ("_f", "_allowed")
 
         def __init__(self, f):
-            self._f = f
-            self._allowed = frozenset({signal.SIGPIPE})
+            object.__setattr__(self, "_f", f)
+            object.__setattr__(self, "_allowed", frozenset({signal.SIGPIPE}))
 
         def __call__(self, signum, handler):
-            if signum in self._allowed:
-                return self._f(signum, handler)
+            _f = object.__getattribute__(self, "_f")
+            allowed = object.__getattribute__(self, "_allowed")
+            if signum in allowed:
+                return _f(signum, handler)
             raise RuntimeError(f"Overriding signal {signum} is not permitted")
+
+        def __getattribute__(self, name):
+            if name in ("_f", "_allowed"):
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
 
     signal.signal = _RestrictedSignal(_real_signal)
     del _real_signal
@@ -146,9 +167,43 @@ def _harden_sandbox():
     _fake_subprocess.getstatusoutput = _blocked
     sys.modules["subprocess"] = _fake_subprocess
 
-    # FINDING-22: Poison ctypes — eliminates libc.system(), dup2(),
+    # FINDING-22 + F-25: Poison ctypes — eliminates libc.system(), dup2(),
     # PyFrame_LocalsToFast(), and all direct C function calls.
-    # This is the single most impactful defense-in-depth measure.
+    # F-25: _ctypes .so is also hidden via bind-mount in spawn-sandbox.sh,
+    # but we poison importlib.util too as defense-in-depth against recovery
+    # via importlib.util.spec_from_file_location().
+    import importlib.machinery as _im
+    import importlib.util as _iu
+
+    _real_spec_from_file = _iu.spec_from_file_location
+
+    class _RestrictedSpecFromFile:
+        __slots__ = ("_f",)
+
+        def __init__(self, f):
+            object.__setattr__(self, "_f", f)
+
+        def __call__(self, name, location=None, *args, **kwargs):
+            if location and isinstance(location, str) and "_ctypes" in location:
+                raise ImportError("Loading _ctypes is not permitted in sandbox")
+            return object.__getattribute__(self, "_f")(name, location, *args, **kwargs)
+
+        def __getattribute__(self, name):
+            if name == "_f":
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
+
+    _iu.spec_from_file_location = _RestrictedSpecFromFile(_real_spec_from_file)
+    del _real_spec_from_file
+
+    _real_ext_loader = _im.ExtensionFileLoader
+
+    class _RestrictedExtLoader:
+        def __init__(self, *_a, **_kw):
+            raise ImportError("Loading C extensions is not permitted in sandbox")
+
+    _im.ExtensionFileLoader = _RestrictedExtLoader
+
     for mod_name in (
         "ctypes",
         "ctypes.util",
@@ -172,18 +227,28 @@ def _harden_sandbox():
     # the os.open() bypass discovered in Round 6.
     import builtins
 
+    # F-26: All _Restricted* classes use __getattribute__ to block direct
+    # attribute access to _f. Attackers must use object.__getattribute__()
+    # which is harder to discover. With _ctypes.so removed from disk (F-25),
+    # recovering the real function is harmless (no libc.system or
+    # PyFrame_LocalsToFast available).
     _real_open = builtins.open
 
     class _RestrictedOpen:
         __slots__ = ("_f",)
 
         def __init__(self, f):
-            self._f = f
+            object.__setattr__(self, "_f", f)
 
         def __call__(self, file, *args, **kwargs):
             if _is_blocked_path(file):
                 raise PermissionError(f"Access denied: {file}")
-            return self._f(file, *args, **kwargs)
+            return object.__getattribute__(self, "_f")(file, *args, **kwargs)
+
+        def __getattribute__(self, name):
+            if name == "_f":
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
 
     builtins.open = _RestrictedOpen(_real_open)
     del _real_open
@@ -194,12 +259,17 @@ def _harden_sandbox():
         __slots__ = ("_f",)
 
         def __init__(self, f):
-            self._f = f
+            object.__setattr__(self, "_f", f)
 
         def __call__(self, path, flags, mode=0o777, *args, **kwargs):
             if _is_blocked_path(path):
                 raise PermissionError(f"Access denied: {path}")
-            return self._f(path, flags, mode, *args, **kwargs)
+            return object.__getattribute__(self, "_f")(path, flags, mode, *args, **kwargs)
+
+        def __getattribute__(self, name):
+            if name == "_f":
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
 
     os.open = _RestrictedOsOpen(_real_os_open)
     del _real_os_open
@@ -212,12 +282,17 @@ def _harden_sandbox():
         __slots__ = ("_f",)
 
         def __init__(self, f):
-            self._f = f
+            object.__setattr__(self, "_f", f)
 
         def __call__(self, file, *args, **kwargs):
             if _is_blocked_path(file):
                 raise PermissionError(f"Access denied: {file}")
-            return self._f(file, *args, **kwargs)
+            return object.__getattribute__(self, "_f")(file, *args, **kwargs)
+
+        def __getattribute__(self, name):
+            if name == "_f":
+                raise AttributeError("Access denied")
+            return object.__getattribute__(self, name)
 
     io.open = _RestrictedIoOpen(_real_io_open)
     del _real_io_open
