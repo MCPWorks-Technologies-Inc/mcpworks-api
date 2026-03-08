@@ -165,6 +165,9 @@ def _harden_sandbox():
     _fake_subprocess.check_output = _blocked
     _fake_subprocess.getoutput = _blocked
     _fake_subprocess.getstatusoutput = _blocked
+    _fake_subprocess.PIPE = -1
+    _fake_subprocess.STDOUT = -2
+    _fake_subprocess.DEVNULL = -3
     sys.modules["subprocess"] = _fake_subprocess
 
     # FINDING-22 + F-25: Poison ctypes — eliminates libc.system(), dup2(),
