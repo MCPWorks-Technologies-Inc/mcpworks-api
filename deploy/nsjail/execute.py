@@ -104,7 +104,11 @@ def _harden_sandbox():
 
         def __init__(self, f):
             object.__setattr__(self, "_f", f)
-            object.__setattr__(self, "_allowed", frozenset({signal.SIGPIPE}))
+            object.__setattr__(
+                self,
+                "_allowed",
+                frozenset({signal.SIGPIPE, signal.SIGINT}),
+            )
 
         def __call__(self, signum, handler):
             _f = object.__getattribute__(self, "_f")
