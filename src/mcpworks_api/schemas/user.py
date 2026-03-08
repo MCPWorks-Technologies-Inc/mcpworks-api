@@ -1,10 +1,11 @@
 """Pydantic schemas for user-related endpoints."""
 
-import re
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from mcpworks_api.schemas.auth import _sanitize_display_name
 
 ALLOWED_SCOPES = {"read", "write", "execute"}
 
@@ -175,11 +176,7 @@ class CreateApiKeyRequest(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def sanitize_name(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        v = re.sub(r"<[^>]*>", "", str(v))
-        v = v.strip()
-        return v if v else None
+        return _sanitize_display_name(v)
 
     @field_validator("scopes")
     @classmethod

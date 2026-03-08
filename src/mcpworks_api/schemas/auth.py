@@ -7,6 +7,17 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
+def _sanitize_display_name(v: str | None) -> str | None:
+    if v is None:
+        return v
+    v = str(v)
+    v = re.sub(r"<[^>]*?>", "", v)
+    v = v.replace("<", "").replace(">", "")
+    v = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", v)
+    v = v.strip()
+    return v if v else None
+
+
 class RegisterRequest(BaseModel):
     """Request body for POST /auth/register."""
 
@@ -34,11 +45,7 @@ class RegisterRequest(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def sanitize_name(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        v = re.sub(r"<[^>]*>", "", str(v))
-        v = v.strip()
-        return v if v else None
+        return _sanitize_display_name(v)
 
 
 class RegisterResponse(BaseModel):
@@ -246,11 +253,7 @@ class CreateApiKeyRequest(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def sanitize_name(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        v = re.sub(r"<[^>]*>", "", str(v))
-        v = v.strip()
-        return v if v else None
+        return _sanitize_display_name(v)
 
 
 class ApiKeyInfo(BaseModel):

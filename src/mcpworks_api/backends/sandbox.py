@@ -295,6 +295,7 @@ class SandboxBackend(Backend):
                         error=output_data.get("error"),
                         error_type=output_data.get("error_type"),
                         execution_time_ms=execution_time_ms,
+                        call_log=output_data.get("call_log", []),
                     )
                 except json.JSONDecodeError:
                     pass
@@ -406,6 +407,7 @@ class SandboxBackend(Backend):
                         error=output_data.get("error"),
                         error_type=output_data.get("error_type"),
                         execution_time_ms=execution_time_ms,
+                        call_log=output_data.get("call_log", []),
                     )
                 except json.JSONDecodeError:
                     pass

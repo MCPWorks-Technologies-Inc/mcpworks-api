@@ -367,8 +367,8 @@ class RunMCPHandler:
         if not backend:
             raise ValueError("Code sandbox backend not available")
 
-        # Append call-log capture: writes a JSON marker to stderr so we can
-        # read back which functions the agent's code actually called.
+        # Append call-log capture (legacy stderr path, kept as fallback).
+        # Primary path: execute.py reads /sandbox/.call_log directly (FINDING-04).
         augmented_code = code + _CALL_LOG_CAPTURE_SNIPPET
 
         execution_id = str(uuid.uuid4())
@@ -388,8 +388,9 @@ class RunMCPHandler:
             (datetime.now(UTC) - start_time).total_seconds() * 1000
         )
 
-        # Extract call log from stderr marker
-        called_functions = _parse_call_log(result.stderr)
+        # FINDING-04: Prefer call_log from output.json (read by trusted execute.py)
+        # Fall back to stderr marker parsing for dev-mode / legacy compatibility
+        called_functions = result.call_log or _parse_call_log(result.stderr)
 
         logger.info(
             "code_executed",
