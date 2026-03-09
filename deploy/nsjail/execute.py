@@ -365,6 +365,8 @@ def _harden_sandbox():
         _fake_ct.LibraryLoader = _blocked
         for _attr, _val in _safe_types.items():
             setattr(_fake_ct, _attr, _val)
+        if mod_name == "ctypes.util":
+            _fake_ct.find_library = lambda _name: None
         sys.modules[mod_name] = _fake_ct
 
     # FINDING-08 + F-22: Block /proc/net and /proc/self/mountinfo reads.
