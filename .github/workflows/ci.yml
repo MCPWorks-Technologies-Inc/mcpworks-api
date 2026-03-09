@@ -1,4 +1,12 @@
 # CI Pipeline - Lint, Test, Build, Security Scan
+#
+# Optimized for wall-clock time: 3 jobs instead of 6.
+# Runner provisioning (~5-7 min queue each) is the bottleneck, not execution.
+#
+# Job graph (2 tiers):
+#   lint  ->  test                (postgres + redis service containers)
+#         ->  build-and-smoketest (Docker build + sandbox smoke test in one job)
+#         ->  security-and-audit  (pip-audit + trufflehog + sandbox CVE scan)
 
 name: CI
 
@@ -130,59 +138,16 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: mcpworks-api:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # Security scanning
-  security:
-    name: Security Scan
+  # Build Docker image and run sandbox smoke test in one job.
+  # These were previously 2 separate jobs (build + sandbox-smoketest), each
+  # provisioning its own runner. The smoketest was rebuilding the same image
+  # from GHA cache anyway — running it here avoids that round-trip entirely.
+  # Also: build has no dependency on test results (it just builds the image),
+  # so it runs parallel with test instead of waiting for it.
+  build-and-smoketest:
+    name: Build & Smoke Test
     runs-on: ubuntu-latest
     needs: lint
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ".[dev]" pip-audit
-
-      - name: Run pip-audit for vulnerabilities
-        run: pip-audit --desc on
-
-      - name: Check for secrets in code
-        uses: trufflesecurity/trufflehog@main
-        with:
-          extra_args: --only-verified
-        continue-on-error: true
-
-  # Sandbox smoke test — validate all 57 packages work inside nsjail
-  sandbox-smoketest:
-    name: Sandbox Smoke Test
-    runs-on: ubuntu-latest
-    needs: build
 
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +160,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: mcpworks-api:smoketest
+          tags: mcpworks-api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -204,7 +169,7 @@ jobs:
           # nsjail writes logs to stderr; capture stdout (JSON) and stderr separately
           docker run --rm --privileged \
             -e JSON_OUTPUT=1 \
-            mcpworks-api:smoketest \
+            mcpworks-api:${{ github.sha }} \
             /opt/mcpworks/bin/run-smoketest.sh \
             > smoketest-output.json 2>smoketest-stderr.log || true
           # Show nsjail logs for debugging
@@ -224,9 +189,11 @@ jobs:
             smoketest-output.json
             smoketest-stderr.log
 
-  # ORDER-005: Weekly sandbox package audit
-  sandbox-audit:
-    name: Sandbox Package Audit
+  # Merged security scan + sandbox package audit into one job.
+  # Previously 2 separate jobs each needing their own runner provision.
+  # Both are pip-based checks that share the same Python setup.
+  security-and-audit:
+    name: Security Scan & Audit
     runs-on: ubuntu-latest
     needs: lint
 
@@ -238,10 +205,23 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install sandbox packages and pip-audit
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip pip-audit
-          # Install the same packages as the Dockerfile sandbox-builder stage
+          python -m pip install --upgrade pip
+          pip install ".[dev]" pip-audit
+
+      - name: Run pip-audit for API vulnerabilities
+        run: pip-audit --desc on
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+        continue-on-error: true
+
+      # ORDER-005: Sandbox package audit (also runs weekly via schedule trigger)
+      - name: Install sandbox packages
+        run: |
           pip install \
             requests httpx urllib3 aiohttp websockets \
             pyyaml orjson tomli tomli-w xmltodict msgpack \
