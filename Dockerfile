@@ -173,7 +173,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     && curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | bash \
     && apt-get install -y infisical \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "root:65533:2" >> /etc/subuid \
+    && echo "root:65533:2" >> /etc/subgid
 
 # Copy API virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
