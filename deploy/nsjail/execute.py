@@ -330,6 +330,10 @@ def _harden_sandbox():
         "Array": type("Array", (), {}),
         "addressof": lambda _obj: 0,
         "string_at": lambda _addr, _size=-1: b"",
+        "py_object": type("py_object", (_CTypeDummy,), {"_type_": "O"}),
+        "cast": lambda _obj, _typ: _typ(),
+        "pointer": lambda _obj: _CTypeDummy(),
+        "byref": lambda _obj, _offset=0: _CTypeDummy(),
     }
 
     for mod_name in (
@@ -344,10 +348,6 @@ def _harden_sandbox():
         _fake_ct.cdll = _blocked
         _fake_ct.pythonapi = _blocked
         _fake_ct.LibraryLoader = _blocked
-        _fake_ct.py_object = _blocked
-        _fake_ct.cast = _blocked
-        _fake_ct.pointer = _blocked
-        _fake_ct.byref = _blocked
         for _attr, _val in _safe_types.items():
             setattr(_fake_ct, _attr, _val)
         sys.modules[mod_name] = _fake_ct
