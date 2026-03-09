@@ -315,9 +315,17 @@ def _harden_sandbox():
         "c_ssize_t": type("c_ssize_t", (_CTypeDummy,), {"_type_": "l"}),
         "sizeof": _sizeof_stub,
         "POINTER": lambda tp: type(f"LP_{getattr(tp, '__name__', 'void')}", (), {}),
+        "CFUNCTYPE": lambda restype, *argtypes: type(
+            "CFuncPtr", (), {"restype": restype, "argtypes": argtypes}
+        ),
+        "PYFUNCTYPE": lambda restype, *argtypes: type(
+            "PyFuncPtr", (), {"restype": restype, "argtypes": argtypes}
+        ),
         "Structure": type("Structure", (), {}),
         "Union": type("Union", (), {}),
         "Array": type("Array", (), {}),
+        "addressof": lambda _obj: 0,
+        "string_at": lambda _addr, _size=-1: b"",
     }
 
     for mod_name in (
@@ -332,7 +340,6 @@ def _harden_sandbox():
         _fake_ct.cdll = _blocked
         _fake_ct.pythonapi = _blocked
         _fake_ct.LibraryLoader = _blocked
-        _fake_ct.CFUNCTYPE = _blocked
         _fake_ct.py_object = _blocked
         _fake_ct.cast = _blocked
         _fake_ct.pointer = _blocked
