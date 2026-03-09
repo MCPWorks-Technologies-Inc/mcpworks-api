@@ -94,7 +94,6 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_mem_parent "${CGROUP_PARENT}")
     NSJAIL_ARGS+=(--cgroup_pids_parent "${CGROUP_PARENT}")
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
-    NSJAIL_ARGS+=(--cgroup_mem_max "$((MEMORY * 1024 * 1024))")
 fi
 
 # Execute (--execute_fd needed because seccomp blocks execve;
