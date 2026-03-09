@@ -247,6 +247,54 @@ def _harden_sandbox():
 
     _im.ExtensionFileLoader = _RestrictedExtLoader
 
+    class _CTypeDummy:
+        _type_ = "l"
+
+        def __init__(self, v=0):
+            self.value = v
+
+    def _sizeof_stub(obj):
+        _sizes = {
+            "c": 1,
+            "b": 1,
+            "B": 1,
+            "h": 2,
+            "H": 2,
+            "i": 4,
+            "I": 4,
+            "l": 8,
+            "L": 8,
+            "q": 8,
+            "Q": 8,
+            "f": 4,
+            "d": 8,
+            "P": 8,
+        }
+        t = getattr(obj, "_type_", None)
+        if t and t in _sizes:
+            return _sizes[t]
+        return 8
+
+    _safe_types = {
+        "c_byte": type("c_byte", (_CTypeDummy,), {"_type_": "b"}),
+        "c_ubyte": type("c_ubyte", (_CTypeDummy,), {"_type_": "B"}),
+        "c_short": type("c_short", (_CTypeDummy,), {"_type_": "h"}),
+        "c_ushort": type("c_ushort", (_CTypeDummy,), {"_type_": "H"}),
+        "c_int": type("c_int", (_CTypeDummy,), {"_type_": "i"}),
+        "c_uint": type("c_uint", (_CTypeDummy,), {"_type_": "I"}),
+        "c_long": type("c_long", (_CTypeDummy,), {"_type_": "l"}),
+        "c_ulong": type("c_ulong", (_CTypeDummy,), {"_type_": "L"}),
+        "c_longlong": type("c_longlong", (_CTypeDummy,), {"_type_": "q"}),
+        "c_ulonglong": type("c_ulonglong", (_CTypeDummy,), {"_type_": "Q"}),
+        "c_float": type("c_float", (_CTypeDummy,), {"_type_": "f"}),
+        "c_double": type("c_double", (_CTypeDummy,), {"_type_": "d"}),
+        "c_char_p": type("c_char_p", (_CTypeDummy,), {"_type_": "P"}),
+        "c_void_p": type("c_void_p", (_CTypeDummy,), {"_type_": "P"}),
+        "c_size_t": type("c_size_t", (_CTypeDummy,), {"_type_": "L"}),
+        "c_ssize_t": type("c_ssize_t", (_CTypeDummy,), {"_type_": "l"}),
+        "sizeof": _sizeof_stub,
+    }
+
     for mod_name in (
         "ctypes",
         "ctypes.util",
@@ -260,9 +308,12 @@ def _harden_sandbox():
         _fake_ct.pythonapi = _blocked
         _fake_ct.LibraryLoader = _blocked
         _fake_ct.CFUNCTYPE = _blocked
-        _fake_ct.c_char_p = _blocked
-        _fake_ct.c_int = _blocked
         _fake_ct.py_object = _blocked
+        _fake_ct.cast = _blocked
+        _fake_ct.pointer = _blocked
+        _fake_ct.byref = _blocked
+        for _attr, _val in _safe_types.items():
+            setattr(_fake_ct, _attr, _val)
         sys.modules[mod_name] = _fake_ct
 
     # FINDING-08 + F-22: Block /proc/net and /proc/self/mountinfo reads.
