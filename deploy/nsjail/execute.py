@@ -216,6 +216,8 @@ def _harden_sandbox():
     _fake_subprocess.SubprocessError = _SubprocessError
     _fake_subprocess.CalledProcessError = _CalledProcessError
     _fake_subprocess.TimeoutExpired = _TimeoutExpired
+    _fake_subprocess._args_from_interpreter_flags = lambda: []
+    _fake_subprocess._optim_args_from_interpreter_flags = lambda: []
     sys.modules["subprocess"] = _fake_subprocess
 
     # F-30: Poison _posixsubprocess — the C extension that subprocess.Popen
