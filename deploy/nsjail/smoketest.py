@@ -19,6 +19,9 @@ import sys
 import time
 import traceback
 
+sys.stderr.write(f"SMOKETEST_ENTRY: argv={sys.argv}\n")
+sys.stderr.flush()
+
 # ---------------------------------------------------------------------------
 # Package test definitions
 #
