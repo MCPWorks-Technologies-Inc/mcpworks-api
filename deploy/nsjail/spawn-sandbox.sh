@@ -153,11 +153,10 @@ NSJAIL_ARGS=(
     --hostname "${NAMESPACE}"
 )
 
-# Override UID/GID mapping for paid tiers (config defaults to 65534)
-if [ "${SANDBOX_UID}" -ne 65534 ]; then
-    NSJAIL_ARGS+=(--uid_mapping "65534:${SANDBOX_UID}:1")
-    NSJAIL_ARGS+=(--gid_mapping "65534:${SANDBOX_UID}:1")
-fi
+# UID/GID mapping: inside always 65534 (nobody), outside depends on tier.
+# Free=65534 (iptables blocks outbound), Paid=65533 (outbound allowed).
+NSJAIL_ARGS+=(--uid_mapping "65534:${SANDBOX_UID}:1")
+NSJAIL_ARGS+=(--gid_mapping "65534:${SANDBOX_UID}:1")
 
 # Overlay fake /proc files to hide host details
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
