@@ -244,10 +244,15 @@ def create_app() -> FastAPI:
         "{method:'POST',headers:{'Content-Type':'application/json'},"
         "body:JSON.stringify({email:document.getElementById('e').value,"
         "password:document.getElementById('p').value})});"
-        "if(!r.ok){err.textContent='Invalid credentials';err.style.display='block';return false}"
-        "var d=await r.json();document.cookie='_admin_token='+d.access_token"
-        "+';path=/admin;SameSite=Strict;Secure';location.reload()}"
-        "catch(e){err.textContent='Login failed';err.style.display='block'}return false}"
+        "if(!r.ok){var b=await r.json().catch(function(){return{}});"
+        "err.textContent=b.detail||'Invalid credentials';err.style.display='block';return false}"
+        "var d=await r.json();"
+        "var sec=location.protocol==='https:'?';Secure':'';"
+        "document.cookie='_admin_token='+d.access_token+';path=/admin;SameSite=Strict'+sec;"
+        "var v=await fetch('/admin',{headers:{'Authorization':'Bearer '+d.access_token}});"
+        "if(v.status===403){err.textContent='Account is not an admin';err.style.display='block';return false}"
+        "location.reload()}"
+        "catch(e){err.textContent='Login failed: '+e.message;err.style.display='block'}return false}"
         "</script></body></html>"
     )
 
@@ -269,6 +274,10 @@ def create_app() -> FastAPI:
 
         try:
             user_id = await get_current_user_id(authorization)
+        except Exception:
+            return HTMLResponse(content=_admin_login_html)
+
+        try:
             db_gen = get_db()
             db = await db_gen.__anext__()
             try:
@@ -276,7 +285,9 @@ def create_app() -> FastAPI:
             finally:
                 await db_gen.aclose()
         except Exception:
-            return HTMLResponse(content=_admin_login_html)
+            resp = HTMLResponse(content=_admin_login_html, status_code=403)
+            resp.delete_cookie("_admin_token", path="/admin")
+            return resp
 
         csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
         return HTMLResponse(
