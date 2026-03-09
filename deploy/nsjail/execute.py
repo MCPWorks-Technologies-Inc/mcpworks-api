@@ -239,13 +239,13 @@ def _harden_sandbox():
     _real_ext_loader = _im.ExtensionFileLoader
     _BLOCKED_EXTENSIONS = frozenset({"_ctypes", "_ctypes_test"})
 
-    class _RestrictedExtLoader(_real_ext_loader):
+    class ExtensionFileLoader(_real_ext_loader):
         def __init__(self, name, path, *_a, **_kw):
             if name in _BLOCKED_EXTENSIONS:
                 raise ImportError(f"Loading {name} is not permitted in sandbox")
             super().__init__(name, path, *_a, **_kw)
 
-    _im.ExtensionFileLoader = _RestrictedExtLoader
+    _im.ExtensionFileLoader = ExtensionFileLoader
 
     class _CTypeDummy:
         _type_ = "l"
