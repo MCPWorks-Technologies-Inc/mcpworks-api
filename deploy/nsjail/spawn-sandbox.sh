@@ -148,8 +148,9 @@ NSJAIL_ARGS=(
     --seccomp_policy "${SECCOMP_POLICY}"
     --bindmount "${WORKSPACE}:/sandbox"
     --time_limit "${TIMEOUT}"
-    --rlimit_as "${MEMORY}"
+    --rlimit_as "$((MEMORY * 4))"
     --rlimit_nproc "${PIDS}"
+    --cgroup_mem_max "$((MEMORY * 1024 * 1024))"
     --hostname "${NAMESPACE}"
 )
 
