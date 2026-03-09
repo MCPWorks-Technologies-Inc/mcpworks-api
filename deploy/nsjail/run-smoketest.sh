@@ -98,16 +98,8 @@ fi
 
 # Execute (--execute_fd needed because seccomp blocks execve;
 # nsjail uses execveat(fd) instead, matching exec_fd:true in config)
-NSJAIL_EXIT=0
 "${NSJAIL}" \
     "${NSJAIL_ARGS[@]}" \
     --execute_fd \
     -- \
-    /usr/local/bin/python3 "${PYTHON_ARGS[@]}" || NSJAIL_EXIT=$?
-
-# exec_fd mode may not pipe stdout through nsjail; read output from workspace file
-if [ "${JSON_OUTPUT:-0}" = "1" ] && [ -f "${WORKSPACE}/smoketest-output.json" ]; then
-    cat "${WORKSPACE}/smoketest-output.json"
-fi
-
-exit ${NSJAIL_EXIT}
+    /usr/local/bin/python3 "${PYTHON_ARGS[@]}"

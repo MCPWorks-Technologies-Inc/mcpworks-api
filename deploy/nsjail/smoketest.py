@@ -15,24 +15,9 @@ Exit codes:
 
 import io
 import json
-import signal
 import sys
 import time
 import traceback
-
-
-def _sigsys_handler(signum, frame):
-    sys.stderr.write(
-        f"SMOKETEST_SIGSYS: signal {signum} at {frame.f_code.co_filename}:{frame.f_lineno}\n"
-    )
-    sys.stderr.flush()
-    sys.exit(99)
-
-
-signal.signal(signal.SIGSYS, _sigsys_handler)
-
-sys.stderr.write(f"SMOKETEST_ENTRY: argv={sys.argv}\n")
-sys.stderr.flush()
 
 # ---------------------------------------------------------------------------
 # Package test definitions
@@ -627,9 +612,7 @@ def run_all(json_output: bool = False) -> int:
     passed = 0
     failed = 0
 
-    for idx, (import_name, desc, fn) in enumerate(TESTS):
-        sys.stderr.write(f"SMOKETEST_RUN: [{idx + 1}/{len(TESTS)}] {import_name}\n")
-        sys.stderr.flush()
+    for import_name, desc, fn in TESTS:
         t0 = time.monotonic()
         try:
             ok = fn()
@@ -659,7 +642,7 @@ def run_all(json_output: bool = False) -> int:
                 )
                 if not json_output:
                     print(f"  FAIL  {import_name:<30s} {desc:<40s} (returned falsy)")
-        except BaseException as e:
+        except Exception as e:
             elapsed = time.monotonic() - t0
             failed += 1
             tb = traceback.format_exc()
@@ -677,8 +660,6 @@ def run_all(json_output: bool = False) -> int:
                 print(f"  FAIL  {import_name:<30s} {desc:<40s} ({e})")
 
     total = passed + failed
-    sys.stderr.write(f"SMOKETEST: {passed}/{total} passed, {failed} failed\n")
-    sys.stderr.flush()
 
     if json_output:
         output = {
@@ -688,20 +669,12 @@ def run_all(json_output: bool = False) -> int:
             "results": results,
         }
         json_str = json.dumps(output, indent=2)
+        print(json_str)
         try:
             with open("/sandbox/smoketest-output.json", "w") as f:
                 f.write(json_str)
-            sys.stderr.write(f"SMOKETEST: wrote {len(json_str)} bytes to output file\n")
-        except OSError as e:
-            sys.stderr.write(f"SMOKETEST: file write failed: {e}\n")
-        sys.stderr.flush()
-        try:
-            sys.stdout.write(json_str + "\n")
-            sys.stdout.flush()
-            sys.stderr.write("SMOKETEST: stdout write ok\n")
-        except OSError as e:
-            sys.stderr.write(f"SMOKETEST: stdout write failed: {e}\n")
-        sys.stderr.flush()
+        except OSError:
+            pass
     else:
         print(f"\n{'=' * 70}")
         print(f"  {passed}/{total} passed, {failed} failed")
