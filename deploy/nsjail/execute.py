@@ -66,7 +66,7 @@ def _harden_sandbox():
     # F-27: Allow _getframe(depth>0) from stdlib (collections.namedtuple needs
     # _getframe(1) for module detection — blocking it breaks socket, urllib,
     # ssl, pathlib, asyncio, dataclasses, and all networking packages).
-    _STDLIB_PREFIXES = ("/usr/local/lib/", "/usr/lib/")
+    _STDLIB_PREFIXES = ("/usr/local/lib/", "/usr/lib/", "/opt/mcpworks/site-packages/")
     _real_getframe = sys._getframe
 
     class _RestrictedGetframe:
