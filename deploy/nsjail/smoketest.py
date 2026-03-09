@@ -615,7 +615,9 @@ def run_all(json_output: bool = False) -> int:
     passed = 0
     failed = 0
 
-    for import_name, desc, fn in TESTS:
+    for idx, (import_name, desc, fn) in enumerate(TESTS):
+        sys.stderr.write(f"SMOKETEST_RUN: [{idx + 1}/{len(TESTS)}] {import_name}\n")
+        sys.stderr.flush()
         t0 = time.monotonic()
         try:
             ok = fn()
