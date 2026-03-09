@@ -15,9 +15,21 @@ Exit codes:
 
 import io
 import json
+import signal
 import sys
 import time
 import traceback
+
+
+def _sigsys_handler(signum, frame):
+    sys.stderr.write(
+        f"SMOKETEST_SIGSYS: signal {signum} at {frame.f_code.co_filename}:{frame.f_lineno}\n"
+    )
+    sys.stderr.flush()
+    sys.exit(99)
+
+
+signal.signal(signal.SIGSYS, _sigsys_handler)
 
 sys.stderr.write(f"SMOKETEST_ENTRY: argv={sys.argv}\n")
 sys.stderr.flush()
@@ -647,7 +659,7 @@ def run_all(json_output: bool = False) -> int:
                 )
                 if not json_output:
                     print(f"  FAIL  {import_name:<30s} {desc:<40s} (returned falsy)")
-        except Exception as e:
+        except BaseException as e:
             elapsed = time.monotonic() - t0
             failed += 1
             tb = traceback.format_exc()
