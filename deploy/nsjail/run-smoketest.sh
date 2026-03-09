@@ -81,6 +81,8 @@ NSJAIL_ARGS=(
     --rlimit_nproc "${PIDS}"
     --rlimit_nofile 64
     --hostname "smoketest"
+    --uid_mapping "65534:65534:1"
+    --gid_mapping "65534:65534:1"
 )
 
 # Overlay fake /proc files (matches spawn-sandbox.sh)
