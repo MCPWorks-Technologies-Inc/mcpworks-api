@@ -191,6 +191,27 @@ def _harden_sandbox():
     _fake_subprocess.PIPE = -1
     _fake_subprocess.STDOUT = -2
     _fake_subprocess.DEVNULL = -3
+
+    class _SubprocessError(Exception):
+        pass
+
+    class _CalledProcessError(_SubprocessError):
+        def __init__(self, returncode=None, cmd=None, output=None, stderr=None):
+            self.returncode = returncode
+            self.cmd = cmd
+            self.output = output
+            self.stderr = stderr
+
+    class _TimeoutExpired(_SubprocessError):
+        def __init__(self, cmd=None, timeout=None, output=None, stderr=None):
+            self.cmd = cmd
+            self.timeout = timeout
+            self.output = output
+            self.stderr = stderr
+
+    _fake_subprocess.SubprocessError = _SubprocessError
+    _fake_subprocess.CalledProcessError = _CalledProcessError
+    _fake_subprocess.TimeoutExpired = _TimeoutExpired
     sys.modules["subprocess"] = _fake_subprocess
 
     # F-30: Poison _posixsubprocess — the C extension that subprocess.Popen
@@ -293,6 +314,10 @@ def _harden_sandbox():
         "c_size_t": type("c_size_t", (_CTypeDummy,), {"_type_": "L"}),
         "c_ssize_t": type("c_ssize_t", (_CTypeDummy,), {"_type_": "l"}),
         "sizeof": _sizeof_stub,
+        "POINTER": lambda tp: type(f"LP_{getattr(tp, '__name__', 'void')}", (), {}),
+        "Structure": type("Structure", (), {}),
+        "Union": type("Union", (), {}),
+        "Array": type("Array", (), {}),
     }
 
     for mod_name in (
