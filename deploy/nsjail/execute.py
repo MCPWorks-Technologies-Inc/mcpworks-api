@@ -181,13 +181,17 @@ def _harden_sandbox():
 
     # Poison subprocess module — must happen BEFORE freezing sys.modules
     _fake_subprocess = types.ModuleType("subprocess")
-    _fake_subprocess.run = _blocked
-    _fake_subprocess.Popen = _blocked
-    _fake_subprocess.call = _blocked
-    _fake_subprocess.check_call = _blocked
-    _fake_subprocess.check_output = _blocked
-    _fake_subprocess.getoutput = _blocked
-    _fake_subprocess.getstatusoutput = _blocked
+
+    def _subprocess_not_found(*_a, **_kw):
+        raise FileNotFoundError("Subprocess execution is not available in sandbox")
+
+    _fake_subprocess.run = _subprocess_not_found
+    _fake_subprocess.Popen = _subprocess_not_found
+    _fake_subprocess.call = _subprocess_not_found
+    _fake_subprocess.check_call = _subprocess_not_found
+    _fake_subprocess.check_output = _subprocess_not_found
+    _fake_subprocess.getoutput = _subprocess_not_found
+    _fake_subprocess.getstatusoutput = _subprocess_not_found
     _fake_subprocess.PIPE = -1
     _fake_subprocess.STDOUT = -2
     _fake_subprocess.DEVNULL = -3
