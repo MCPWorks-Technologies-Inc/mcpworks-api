@@ -16,6 +16,9 @@ import sys
 import traceback
 from io import StringIO
 
+sys.stderr.write(f"EXECUTE_ENTRY: argv={sys.argv}\n")
+sys.stderr.flush()
+
 SANDBOX_DIR = "/sandbox"
 INPUT_PATH = f"{SANDBOX_DIR}/input.json"
 OUTPUT_PATH = f"{SANDBOX_DIR}/output.json"
