@@ -278,8 +278,10 @@ ALLOW {
   /* ══════════════════════════════════════════════════════════════════════
    * x86_64 specific
    * ══════════════════════════════════════════════════════════════════════ */
-  /* vfork: REMOVED — only used by subprocess (poisoned). Without execve
-   * allowed, fork+exec is impossible anyway. */
+  vfork,               /* CPython _posixsubprocess uses vfork; execve block
+                        * in child prevents actual exec. Removing vfork doesn't
+                        * help — glibc implements it as clone(CLONE_VM|CLONE_VFORK)
+                        * which bypasses the raw syscall filter anyway. */
   restart_syscall      /* Required for signal restart */
 }
 
