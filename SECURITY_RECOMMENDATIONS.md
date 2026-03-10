@@ -46,7 +46,7 @@ each sandbox gets its own network namespace where `/proc/net` shows only sandbox
 `clone_newnet: true` in nsjail config gives each sandbox its own network namespace:
 
 - **Free tier:** Empty network namespace = zero connectivity (no MACVLAN)
-- **Paid tiers:** MACVLAN on container's eth0 with unique IP per execution (10.200.X.Y)
+- **Paid tiers:** MACVLAN on container's eth0 with unique IP per execution (172.18.128-254.X)
 - `/proc/net/tcp` shows only sandbox's own connections (not host)
 - `/proc/net/arp` is empty (no Docker containers visible)
 - Port hijacking impossible (sandbox can't bind to host ports)
@@ -56,7 +56,7 @@ each sandbox gets its own network namespace where `/proc/net` shows only sandbox
 - `deploy/nsjail/python.cfg` — `clone_newnet: true`
 - `deploy/nsjail/spawn-sandbox.sh` — MACVLAN args for paid tiers, unified UID 65534
 - `scripts/start.sh` — removed UID-based iptables (replaced by network namespaces)
-- `scripts/setup-sandbox-network.sh` — host-level iptables for MACVLAN subnet (10.200.0.0/16)
+- `scripts/setup-sandbox-network.sh` — host-level iptables for MACVLAN subnet (172.18.128.0/17)
 
 ---
 
