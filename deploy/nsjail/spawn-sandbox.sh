@@ -131,9 +131,37 @@ cat > "${WORKSPACE}/.fake_version" <<'VERSION'
 Linux version 0.0.0 (sandbox)
 VERSION
 
-# NOTE: /proc/net overlay not possible — nsjail's move_mount() fails on
-# procfs subdirectories (both tmpfs and bind-mount). /proc/net is read-only
-# and iptables rules prevent actual network access to internal services.
+# F-33/F-37: Fake /proc/net entries to prevent host network topology leakage.
+# Bypass-proof: bind-mounts are kernel-level, no Python introspection can read through them.
+touch "${WORKSPACE}/.fake_proc_empty"
+
+cat > "${WORKSPACE}/.fake_proc_net_tcp" <<'TCP'
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+TCP
+
+cp "${WORKSPACE}/.fake_proc_net_tcp" "${WORKSPACE}/.fake_proc_net_tcp6"
+
+cat > "${WORKSPACE}/.fake_proc_net_route" <<'ROUTE'
+Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
+ROUTE
+
+cat > "${WORKSPACE}/.fake_proc_net_arp" <<'ARP'
+IP address       HW type     Flags       HW address            Mask     Device
+ARP
+
+cat > "${WORKSPACE}/.fake_mountinfo" <<'MOUNTINFO'
+1 0 0:1 / / rw - tmpfs tmpfs rw
+MOUNTINFO
+
+cat > "${WORKSPACE}/.fake_status" <<'STATUS'
+Name:	python3
+Umask:	0022
+State:	R (running)
+Pid:	1
+PPid:	0
+Uid:	65534	65534	65534	65534
+Gid:	65534	65534	65534	65534
+STATUS
 
 # F-16: UID-based network isolation.
 # Free tier runs as UID 65534 (all outbound blocked by iptables).
@@ -166,6 +194,21 @@ NSJAIL_ARGS+=(--gid_mapping "65534:${SANDBOX_UID}:1")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
+
+# F-33/F-37: Overlay fake /proc/net and /proc/self entries
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_tcp:/proc/net/tcp")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_tcp6:/proc/net/tcp6")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_arp:/proc/net/arp")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_route:/proc/net/route")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/net/unix")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_mountinfo:/proc/self/mountinfo")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_mountinfo:/proc/1/mountinfo")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_status:/proc/self/status")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_status:/proc/1/status")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/self/maps")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/1/maps")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/self/smaps")
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/1/smaps")
 
 # FINDING-25: Hide _ctypes C extension .so files from sandbox.
 # sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
