@@ -78,47 +78,58 @@ These were built correctly from the start and won't need rework:
 
 ## Scaling Phases
 
-### Phase 1: Vertical (0-100 customers)
+### Phase 1: Current State (0-100 customers)
 
-**What you have today.** Single prod droplet, single mgmt droplet.
+**Active as of 2026-03-10.** Postgres and Redis migrated to DO Managed services. Prod droplet runs only API + Caddy + Sandbox.
 
 | Component | Spec | Monthly Cost |
 |-----------|------|-------------|
-| Prod droplet (API + Postgres + Redis + Caddy + Sandbox) | s-2vcpu-4gb | $24 |
-| Mgmt droplet (Grafana + Prometheus + Loki + Uptime Kuma) | s-2vcpu-4gb | $24 |
-| **Total** | | **$48** |
+| Prod droplet (API + Caddy + Sandbox) | s-2vcpu-4gb | $24 |
+| DO Managed Postgres | db-s-1vcpu-2gb (daily backups, VPC) | $15 |
+| DO Managed Valkey | db-s-1vcpu-1gb (VPC, TLS) | $15 |
+| **Total** | | **$54** |
 
-**Actions at this phase:**
+**Completed (from original Phase 2 plan):**
+- ✅ Migrated Postgres to DO Managed Database (pg_dump/pg_restore)
+- ✅ Migrated Redis to DO Managed Valkey (wire-compatible)
+- ✅ Updated DATABASE_URL/REDIS_URL to managed service endpoints
+- ✅ Removed postgres/redis containers from docker-compose.prod.yml
+- ✅ asyncpg SSL handling via connect_args (sslmode stripping)
+- ✅ Redis TLS via rediss:// with ssl_cert_reqs=None for VPC certs
+- ✅ Statement cache disabled for managed DB connection pooling compat
+
+**Still TODO for full Phase 2:**
 - Deploy mgmt stack per PLAN.md
-- Set up alerts for the Phase 2 triggers below
-- Monitor `prometheus_tsdb_head_series`, API p99, Postgres connection count
+- Set up alerts for Phase 3 triggers
+- Add PgBouncer sidecar (when connection count warrants it)
+- Implement Redis fail-closed pattern in billing middleware
+- Resize prod droplet to s-4vcpu-8gb (when sandbox concurrency warrants it)
 
-**Trigger to Phase 2:**
-- API p99 latency > 500ms sustained 15min
-- Postgres connection warnings in logs (`remaining connection slots are reserved`)
-- Sandbox queue depth > 5 (executions waiting for a slot)
-- Prod droplet CPU > 70% sustained 10min
+**Trigger to Phase 3:**
+- Sandbox queue depth > 10 sustained 5min
+- Prod droplet CPU > 80% sustained 10min
+- Concurrent sandbox executions > 30 sustained 5min
 
 ---
 
-### Phase 2: Extract Stateful Services (100-250 customers)
+### Phase 2: Full Hardening (100-250 customers)
 
-Move Postgres and Redis off the prod droplet. This frees CPU and RAM for the API and sandbox, and removes the blast radius of a sandbox OOM killing the database.
+Stateful services already extracted (see Phase 1). Remaining work: observability, connection pooling, fail-closed patterns, and droplet upsize.
 
 | Component | Spec | Monthly Cost |
 |-----------|------|-------------|
 | Prod droplet (API + Caddy + Sandbox) | s-4vcpu-8gb | $48 |
-| DO Managed Postgres | db-s-1vcpu-2gb (1 primary, daily backups) | $30 |
-| DO Managed Redis/Valkey | db-s-1vcpu-1gb (HA standby) | $20 |
+| DO Managed Postgres | db-s-1vcpu-2gb (daily backups) | $15 |
+| DO Managed Valkey | db-s-1vcpu-1gb (HA standby upgrade) | $20 |
 | Mgmt droplet | s-2vcpu-4gb | $24 |
-| **Total** | | **$122** |
+| **Total** | | **$107** |
 
 **Actions:**
-1. **Managed Postgres** — Migrate with `pg_dump`/`pg_restore`. Update `DATABASE_URL`. Managed service handles backups, failover, and connection limits (25 connections on the $15 plan; upgrade to $30 plan for 50 connections if needed).
-2. **PgBouncer** — Add PgBouncer sidecar on the prod droplet. Set `pool_mode=transaction`, `default_pool_size=20`, `max_client_conn=100`. This multiplexes application connections over fewer Postgres connections, buying headroom for Phase 3 horizontal scaling.
-3. **Managed Redis/Valkey** — DO Managed Database for Redis ($15/mo for single node, $20/mo with HA standby). Update `REDIS_URL`.
-4. **Redis fail-closed** — Update billing middleware: if Redis is unreachable, reject execution requests (fail closed) rather than allowing unlimited executions. A 30-second circuit breaker retries before hard-failing.
-5. **Upsize prod droplet** — s-4vcpu-8gb gives the sandbox room. Concurrent capacity goes from ~15 to ~40.
+1. **PgBouncer** — Add PgBouncer sidecar on the prod droplet. Set `pool_mode=transaction`, `default_pool_size=20`, `max_client_conn=100`. Multiplexes application connections over fewer Postgres connections for Phase 3 horizontal scaling.
+2. **Redis fail-closed** — Update billing middleware: if Redis is unreachable, reject execution requests (fail closed) rather than allowing unlimited executions. A 30-second circuit breaker retries before hard-failing.
+3. **Upsize prod droplet** — s-4vcpu-8gb gives the sandbox room. Concurrent capacity goes from ~15 to ~40.
+4. **Upgrade Valkey to HA** — Add standby node for automatic failover ($15 → $20).
+5. **Deploy mgmt stack** — Grafana, Prometheus, Loki, Uptime Kuma per PLAN.md.
 
 **Trigger to Phase 3:**
 - Sandbox queue depth > 10 sustained 5min
@@ -211,7 +222,7 @@ Scale out all components. Add read replicas for query-heavy dashboards/analytics
 
 | Phase | Setup | Max Connections | Monthly Cost |
 |-------|-------|----------------|-------------|
-| 1 | Local Postgres in Docker | 100 (default) | $0 (on prod droplet) |
+| 1 | DO Managed db-s-1vcpu-2gb (migrated 2026-03-10) | 25 | $15 |
 | 2 | DO Managed db-s-1vcpu-2gb + PgBouncer | 25 Postgres / 100 app-side | $30 |
 | 3 | DO Managed db-s-2vcpu-4gb + PgBouncer × 2 | 50 Postgres / 200 app-side | $60 |
 | 4 | DO Managed db-s-4vcpu-8gb + read replica | 100 Postgres / 300 app-side | $120 |
@@ -246,7 +257,7 @@ CREATE TABLE executions_2026_03 PARTITION OF executions
 
 | Phase | Setup | Monthly Cost |
 |-------|-------|-------------|
-| 1 | Local Redis in Docker | $0 (on prod droplet) |
+| 1 | DO Managed Valkey db-s-1vcpu-1gb (migrated 2026-03-10) | $15 |
 | 2 | DO Managed db-s-1vcpu-1gb (HA standby) | $20 |
 | 3 | Same + task queue broker duties | $30 |
 | 4 | DO Managed db-s-2vcpu-4gb (HA) | $45 |
@@ -351,11 +362,12 @@ Using FINANCIAL-PLAN.md moderate scenario (Value Ladder pricing: Builder $49, Pr
 
 ### Detailed Cost Breakdown
 
-**Phase 1 ($48/mo):**
+**Phase 1 ($54/mo, current):**
 | Item | Cost |
 |------|------|
-| s-2vcpu-4gb (prod) | $24 |
-| s-2vcpu-4gb (mgmt) | $24 |
+| s-2vcpu-4gb (prod — API + Caddy + Sandbox) | $24 |
+| DO Managed Postgres (db-s-1vcpu-2gb) | $15 |
+| DO Managed Valkey (db-s-1vcpu-1gb) | $15 |
 
 **Phase 2 ($122/mo):**
 | Item | Cost |
@@ -460,21 +472,21 @@ DO App Platform and similar managed container services add cost and reduce contr
 ### Phase 1 → Phase 2 Migration
 
 ```
-□ Provision DO Managed Postgres (db-s-1vcpu-2gb, TOR1, private networking)
-□ pg_dump from Docker Postgres, pg_restore to managed instance
-□ Update DATABASE_URL in prod .env to managed Postgres connection string
+✅ Provision DO Managed Postgres (db-s-1vcpu-2gb, TOR1, private networking) — 2026-03-10
+✅ pg_dump from Docker Postgres, pg_restore to managed instance — 2026-03-10
+✅ Update DATABASE_URL in prod .env to managed Postgres connection string — 2026-03-10
+✅ Provision DO Managed Valkey (db-s-1vcpu-1gb, TOR1) — 2026-03-10
+✅ Update REDIS_URL in prod .env to managed Valkey connection string — 2026-03-10
+✅ Remove postgres and redis containers from docker-compose.prod.yml — 2026-03-10
+✅ Verify health check passes — 2026-03-10
+✅ Update CLAUDE.md infrastructure section — 2026-03-10
 □ Add PgBouncer container to docker-compose.prod.yml
 □ Point API DATABASE_URL at PgBouncer (localhost:6432)
 □ Reduce database_pool_size to 3, database_max_overflow to 5 in config
-□ Provision DO Managed Redis (db-s-1vcpu-1gb, HA standby, TOR1)
-□ Update REDIS_URL in prod .env to managed Redis connection string
 □ Implement Redis fail-closed pattern in billing middleware
-□ Remove postgres and redis containers from docker-compose.prod.yml
-□ Resize prod droplet: s-2vcpu-4gb → s-4vcpu-8gb (requires downtime)
-□ Verify health check passes
+□ Resize prod droplet: s-2vcpu-4gb → s-4vcpu-8gb (when sandbox concurrency warrants it)
 □ Run billing middleware integration test against managed Redis
-□ Update Prometheus scrape targets (remove postgres/redis container metrics, add managed DB monitoring)
-□ Update CLAUDE.md infrastructure section
+□ Update Prometheus scrape targets (add managed DB monitoring)
 ```
 
 ### Phase 2 → Phase 3 Migration
