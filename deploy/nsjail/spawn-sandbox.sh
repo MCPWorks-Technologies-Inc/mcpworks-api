@@ -86,6 +86,10 @@ trap cleanup EXIT
 cp "${CODE_PATH}" "${WORKSPACE}/user_code.py"
 cp "${INPUT_PATH}" "${WORKSPACE}/input.json"
 
+# F-36: Copy execute.pyc into writable workspace (deleted by execute.py
+# before user code runs — prevents .pyc decompilation via marshal.loads).
+cp /opt/mcpworks/bin/execute.pyc "${WORKSPACE}/.e"
+
 # Copy functions/ package if it exists (code-mode)
 if [ -d "${EXEC_DIR}/functions" ]; then
     cp -r "${EXEC_DIR}/functions" "${WORKSPACE}/functions"
@@ -191,7 +195,7 @@ fi
     "${NSJAIL_ARGS[@]}" \
     --execute_fd \
     -- \
-    /usr/local/bin/python3 -S /opt/mcpworks/bin/execute.pyc
+    /usr/local/bin/python3 -S /sandbox/.e
 
 NSJAIL_EXIT=$?
 
