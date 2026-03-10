@@ -71,75 +71,53 @@ def _harden_sandbox():
     FINDING-22 bypass mitigations:
     - ctypes/_ctypes poisoned (eliminates libc.system, dup2, PyFrame_LocalsToFast)
     - os.open/os.read restricted (closes low-level /proc bypass)
-    - Closures eliminated where possible (prevents __closure__ extraction)
+    - Factory-pattern wrappers: real functions in class-method closures, not instance slots
     - FrozenModules hardened against dict.__setitem__ bypass
     """
     import signal
 
     # FINDING-17 + F-27: Block stack frame traversal for user code.
-    # F-22: class-based callable (no __closure__ to extract).
-    # F-26: __getattribute__ blocks direct _f access.
+    # F-35: factory pattern — real function in class-method closure, no instance _f slot.
+    # Recovery requires type(obj).__call__.__closure__ inspection.
     # F-27: Allow _getframe(depth>0) from stdlib (collections.namedtuple needs
     # _getframe(1) for module detection — blocking it breaks socket, urllib,
     # ssl, pathlib, asyncio, dataclasses, and all networking packages).
     _STDLIB_PREFIXES = ("/usr/local/lib/", "/usr/lib/", "/opt/mcpworks/site-packages/")
-    _real_getframe = sys._getframe
 
-    class _RestrictedGetframe:
-        __slots__ = ("_f",)
+    def _build_restricted_getframe(real_fn):
+        class _R:
+            __slots__ = ()
 
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
+            def __call__(self, depth=0):
+                if depth > 0:
+                    caller = real_fn(1)
+                    if caller.f_code.co_filename.startswith(_STDLIB_PREFIXES):
+                        return real_fn(depth + 1)
+                    raise RuntimeError("Access to caller frames is restricted")
+                return real_fn(1)
 
-        def __call__(self, depth=0):
-            _f = object.__getattribute__(self, "_f")
-            # +1 to all depths: skip this wrapper's own stack frame
-            if depth > 0:
-                caller = _f(1)  # actual caller of sys._getframe()
-                if caller.f_code.co_filename.startswith(_STDLIB_PREFIXES):
-                    return _f(depth + 1)
-                raise RuntimeError("Access to caller frames is restricted")
-            return _f(1)
+        return _R()
 
-        def __getattribute__(self, name):
-            if name == "_f":
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
-
-    sys._getframe = _RestrictedGetframe(_real_getframe)
-    del _real_getframe
+    sys._getframe = _build_restricted_getframe(sys._getframe)
     if hasattr(sys, "_current_frames"):
         sys._current_frames = lambda: {}
 
     # FINDING-19: Block signal handler overrides.
-    # F-22: class-based callable (no closure). F-26: __getattribute__ guard.
-    _real_signal = signal.signal
+    # F-35: factory pattern — no instance _f slot.
+    _allowed_signals = frozenset({signal.SIGPIPE, signal.SIGINT})
 
-    class _RestrictedSignal:
-        __slots__ = ("_f", "_allowed")
+    def _build_restricted_signal(real_fn, allowed):
+        class _R:
+            __slots__ = ()
 
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
-            object.__setattr__(
-                self,
-                "_allowed",
-                frozenset({signal.SIGPIPE, signal.SIGINT}),
-            )
+            def __call__(self, signum, handler):
+                if signum in allowed:
+                    return real_fn(signum, handler)
+                raise RuntimeError(f"Overriding signal {signum} is not permitted")
 
-        def __call__(self, signum, handler):
-            _f = object.__getattribute__(self, "_f")
-            allowed = object.__getattribute__(self, "_allowed")
-            if signum in allowed:
-                return _f(signum, handler)
-            raise RuntimeError(f"Overriding signal {signum} is not permitted")
+        return _R()
 
-        def __getattribute__(self, name):
-            if name in ("_f", "_allowed"):
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
-
-    signal.signal = _RestrictedSignal(_real_signal)
-    del _real_signal
+    signal.signal = _build_restricted_signal(signal.signal, _allowed_signals)
     signal.alarm = lambda *_a: 0
     if hasattr(signal, "setitimer"):
         signal.setitimer = lambda *_a: (0.0, 0.0)
@@ -266,26 +244,18 @@ def _harden_sandbox():
     import importlib.machinery as _im
     import importlib.util as _iu
 
-    _real_spec_from_file = _iu.spec_from_file_location
+    def _build_restricted_spec(real_fn):
+        class _R:
+            __slots__ = ()
 
-    class _RestrictedSpecFromFile:
-        __slots__ = ("_f",)
+            def __call__(self, name, location=None, *args, **kwargs):
+                if location and isinstance(location, str) and "_ctypes" in location:
+                    raise ImportError("Loading _ctypes is not permitted in sandbox")
+                return real_fn(name, location, *args, **kwargs)
 
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
+        return _R()
 
-        def __call__(self, name, location=None, *args, **kwargs):
-            if location and isinstance(location, str) and "_ctypes" in location:
-                raise ImportError("Loading _ctypes is not permitted in sandbox")
-            return object.__getattribute__(self, "_f")(name, location, *args, **kwargs)
-
-        def __getattribute__(self, name):
-            if name == "_f":
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
-
-    _iu.spec_from_file_location = _RestrictedSpecFromFile(_real_spec_from_file)
-    del _real_spec_from_file
+    _iu.spec_from_file_location = _build_restricted_spec(_iu.spec_from_file_location)
 
     _real_ext_loader = _im.ExtensionFileLoader
     _BLOCKED_EXTENSIONS = frozenset({"_ctypes", "_ctypes_test"})
@@ -393,83 +363,50 @@ def _harden_sandbox():
             _fake_ct.find_library = lambda _name: None
         sys.modules[mod_name] = _fake_ct
 
-    # FINDING-08 + F-22: Block /proc/net and /proc/self/mountinfo reads.
-    # Restrict both builtins.open AND os.open/os.read/io.open to prevent
-    # the os.open() bypass discovered in Round 6.
+    # FINDING-08 + F-22 + F-34: Block /proc/net and sensitive path reads.
+    # F-34 FIX: Reverted from closure-based wrappers (bypassable via
+    # func.__closure__[0].cell_contents) to factory-pattern classes.
+    # Real functions are in class-method closures — recovery requires
+    # type(obj).__call__.__closure__ inspection, not instance attributes.
+    #
+    # SECURITY MODEL: These wrappers are DEFENSE-IN-DEPTH only.
+    # Primary boundaries: mount namespace, iptables, seccomp.
     import _io
     import builtins
-
-    # F-28 FIX: RestrictedOpen defense-in-depth for /proc path blocking.
-    #
-    # IMPORTANT SECURITY MODEL: Python-level open() wrappers are
-    # DEFENSE-IN-DEPTH, not a security boundary. Every approach to hide
-    # the real function from Python-level introspection is bypassable:
-    #   - __slots__: object.__getattribute__(obj, '_f') reads the slot
-    #   - closure: func.__closure__[0].cell_contents recovers the cell
-    #   - default arg: func.__defaults__[0]
-    #   - global: func.__globals__['var']
-    #
-    # The PRIMARY security boundaries are:
-    #   1. Mount namespace: sensitive files not mounted (Fix 1)
-    #   2. Network namespace + iptables: no exfiltration (free tier)
-    #   3. seccomp: dangerous syscalls blocked
-    #
-    # These wrappers exist to block CASUAL access to /proc paths.
-    # A determined attacker who recovers the real open() can read /proc,
-    # but the information gained is limited (fake cpuinfo/meminfo/version
-    # overlaid, mountinfo blocked, /proc/net visible but network is
-    # firewalled). The scripts they previously could read (spawn-sandbox.sh,
-    # setup-cgroups.sh, etc.) are no longer in the namespace (Fix 1).
     import io
 
-    _real_open = builtins.open
-    _real_os_open = os.open
-    _real_io_open = io.open
-    _real_io_c_open = _io.open
+    def _build_restricted_open(real_fn):
+        class _R:
+            __slots__ = ()
 
-    def _restricted_open(file, *args, **kwargs):
-        if _is_blocked_path(file):
-            raise PermissionError(f"Access denied: {file}")
-        return _real_open(file, *args, **kwargs)
+            def __call__(self, file, *args, **kwargs):
+                if _is_blocked_path(file):
+                    raise PermissionError(f"Access denied: {file}")
+                return real_fn(file, *args, **kwargs)
 
-    def _restricted_os_open(path, flags, mode=0o777, *args, **kwargs):
-        if _is_blocked_path(path):
-            raise PermissionError(f"Access denied: {path}")
-        return _real_os_open(path, flags, mode, *args, **kwargs)
+        return _R()
 
-    def _restricted_io_open(file, *args, **kwargs):
-        if _is_blocked_path(file):
-            raise PermissionError(f"Access denied: {file}")
-        return _real_io_open(file, *args, **kwargs)
+    def _build_restricted_os_open(real_fn):
+        class _R:
+            __slots__ = ()
 
-    def _restricted_io_c_open(file, *args, **kwargs):
-        if _is_blocked_path(file):
-            raise PermissionError(f"Access denied: {file}")
-        return _real_io_c_open(file, *args, **kwargs)
+            def __call__(self, path, flags, mode=0o777, *args, **kwargs):
+                if _is_blocked_path(path):
+                    raise PermissionError(f"Access denied: {path}")
+                return real_fn(path, flags, mode, *args, **kwargs)
 
-    builtins.open = _restricted_open
-    os.open = _restricted_os_open
-    io.open = _restricted_io_open
-    _io.open = _restricted_io_c_open
+        return _R()
 
-    # FINDING-20 + F-22: Protect poisoned modules from being restored.
-    #
-    # Previous approach used _FrozenModules (dict subclass replacing sys.modules)
-    # but this broke C extension imports (asyncio, _asyncio, etc.) because
-    # CPython's interp->modules pointer doesn't update when sys.modules is
-    # reassigned from Python code — C extensions use PyImport_GetModuleDict()
-    # which reads the stale pointer.
-    #
-    # New approach: hook builtins.__import__ to block re-import of poisoned
-    # modules. The poisoned stubs remain in sys.modules. User code calling
-    # `import ctypes` gets the poisoned stub. Direct sys.modules manipulation
-    # via dict.__setitem__ is a known C-level bypass that requires ctypes
-    # (chicken-and-egg with _ctypes.so removed from disk via bind-mount).
-    # F-30: Use __slots__ class to avoid closure leak of _real_import.
-    # Previous closure-based _guarded_import leaked via __closure__[1].cell_contents.
-    # F-28 note: object.__getattribute__ can still recover _f from __slots__,
-    # but _posixsubprocess is poisoned and posix.system is blocked, so
-    # recovering __import__ alone doesn't enable shell access.
+    builtins.open = _build_restricted_open(builtins.open)
+    os.open = _build_restricted_os_open(os.open)
+    io.open = _build_restricted_open(io.open)
+    _io.open = _build_restricted_open(_io.open)
+
+    # FINDING-20 + F-35: Protect poisoned modules from being restored.
+    # F-35 FIX: Removed _f instance slot — real __import__ was recoverable
+    # via object.__getattribute__(obj, '_f'). Now uses factory pattern:
+    # real function in class-method closure, not instance attribute.
+    # Recovery requires type(builtins.__import__).__call__.__closure__.
     _POISONED_MODULES = frozenset(
         {
             "ctypes",
@@ -482,26 +419,21 @@ def _harden_sandbox():
         }
     )
 
-    class _GuardedImport:
-        __slots__ = ("_f",)
+    def _build_guarded_import(real_fn, poisoned):
+        class _G:
+            __slots__ = ()
 
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
+            def __call__(self, name, *args, **kwargs):
+                if name in poisoned:
+                    existing = sys.modules.get(name)
+                    if existing is not None:
+                        return existing
+                    raise ImportError(f"Module {name} is not available in sandbox")
+                return real_fn(name, *args, **kwargs)
 
-        def __call__(self, name, *args, **kwargs):
-            if name in _POISONED_MODULES:
-                existing = sys.modules.get(name)
-                if existing is not None:
-                    return existing
-                raise ImportError(f"Module {name} is not available in sandbox")
-            return object.__getattribute__(self, "_f")(name, *args, **kwargs)
+        return _G()
 
-        def __getattribute__(self, name):
-            if name == "_f":
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
-
-    builtins.__import__ = _GuardedImport(builtins.__import__)
+    builtins.__import__ = _build_guarded_import(builtins.__import__, _POISONED_MODULES)
 
 
 def run():
