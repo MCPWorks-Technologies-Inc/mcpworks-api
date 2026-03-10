@@ -1997,9 +1997,9 @@ async def get_database_diagnostics(
     try:
         table_result = await db.execute(
             text("""
-            SELECT relname AS table_name,
+            SELECT s.relname AS table_name,
                    pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
-                   n_live_tup AS row_count
+                   s.n_live_tup AS row_count
             FROM pg_class c
             JOIN pg_stat_user_tables s ON c.relname = s.relname
             WHERE c.relkind = 'r'
