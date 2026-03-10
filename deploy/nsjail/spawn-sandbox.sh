@@ -169,6 +169,9 @@ NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 touch "${WORKSPACE}/.empty"
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes.cpython-311-x86_64-linux-gnu.so")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes_test.cpython-311-x86_64-linux-gnu.so")
+# F-32: Hollow _posixsubprocess .so — defense-in-depth (execve blocked by seccomp,
+# but prevents C-level fork_exec even if sys.modules poison is bypassed).
+NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_posixsubprocess.cpython-311-x86_64-linux-gnu.so")
 
 # ORDER-002: Run under aggregate cgroup if available
 if [ -d "${CGROUP_PARENT}" ]; then
