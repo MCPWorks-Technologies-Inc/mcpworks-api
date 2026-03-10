@@ -2,14 +2,55 @@
 {% block content %}
 <h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Welcome to MCPWorks</h1>
 <p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
-Hi {{ name }},
+Hey {{ name }},
 </p>
 <p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
-Your account has been created and is ready to use. You can start creating namespaces, services, and functions right away.
+Thanks for signing up. Here's what we're building: <strong>namespace-based function hosting for AI assistants</strong>. You create functions, we host them, your AI uses them &mdash; over standard HTTPS with the MCP protocol.
 </p>
+
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:15px;line-height:1.6;font-weight:600;">
+What makes MCPWorks different:
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
+<tr>
+<td style="padding:4px 8px 4px 0;color:#3f3f46;font-size:15px;line-height:1.6;vertical-align:top;">&bull;</td>
+<td style="padding:4px 0;color:#3f3f46;font-size:15px;line-height:1.6;"><strong>Code-mode execution</strong> &mdash; 70-98% token savings vs traditional MCP tool loading</td>
+</tr>
+<tr>
+<td style="padding:4px 8px 4px 0;color:#3f3f46;font-size:15px;line-height:1.6;vertical-align:top;">&bull;</td>
+<td style="padding:4px 0;color:#3f3f46;font-size:15px;line-height:1.6;"><strong>Secure sandboxes</strong> &mdash; nsjail isolation with Linux namespaces, cgroups, and seccomp</td>
+</tr>
+<tr>
+<td style="padding:4px 8px 4px 0;color:#3f3f46;font-size:15px;line-height:1.6;vertical-align:top;">&bull;</td>
+<td style="padding:4px 0;color:#3f3f46;font-size:15px;line-height:1.6;"><strong>BYOAI</strong> &mdash; bring your own AI client (Claude Code, Cursor, Copilot, etc.)</td>
+</tr>
+<tr>
+<td style="padding:4px 8px 4px 0;color:#3f3f46;font-size:15px;line-height:1.6;vertical-align:top;">&bull;</td>
+<td style="padding:4px 0;color:#3f3f46;font-size:15px;line-height:1.6;"><strong>No local proxy</strong> &mdash; direct HTTPS, nothing to install</td>
+</tr>
+</table>
+
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Your Free tier includes <strong>1,000 executions/month</strong> and <strong>5 functions</strong>. That's enough to build something real.
+</p>
+
 <p style="margin:0 0 24px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
-Get started by visiting the dashboard:
+Add this to your MCP client config to get started:
 </p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px 0;">
+<tr>
+<td style="background-color:#f4f4f5;border-radius:6px;padding:16px;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;line-height:1.5;color:#18181b;white-space:pre;overflow-x:auto;">{
+  "mcpServers": {
+    "mcpworks": {
+      "url": "https://mcp.mcpworks.io/sse",
+      "env": { "API_KEY": "your-api-key" }  <!-- pragma: allowlist secret -->
+    }
+  }
+}</td>
+</tr>
+</table>
+
 <table role="presentation" cellpadding="0" cellspacing="0">
 <tr>
 <td style="background-color:#18181b;border-radius:6px;padding:12px 24px;">
@@ -17,6 +58,14 @@ Get started by visiting the dashboard:
 </td>
 </tr>
 </table>
+
+<p style="margin:24px 0 0 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+You'll hear from us when there's something worth sharing &mdash; product updates, new features, and technical deep dives. No spam.
+</p>
+<p style="margin:16px 0 0 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+&mdash; Simon Carr<br>
+<span style="color:#71717a;">Founder, MCPWorks Technologies Inc.</span>
+</p>
 <p style="margin:24px 0 0 0;color:#71717a;font-size:13px;">
 If you did not create this account, you can safely ignore this email.
 </p>
