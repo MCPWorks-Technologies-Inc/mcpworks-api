@@ -131,48 +131,30 @@ cat > "${WORKSPACE}/.fake_version" <<'VERSION'
 Linux version 0.0.0 (sandbox)
 VERSION
 
-# F-33/F-37: Fake /proc/net entries to prevent host network topology leakage.
-# Bypass-proof: bind-mounts are kernel-level, no Python introspection can read through them.
-touch "${WORKSPACE}/.fake_proc_empty"
+# clone_newnet: each sandbox gets its own network namespace.
+# /proc/net is automatically empty (no host network info visible).
+# Free tier: empty network namespace = zero connectivity (no MACVLAN).
+# Paid tiers: MACVLAN on eth0 gives outbound internet access.
 
-cat > "${WORKSPACE}/.fake_proc_net_tcp" <<'TCP'
-  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-TCP
-
-cp "${WORKSPACE}/.fake_proc_net_tcp" "${WORKSPACE}/.fake_proc_net_tcp6"
-
-cat > "${WORKSPACE}/.fake_proc_net_route" <<'ROUTE'
-Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
-ROUTE
-
-cat > "${WORKSPACE}/.fake_proc_net_arp" <<'ARP'
-IP address       HW type     Flags       HW address            Mask     Device
-ARP
-
-cat > "${WORKSPACE}/.fake_mountinfo" <<'MOUNTINFO'
-1 0 0:1 / / rw - tmpfs tmpfs rw
-MOUNTINFO
-
-cat > "${WORKSPACE}/.fake_status" <<'STATUS'
-Name:	python3
-Umask:	0022
-State:	R (running)
-Pid:	1
-PPid:	0
-Uid:	65534	65534	65534	65534
-Gid:	65534	65534	65534	65534
-STATUS
-
-# F-16: UID-based network isolation.
-# Free tier runs as UID 65534 (all outbound blocked by iptables).
-# Paid tiers run as UID 65533 (outbound allowed, internal services blocked).
-if [ "${TIER}" = "free" ]; then
-    SANDBOX_UID=65534
-else
-    SANDBOX_UID=65533
-fi
+# All tiers use UID 65534 (nobody). Network isolation is per-namespace
+# via clone_newnet, not per-UID via iptables.
+SANDBOX_UID=65534
 
 chown -R "${SANDBOX_UID}:${SANDBOX_UID}" "${WORKSPACE}"
+
+# Derive unique MACVLAN IP from exec_id for paid tiers.
+# Hash exec_id to 2 bytes → 10.200.{octet3}.{octet4} (avoiding .0 and .255).
+_exec_hash=$(echo -n "${EXEC_ID}" | md5sum | cut -c1-4)
+_hex3=$(echo "${_exec_hash}" | cut -c1-2)
+_hex4=$(echo "${_exec_hash}" | cut -c3-4)
+_octet3=$(( 16#${_hex3} ))
+_octet4=$(( 16#${_hex4} ))
+# Clamp to 1-254 to avoid network/broadcast addresses
+[ "${_octet3}" -eq 0 ] && _octet3=1
+[ "${_octet3}" -eq 255 ] && _octet3=254
+[ "${_octet4}" -eq 0 ] && _octet4=1
+[ "${_octet4}" -eq 255 ] && _octet4=254
+MACVLAN_IP="10.200.${_octet3}.${_octet4}"
 
 # Build nsjail arguments
 NSJAIL_ARGS=(
@@ -185,27 +167,17 @@ NSJAIL_ARGS=(
     --hostname "${NAMESPACE}"
 )
 
-# UID/GID mapping: inside always 65534 (nobody), outside depends on tier.
-# Free=65534 (iptables blocks outbound), Paid=65533 (outbound allowed).
-NSJAIL_ARGS+=(--uid_mapping "65534:${SANDBOX_UID}:1")
-NSJAIL_ARGS+=(--gid_mapping "65534:${SANDBOX_UID}:1")
+# UID/GID mapping: all tiers use 65534 (nobody) inside and outside.
+NSJAIL_ARGS+=(--uid_mapping "65534:65534:1")
+NSJAIL_ARGS+=(--gid_mapping "65534:65534:1")
 
 # Overlay fake /proc files to hide host details
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 
-# F-33/F-37: /proc subdirectory bind-mounts are NOT possible with nsjail.
-# nsjail's remountPt() always calls mount() with MS_REMOUNT|MS_BIND after
-# every bind-mount, and the kernel rejects remount on procfs entries.
-# This affects both /proc/net/* and /proc/self/* — tested with both
-# --bindmount and --bindmount_ro.
-#
-# /proc/net (TCP table, ARP, routes): requires P2 clone_newnet to fix.
-# /proc/self (mountinfo, maps, status): low-risk info leak, accepted.
-#
-# The fake files are still generated above for future use if nsjail
-# adds a skip-remount option or we switch to clone_newnet.
+# clone_newnet isolates /proc/net natively (each sandbox sees only its own
+# network namespace). /proc/self (mountinfo, maps, status) is low-risk.
 
 # FINDING-25: Hide _ctypes C extension .so files from sandbox.
 # sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
@@ -224,8 +196,15 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
 fi
 
-# F-16: Free tier network isolation is handled by iptables UID rules:
-# UID 65534 → all outbound DROP. No clone_newnet needed.
+# Network isolation via clone_newnet:
+# Free tier: empty network namespace (no MACVLAN) = zero connectivity.
+# Paid tiers: MACVLAN on eth0 gives internet access via container gateway.
+if [ "${TIER}" != "free" ]; then
+    NSJAIL_ARGS+=(--macvlan_iface eth0)
+    NSJAIL_ARGS+=(--macvlan_vs_ip "${MACVLAN_IP}")
+    NSJAIL_ARGS+=(--macvlan_vs_nm "255.255.0.0")
+    NSJAIL_ARGS+=(--macvlan_vs_gw "172.18.0.1")
+fi
 
 # Execute nsjail with tier-specific overrides.
 # --execute_fd: use execveat(fd) instead of execve(path), required because
