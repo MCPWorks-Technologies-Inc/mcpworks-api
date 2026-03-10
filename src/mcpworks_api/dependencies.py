@@ -223,25 +223,45 @@ ActiveUserId = Annotated[str, Depends(require_active_status)]
 
 
 async def require_admin(
-    user_id: str = Depends(get_current_user_id),
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_key: Annotated[str | None, Header()] = None,
     db: AsyncSession = Depends(get_db),
 ) -> str:
-    """Require the authenticated user to be an admin.
+    """Require admin access via JWT (email allowlist) or static API key.
 
-    Checks the user's email against the admin_emails allowlist in settings.
+    Auth methods (checked in order):
+    1. X-Admin-Key header — matches settings.admin_api_key
+    2. Authorization: Bearer <JWT> — user email in settings.admin_emails
 
     Returns:
-        The admin user's ID.
+        The admin user's ID (real user ID for JWT, first admin's ID for API key).
 
     Raises:
-        HTTPException: 403 if user is not an admin.
+        HTTPException: 401/403 if neither auth method succeeds.
     """
+    import hmac
+
     from sqlalchemy import select
 
     from mcpworks_api.config import get_settings
     from mcpworks_api.models import User
 
     settings = get_settings()
+
+    if (
+        x_admin_key
+        and settings.admin_api_key
+        and hmac.compare_digest(x_admin_key, settings.admin_api_key)
+    ):
+        result = await db.execute(
+            select(User.id).where(User.email.in_(settings.admin_emails)).limit(1)
+        )
+        admin_id = result.scalar_one_or_none()
+        if admin_id:
+            return str(admin_id)
+        return "system-admin"
+
+    user_id = await get_current_user_id(authorization)
 
     result = await db.execute(select(User.email).where(User.id == user_id))
     email = result.scalar_one_or_none()
