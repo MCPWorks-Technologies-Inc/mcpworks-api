@@ -24,6 +24,7 @@ from mcpworks_api.models import (
     Namespace,
     NamespaceService,
     NamespaceShare,
+    SecurityEvent,
     User,
 )
 
@@ -1384,3 +1385,138 @@ async def revoke_namespace_share(
         raise HTTPException(status_code=404, detail=str(e))
     except ForbiddenError as e:
         raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.get("/audit-logs")
+async def list_audit_logs(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    limit: int = 50,
+    offset: int = 0,
+    action: str | None = None,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    """Paginated audit log viewer."""
+    q = select(AuditLog).order_by(AuditLog.created_at.desc())
+    count_q = select(func.count(AuditLog.id))
+
+    if action:
+        q = q.where(AuditLog.action == action)
+        count_q = count_q.where(AuditLog.action == action)
+    if user_id:
+        try:
+            uid = uuid_module.UUID(user_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user_id format")
+        q = q.where(AuditLog.user_id == uid)
+        count_q = count_q.where(AuditLog.user_id == uid)
+
+    total = (await db.execute(count_q)).scalar() or 0
+    rows = (await db.execute(q.limit(min(limit, 100)).offset(offset))).scalars().all()
+
+    user_ids = {r.user_id for r in rows if r.user_id}
+    user_map: dict[str, str] = {}
+    if user_ids:
+        user_rows = (
+            await db.execute(select(User.id, User.email).where(User.id.in_(user_ids)))
+        ).all()
+        user_map = {str(u.id): u.email for u in user_rows}
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": str(r.id),
+                "action": r.action,
+                "user_email": user_map.get(str(r.user_id)) if r.user_id else None,
+                "resource_type": r.resource_type,
+                "resource_id": str(r.resource_id) if r.resource_id else None,
+                "ip_address": str(r.ip_address) if r.ip_address else None,
+                "event_data": r.event_data,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/security-events")
+async def list_security_events(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    limit: int = 50,
+    offset: int = 0,
+    severity: str | None = None,
+    event_type: str | None = None,
+) -> dict[str, Any]:
+    """Paginated security events viewer."""
+    q = select(SecurityEvent).order_by(SecurityEvent.timestamp.desc())
+    count_q = select(func.count(SecurityEvent.id))
+
+    if severity:
+        q = q.where(SecurityEvent.severity == severity)
+        count_q = count_q.where(SecurityEvent.severity == severity)
+    if event_type:
+        q = q.where(SecurityEvent.event_type == event_type)
+        count_q = count_q.where(SecurityEvent.event_type == event_type)
+
+    total = (await db.execute(count_q)).scalar() or 0
+    rows = (await db.execute(q.limit(min(limit, 100)).offset(offset))).scalars().all()
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": str(r.id),
+                "event_type": r.event_type,
+                "severity": r.severity,
+                "actor_id": r.actor_id,
+                "details": r.details,
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/system/health")
+async def get_system_health(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """System health overview for admin dashboard."""
+    from mcpworks_api.core.redis import get_redis_context
+    from mcpworks_api.middleware.execution_metrics import get_stats_snapshot
+
+    components: dict[str, str] = {}
+
+    try:
+        await db.execute(select(func.count(User.id)))
+        components["database"] = "healthy"
+    except Exception as e:
+        components["database"] = f"unhealthy: {e}"
+
+    redis_uptime = 0
+    try:
+        async with get_redis_context() as redis:
+            info = await redis.info("server")
+            components["redis"] = "healthy"
+            redis_uptime = info.get("uptime_in_seconds", 0)
+    except Exception as e:
+        components["redis"] = f"unhealthy: {e}"
+
+    sandbox_stats = get_stats_snapshot()
+
+    severity_counts_q = select(
+        SecurityEvent.severity,
+        func.count(SecurityEvent.id),
+    ).group_by(SecurityEvent.severity)
+    severity_rows = (await db.execute(severity_counts_q)).all()
+    severity_counts = {r[0]: r[1] for r in severity_rows}
+
+    return {
+        "components": components,
+        "sandbox": sandbox_stats,
+        "redis_uptime_seconds": redis_uptime,
+        "security_summary": severity_counts,
+    }

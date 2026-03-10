@@ -27,6 +27,8 @@ tailwind.config = {
   .btn:hover { background: #1d4ed8; }
   input { background: #030712; border: 1px solid #374151; color: #fff; padding: 8px 12px; border-radius: 6px; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; transition: border-color 0.15s; }
   input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+  select { background: #030712; border: 1px solid #374151; color: #fff; padding: 8px 12px; border-radius: 6px; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; transition: border-color 0.15s; }
+  select:focus { outline: none; border-color: #2563eb; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; padding: 8px 12px; color: #6b7280; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #374151; }
   td { padding: 8px 12px; border-bottom: 1px solid #1f2937; font-size: 14px; }
@@ -80,6 +82,41 @@ tailwind.config = {
   .btn-danger:hover { background: #b91c1c; }
   .btn-ghost { background: transparent; color: #9ca3af; padding: 6px 14px; border-radius: 6px; border: 1px solid #374151; cursor: pointer; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 500; font-size: 13px; transition: all 0.15s; }
   .btn-ghost:hover { background: #374151; color: #e5e7eb; }
+  /* Tab system */
+  .tab-bar { display: flex; border-bottom: 1px solid #374151; margin-bottom: 24px; gap: 0; }
+  .tab-btn { background: none; border: none; color: #6b7280; padding: 10px 18px; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; letter-spacing: 0.03em; }
+  .tab-btn:hover { color: #d1d5db; }
+  .tab-btn.active { color: #60a5fa; border-bottom-color: #2563eb; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  /* Sandbox / new sections */
+  .metric-card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 20px; }
+  .metric-num { font-size: 32px; font-weight: 700; color: #fff; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; line-height: 1; }
+  .metric-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-weight: 600; margin-top: 6px; }
+  .metric-sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+  .section-heading { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-size: 13px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+  /* Health dots */
+  .health-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .health-dot.healthy { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+  .health-dot.unhealthy { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
+  .health-dot.unknown { background: #6b7280; }
+  /* Severity badges */
+  .sev-info { background: #374151; color: #9ca3af; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sev-warning { background: #422006; color: #fbbf24; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sev-error { background: #431407; color: #fb923c; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sev-critical { background: #450a0a; color: #f87171; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+  /* Expandable rows */
+  .expand-btn { background: none; border: 1px solid #374151; color: #9ca3af; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .expand-btn:hover { background: #374151; color: #e5e7eb; }
+  .expand-row { background: #030712 !important; }
+  .expand-row td { padding: 12px; }
+  .expand-pre { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-word; color: #9ca3af; margin: 0; }
+  /* Pagination */
+  .pagination { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid #374151; }
+  .page-info { color: #6b7280; font-size: 13px; }
+  /* Auto-refresh indicator */
+  .refresh-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 </style>
 </head>
 <body>
@@ -139,49 +176,194 @@ tailwind.config = {
   <!-- Dashboard (hidden until login) -->
   <div id="dashboard" class="hidden">
 
-    <!-- Stats bar -->
+    <!-- Stats bar (always visible) -->
     <div id="stats-bar" class="grid grid-cols-6 gap-4 mb-6">
-      <div class="card stat-card p-4 text-center" onclick="loadUsers()"><div class="stat-num" id="stat-users">-</div><div class="stat-label">Users</div></div>
-      <div class="card stat-card p-4 text-center" onclick="loadNamespaces()"><div class="stat-num" id="stat-namespaces">-</div><div class="stat-label">Namespaces</div></div>
-      <div class="card stat-card p-4 text-center" onclick="loadAllServices()"><div class="stat-num" id="stat-services">-</div><div class="stat-label">Services</div></div>
-      <div class="card stat-card p-4 text-center" onclick="loadAllFunctions()"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
-      <div class="card stat-card p-4 text-center" onclick="loadExecutions()"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
+      <div class="card stat-card p-4 text-center" onclick="showTab('overview');loadUsers()"><div class="stat-num" id="stat-users">-</div><div class="stat-label">Users</div></div>
+      <div class="card stat-card p-4 text-center" onclick="showTab('overview');loadNamespaces()"><div class="stat-num" id="stat-namespaces">-</div><div class="stat-label">Namespaces</div></div>
+      <div class="card stat-card p-4 text-center" onclick="showTab('overview');loadAllServices()"><div class="stat-num" id="stat-services">-</div><div class="stat-label">Services</div></div>
+      <div class="card stat-card p-4 text-center" onclick="showTab('overview');loadAllFunctions()"><div class="stat-num" id="stat-functions">-</div><div class="stat-label">Functions</div></div>
+      <div class="card stat-card p-4 text-center" onclick="showTab('overview');loadExecutions()"><div class="stat-num" id="stat-executions">-</div><div class="stat-label">Executions</div></div>
       <div class="card stat-card p-4 text-center"><div class="stat-num" id="stat-calls">-</div><div class="stat-label">Tool Calls</div></div>
     </div>
 
-    <!-- Leaderboard -->
-    <div id="leaderboard-section" class="mb-6 hidden">
-      <div class="leaderboard-grid mb-4">
-        <div class="lb-card" id="lb-users"></div>
-        <div class="lb-card" id="lb-namespaces"></div>
-        <div class="lb-card" id="lb-services"></div>
-        <div class="lb-card" id="lb-functions"></div>
-      </div>
-      <div class="card p-4 mb-4" id="lb-tiers"></div>
-      <div class="card p-4" id="lb-recent-exec"></div>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
+      <button class="tab-btn" onclick="showTab('sandbox')">Sandbox</button>
+      <button class="tab-btn" onclick="showTab('audit')">Audit Log</button>
+      <button class="tab-btn" onclick="showTab('security')">Security</button>
+      <button class="tab-btn" onclick="showTab('system')">System</button>
     </div>
 
-    <!-- Pending Approvals -->
-    <div id="pending-section" class="card p-4 mb-6 hidden">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-white font-bold font-display text-sm">Pending Approvals</h3>
-        <span id="pending-count" class="tag" style="background:#92400e;color:#fbbf24;"></span>
+    <!-- ============================================================ -->
+    <!-- TAB: Overview                                                -->
+    <!-- ============================================================ -->
+    <div id="tab-overview" class="tab-panel active">
+
+      <!-- Leaderboard -->
+      <div id="leaderboard-section" class="mb-6 hidden">
+        <div class="leaderboard-grid mb-4">
+          <div class="lb-card" id="lb-users"></div>
+          <div class="lb-card" id="lb-namespaces"></div>
+          <div class="lb-card" id="lb-services"></div>
+          <div class="lb-card" id="lb-functions"></div>
+        </div>
+        <div class="card p-4 mb-4" id="lb-tiers"></div>
+        <div class="card p-4" id="lb-recent-exec"></div>
       </div>
-      <table id="pending-table"><thead><tr><th>Email</th><th>Name</th><th>Registered</th><th>Actions</th></tr></thead><tbody id="pending-body"></tbody></table>
-    </div>
 
-    <!-- Breadcrumb -->
-    <div id="breadcrumb" class="breadcrumb mb-4"></div>
+      <!-- Pending Approvals -->
+      <div id="pending-section" class="card p-4 mb-6 hidden">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-white font-bold font-display text-sm">Pending Approvals</h3>
+          <span id="pending-count" class="tag" style="background:#92400e;color:#fbbf24;"></span>
+        </div>
+        <table id="pending-table"><thead><tr><th>Email</th><th>Name</th><th>Registered</th><th>Actions</th></tr></thead><tbody id="pending-body"></tbody></table>
+      </div>
 
-    <!-- Content area -->
-    <div id="content" class="card"></div>
-  </div>
+      <!-- Breadcrumb -->
+      <div id="breadcrumb" class="breadcrumb mb-4"></div>
+
+      <!-- Content area -->
+      <div id="content" class="card"></div>
+
+    </div><!-- /tab-overview -->
+
+    <!-- ============================================================ -->
+    <!-- TAB: Sandbox                                                 -->
+    <!-- ============================================================ -->
+    <div id="tab-sandbox" class="tab-panel">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white font-semibold font-display">Sandbox Metrics</h2>
+        <div class="flex items-center gap-3">
+          <span id="sandbox-refresh-indicator" class="hidden text-xs text-gray-500 flex items-center gap-1">
+            <span class="refresh-dot"></span> auto-refreshing
+          </span>
+          <button id="sandbox-refresh-btn" class="btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="toggleSandboxAutoRefresh()">Auto-refresh</button>
+          <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="loadSandboxStats()">Refresh now</button>
+        </div>
+      </div>
+
+      <div id="sandbox-content">
+        <div class="text-gray-500 text-sm">Loading sandbox metrics…</div>
+      </div>
+    </div><!-- /tab-sandbox -->
+
+    <!-- ============================================================ -->
+    <!-- TAB: Audit Log                                               -->
+    <!-- ============================================================ -->
+    <div id="tab-audit" class="tab-panel">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white font-semibold font-display">Audit Log</h2>
+        <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="loadAuditLogs()">Refresh</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <select id="audit-action-filter" style="font-size:13px;padding:6px 10px;" onchange="loadAuditLogs()">
+          <option value="">All actions</option>
+          <option value="login">login</option>
+          <option value="logout">logout</option>
+          <option value="impersonate">impersonate</option>
+          <option value="approve_user">approve_user</option>
+          <option value="reject_user">reject_user</option>
+          <option value="suspend_user">suspend_user</option>
+          <option value="unsuspend_user">unsuspend_user</option>
+          <option value="delete_account">delete_account</option>
+          <option value="tier_override">tier_override</option>
+          <option value="clear_tier_override">clear_tier_override</option>
+          <option value="revoke_share">revoke_share</option>
+        </select>
+        <input id="audit-user-filter" type="text" placeholder="Filter by user…" style="font-size:13px;padding:6px 10px;width:200px;" oninput="clearTimeout(_auditTimer);_auditTimer=setTimeout(loadAuditLogs,400)">
+      </div>
+
+      <div id="audit-content" class="card">
+        <div class="p-6 text-gray-500 text-sm">Loading…</div>
+      </div>
+    </div><!-- /tab-audit -->
+
+    <!-- ============================================================ -->
+    <!-- TAB: Security                                                -->
+    <!-- ============================================================ -->
+    <div id="tab-security" class="tab-panel">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white font-semibold font-display">Security Events</h2>
+        <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="loadSecurityEvents()">Refresh</button>
+      </div>
+
+      <!-- Summary cards -->
+      <div id="security-summary" class="grid grid-cols-4 gap-4 mb-6"></div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-3 mb-4">
+        <select id="security-severity-filter" style="font-size:13px;padding:6px 10px;" onchange="loadSecurityEvents()">
+          <option value="">All severities</option>
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="error">Error</option>
+          <option value="critical">Critical</option>
+        </select>
+        <select id="security-type-filter" style="font-size:13px;padding:6px 10px;" onchange="loadSecurityEvents()">
+          <option value="">All types</option>
+          <option value="rate_limit_exceeded">rate_limit_exceeded</option>
+          <option value="auth_failure">auth_failure</option>
+          <option value="invalid_token">invalid_token</option>
+          <option value="forbidden_access">forbidden_access</option>
+          <option value="sandbox_violation">sandbox_violation</option>
+          <option value="suspicious_activity">suspicious_activity</option>
+        </select>
+      </div>
+
+      <div id="security-content" class="card">
+        <div class="p-6 text-gray-500 text-sm">Loading…</div>
+      </div>
+    </div><!-- /tab-security -->
+
+    <!-- ============================================================ -->
+    <!-- TAB: System                                                  -->
+    <!-- ============================================================ -->
+    <div id="tab-system" class="tab-panel">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white font-semibold font-display">System Health</h2>
+        <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="loadSystemHealth()">Refresh</button>
+      </div>
+
+      <div id="system-content">
+        <div class="text-gray-500 text-sm">Loading system health…</div>
+      </div>
+    </div><!-- /tab-system -->
+
+  </div><!-- /dashboard -->
 
 </div>
 
 <script>
 let TOKEN = null;
 const API = window.location.origin;
+
+// --- Tab system ---
+
+let _activeTab = 'overview';
+const _tabLoaded = {};
+
+function showTab(name) {
+  _activeTab = name;
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    const tabs = ['overview', 'sandbox', 'audit', 'security', 'system'];
+    btn.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+
+  if (!_tabLoaded[name]) {
+    _tabLoaded[name] = true;
+    if (name === 'sandbox') loadSandboxStats();
+    else if (name === 'audit') loadAuditLogs();
+    else if (name === 'security') loadSecurityEvents();
+    else if (name === 'system') loadSystemHealth();
+  }
+}
 
 // --- Auth ---
 
@@ -1299,6 +1481,463 @@ function fmtDate(iso) {
   } catch {
     return iso;
   }
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
+// ================================================================
+// SANDBOX TAB
+// ================================================================
+
+let _sandboxAutoRefresh = false;
+let _sandboxRefreshInterval = null;
+
+function toggleSandboxAutoRefresh() {
+  _sandboxAutoRefresh = !_sandboxAutoRefresh;
+  const btn = document.getElementById('sandbox-refresh-btn');
+  const indicator = document.getElementById('sandbox-refresh-indicator');
+  if (_sandboxAutoRefresh) {
+    btn.textContent = 'Stop auto-refresh';
+    btn.style.color = '#4ade80';
+    indicator.classList.remove('hidden');
+    _sandboxRefreshInterval = setInterval(loadSandboxStats, 10000);
+  } else {
+    btn.textContent = 'Auto-refresh';
+    btn.style.color = '';
+    indicator.classList.add('hidden');
+    clearInterval(_sandboxRefreshInterval);
+    _sandboxRefreshInterval = null;
+  }
+}
+
+async function loadSandboxStats() {
+  const el = document.getElementById('sandbox-content');
+  try {
+    const d = await apiFetch('/v1/admin/stats/sandbox');
+
+    const tiers = Object.keys(d.executions_by_tier || {});
+
+    const statusColors = {
+      completed: '#4ade80',
+      failed: '#f87171',
+      running: '#fbbf24',
+      pending: '#6b7280',
+      timeout: '#fb923c',
+    };
+
+    const allStatuses = [...new Set(
+      tiers.flatMap(t => Object.keys(d.executions_by_tier[t] || {}))
+    )];
+
+    const execTableRows = tiers.length ? tiers.map(tier => {
+      const byStatus = d.executions_by_tier[tier] || {};
+      const total = Object.values(byStatus).reduce((s, n) => s + n, 0);
+      const statusCells = allStatuses.map(s => {
+        const count = byStatus[s] || 0;
+        const color = statusColors[s] || '#9ca3af';
+        return `<td style="color:${color}">${count}</td>`;
+      }).join('');
+      return `<tr>
+        <td class="text-gray-300 font-medium">${esc(tier)}</td>
+        ${statusCells}
+        <td class="text-white font-medium">${total}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="10" class="text-gray-500">No data.</td></tr>';
+
+    const execTableHead = allStatuses.map(s => `<th style="color:${statusColors[s] || '#6b7280'}">${esc(s)}</th>`).join('');
+
+    const allErrorTypes = [...new Set(
+      tiers.flatMap(t => Object.keys(d.errors_by_tier[t] || {}))
+    )];
+
+    const errorTableRows = tiers.filter(t => Object.keys(d.errors_by_tier[t] || {}).length).map(tier => {
+      const byError = d.errors_by_tier[tier] || {};
+      return allErrorTypes.map(et => {
+        const count = byError[et];
+        if (!count) return '';
+        return `<tr>
+          <td class="text-gray-300">${esc(tier)}</td>
+          <td class="text-orange-400 font-mono text-xs">${esc(et)}</td>
+          <td class="text-white font-medium">${count}</td>
+        </tr>`;
+      }).join('');
+    }).join('');
+
+    const inProgressRows = Object.entries(d.in_progress || {}).map(([tier, count]) =>
+      count > 0 ? `<span class="tag" style="background:#1e3a5f;color:#60a5fa;">${esc(tier)}: ${count}</span>` : ''
+    ).join('');
+
+    const avgRows = Object.entries(d.avg_duration_seconds || {}).map(([tier, avg]) =>
+      `<tr><td class="text-gray-300">${esc(tier)}</td><td class="text-white font-medium">${avg != null ? avg.toFixed(2) + 's' : '-'}</td></tr>`
+    ).join('');
+
+    const totalViolations = Object.values(d.violations_by_tier || {}).reduce((s, n) => s + n, 0);
+    const violationRows = Object.entries(d.violations_by_tier || {})
+      .filter(([, n]) => n > 0)
+      .map(([tier, n]) => `<tr><td class="text-gray-300">${esc(tier)}</td><td class="text-red-400 font-medium">${n}</td></tr>`)
+      .join('') || '<tr><td colspan="2" class="text-gray-500">None</td></tr>';
+
+    el.innerHTML = `
+      <div class="fade-in">
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="metric-card">
+            <div class="metric-num">${d.total_executions ?? 0}</div>
+            <div class="metric-label">Total Executions</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num" style="color:#fbbf24;">${Object.values(d.in_progress || {}).reduce((s,n)=>s+n,0)}</div>
+            <div class="metric-label">In Progress</div>
+            <div class="metric-sub">${inProgressRows || 'None'}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num" style="color:${totalViolations > 0 ? '#f87171' : '#4ade80'};">${totalViolations}</div>
+            <div class="metric-label">Sandbox Violations</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6 mb-6">
+          <div>
+            <div class="section-heading">Executions by Tier &amp; Status</div>
+            <div class="card" style="overflow:auto;">
+              <table>
+                <thead><tr><th>Tier</th>${execTableHead}<th>Total</th></tr></thead>
+                <tbody>${execTableRows}</tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="section-heading">Avg Duration by Tier</div>
+            <div class="card" style="overflow:auto;">
+              <table>
+                <thead><tr><th>Tier</th><th>Avg Duration</th></tr></thead>
+                <tbody>${avgRows || '<tr><td colspan="2" class="text-gray-500">No data.</td></tr>'}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6">
+          <div>
+            <div class="section-heading">Errors by Tier</div>
+            <div class="card" style="overflow:auto;">
+              <table>
+                <thead><tr><th>Tier</th><th>Error Type</th><th>Count</th></tr></thead>
+                <tbody>${errorTableRows || '<tr><td colspan="3" class="text-gray-500">No errors.</td></tr>'}</tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="section-heading">Violations by Tier</div>
+            <div class="card" style="overflow:auto;">
+              <table>
+                <thead><tr><th>Tier</th><th>Violations</th></tr></thead>
+                <tbody>${violationRows}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="card p-6 text-red-400">Failed to load sandbox stats: ${esc(e.message)}</div>`;
+  }
+}
+
+// ================================================================
+// AUDIT LOG TAB
+// ================================================================
+
+let _auditOffset = 0;
+let _auditTotal = 0;
+let _auditLimit = 50;
+let _auditTimer = null;
+
+async function loadAuditLogs(resetPage) {
+  if (resetPage) _auditOffset = 0;
+  const action = document.getElementById('audit-action-filter').value;
+  const userId = document.getElementById('audit-user-filter').value.trim();
+  const el = document.getElementById('audit-content');
+  el.innerHTML = '<div class="p-6"><span class="loader"></span> Loading audit logs…</div>';
+
+  try {
+    let path = `/v1/admin/audit-logs?limit=${_auditLimit}&offset=${_auditOffset}`;
+    if (action) path += `&action=${encodeURIComponent(action)}`;
+    if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
+
+    const data = await apiFetch(path);
+    _auditTotal = data.total ?? data.items.length;
+    const items = data.items || [];
+
+    if (!items.length) {
+      el.innerHTML = '<div class="p-6 text-gray-500">No audit log entries found.</div>';
+      return;
+    }
+
+    const rows = items.map((item, idx) => {
+      const expandId = `audit-expand-${idx}`;
+      const detailJson = item.event_data ? JSON.stringify(item.event_data, null, 2) : null;
+      return `<tr>
+        <td class="text-gray-500 text-xs" style="white-space:nowrap;">${fmtDateTime(item.created_at)}</td>
+        <td><span class="tag" style="background:#1e3a5f;color:#93c5fd;">${esc(item.action)}</span></td>
+        <td class="text-blue-400 text-sm">${esc(item.user_email || '-')}</td>
+        <td class="text-gray-400 text-sm">${item.resource_type ? `<span class="tag">${esc(item.resource_type)}</span>` : '-'} ${item.resource_id ? `<span class="text-gray-600 text-xs">${esc(String(item.resource_id).substring(0,8))}</span>` : ''}</td>
+        <td class="text-gray-500 text-xs" style="font-family:ui-monospace,monospace;">${item.ip_address ? esc(item.ip_address) : '-'}</td>
+        <td>${detailJson ? `<button class="expand-btn" onclick="toggleExpand('${expandId}')">details</button>` : ''}</td>
+      </tr>
+      ${detailJson ? `<tr id="${expandId}" class="expand-row hidden"><td colspan="6"><pre class="expand-pre">${esc(detailJson)}</pre></td></tr>` : ''}`;
+    }).join('');
+
+    const start = _auditOffset + 1;
+    const end = Math.min(_auditOffset + items.length, _auditTotal);
+
+    el.innerHTML = `
+      <div class="fade-in">
+        <table>
+          <thead><tr><th>Time</th><th>Action</th><th>User</th><th>Resource</th><th>IP</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="pagination">
+          <button class="btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="auditPage(-1)" ${_auditOffset === 0 ? 'disabled style="opacity:0.4;"' : ''}>Previous</button>
+          <span class="page-info">${start}–${end} of ${_auditTotal}</span>
+          <button class="btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="auditPage(1)" ${end >= _auditTotal ? 'disabled style="opacity:0.4;"' : ''}>Next</button>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="p-6 text-red-400">Failed to load audit logs: ${esc(e.message)}</div>`;
+  }
+}
+
+function auditPage(dir) {
+  _auditOffset = Math.max(0, _auditOffset + dir * _auditLimit);
+  loadAuditLogs();
+}
+
+function toggleExpand(id) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  row.classList.toggle('hidden');
+}
+
+// ================================================================
+// SECURITY TAB
+// ================================================================
+
+let _secOffset = 0;
+let _secTotal = 0;
+let _secLimit = 50;
+
+const SEV_CLASS = { info: 'sev-info', warning: 'sev-warning', error: 'sev-error', critical: 'sev-critical' };
+
+async function loadSecurityEvents(resetPage) {
+  if (resetPage) _secOffset = 0;
+  const severity = document.getElementById('security-severity-filter').value;
+  const eventType = document.getElementById('security-type-filter').value;
+  const el = document.getElementById('security-content');
+  el.innerHTML = '<div class="p-6"><span class="loader"></span> Loading security events…</div>';
+
+  try {
+    let path = `/v1/admin/security-events?limit=${_secLimit}&offset=${_secOffset}`;
+    if (severity) path += `&severity=${encodeURIComponent(severity)}`;
+    if (eventType) path += `&event_type=${encodeURIComponent(eventType)}`;
+
+    const data = await apiFetch(path);
+    _secTotal = data.total ?? data.items.length;
+    const items = data.items || [];
+
+    await loadSecuritySummary();
+
+    if (!items.length) {
+      el.innerHTML = '<div class="p-6 text-gray-500">No security events found.</div>';
+      return;
+    }
+
+    const rows = items.map((item, idx) => {
+      const expandId = `sec-expand-${idx}`;
+      const detailJson = item.details ? JSON.stringify(item.details, null, 2) : null;
+      const sevClass = SEV_CLASS[item.severity] || 'sev-info';
+      return `<tr>
+        <td class="text-gray-500 text-xs" style="white-space:nowrap;">${fmtDateTime(item.timestamp)}</td>
+        <td class="text-gray-300 text-sm font-mono text-xs">${esc(item.event_type)}</td>
+        <td><span class="${sevClass}">${esc(item.severity)}</span></td>
+        <td class="text-gray-400 text-sm">${item.actor_id ? `<span class="text-gray-500 text-xs" style="font-family:ui-monospace,monospace;">${esc(String(item.actor_id).substring(0,8))}…</span>` : '-'}</td>
+        <td>${detailJson ? `<button class="expand-btn" onclick="toggleExpand('${expandId}')">details</button>` : ''}</td>
+      </tr>
+      ${detailJson ? `<tr id="${expandId}" class="expand-row hidden"><td colspan="5"><pre class="expand-pre">${esc(detailJson)}</pre></td></tr>` : ''}`;
+    }).join('');
+
+    const start = _secOffset + 1;
+    const end = Math.min(_secOffset + items.length, _secTotal);
+
+    el.innerHTML = `
+      <div class="fade-in">
+        <table>
+          <thead><tr><th>Time</th><th>Type</th><th>Severity</th><th>Actor</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="pagination">
+          <button class="btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="secPage(-1)" ${_secOffset === 0 ? 'disabled style="opacity:0.4;"' : ''}>Previous</button>
+          <span class="page-info">${start}–${end} of ${_secTotal}</span>
+          <button class="btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="secPage(1)" ${end >= _secTotal ? 'disabled style="opacity:0.4;"' : ''}>Next</button>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="p-6 text-red-400">Failed to load security events: ${esc(e.message)}</div>`;
+  }
+}
+
+function secPage(dir) {
+  _secOffset = Math.max(0, _secOffset + dir * _secLimit);
+  loadSecurityEvents();
+}
+
+async function loadSecuritySummary() {
+  try {
+    const health = await apiFetch('/v1/admin/system/health');
+    const summary = health.security_summary || {};
+    const summaryEl = document.getElementById('security-summary');
+    const sevOrder = ['critical', 'error', 'warning', 'info'];
+    const sevColors = { critical: '#f87171', error: '#fb923c', warning: '#fbbf24', info: '#9ca3af' };
+    summaryEl.innerHTML = sevOrder.map(sev => {
+      const count = summary[sev] ?? 0;
+      const color = sevColors[sev] || '#9ca3af';
+      return `<div class="metric-card">
+        <div class="metric-num" style="color:${color};">${count}</div>
+        <div class="metric-label">${sev}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('security-summary').innerHTML = '';
+  }
+}
+
+// ================================================================
+// SYSTEM TAB
+// ================================================================
+
+async function loadSystemHealth() {
+  const el = document.getElementById('system-content');
+  try {
+    const d = await apiFetch('/v1/admin/system/health');
+
+    const components = d.components || {};
+    const compOrder = ['database', 'redis', 'sandbox'];
+    const compRows = compOrder.filter(c => components[c] !== undefined).map(c => {
+      const status = components[c];
+      const healthy = status === 'healthy';
+      return `<div class="flex items-center justify-between py-3" style="border-bottom:1px solid #374151;">
+        <span class="text-gray-300 font-medium">${esc(c.charAt(0).toUpperCase() + c.slice(1))}</span>
+        <div class="flex items-center gap-2">
+          <span class="health-dot ${healthy ? 'healthy' : 'unhealthy'}"></span>
+          <span style="color:${healthy ? '#4ade80' : '#f87171'};font-size:13px;font-weight:600;">${esc(status)}</span>
+        </div>
+      </div>`;
+    }).join('');
+
+    const unknownComponents = Object.entries(components)
+      .filter(([k]) => !compOrder.includes(k))
+      .map(([k, status]) => {
+        const healthy = status === 'healthy';
+        return `<div class="flex items-center justify-between py-3" style="border-bottom:1px solid #374151;">
+          <span class="text-gray-300 font-medium">${esc(k)}</span>
+          <div class="flex items-center gap-2">
+            <span class="health-dot ${healthy ? 'healthy' : 'unhealthy'}"></span>
+            <span style="color:${healthy ? '#4ade80' : '#f87171'};font-size:13px;font-weight:600;">${esc(status)}</span>
+          </div>
+        </div>`;
+      }).join('');
+
+    const redisUptime = d.redis_uptime_seconds != null
+      ? formatUptime(d.redis_uptime_seconds)
+      : 'Unknown';
+
+    const summary = d.security_summary || {};
+    const sevOrder = ['critical', 'error', 'warning', 'info'];
+    const sevColors = { critical: '#f87171', error: '#fb923c', warning: '#fbbf24', info: '#9ca3af' };
+    const secSummaryHtml = sevOrder.map(sev => {
+      const count = summary[sev] ?? 0;
+      if (count === 0 && sev !== 'critical') return '';
+      return `<div class="flex items-center justify-between py-2">
+        <span class="sev-${sev}">${sev}</span>
+        <span style="color:${sevColors[sev]};font-weight:600;">${count}</span>
+      </div>`;
+    }).join('');
+
+    const sandbox = d.sandbox || {};
+    const totalExec = sandbox.total_executions ?? 0;
+    const inProgress = Object.values(sandbox.in_progress || {}).reduce((s, n) => s + n, 0);
+    const violations = Object.values(sandbox.violations_by_tier || {}).reduce((s, n) => s + n, 0);
+
+    el.innerHTML = `
+      <div class="fade-in">
+        <div class="grid grid-cols-3 gap-6">
+
+          <div>
+            <div class="section-heading">Components</div>
+            <div class="card p-4">
+              ${compRows}${unknownComponents}
+              ${!compRows && !unknownComponents ? '<div class="text-gray-500 text-sm">No component data.</div>' : ''}
+              <div class="flex items-center justify-between pt-3">
+                <span class="text-gray-500 text-sm">Redis uptime</span>
+                <span class="text-gray-300 text-sm font-medium">${esc(redisUptime)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-heading">Security Events</div>
+            <div class="card p-4">
+              ${secSummaryHtml || '<div class="text-gray-500 text-sm">No events.</div>'}
+              <button class="btn-ghost mt-3 w-full" style="font-size:12px;padding:6px;" onclick="showTab('security')">View all security events</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-heading">Sandbox (compact)</div>
+            <div class="card p-4">
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Total executions</span>
+                <span class="text-white font-medium">${totalExec}</span>
+              </div>
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">In progress</span>
+                <span style="color:${inProgress > 0 ? '#fbbf24' : '#4ade80'};font-weight:600;">${inProgress}</span>
+              </div>
+              <div class="flex items-center justify-between py-2">
+                <span class="text-gray-500 text-sm">Violations</span>
+                <span style="color:${violations > 0 ? '#f87171' : '#4ade80'};font-weight:600;">${violations}</span>
+              </div>
+              <button class="btn-ghost mt-3 w-full" style="font-size:12px;padding:6px;" onclick="showTab('sandbox')">View sandbox details</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="card p-6 text-red-400">Failed to load system health: ${esc(e.message)}</div>`;
+  }
+}
+
+function formatUptime(seconds) {
+  if (seconds == null || isNaN(seconds)) return 'Unknown';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || parts.length === 0) parts.push(`${m}m`);
+  return parts.join(' ');
 }
 </script>
 
