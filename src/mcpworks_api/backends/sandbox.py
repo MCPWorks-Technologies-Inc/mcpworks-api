@@ -14,6 +14,7 @@ In development (SANDBOX_DEV_MODE=true):
 
 import ast
 import asyncio
+import contextlib
 import json
 import secrets
 import shutil
@@ -27,6 +28,11 @@ import structlog
 
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
 from mcpworks_api.config import get_settings
+from mcpworks_api.middleware.execution_metrics import (
+    record_execution,
+    record_violation,
+    track_execution,
+)
 from mcpworks_api.models import Account
 
 logger = structlog.get_logger(__name__)
@@ -189,12 +195,19 @@ class SandboxBackend(Backend):
         tier_config = self._get_tier_config(account)
         timeout_sec = min(timeout_ms / 1000, tier_config["timeout_sec"])
 
+        tier = DEFAULT_TIER.value
+        if hasattr(account, "user") and account.user is not None:
+            tier = account.user.effective_tier
+        namespace = getattr(account, "namespace", None) or "unknown"
+
         if self._dev_mode:
             return await self._execute_dev_mode(
                 code=code,
                 input_data=input_data,
                 execution_id=execution_id,
                 timeout_sec=timeout_sec,
+                tier=tier,
+                namespace=namespace,
                 extra_files=extra_files,
                 sandbox_env=sandbox_env,
             )
@@ -206,6 +219,8 @@ class SandboxBackend(Backend):
                 execution_id=execution_id,
                 timeout_sec=timeout_sec,
                 tier_config=tier_config,
+                tier=tier,
+                namespace=namespace,
                 extra_files=extra_files,
                 sandbox_env=sandbox_env,
             )
@@ -216,6 +231,8 @@ class SandboxBackend(Backend):
         input_data: dict[str, Any],
         execution_id: str,
         timeout_sec: float,
+        tier: str = DEFAULT_TIER.value,
+        namespace: str = "unknown",
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
     ) -> ExecutionResult:
@@ -252,64 +269,93 @@ class SandboxBackend(Backend):
             wrapped_code = self._wrap_code(code)
             code_file.write_text(wrapped_code)
 
-            # Execute with subprocess
-            process = await asyncio.create_subprocess_exec(
-                "python3",
-                str(code_file),
-                str(input_file),
-                str(output_file),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(exec_dir),
-            )
+            result: ExecutionResult
 
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout_sec,
-                )
-            except TimeoutError:
-                process.kill()
-                await process.wait()
-                return ExecutionResult(
-                    success=False,
-                    output=None,
-                    stdout=None,
-                    stderr=None,
-                    error="Execution timed out",
-                    error_type="TimeoutError",
-                    execution_time_ms=int(timeout_sec * 1000),
+            async with track_execution(tier=tier, namespace=namespace):
+                # Execute with subprocess
+                process = await asyncio.create_subprocess_exec(
+                    "python3",
+                    str(code_file),
+                    str(input_file),
+                    str(output_file),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(exec_dir),
                 )
 
-            execution_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
-
-            # Read output
-            if output_file.exists():
                 try:
-                    output_data = json.loads(output_file.read_text())
-                    return ExecutionResult(
-                        success=output_data.get("success", False),
-                        output=output_data.get("result"),
-                        stdout=output_data.get("stdout", stdout.decode() if stdout else None),
-                        stderr=output_data.get("stderr", stderr.decode() if stderr else None),
-                        error=output_data.get("error"),
-                        error_type=output_data.get("error_type"),
-                        execution_time_ms=execution_time_ms,
-                        call_log=output_data.get("call_log", []),
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(),
+                        timeout=timeout_sec,
                     )
-                except json.JSONDecodeError:
-                    pass
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    result = ExecutionResult(
+                        success=False,
+                        output=None,
+                        stdout=None,
+                        stderr=None,
+                        error="Execution timed out",
+                        error_type="TimeoutError",
+                        execution_time_ms=int(timeout_sec * 1000),
+                    )
+                    record_execution(
+                        tier=tier,
+                        status="timeout",
+                        duration_seconds=timeout_sec,
+                        error_type="TimeoutError",
+                        namespace=namespace,
+                    )
+                    return result
 
-            # No output file or parse error
-            return ExecutionResult(
-                success=process.returncode == 0,
-                output=None,
-                stdout=stdout.decode() if stdout else None,
-                stderr=stderr.decode() if stderr else None,
-                error="No structured output produced" if process.returncode != 0 else None,
-                error_type="ExecutionError" if process.returncode != 0 else None,
-                execution_time_ms=execution_time_ms,
-            )
+                execution_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
+
+                # Read output
+                if output_file.exists():
+                    try:
+                        output_data = json.loads(output_file.read_text())
+                        result = ExecutionResult(
+                            success=output_data.get("success", False),
+                            output=output_data.get("result"),
+                            stdout=output_data.get("stdout", stdout.decode() if stdout else None),
+                            stderr=output_data.get("stderr", stderr.decode() if stderr else None),
+                            error=output_data.get("error"),
+                            error_type=output_data.get("error_type"),
+                            execution_time_ms=execution_time_ms,
+                            call_log=output_data.get("call_log", []),
+                        )
+                        status = "success" if result.success else "failure"
+                        record_execution(
+                            tier=tier,
+                            status=status,
+                            duration_seconds=execution_time_ms / 1000,
+                            error_type=result.error_type if not result.success else None,
+                            namespace=namespace,
+                        )
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+
+                # No output file or parse error
+                result = ExecutionResult(
+                    success=process.returncode == 0,
+                    output=None,
+                    stdout=stdout.decode() if stdout else None,
+                    stderr=stderr.decode() if stderr else None,
+                    error="No structured output produced" if process.returncode != 0 else None,
+                    error_type="ExecutionError" if process.returncode != 0 else None,
+                    execution_time_ms=execution_time_ms,
+                )
+                status = "success" if result.success else "failure"
+                record_execution(
+                    tier=tier,
+                    status=status,
+                    duration_seconds=execution_time_ms / 1000,
+                    error_type=result.error_type if not result.success else None,
+                    namespace=namespace,
+                )
+                return result
 
         finally:
             # Cleanup
@@ -324,6 +370,8 @@ class SandboxBackend(Backend):
         execution_id: str,
         timeout_sec: float,
         tier_config: dict[str, Any],
+        tier: str = DEFAULT_TIER.value,
+        namespace: str = "unknown",
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
     ) -> ExecutionResult:
@@ -353,86 +401,118 @@ class SandboxBackend(Backend):
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))
             (exec_dir / "user_code.py").write_text(code)
 
-            tier = DEFAULT_TIER.value
-            if hasattr(account, "user") and account.user is not None:
-                tier = account.user.effective_tier
-            namespace = getattr(account, "namespace", "sandbox") or "sandbox"
-
             # ORDER-003: Generate execution token via file (never env var or /proc)
             exec_token = secrets.token_urlsafe(32)
             token_file = exec_dir / ".exec_token"
             token_file.write_text(exec_token)
 
-            # Spawn sandbox process
-            process = await asyncio.create_subprocess_exec(
-                str(self.spawn_script),
-                execution_id,
-                tier,
-                str(exec_dir / "user_code.py"),
-                str(exec_dir / "input.json"),
-                namespace,
-                str(token_file),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            result: ExecutionResult
 
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout_sec + 5,  # Grace period
+            async with track_execution(tier=tier, namespace=namespace):
+                # Spawn sandbox process
+                process = await asyncio.create_subprocess_exec(
+                    str(self.spawn_script),
+                    execution_id,
+                    tier,
+                    str(exec_dir / "user_code.py"),
+                    str(exec_dir / "input.json"),
+                    namespace,
+                    str(token_file),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-            except TimeoutError:
-                process.kill()
-                await process.wait()
-                return ExecutionResult(
+
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(),
+                        timeout=timeout_sec + 5,  # Grace period
+                    )
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    result = ExecutionResult(
+                        success=False,
+                        output=None,
+                        error="Execution timed out",
+                        error_type="TimeoutError",
+                        execution_time_ms=int(timeout_sec * 1000),
+                    )
+                    record_execution(
+                        tier=tier,
+                        status="timeout",
+                        duration_seconds=timeout_sec,
+                        error_type="TimeoutError",
+                        namespace=namespace,
+                    )
+                    return result
+
+                execution_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
+
+                # Read output
+                output_file = exec_dir / "output.json"
+                if output_file.exists():
+                    try:
+                        output_data = json.loads(output_file.read_text())
+                        result = ExecutionResult(
+                            success=output_data.get("success", False),
+                            output=output_data.get("result"),
+                            stdout=output_data.get("stdout", ""),
+                            stderr=output_data.get("stderr", ""),
+                            error=output_data.get("error"),
+                            error_type=output_data.get("error_type"),
+                            execution_time_ms=execution_time_ms,
+                            call_log=output_data.get("call_log", []),
+                        )
+                        status = "success" if result.success else "failure"
+                        record_execution(
+                            tier=tier,
+                            status=status,
+                            duration_seconds=execution_time_ms / 1000,
+                            error_type=result.error_type if not result.success else None,
+                            namespace=namespace,
+                        )
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+
+                # ORDER-022: Log sandbox violations (nsjail seccomp/resource kills)
+                if process.returncode and process.returncode not in (0, 1):
+                    record_violation(tier=tier)
+                    asyncio.create_task(
+                        self._log_sandbox_violation(
+                            execution_id=execution_id,
+                            account_id=str(getattr(account, "id", "")),
+                            exit_code=process.returncode,
+                            stderr_tail=(stderr.decode()[-500:] if stderr else ""),
+                        )
+                    )
+                    asyncio.create_task(
+                        self._send_violation_alert(
+                            execution_id=execution_id,
+                            tier=tier,
+                            namespace=namespace,
+                            exit_code=process.returncode,
+                        )
+                    )
+
+                # Fallback if no output file
+                result = ExecutionResult(
                     success=False,
                     output=None,
-                    error="Execution timed out",
-                    error_type="TimeoutError",
-                    execution_time_ms=int(timeout_sec * 1000),
+                    stdout=stdout.decode() if stdout else None,
+                    stderr=stderr.decode() if stderr else None,
+                    error="No output produced by sandbox",
+                    error_type="ExecutionError",
+                    execution_time_ms=execution_time_ms,
                 )
-
-            execution_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
-
-            # Read output
-            output_file = exec_dir / "output.json"
-            if output_file.exists():
-                try:
-                    output_data = json.loads(output_file.read_text())
-                    return ExecutionResult(
-                        success=output_data.get("success", False),
-                        output=output_data.get("result"),
-                        stdout=output_data.get("stdout", ""),
-                        stderr=output_data.get("stderr", ""),
-                        error=output_data.get("error"),
-                        error_type=output_data.get("error_type"),
-                        execution_time_ms=execution_time_ms,
-                        call_log=output_data.get("call_log", []),
-                    )
-                except json.JSONDecodeError:
-                    pass
-
-            # ORDER-022: Log sandbox violations (nsjail seccomp/resource kills)
-            if process.returncode and process.returncode not in (0, 1):
-                asyncio.create_task(
-                    self._log_sandbox_violation(
-                        execution_id=execution_id,
-                        account_id=str(getattr(account, "id", "")),
-                        exit_code=process.returncode,
-                        stderr_tail=(stderr.decode()[-500:] if stderr else ""),
-                    )
+                record_execution(
+                    tier=tier,
+                    status="error",
+                    duration_seconds=execution_time_ms / 1000,
+                    error_type="ExecutionError",
+                    namespace=namespace,
                 )
-
-            # Fallback if no output file
-            return ExecutionResult(
-                success=False,
-                output=None,
-                stdout=stdout.decode() if stdout else None,
-                stderr=stderr.decode() if stderr else None,
-                error="No output produced by sandbox",
-                error_type="ExecutionError",
-                execution_time_ms=execution_time_ms,
-            )
+                return result
 
         finally:
             # Cleanup
@@ -461,6 +541,24 @@ class SandboxBackend(Backend):
                     "exit_code": exit_code,
                     "stderr_tail": stderr_tail[:255],
                 },
+            )
+
+    @staticmethod
+    async def _send_violation_alert(
+        execution_id: str,
+        tier: str,
+        namespace: str,
+        exit_code: int,
+    ) -> None:
+        from mcpworks_api.services.discord_alerts import send_execution_alert
+
+        with contextlib.suppress(Exception):
+            await send_execution_alert(
+                event="violation",
+                execution_id=execution_id,
+                tier=tier,
+                namespace=namespace,
+                exit_code=exit_code,
             )
 
     def _wrap_code(self, code: str) -> str:

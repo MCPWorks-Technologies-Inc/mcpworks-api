@@ -149,6 +149,16 @@ async def get_stats(
     }
 
 
+@router.get("/stats/sandbox")
+async def get_sandbox_stats(
+    _admin: AdminUserId,
+) -> dict[str, Any]:
+    """Real-time sandbox execution metrics (in-memory since last restart)."""
+    from mcpworks_api.middleware.execution_metrics import get_stats_snapshot
+
+    return get_stats_snapshot()
+
+
 @router.get("/stats/leaderboard")
 async def get_stats_leaderboard(
     _admin: AdminUserId,
