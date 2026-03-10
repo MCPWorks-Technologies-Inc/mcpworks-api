@@ -33,14 +33,18 @@ def _params_from_schema(schema: dict[str, Any] | None) -> list[tuple[str, Any, s
     if not schema or "properties" not in schema:
         return []
     required = set(schema.get("required", []))
-    params: list[tuple[str, Any, str]] = []
+    required_params: list[tuple[str, Any, str]] = []
+    optional_params: list[tuple[str, Any, str]] = []
     for key, prop in schema["properties"].items():
         default = prop.get("default", _NO_DEFAULT)
-        if key not in required and default is _NO_DEFAULT:
-            default = None  # optional without explicit default → None
         desc = prop.get("description", "")
-        params.append((_sanitize(key), default, desc))
-    return params
+        if key in required and default is _NO_DEFAULT:
+            required_params.append((_sanitize(key), _NO_DEFAULT, desc))
+        else:
+            if default is _NO_DEFAULT:
+                default = None
+            optional_params.append((_sanitize(key), default, desc))
+    return required_params + optional_params
 
 
 def _generate_wrapper(
