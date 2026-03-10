@@ -143,18 +143,21 @@ SANDBOX_UID=65534
 chown -R "${SANDBOX_UID}:${SANDBOX_UID}" "${WORKSPACE}"
 
 # Derive unique MACVLAN IP from exec_id for paid tiers.
-# Hash exec_id to 2 bytes → 10.200.{octet3}.{octet4} (avoiding .0 and .255).
+# Must be on the same subnet as the container (172.18.0.0/16) so the
+# gateway (172.18.0.1) is directly reachable from the MACVLAN interface.
+# Use 172.18.128-254.1-254 range to avoid conflicts with Docker-assigned IPs
+# (Docker assigns from the low end of the subnet).
 _exec_hash=$(echo -n "${EXEC_ID}" | md5sum | cut -c1-4)
 _hex3=$(echo "${_exec_hash}" | cut -c1-2)
 _hex4=$(echo "${_exec_hash}" | cut -c3-4)
 _octet3=$(( 16#${_hex3} ))
 _octet4=$(( 16#${_hex4} ))
-# Clamp to 1-254 to avoid network/broadcast addresses
-[ "${_octet3}" -eq 0 ] && _octet3=1
-[ "${_octet3}" -eq 255 ] && _octet3=254
+# Clamp octet3 to 128-254 (high range, away from Docker's low-range allocations)
+_octet3=$(( (_octet3 % 127) + 128 ))
+# Clamp octet4 to 1-254
 [ "${_octet4}" -eq 0 ] && _octet4=1
 [ "${_octet4}" -eq 255 ] && _octet4=254
-MACVLAN_IP="10.200.${_octet3}.${_octet4}"
+MACVLAN_IP="172.18.${_octet3}.${_octet4}"
 
 # Build nsjail arguments
 NSJAIL_ARGS=(
