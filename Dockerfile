@@ -189,6 +189,8 @@ COPY --from=sandbox-builder /sandbox-packages /opt/mcpworks/sandbox-root/site-pa
 
 # Copy sandbox scripts and rootfs
 COPY deploy/nsjail/execute.py /opt/mcpworks/bin/execute.py
+RUN python3 -c "import py_compile; py_compile.compile('/opt/mcpworks/bin/execute.py', '/opt/mcpworks/bin/execute.pyc', doraise=True)" \
+    && rm /opt/mcpworks/bin/execute.py
 COPY deploy/nsjail/spawn-sandbox.sh /opt/mcpworks/bin/spawn-sandbox.sh
 COPY deploy/nsjail/setup-cgroups.sh /opt/mcpworks/bin/setup-cgroups.sh
 COPY deploy/nsjail/smoketest.py /opt/mcpworks/bin/smoketest.py
