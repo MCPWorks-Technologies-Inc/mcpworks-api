@@ -15,12 +15,14 @@ async def get_redis_pool() -> ConnectionPool:
     """Get or create Redis connection pool."""
     global _pool
     if _pool is None:
-        _pool = ConnectionPool.from_url(
-            get_settings().redis_url,
-            max_connections=10,
-            decode_responses=True,
-            ssl_cert_reqs=None,
-        )
+        url = get_settings().redis_url
+        kwargs: dict[str, object] = {
+            "max_connections": 10,
+            "decode_responses": True,
+        }
+        if url.startswith("rediss://"):
+            kwargs["ssl_cert_reqs"] = None
+        _pool = ConnectionPool.from_url(url, **kwargs)
     return _pool
 
 
