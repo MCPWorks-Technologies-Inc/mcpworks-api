@@ -85,6 +85,11 @@ NSJAIL_ARGS=(
     --gid_mapping "65534:65534:1"
 )
 
+# Smoketest needs network access (tiktoken downloads encoding data).
+# Config has clone_newnet:true for production, but smoketest runs in CI
+# without MACVLAN setup. Disable network namespace isolation for smoketest.
+NSJAIL_ARGS+=(--disable_clone_newnet)
+
 # Overlay fake /proc files (matches spawn-sandbox.sh)
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
