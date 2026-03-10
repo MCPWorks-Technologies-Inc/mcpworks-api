@@ -45,6 +45,7 @@ services:
       - OAUTH_STATE_SECRET=${OAUTH_STATE_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@mcpworks.io}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
     volumes:
       - sandbox-tmp:/tmp/sandbox
       - ./keys/jwt_private.pem:/app/keys/private.pem:ro
