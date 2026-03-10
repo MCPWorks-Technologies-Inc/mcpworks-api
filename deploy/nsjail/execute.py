@@ -55,7 +55,7 @@ def _is_blocked_path(path):
         "/proc/1/cgroup",
         "/proc/self/environ",
         "/proc/1/environ",
-        "/opt/mcpworks/bin/execute.py",
+        "/opt/mcpworks/bin/execute.pyc",
     )
     if any(p.startswith(pfx) for pfx in _prefixes):
         return True

@@ -188,7 +188,7 @@ fi
     "${NSJAIL_ARGS[@]}" \
     --execute_fd \
     -- \
-    /usr/local/bin/python3 -S /opt/mcpworks/bin/execute.py
+    /usr/local/bin/python3 -S /opt/mcpworks/bin/execute.pyc
 
 NSJAIL_EXIT=$?
 
