@@ -28,7 +28,11 @@ def get_engine() -> AsyncEngine:
             echo=settings.app_debug,
             pool_size=settings.database_pool_size,
             max_overflow=settings.database_max_overflow,
-            pool_pre_ping=True,  # Verify connections before use
+            pool_pre_ping=True,
+            connect_args={
+                "statement_cache_size": 0,
+                "prepared_statement_cache_size": 0,
+            },
         )
     return _engine
 

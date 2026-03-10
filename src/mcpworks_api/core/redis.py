@@ -19,6 +19,7 @@ async def get_redis_pool() -> ConnectionPool:
             get_settings().redis_url,
             max_connections=10,
             decode_responses=True,
+            ssl_cert_reqs=None,
         )
     return _pool
 
