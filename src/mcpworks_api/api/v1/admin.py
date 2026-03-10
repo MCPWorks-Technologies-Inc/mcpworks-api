@@ -1,19 +1,20 @@
 """Admin API endpoints - superadmin cross-user visibility."""
 
 import asyncio
+import os
 import uuid as uuid_module
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from mcpworks_api.config import get_settings
-from mcpworks_api.core.database import get_db
+from mcpworks_api.core.database import get_db, get_engine
 from mcpworks_api.dependencies import AdminUserId
 from mcpworks_api.models import (
     Account,
@@ -1520,3 +1521,729 @@ async def get_system_health(
         "redis_uptime_seconds": redis_uptime,
         "security_summary": severity_counts,
     }
+
+
+# --- Execution detail & search ---
+
+
+@router.get("/executions/{execution_id}")
+async def get_execution_detail(
+    execution_id: str,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Full execution detail: input, output, error, timing, metadata."""
+    result = await db.execute(
+        select(Execution)
+        .where(Execution.id == uuid_module.UUID(execution_id))
+        .options(
+            selectinload(Execution.user),
+            selectinload(Execution.function)
+            .selectinload(Function.service)
+            .selectinload(NamespaceService.namespace),
+        )
+    )
+    ex = result.scalar_one_or_none()
+
+    if not ex:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    return {
+        "id": str(ex.id),
+        "user_id": str(ex.user_id),
+        "user_email": ex.user.email if ex.user else None,
+        "function_id": str(ex.function_id) if ex.function_id else None,
+        "function_name": ex.function.name if ex.function else None,
+        "service_name": ex.function.service.name if ex.function and ex.function.service else None,
+        "namespace": (
+            ex.function.service.namespace.name
+            if ex.function and ex.function.service and ex.function.service.namespace
+            else None
+        ),
+        "function_version": ex.function_version_num,
+        "backend": ex.backend,
+        "workflow_id": ex.workflow_id,
+        "status": ex.status,
+        "input_data": ex.input_data,
+        "result_data": ex.result_data,
+        "error_message": ex.error_message,
+        "error_code": ex.error_code,
+        "backend_metadata": ex.backend_metadata,
+        "started_at": ex.started_at.isoformat() if ex.started_at else None,
+        "completed_at": ex.completed_at.isoformat() if ex.completed_at else None,
+        "duration_seconds": ex.duration_seconds,
+        "created_at": ex.created_at.isoformat() if ex.created_at else None,
+    }
+
+
+@router.get("/executions-search")
+async def search_executions(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    status: str | None = None,
+    user_id: str | None = None,
+    function_id: str | None = None,
+    namespace: str | None = None,
+    since: str | None = Query(
+        default=None, description="ISO datetime or relative like '1h', '24h', '7d'"
+    ),
+    limit: int = Query(default=50, le=200),
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Search executions with filters."""
+    q = (
+        select(Execution)
+        .options(
+            selectinload(Execution.user),
+            selectinload(Execution.function)
+            .selectinload(Function.service)
+            .selectinload(NamespaceService.namespace),
+        )
+        .order_by(Execution.created_at.desc())
+    )
+    count_q = select(func.count(Execution.id))
+
+    if status:
+        q = q.where(Execution.status == status)
+        count_q = count_q.where(Execution.status == status)
+    if user_id:
+        uid = uuid_module.UUID(user_id)
+        q = q.where(Execution.user_id == uid)
+        count_q = count_q.where(Execution.user_id == uid)
+    if function_id:
+        fid = uuid_module.UUID(function_id)
+        q = q.where(Execution.function_id == fid)
+        count_q = count_q.where(Execution.function_id == fid)
+    if namespace:
+        q = (
+            q.join(Function, Execution.function_id == Function.id)
+            .join(NamespaceService, Function.service_id == NamespaceService.id)
+            .join(Namespace, NamespaceService.namespace_id == Namespace.id)
+            .where(Namespace.name == namespace)
+        )
+        count_q = (
+            count_q.join(Function, Execution.function_id == Function.id)
+            .join(NamespaceService, Function.service_id == NamespaceService.id)
+            .join(Namespace, NamespaceService.namespace_id == Namespace.id)
+            .where(Namespace.name == namespace)
+        )
+    if since:
+        since_dt = _parse_relative_time(since)
+        q = q.where(Execution.created_at >= since_dt)
+        count_q = count_q.where(Execution.created_at >= since_dt)
+
+    total = (await db.execute(count_q)).scalar() or 0
+    rows = (await db.execute(q.limit(limit).offset(offset))).scalars().all()
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": str(ex.id),
+                "user_email": ex.user.email if ex.user else None,
+                "function_name": ex.function.name if ex.function else None,
+                "namespace": (
+                    ex.function.service.namespace.name
+                    if ex.function and ex.function.service and ex.function.service.namespace
+                    else None
+                ),
+                "status": ex.status,
+                "error_message": ex.error_message,
+                "error_code": ex.error_code,
+                "duration_seconds": ex.duration_seconds,
+                "created_at": ex.created_at.isoformat() if ex.created_at else None,
+            }
+            for ex in rows
+        ],
+    }
+
+
+# --- User activity timeline ---
+
+
+@router.get("/users/{user_id}/activity")
+async def get_user_activity(
+    user_id: str,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, le=200),
+) -> dict[str, Any]:
+    """User activity timeline: recent executions, audit logs, security events."""
+    uid = uuid_module.UUID(user_id)
+
+    result = await db.execute(select(User).where(User.id == uid))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    exec_q = (
+        select(Execution)
+        .where(Execution.user_id == uid)
+        .options(selectinload(Execution.function))
+        .order_by(Execution.created_at.desc())
+        .limit(limit)
+    )
+    exec_rows = (await db.execute(exec_q)).scalars().all()
+
+    audit_q = (
+        select(AuditLog)
+        .where(AuditLog.user_id == uid)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
+    audit_rows = (await db.execute(audit_q)).scalars().all()
+
+    sec_q = (
+        select(SecurityEvent)
+        .where(SecurityEvent.actor_id == str(uid))
+        .order_by(SecurityEvent.timestamp.desc())
+        .limit(limit)
+    )
+    sec_rows = (await db.execute(sec_q)).scalars().all()
+
+    return {
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "name": user.name,
+            "tier": user.tier,
+            "effective_tier": user.effective_tier,
+            "status": user.status,
+        },
+        "recent_executions": [
+            {
+                "id": str(ex.id),
+                "function_name": ex.function.name if ex.function else None,
+                "status": ex.status,
+                "error_message": ex.error_message,
+                "duration_seconds": ex.duration_seconds,
+                "created_at": ex.created_at.isoformat() if ex.created_at else None,
+            }
+            for ex in exec_rows
+        ],
+        "recent_audit_logs": [
+            {
+                "id": str(r.id),
+                "action": r.action,
+                "resource_type": r.resource_type,
+                "event_data": r.event_data,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in audit_rows
+        ],
+        "recent_security_events": [
+            {
+                "id": str(r.id),
+                "event_type": r.event_type,
+                "severity": r.severity,
+                "details": r.details,
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            }
+            for r in sec_rows
+        ],
+    }
+
+
+# --- Error aggregation ---
+
+
+@router.get("/errors")
+async def get_error_summary(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    since: str | None = Query(default="24h", description="Relative time like '1h', '24h', '7d'"),
+) -> dict[str, Any]:
+    """Error aggregation: recent failures grouped by error code and function."""
+    since_dt = _parse_relative_time(since or "24h")
+
+    by_code_q = (
+        select(
+            Execution.error_code,
+            func.count(Execution.id).label("count"),
+        )
+        .where(Execution.status == "failed", Execution.created_at >= since_dt)
+        .group_by(Execution.error_code)
+        .order_by(func.count(Execution.id).desc())
+        .limit(20)
+    )
+    by_code_rows = (await db.execute(by_code_q)).all()
+
+    by_fn_q = (
+        select(
+            Function.name.label("function_name"),
+            Namespace.name.label("namespace"),
+            func.count(Execution.id).label("count"),
+        )
+        .join(Function, Execution.function_id == Function.id)
+        .join(NamespaceService, Function.service_id == NamespaceService.id)
+        .join(Namespace, NamespaceService.namespace_id == Namespace.id)
+        .where(Execution.status == "failed", Execution.created_at >= since_dt)
+        .group_by(Function.name, Namespace.name)
+        .order_by(func.count(Execution.id).desc())
+        .limit(20)
+    )
+    by_fn_rows = (await db.execute(by_fn_q)).all()
+
+    recent_q = (
+        select(Execution)
+        .options(
+            selectinload(Execution.user),
+            selectinload(Execution.function),
+        )
+        .where(Execution.status == "failed", Execution.created_at >= since_dt)
+        .order_by(Execution.created_at.desc())
+        .limit(20)
+    )
+    recent_rows = (await db.execute(recent_q)).scalars().all()
+
+    total_failed = (
+        await db.execute(
+            select(func.count(Execution.id)).where(
+                Execution.status == "failed", Execution.created_at >= since_dt
+            )
+        )
+    ).scalar() or 0
+
+    total_all = (
+        await db.execute(select(func.count(Execution.id)).where(Execution.created_at >= since_dt))
+    ).scalar() or 0
+
+    return {
+        "since": since_dt.isoformat(),
+        "total_executions": total_all,
+        "total_failures": total_failed,
+        "failure_rate": round(total_failed / total_all * 100, 2) if total_all > 0 else 0,
+        "by_error_code": [
+            {"error_code": r.error_code or "unknown", "count": r.count} for r in by_code_rows
+        ],
+        "by_function": [
+            {"namespace": r.namespace, "function": r.function_name, "count": r.count}
+            for r in by_fn_rows
+        ],
+        "recent_failures": [
+            {
+                "id": str(ex.id),
+                "user_email": ex.user.email if ex.user else None,
+                "function_name": ex.function.name if ex.function else None,
+                "error_code": ex.error_code,
+                "error_message": ex.error_message,
+                "created_at": ex.created_at.isoformat() if ex.created_at else None,
+            }
+            for ex in recent_rows
+        ],
+    }
+
+
+# --- Usage overview ---
+
+
+@router.get("/usage")
+async def get_usage_overview(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """All accounts' current month usage vs tier limits."""
+    from mcpworks_api.core.redis import get_redis_context
+    from mcpworks_api.middleware.billing import BillingMiddleware
+
+    now = datetime.now(UTC)
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.account))
+        .where(User.status == "active")
+        .order_by(User.created_at.desc())
+    )
+    users = result.scalars().all()
+
+    usage_data = []
+    async with get_redis_context() as redis:
+        for user in users:
+            if not user.account:
+                continue
+            month_key = f"usage:{user.account.id}:{now.year}:{now.month}"
+            current = await redis.get(month_key)
+            usage_count = int(current) if current else 0
+            tier = user.effective_tier or user.tier or "free"
+            limit = BillingMiddleware.TIER_LIMITS.get(tier, 1000)
+            pct = round(usage_count / limit * 100, 1) if limit > 0 else 0
+
+            usage_data.append(
+                {
+                    "user_id": str(user.id),
+                    "email": user.email,
+                    "tier": tier,
+                    "usage": usage_count,
+                    "limit": limit,
+                    "usage_pct": pct,
+                    "at_risk": pct >= 80,
+                }
+            )
+
+    usage_data.sort(key=lambda x: x["usage"], reverse=True)
+
+    return {
+        "month": f"{now.year}-{now.month:02d}",
+        "accounts": usage_data,
+        "accounts_at_risk": [u for u in usage_data if u["at_risk"]],
+    }
+
+
+# --- System resources ---
+
+
+@router.get("/system/resources")
+async def get_system_resources(
+    _admin: AdminUserId,
+) -> dict[str, Any]:
+    """Server resource usage: CPU, memory, disk."""
+    resources: dict[str, Any] = {}
+
+    try:
+        with open("/proc/loadavg") as f:
+            parts = f.read().strip().split()
+            resources["cpu"] = {
+                "load_1m": float(parts[0]),
+                "load_5m": float(parts[1]),
+                "load_15m": float(parts[2]),
+            }
+    except Exception:
+        resources["cpu"] = {"error": "unavailable"}
+
+    try:
+        with open("/proc/meminfo") as f:
+            meminfo = {}
+            for line in f:
+                key, val = line.split(":", 1)
+                meminfo[key.strip()] = int(val.strip().split()[0])
+            total_kb = meminfo.get("MemTotal", 0)
+            available_kb = meminfo.get("MemAvailable", 0)
+            used_kb = total_kb - available_kb
+            resources["memory"] = {
+                "total_mb": round(total_kb / 1024, 1),
+                "used_mb": round(used_kb / 1024, 1),
+                "available_mb": round(available_kb / 1024, 1),
+                "usage_pct": round(used_kb / total_kb * 100, 1) if total_kb else 0,
+            }
+    except Exception:
+        resources["memory"] = {"error": "unavailable"}
+
+    try:
+        statvfs = os.statvfs("/")
+        total = statvfs.f_frsize * statvfs.f_blocks
+        available = statvfs.f_frsize * statvfs.f_bavail
+        used = total - available
+        resources["disk"] = {
+            "total_gb": round(total / (1024**3), 2),
+            "used_gb": round(used / (1024**3), 2),
+            "available_gb": round(available / (1024**3), 2),
+            "usage_pct": round(used / total * 100, 1) if total else 0,
+        }
+    except Exception:
+        resources["disk"] = {"error": "unavailable"}
+
+    try:
+        with open("/proc/uptime") as f:
+            uptime_seconds = float(f.read().split()[0])
+            days = int(uptime_seconds // 86400)
+            hours = int((uptime_seconds % 86400) // 3600)
+            resources["uptime"] = {
+                "seconds": int(uptime_seconds),
+                "human": f"{days}d {hours}h",
+            }
+    except Exception:
+        resources["uptime"] = {"error": "unavailable"}
+
+    return resources
+
+
+# --- Database diagnostics ---
+
+
+@router.get("/system/database")
+async def get_database_diagnostics(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Database diagnostics: pool stats, table sizes, active connections."""
+    diagnostics: dict[str, Any] = {}
+
+    engine = get_engine()
+    pool = engine.pool
+    diagnostics["pool"] = {
+        "size": pool.size(),
+        "checked_in": pool.checkedin(),
+        "checked_out": pool.checkedout(),
+        "overflow": pool.overflow(),
+        "status": pool.status(),
+    }
+
+    try:
+        conn_result = await db.execute(
+            text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")
+        )
+        diagnostics["active_connections"] = conn_result.scalar()
+    except Exception as e:
+        diagnostics["active_connections_error"] = str(e)
+
+    try:
+        size_result = await db.execute(
+            text("SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size")
+        )
+        diagnostics["database_size"] = size_result.scalar()
+    except Exception as e:
+        diagnostics["database_size_error"] = str(e)
+
+    try:
+        table_result = await db.execute(
+            text("""
+            SELECT relname AS table_name,
+                   pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
+                   n_live_tup AS row_count
+            FROM pg_class c
+            JOIN pg_stat_user_tables s ON c.relname = s.relname
+            WHERE c.relkind = 'r'
+            ORDER BY pg_total_relation_size(c.oid) DESC
+            LIMIT 20
+        """)
+        )
+        diagnostics["tables"] = [
+            {"table": r.table_name, "size": r.total_size, "rows": r.row_count} for r in table_result
+        ]
+    except Exception as e:
+        diagnostics["tables_error"] = str(e)
+
+    try:
+        slow_result = await db.execute(
+            text("""
+            SELECT query, calls, mean_exec_time, total_exec_time
+            FROM pg_stat_statements
+            ORDER BY mean_exec_time DESC
+            LIMIT 10
+        """)
+        )
+        diagnostics["slow_queries"] = [
+            {
+                "query": r.query[:200],
+                "calls": r.calls,
+                "avg_ms": round(r.mean_exec_time, 2),
+                "total_ms": round(r.total_exec_time, 2),
+            }
+            for r in slow_result
+        ]
+    except Exception:
+        diagnostics["slow_queries"] = "pg_stat_statements extension not available"
+
+    return diagnostics
+
+
+# --- Redis diagnostics ---
+
+
+@router.get("/system/redis")
+async def get_redis_diagnostics(
+    _admin: AdminUserId,
+) -> dict[str, Any]:
+    """Redis diagnostics: memory, keys, clients, key patterns."""
+    from mcpworks_api.core.redis import get_redis_context
+
+    diagnostics: dict[str, Any] = {}
+
+    async with get_redis_context() as redis:
+        try:
+            info = await redis.info()
+            diagnostics["server"] = {
+                "version": info.get("redis_version"),
+                "uptime_seconds": info.get("uptime_in_seconds"),
+                "uptime_human": info.get("uptime_in_days", 0),
+                "connected_clients": info.get("connected_clients"),
+            }
+            diagnostics["memory"] = {
+                "used_human": info.get("used_memory_human"),
+                "used_bytes": info.get("used_memory"),
+                "peak_human": info.get("used_memory_peak_human"),
+                "fragmentation_ratio": info.get("mem_fragmentation_ratio"),
+            }
+            diagnostics["stats"] = {
+                "total_commands_processed": info.get("total_commands_processed"),
+                "keyspace_hits": info.get("keyspace_hits"),
+                "keyspace_misses": info.get("keyspace_misses"),
+                "evicted_keys": info.get("evicted_keys"),
+            }
+        except Exception as e:
+            diagnostics["error"] = str(e)
+
+        try:
+            db_size = await redis.dbsize()
+            diagnostics["total_keys"] = db_size
+        except Exception:
+            pass
+
+        try:
+            usage_keys = []
+            async for key in redis.scan_iter("usage:*", count=100):
+                val = await redis.get(key)
+                ttl = await redis.ttl(key)
+                usage_keys.append({"key": key, "value": int(val) if val else 0, "ttl_seconds": ttl})
+            diagnostics["usage_keys"] = sorted(usage_keys, key=lambda x: x["value"], reverse=True)
+        except Exception:
+            pass
+
+        try:
+            rl_keys = []
+            async for key in redis.scan_iter("ratelimit:*", count=100):
+                val = await redis.get(key)
+                ttl = await redis.ttl(key)
+                rl_keys.append({"key": key, "value": int(val) if val else 0, "ttl_seconds": ttl})
+            diagnostics["rate_limit_keys"] = rl_keys
+        except Exception:
+            pass
+
+    return diagnostics
+
+
+# --- Rate limit inspection ---
+
+
+@router.get("/rate-limits")
+async def get_rate_limit_state(
+    _admin: AdminUserId,
+) -> dict[str, Any]:
+    """Current rate limit state: who's being throttled and approaching limits."""
+    from mcpworks_api.core.redis import get_redis_context
+    from mcpworks_api.middleware.rate_limit import RateLimitMiddleware
+
+    limits_config = RateLimitMiddleware.LIMITS
+    result: dict[str, Any] = {"config": limits_config, "active": []}
+
+    async with get_redis_context() as redis:
+        async for key in redis.scan_iter("ratelimit:*", count=200):
+            val = await redis.get(key)
+            ttl = await redis.ttl(key)
+            count = int(val) if val else 0
+
+            parts = key.split(":") if isinstance(key, str) else key.decode().split(":")
+            key_type = parts[1] if len(parts) > 1 else "unknown"
+            identifier = ":".join(parts[2:]) if len(parts) > 2 else "unknown"
+
+            config = limits_config.get(
+                {
+                    "auth": "auth_attempt",
+                    "auth_fail": "auth_failure",
+                    "register": "registration",
+                }.get(key_type, "ip_request"),
+                {"limit": 0, "window": 0},
+            )
+
+            result["active"].append(
+                {
+                    "key": key if isinstance(key, str) else key.decode(),
+                    "type": key_type,
+                    "identifier": identifier,
+                    "count": count,
+                    "limit": config["limit"],
+                    "is_limited": count >= config["limit"],
+                    "ttl_seconds": ttl,
+                }
+            )
+
+    result["active"].sort(key=lambda x: x["count"], reverse=True)
+    result["currently_limited"] = [x for x in result["active"] if x["is_limited"]]
+
+    return result
+
+
+# --- Usage reset (admin action) ---
+
+
+@router.post("/users/{user_id}/reset-usage")
+async def reset_user_usage(
+    user_id: str,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Reset a user's monthly usage counter."""
+    from mcpworks_api.middleware.billing import reset_account_usage
+
+    result = await db.execute(
+        select(User).where(User.id == uuid_module.UUID(user_id)).options(selectinload(User.account))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.account:
+        raise HTTPException(status_code=404, detail="User has no account")
+
+    success = await reset_account_usage(user.account.id)
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="usage_reset",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={"target_email": user.email},
+    )
+    db.add(audit_log)
+
+    return {
+        "user_id": str(user.id),
+        "email": user.email,
+        "usage_reset": success,
+    }
+
+
+# --- Execution status timeline ---
+
+
+@router.get("/system/execution-timeline")
+async def get_execution_timeline(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    hours: int = Query(default=24, le=168),
+) -> dict[str, Any]:
+    """Execution counts grouped by hour for the past N hours."""
+    since = datetime.now(UTC) - timedelta(hours=hours)
+
+    result = await db.execute(
+        text("""
+        SELECT
+            date_trunc('hour', created_at) AS hour,
+            status,
+            count(*) AS count
+        FROM executions
+        WHERE created_at >= :since
+        GROUP BY hour, status
+        ORDER BY hour DESC
+    """).bindparams(since=since)
+    )
+
+    timeline: dict[str, dict[str, int]] = {}
+    for row in result:
+        hour_str = row.hour.isoformat() if row.hour else "unknown"
+        if hour_str not in timeline:
+            timeline[hour_str] = {}
+        timeline[hour_str][row.status] = row.count
+
+    return {
+        "hours": hours,
+        "since": since.isoformat(),
+        "timeline": timeline,
+    }
+
+
+# --- Helpers ---
+
+
+def _parse_relative_time(value: str) -> datetime:
+    """Parse relative time string like '1h', '24h', '7d' or ISO datetime."""
+    value = value.strip()
+    try:
+        if value.endswith("m"):
+            return datetime.now(UTC) - timedelta(minutes=int(value[:-1]))
+        if value.endswith("h"):
+            return datetime.now(UTC) - timedelta(hours=int(value[:-1]))
+        if value.endswith("d"):
+            return datetime.now(UTC) - timedelta(days=int(value[:-1]))
+        return datetime.fromisoformat(value)
+    except (ValueError, OverflowError):
+        return datetime.now(UTC) - timedelta(hours=24)

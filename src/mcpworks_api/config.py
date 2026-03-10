@@ -90,6 +90,10 @@ class Settings(BaseSettings):
 
     # Admin
     admin_emails: list[str] = Field(default_factory=lambda: ["simon.carr@mcpworks.io"])
+    admin_api_key: str = Field(
+        default="",
+        description="Static API key for admin endpoints (X-Admin-Key header)",
+    )
 
     # OAuth Providers
     oauth_google_client_id: str = Field(default="")
