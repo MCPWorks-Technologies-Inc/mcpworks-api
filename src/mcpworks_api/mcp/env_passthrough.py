@@ -70,6 +70,9 @@ def extract_env_vars(request: Request) -> dict[str, str]:
     if not raw:
         return {}
 
+    if raw.startswith("base64:"):
+        raw = raw[7:]
+
     try:
         decoded = base64.b64decode(raw, validate=True)
     except Exception:
