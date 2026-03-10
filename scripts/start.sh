@@ -121,9 +121,12 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
 
         OUR_IPS=$(getent hosts api.mcpworks.io 2>/dev/null | awk '{print $1}')
         for IP in ${OUR_IPS}; do
+            iptables -C OUTPUT -d "${IP}" -p tcp --dport 443 -m owner --uid-owner 65533 -j ACCEPT 2>/dev/null || \
+            iptables -A OUTPUT -d "${IP}" -p tcp --dport 443 -m owner --uid-owner 65533 -j ACCEPT
+            echo "Allowed paid sandbox (uid 65533) -> mcpworks API HTTPS (${IP}:443)"
             iptables -C OUTPUT -d "${IP}" -m owner --uid-owner 65533 -j DROP 2>/dev/null || \
             iptables -A OUTPUT -d "${IP}" -m owner --uid-owner 65533 -j DROP
-            echo "Blocked paid sandbox (uid 65533) -> mcpworks API (${IP})"
+            echo "Blocked paid sandbox (uid 65533) -> mcpworks API other (${IP})"
         done
 
         iptables -C OUTPUT -m owner --uid-owner 65533 -p tcp --syn \
