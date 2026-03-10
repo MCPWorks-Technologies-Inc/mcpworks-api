@@ -195,20 +195,23 @@ NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 
-# F-33/F-37: Overlay fake /proc/net and /proc/self entries
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_tcp:/proc/net/tcp")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_tcp6:/proc/net/tcp6")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_arp:/proc/net/arp")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_net_route:/proc/net/route")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/net/unix")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_mountinfo:/proc/self/mountinfo")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_mountinfo:/proc/1/mountinfo")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_status:/proc/self/status")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_status:/proc/1/status")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/self/maps")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/1/maps")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/self/smaps")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_proc_empty:/proc/1/smaps")
+# F-33/F-37: Overlay fake /proc/net and /proc/self entries.
+# Uses --bindmount (rw) because nsjail's MS_REMOUNT|MS_RDONLY fails on
+# procfs subdirectories. The fake files are in the per-execution tmpfs so
+# sandbox can only modify its own fake data — no security impact.
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_tcp:/proc/net/tcp")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_tcp6:/proc/net/tcp6")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_arp:/proc/net/arp")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_route:/proc/net/route")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/net/unix")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_mountinfo:/proc/self/mountinfo")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_mountinfo:/proc/1/mountinfo")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_status:/proc/self/status")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_status:/proc/1/status")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/self/maps")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/1/maps")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/self/smaps")
+NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/1/smaps")
 
 # FINDING-25: Hide _ctypes C extension .so files from sandbox.
 # sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
