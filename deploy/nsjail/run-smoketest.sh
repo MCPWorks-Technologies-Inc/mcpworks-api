@@ -90,6 +90,10 @@ NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 
+# Bind-mount smoketest.py into sandbox (python.cfg only mounts execute.py now,
+# not the full /opt/mcpworks/bin directory — see F-28 fix)
+NSJAIL_ARGS+=(--bindmount_ro "/opt/mcpworks/bin/smoketest.py:/opt/mcpworks/bin/smoketest.py")
+
 # Run under aggregate cgroup if available
 CGROUP_PARENT="/sys/fs/cgroup/mcpworks"
 if [ -d "${CGROUP_PARENT}" ]; then

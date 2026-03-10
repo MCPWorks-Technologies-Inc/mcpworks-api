@@ -34,12 +34,28 @@ def _is_blocked_path(path):
     if not isinstance(path, str | bytes):
         return False
     p = path.decode("utf-8", errors="replace") if isinstance(path, bytes) else path
-    _prefixes = ("/proc/net/", "/proc/self/net/", "/proc/1/net/")
+    _prefixes = (
+        "/proc/net/",
+        "/proc/self/net/",
+        "/proc/1/net/",
+        "/opt/mcpworks/bin/",
+    )
     _paths = (
         "/proc/self/mountinfo",
         "/proc/1/mountinfo",
         "/proc/self/mounts",
         "/proc/1/mounts",
+        "/proc/self/maps",
+        "/proc/1/maps",
+        "/proc/self/smaps",
+        "/proc/1/smaps",
+        "/proc/self/status",
+        "/proc/1/status",
+        "/proc/self/cgroup",
+        "/proc/1/cgroup",
+        "/proc/self/environ",
+        "/proc/1/environ",
+        "/opt/mcpworks/bin/execute.py",
     )
     if any(p.startswith(pfx) for pfx in _prefixes):
         return True
@@ -380,77 +396,61 @@ def _harden_sandbox():
     # FINDING-08 + F-22: Block /proc/net and /proc/self/mountinfo reads.
     # Restrict both builtins.open AND os.open/os.read/io.open to prevent
     # the os.open() bypass discovered in Round 6.
+    import _io
     import builtins
 
-    # F-26: All _Restricted* classes use __getattribute__ to block direct
-    # attribute access to _f. Attackers must use object.__getattribute__()
-    # which is harder to discover. With _ctypes.so removed from disk (F-25),
-    # recovering the real function is harmless (no libc.system or
-    # PyFrame_LocalsToFast available).
-    _real_open = builtins.open
-
-    class _RestrictedOpen:
-        __slots__ = ("_f",)
-
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
-
-        def __call__(self, file, *args, **kwargs):
-            if _is_blocked_path(file):
-                raise PermissionError(f"Access denied: {file}")
-            return object.__getattribute__(self, "_f")(file, *args, **kwargs)
-
-        def __getattribute__(self, name):
-            if name == "_f":
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
-
-    builtins.open = _RestrictedOpen(_real_open)
-    del _real_open
-
-    _real_os_open = os.open
-
-    class _RestrictedOsOpen:
-        __slots__ = ("_f",)
-
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
-
-        def __call__(self, path, flags, mode=0o777, *args, **kwargs):
-            if _is_blocked_path(path):
-                raise PermissionError(f"Access denied: {path}")
-            return object.__getattribute__(self, "_f")(path, flags, mode, *args, **kwargs)
-
-        def __getattribute__(self, name):
-            if name == "_f":
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
-
-    os.open = _RestrictedOsOpen(_real_os_open)
-    del _real_os_open
-
+    # F-28 FIX: RestrictedOpen defense-in-depth for /proc path blocking.
+    #
+    # IMPORTANT SECURITY MODEL: Python-level open() wrappers are
+    # DEFENSE-IN-DEPTH, not a security boundary. Every approach to hide
+    # the real function from Python-level introspection is bypassable:
+    #   - __slots__: object.__getattribute__(obj, '_f') reads the slot
+    #   - closure: func.__closure__[0].cell_contents recovers the cell
+    #   - default arg: func.__defaults__[0]
+    #   - global: func.__globals__['var']
+    #
+    # The PRIMARY security boundaries are:
+    #   1. Mount namespace: sensitive files not mounted (Fix 1)
+    #   2. Network namespace + iptables: no exfiltration (free tier)
+    #   3. seccomp: dangerous syscalls blocked
+    #
+    # These wrappers exist to block CASUAL access to /proc paths.
+    # A determined attacker who recovers the real open() can read /proc,
+    # but the information gained is limited (fake cpuinfo/meminfo/version
+    # overlaid, mountinfo blocked, /proc/net visible but network is
+    # firewalled). The scripts they previously could read (spawn-sandbox.sh,
+    # setup-cgroups.sh, etc.) are no longer in the namespace (Fix 1).
     import io
 
+    _real_open = builtins.open
+    _real_os_open = os.open
     _real_io_open = io.open
+    _real_io_c_open = _io.open
 
-    class _RestrictedIoOpen:
-        __slots__ = ("_f",)
+    def _restricted_open(file, *args, **kwargs):
+        if _is_blocked_path(file):
+            raise PermissionError(f"Access denied: {file}")
+        return _real_open(file, *args, **kwargs)
 
-        def __init__(self, f):
-            object.__setattr__(self, "_f", f)
+    def _restricted_os_open(path, flags, mode=0o777, *args, **kwargs):
+        if _is_blocked_path(path):
+            raise PermissionError(f"Access denied: {path}")
+        return _real_os_open(path, flags, mode, *args, **kwargs)
 
-        def __call__(self, file, *args, **kwargs):
-            if _is_blocked_path(file):
-                raise PermissionError(f"Access denied: {file}")
-            return object.__getattribute__(self, "_f")(file, *args, **kwargs)
+    def _restricted_io_open(file, *args, **kwargs):
+        if _is_blocked_path(file):
+            raise PermissionError(f"Access denied: {file}")
+        return _real_io_open(file, *args, **kwargs)
 
-        def __getattribute__(self, name):
-            if name == "_f":
-                raise AttributeError("Access denied")
-            return object.__getattribute__(self, name)
+    def _restricted_io_c_open(file, *args, **kwargs):
+        if _is_blocked_path(file):
+            raise PermissionError(f"Access denied: {file}")
+        return _real_io_c_open(file, *args, **kwargs)
 
-    io.open = _RestrictedIoOpen(_real_io_open)
-    del _real_io_open
+    builtins.open = _restricted_open
+    os.open = _restricted_os_open
+    io.open = _restricted_io_open
+    _io.open = _restricted_io_c_open
 
     # FINDING-20 + F-22: Protect poisoned modules from being restored.
     #
