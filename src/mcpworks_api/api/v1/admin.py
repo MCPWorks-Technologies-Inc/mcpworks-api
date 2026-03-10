@@ -2252,10 +2252,10 @@ def _parse_relative_time(value: str) -> datetime:
 @router.delete("/namespaces/{ns_name}")
 async def admin_delete_namespace(
     ns_name: str,
+    admin_id: AdminUserId,
     hard: bool = Query(
         False, description="Hard delete (permanent) vs soft delete (30-day recovery)"
     ),
-    admin_user_id: str = AdminUserId,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     result = await db.execute(select(Namespace).where(Namespace.name == ns_name.lower()))
@@ -2328,7 +2328,7 @@ async def admin_delete_namespace(
         namespace.deleted_at = datetime.now(UTC)
 
     audit_log = AuditLog(
-        user_id=uuid_module.UUID(admin_user_id),
+        user_id=uuid_module.UUID(admin_id),
         action="admin.namespace_deleted",
         resource_type="namespace",
         resource_id=namespace.id,
