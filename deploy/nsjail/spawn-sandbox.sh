@@ -195,23 +195,17 @@ NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_cpuinfo:/proc/cpuinfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_meminfo:/proc/meminfo")
 NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 
-# F-33/F-37: Overlay fake /proc/net and /proc/self entries.
-# Uses --bindmount (rw) because nsjail's MS_REMOUNT|MS_RDONLY fails on
-# procfs subdirectories. The fake files are in the per-execution tmpfs so
-# sandbox can only modify its own fake data — no security impact.
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_tcp:/proc/net/tcp")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_tcp6:/proc/net/tcp6")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_arp:/proc/net/arp")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_net_route:/proc/net/route")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/net/unix")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_mountinfo:/proc/self/mountinfo")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_mountinfo:/proc/1/mountinfo")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_status:/proc/self/status")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_status:/proc/1/status")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/self/maps")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/1/maps")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/self/smaps")
-NSJAIL_ARGS+=(--bindmount "${WORKSPACE}/.fake_proc_empty:/proc/1/smaps")
+# F-33/F-37: /proc subdirectory bind-mounts are NOT possible with nsjail.
+# nsjail's remountPt() always calls mount() with MS_REMOUNT|MS_BIND after
+# every bind-mount, and the kernel rejects remount on procfs entries.
+# This affects both /proc/net/* and /proc/self/* — tested with both
+# --bindmount and --bindmount_ro.
+#
+# /proc/net (TCP table, ARP, routes): requires P2 clone_newnet to fix.
+# /proc/self (mountinfo, maps, status): low-risk info leak, accepted.
+#
+# The fake files are still generated above for future use if nsjail
+# adds a skip-remount option or we switch to clone_newnet.
 
 # FINDING-25: Hide _ctypes C extension .so files from sandbox.
 # sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
