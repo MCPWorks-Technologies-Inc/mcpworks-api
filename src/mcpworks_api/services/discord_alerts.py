@@ -58,6 +58,39 @@ async def send_new_account_alert(
     )
 
 
+async def send_execution_alert(
+    event: str,
+    execution_id: str,
+    tier: str,
+    namespace: str,
+    error_type: str | None = None,
+    duration_ms: int | None = None,
+    exit_code: int | None = None,
+) -> None:
+    color_map = {
+        "timeout": 0xFEE75C,
+        "violation": 0xED4245,
+        "error": 0xE67E22,
+    }
+    fields = [
+        {"name": "Execution", "value": f"`{execution_id[:12]}…`", "inline": True},
+        {"name": "Tier", "value": tier, "inline": True},
+        {"name": "Namespace", "value": namespace, "inline": True},
+    ]
+    if error_type:
+        fields.append({"name": "Error Type", "value": error_type, "inline": True})
+    if duration_ms is not None:
+        fields.append({"name": "Duration", "value": f"{duration_ms}ms", "inline": True})
+    if exit_code is not None:
+        fields.append({"name": "Exit Code", "value": str(exit_code), "inline": True})
+    await send_alert(
+        title=f"Sandbox {event.title()}",
+        description=f"Execution {event} in **{namespace}**",
+        color=color_map.get(event, 0xE67E22),
+        fields=fields,
+    )
+
+
 async def send_impersonation_alert(
     admin_email: str,
     target_email: str,
