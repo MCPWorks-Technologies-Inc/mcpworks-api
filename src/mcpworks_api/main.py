@@ -273,7 +273,7 @@ def create_app() -> FastAPI:
                 authorization = f"Bearer {token_cookie}"
 
         try:
-            user_id = await get_current_user_id(authorization)
+            await get_current_user_id(authorization)
         except Exception:
             return HTMLResponse(content=_admin_login_html)
 
@@ -281,7 +281,7 @@ def create_app() -> FastAPI:
             db_gen = get_db()
             db = await db_gen.__anext__()
             try:
-                await require_admin(user_id, db)
+                await require_admin(authorization=authorization, x_admin_key=None, db=db)
             finally:
                 await db_gen.aclose()
         except Exception:
