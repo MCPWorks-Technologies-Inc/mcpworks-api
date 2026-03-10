@@ -437,14 +437,19 @@ def _harden_sandbox():
 
 
 def run():
+    import contextlib
+    import os
+
+    # F-36: Self-destruct — delete own bytecode before user code runs.
+    # Python has already loaded the module into memory; file is no longer needed.
+    # Prevents .pyc decompilation via marshal.loads() from user code.
+    with contextlib.suppress(FileNotFoundError, PermissionError):
+        os.unlink(f"{SANDBOX_DIR}/.e")
+
     # ORDER-003: Delete execution token file if present.
     # Token is never exposed to user code (SECURITY_AUDIT.md FINDING-03).
-    try:
-        import os
-
+    with contextlib.suppress(FileNotFoundError):
         os.unlink(TOKEN_PATH)
-    except FileNotFoundError:
-        pass
 
     # ENV PASSTHROUGH: Read user-provided env vars, delete file, inject into os.environ.
     # File lifecycle: written to tmpfs by spawn-sandbox.sh, read here, unlinked immediately.
