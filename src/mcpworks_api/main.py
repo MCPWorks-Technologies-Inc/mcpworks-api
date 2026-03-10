@@ -234,7 +234,7 @@ def create_app() -> FastAPI:
         "box-sizing:border-box}button{width:100%;padding:10px;background:#3b82f6;"
         "color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;margin-top:8px}"
         "button:hover{background:#2563eb}.err{color:#f87171;font-size:13px;margin-top:8px;display:none}"
-        '</style></head><body><form onsubmit="return doLogin()">'
+        '</style></head><body><form onsubmit="event.preventDefault();doLogin()">'
         '<h3>Admin Login</h3><input id="e" type="email" placeholder="Email" required>'
         '<input id="p" type="password" placeholder="Password" required>'
         '<button type="submit">Login</button><div class="err" id="err"></div></form>'
