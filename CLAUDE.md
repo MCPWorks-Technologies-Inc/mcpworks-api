@@ -93,20 +93,29 @@ Constitution → Specification → Plan → Tasks → Implementation
 | Property | Value |
 |----------|-------|
 | **Name** | mcpworks-prod |
-| **IP Address** | TBD after TOR1 migration (was 159.203.30.199 in NYC1) |
-| **Region** | TOR1 (Toronto) — migrating from NYC1 |
+| **IP Address** | 159.203.30.199 |
+| **Region** | TOR1 (Toronto) |
 | **Size** | s-2vcpu-4gb |
 | **SSH User** | root |
 | **App Directory** | /opt/mcpworks |
 
 ### Services
 
-| Service | Container | Port | Status |
-|---------|-----------|------|--------|
-| API | mcpworks-api | 8000 (internal) | Docker healthcheck |
-| Caddy | mcpworks-caddy | 80, 443 | Reverse proxy to API |
-| PostgreSQL | mcpworks-postgres | 5432 (internal) | Primary database |
-| Redis | mcpworks-redis | 6379 (internal) | Rate limiting, sessions |
+| Service | Location | Port | Status |
+|---------|----------|------|--------|
+| API | mcpworks-api container | 8000 (internal) | Docker healthcheck |
+| Caddy | mcpworks-caddy container | 80, 443 | Reverse proxy to API |
+| PostgreSQL | DO Managed Database (VPC) | 25060 | Managed, daily backups |
+| Redis/Valkey | DO Managed Valkey (VPC) | 25061 | Managed, TLS |
+
+### Managed Services
+
+| Service | Plan | Host (private VPC) |
+|---------|------|---------------------|
+| PostgreSQL | db-s-1vcpu-2gb | `private-mcpworks-db-do-user-2618613-0.d.db.ondigitalocean.com:25060` |
+| Valkey (Redis) | db-s-1vcpu-1gb | `private-mcpworks-cache-do-user-2618613-0.d.db.ondigitalocean.com:25061` |
+
+**Note:** `DATABASE_URL` and `REDIS_URL` are set in the prod `.env` pointing to managed services over VPC private networking. The `database.py` module auto-enables SSL for non-localhost hosts and strips `?sslmode=require` (asyncpg incompatible). Redis uses `rediss://` for TLS with `ssl_cert_reqs=None` (VPC self-signed certs).
 
 ### Endpoints
 
@@ -202,8 +211,8 @@ ssh root@159.203.30.199 "docker ps"
 # Restart API
 ssh root@159.203.30.199 "cd /opt/mcpworks && docker compose -f docker-compose.prod.yml restart api"
 
-# Database query
-ssh root@159.203.30.199 "docker exec mcpworks-postgres psql -U mcpworks -c 'SELECT * FROM users;'"
+# Database query (via managed Postgres — use psql with connection string from .env)
+ssh root@159.203.30.199 "docker exec mcpworks-api python -c \"from mcpworks_api.config import get_settings; print(get_settings().database_url)\""
 ```
 
 ## Common Development Commands
