@@ -2247,3 +2247,106 @@ def _parse_relative_time(value: str) -> datetime:
         return datetime.fromisoformat(value)
     except (ValueError, OverflowError):
         return datetime.now(UTC) - timedelta(hours=24)
+
+
+@router.delete("/namespaces/{ns_name}")
+async def admin_delete_namespace(
+    ns_name: str,
+    hard: bool = Query(
+        False, description="Hard delete (permanent) vs soft delete (30-day recovery)"
+    ),
+    admin_user_id: str = AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    result = await db.execute(select(Namespace).where(Namespace.name == ns_name.lower()))
+    namespace = result.scalar_one_or_none()
+    if not namespace:
+        raise HTTPException(status_code=404, detail=f"Namespace '{ns_name}' not found")
+
+    fn_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Function)
+            .join(NamespaceService, Function.service_id == NamespaceService.id)
+            .where(NamespaceService.namespace_id == namespace.id)
+        )
+    ).scalar() or 0
+
+    svc_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(NamespaceService)
+            .where(NamespaceService.namespace_id == namespace.id)
+        )
+    ).scalar() or 0
+
+    if hard:
+        shares = (
+            (
+                await db.execute(
+                    select(NamespaceShare).where(NamespaceShare.namespace_id == namespace.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for share in shares:
+            await db.delete(share)
+
+        services = (
+            (
+                await db.execute(
+                    select(NamespaceService).where(NamespaceService.namespace_id == namespace.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for svc in services:
+            fns = (
+                (await db.execute(select(Function).where(Function.service_id == svc.id)))
+                .scalars()
+                .all()
+            )
+            for fn in fns:
+                versions = (
+                    (
+                        await db.execute(
+                            select(FunctionVersion).where(FunctionVersion.function_id == fn.id)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                for v in versions:
+                    await db.delete(v)
+                await db.delete(fn)
+            await db.delete(svc)
+
+        await db.delete(namespace)
+    else:
+        namespace.deleted_at = datetime.now(UTC)
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_user_id),
+        action="admin.namespace_deleted",
+        resource_type="namespace",
+        resource_id=namespace.id,
+        event_data={
+            "namespace": ns_name,
+            "hard_delete": hard,
+            "services_deleted": svc_count,
+            "functions_deleted": fn_count,
+        },
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    return {
+        "namespace": ns_name,
+        "deleted": True,
+        "hard_delete": hard,
+        "services_deleted": svc_count,
+        "functions_deleted": fn_count,
+    }
