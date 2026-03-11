@@ -90,7 +90,7 @@ async def verify_domain(domain: str) -> dict[str, bool]:
     """Verify if a domain is valid for on-demand TLS certificate issuance.
 
     Called by Caddy before issuing certificates for wildcard subdomains.
-    Only allows *.create.mcpworks.io and *.run.mcpworks.io patterns.
+    Only allows *.create.mcpworks.io, *.run.mcpworks.io, and *.agent.mcpworks.io patterns.
 
     Args:
         domain: The domain requesting a certificate.
@@ -101,7 +101,7 @@ async def verify_domain(domain: str) -> dict[str, bool]:
     from fastapi import HTTPException
 
     # Valid domain patterns for on-demand TLS
-    valid_suffixes = [".create.mcpworks.io", ".run.mcpworks.io"]
+    valid_suffixes = [".create.mcpworks.io", ".run.mcpworks.io", ".agent.mcpworks.io"]
 
     # Check if domain matches our namespace patterns
     is_valid = any(domain.endswith(suffix) for suffix in valid_suffixes)
