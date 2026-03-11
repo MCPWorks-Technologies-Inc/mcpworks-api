@@ -2029,6 +2029,12 @@ async function saveAgentAi(agentId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ engine, model, api_key, system_prompt }),
     });
+    if (confirm('AI configuration saved. Restart the agent now to apply changes?')) {
+      try {
+        await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/stop`, { method: 'POST' });
+        await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/start`, { method: 'POST' });
+      } catch (re) { alert('Restart failed: ' + re.message); }
+    }
     loadAgent(agentId);
   } catch (e) { alert('Failed to save AI config: ' + e.message); }
 }
