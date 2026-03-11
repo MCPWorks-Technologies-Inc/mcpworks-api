@@ -18,6 +18,7 @@ No servers to manage. No containers to configure. Write a function, and it runs.
 - [Templates](#templates)
 - [Versioning](#versioning)
 - [Environment Variables](#environment-variables)
+- [Agents](#agents)
 - [Billing & Tiers](#billing--tiers)
 - [Sandbox Limits](#sandbox-limits)
 - [Code Mode Deep Dive](#code-mode-deep-dive)
@@ -619,6 +620,75 @@ Call the `_env_status` tool (available on run endpoints in tool mode via `?mode=
 
 ---
 
+## Agents
+
+Agents are containerized autonomous AI entities that run on top of the Functions platform. While functions execute on-demand in response to MCP tool calls, agents are long-running containers with their own AI engine, scheduled tasks, webhook endpoints, persistent state, and communication channels.
+
+### Three Interfaces
+
+When an agent is created, its namespace gains a third MCP endpoint:
+
+| Interface | Pattern | Purpose |
+|-----------|---------|---------|
+| Create | `{ns}.create.mcpworks.io/mcp` | Manage functions (same as before) |
+| Run | `{ns}.run.mcpworks.io/mcp` | Execute functions (same as before) |
+| Agent | `{ns}.agent.mcpworks.io/mcp` | Webhook delivery and agent communication |
+
+### What Agents Can Do
+
+- **Run on a schedule** — cron expressions with tier-based minimum intervals (e.g., every 5 minutes on Builder Agent, every 15 seconds on Enterprise Agent)
+- **Receive webhooks** — external services POST to `{agent-name}.agent.mcpworks.io` and the agent processes events
+- **Persist state** — encrypted key-value store for maintaining context across executions
+- **Use AI engines** — BYOAI: configure any supported LLM provider (Anthropic, OpenAI, Google, Grok, DeepSeek, Kimi, OpenRouter, or self-hosted Ollama)
+- **Communicate** — send and receive messages via Discord, Slack, WhatsApp, or email channels
+- **Call functions** — agents have full access to their namespace's functions
+
+### AI Engine Configuration
+
+Agents support 8 LLM providers, all configured through the console or API:
+
+| Engine | Provider | Notes |
+|--------|----------|-------|
+| `anthropic` | Anthropic (Claude) | Native SDK |
+| `openai` | OpenAI | OpenAI-compatible |
+| `google` | Google (Gemini) | Native SDK |
+| `grok` | xAI | OpenAI-compatible |
+| `deepseek` | DeepSeek | OpenAI-compatible |
+| `kimi` | Moonshot (Kimi) | OpenAI-compatible |
+| `openrouter` | OpenRouter | OpenAI-compatible, multi-model |
+| `ollama` | Self-hosted | OpenAI-compatible, no API key required |
+
+Provide your own API key — keys are encrypted at rest using envelope encryption (AES-256-GCM) and decrypted only when injected into the agent container.
+
+### Agent Tiers
+
+Agent functionality requires an agent-enabled subscription tier. These are currently provisioned by admin only (not available through self-service upgrade).
+
+| Tier | Agents | RAM | CPU | Min Schedule | State Storage |
+|------|--------|-----|-----|-------------|---------------|
+| **Builder Agent** | 1 | 256 MB | 0.25 vCPU | 5 min | 10 MB |
+| **Pro Agent** | 5 | 512 MB | 0.5 vCPU | 30 sec | 100 MB |
+| **Enterprise Agent** | 20 | 1 GB | 1.0 vCPU | 15 sec | 1 GB |
+
+Agent tiers include full access to the corresponding Functions tier (Builder Agent includes Builder functions, etc.).
+
+### Container Lifecycle
+
+Agents are managed through the console or MCP tools:
+
+- **Create** — provisions a container, creates the agent namespace, starts the runtime
+- **Start / Stop** — control the container without destroying state
+- **Destroy** — removes the container and all associated resources
+- **Clone** — duplicates an agent including namespace, functions, state, and schedules
+
+### Managing via MCP
+
+The create endpoint exposes agent management tools when on an agent-enabled tier:
+
+`make_agent`, `list_agents`, `describe_agent`, `start_agent`, `stop_agent`, `destroy_agent`, `clone_agent`, `configure_ai`, `add_schedule`, `add_webhook`, `set_state`, `get_state`
+
+---
+
 ## Billing & Tiers
 
 ### Subscription Tiers
@@ -629,8 +699,11 @@ Call the `_env_status` tool (available on run endpoints in tool mode via `?mode=
 | **Builder** | $29/mo | 25,000 |
 | **Pro** | $149/mo | 250,000 |
 | **Enterprise** | $499+/mo | 1,000,000 |
+| **Builder Agent** | $29/mo | 25,000 + 1 agent |
+| **Pro Agent** | $179/mo | 250,000 + 5 agents |
+| **Enterprise Agent** | $599/mo | 1,000,000 + 20 agents |
 
-New accounts start on the free tier.
+New accounts start on the free tier. Agent tiers are currently admin-provisioned only.
 
 ### What Counts as an Execution
 
