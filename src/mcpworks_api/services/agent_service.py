@@ -663,6 +663,38 @@ class AgentService:
         logger.info("agent_ai_removed", agent_id=str(agent.id))
         return agent
 
+    async def chat_with_agent(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+        message: str,
+    ) -> str:
+        from mcpworks_api.core.ai_client import AIClientError, chat
+
+        agent = await self.get_agent(account_id, agent_name)
+        if not agent.ai_engine or not agent.ai_api_key_encrypted:
+            raise NotFoundError("Agent has no AI engine configured")
+
+        api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
+
+        try:
+            response = await chat(
+                engine=agent.ai_engine,
+                model=agent.ai_model or "",
+                api_key=api_key,
+                message=message,
+                system_prompt=agent.system_prompt,
+            )
+        except AIClientError as exc:
+            logger.error(
+                "agent_chat_failed",
+                agent_id=str(agent.id),
+                engine=agent.ai_engine,
+                error=str(exc),
+            )
+            raise
+        return response
+
     async def add_channel(
         self,
         account_id: uuid.UUID,
