@@ -2025,7 +2025,7 @@ async function saveAgentAi(agentId) {
   if (!engine || !model || !api_key) { alert('Engine, model, and API key are required'); return; }
   try {
     await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/ai`, {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ engine, model, api_key, system_prompt }),
     });
