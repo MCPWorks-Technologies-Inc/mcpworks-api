@@ -2450,22 +2450,33 @@ async def list_all_agents(
     total = total_q.scalar_one()
 
     agents_q = await db.execute(
-        select(Agent).order_by(Agent.created_at.desc()).offset(offset).limit(page_size)
+        select(Agent, User.email)
+        .join(Account, Agent.account_id == Account.id)
+        .join(User, Account.user_id == User.id)
+        .order_by(Agent.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
     )
-    agents = agents_q.scalars().all()
+    rows = agents_q.all()
 
     return {
         "agents": [
             {
                 "id": str(a.id),
                 "name": a.name,
+                "display_name": a.display_name,
                 "account_id": str(a.account_id),
+                "owner_email": email,
                 "status": a.status,
+                "ai_engine": a.ai_engine,
+                "ai_model": a.ai_model,
                 "memory_limit_mb": a.memory_limit_mb,
                 "cpu_limit": a.cpu_limit,
+                "enabled": a.enabled,
+                "container_id": a.container_id[:12] if a.container_id else None,
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             }
-            for a in agents
+            for a, email in rows
         ],
         "total": total,
         "page": page,

@@ -117,6 +117,15 @@ tailwind.config = {
   /* Auto-refresh indicator */
   .refresh-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; animation: pulse 2s infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  /* Agent status dots */
+  .agent-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .agent-dot.running { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+  .agent-dot.stopped { background: #6b7280; }
+  .agent-dot.error { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
+  .agent-dot.creating { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.4); }
+  /* Resource utilization bars */
+  .agent-res-bar-track { height: 6px; background: #374151; border-radius: 3px; overflow: hidden; }
+  .agent-res-bar { height: 6px; border-radius: 3px; transition: width 0.4s ease; }
 </style>
 </head>
 <body>
@@ -193,6 +202,7 @@ tailwind.config = {
       <button class="tab-btn" onclick="showTab('audit')">Audit Log</button>
       <button class="tab-btn" onclick="showTab('security')">Security</button>
       <button class="tab-btn" onclick="showTab('system')">System</button>
+      <button class="tab-btn" onclick="showTab('agents')">Agents</button>
     </div>
 
     <!-- ============================================================ -->
@@ -333,6 +343,59 @@ tailwind.config = {
       </div>
     </div><!-- /tab-system -->
 
+    <!-- ============================================================ -->
+    <!-- TAB: Agents                                                  -->
+    <!-- ============================================================ -->
+    <div id="tab-agents" class="tab-panel">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white font-semibold font-display">Agent Fleet</h2>
+        <div class="flex items-center gap-3">
+          <span id="agents-refresh-indicator" class="hidden text-xs text-gray-500 flex items-center gap-1">
+            <span class="refresh-dot"></span> auto-refreshing
+          </span>
+          <button id="agents-refresh-btn" class="btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="toggleAgentsAutoRefresh()">Auto-refresh</button>
+          <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="loadAgentFleet()">Refresh now</button>
+        </div>
+      </div>
+
+      <!-- Fleet overview cards -->
+      <div id="agents-fleet-overview" class="grid grid-cols-3 gap-4 mb-6">
+        <div class="metric-card"><div class="metric-num">-</div><div class="metric-label">Loading…</div></div>
+      </div>
+
+      <!-- Resource bars -->
+      <div id="agents-resource-bars" class="card p-4 mb-6 hidden">
+        <div class="section-heading mb-3">Resource Utilization</div>
+        <div class="mb-3">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-gray-400 text-xs">Memory</span>
+            <span id="agents-mem-label" class="text-gray-400 text-xs"></span>
+          </div>
+          <div class="agent-res-bar-track"><div id="agents-mem-bar" class="agent-res-bar" style="background:#2563eb;width:0%"></div></div>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-gray-400 text-xs">CPU</span>
+            <span id="agents-cpu-label" class="text-gray-400 text-xs"></span>
+          </div>
+          <div class="agent-res-bar-track"><div id="agents-cpu-bar" class="agent-res-bar" style="background:#7c3aed;width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Agent search -->
+      <div class="flex items-center gap-3 mb-4">
+        <input id="agent-search-input" type="text" placeholder="Search by agent ID or owner email…" style="font-size:13px;padding:6px 10px;width:320px;" oninput="clearTimeout(_agentSearchTimer);_agentSearchTimer=setTimeout(searchAgentById,400)">
+        <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="searchAgentById()">Look up</button>
+      </div>
+
+      <!-- Agent detail panel (shown after lookup) -->
+      <div id="agent-detail-panel" class="hidden mb-6"></div>
+
+      <div id="agents-content">
+        <div class="text-gray-500 text-sm">Loading agent fleet…</div>
+      </div>
+    </div><!-- /tab-agents -->
+
   </div><!-- /dashboard -->
 
 </div>
@@ -349,7 +412,7 @@ const _tabLoaded = {};
 function showTab(name) {
   _activeTab = name;
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-    const tabs = ['overview', 'sandbox', 'audit', 'security', 'system'];
+    const tabs = ['overview', 'sandbox', 'audit', 'security', 'system', 'agents'];
     btn.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -362,6 +425,7 @@ function showTab(name) {
     else if (name === 'audit') loadAuditLogs();
     else if (name === 'security') loadSecurityEvents();
     else if (name === 'system') loadSystemHealth();
+    else if (name === 'agents') loadAgentFleet();
   }
 }
 
@@ -1938,6 +2002,278 @@ function formatUptime(seconds) {
   if (h > 0) parts.push(`${h}h`);
   if (m > 0 || parts.length === 0) parts.push(`${m}m`);
   return parts.join(' ');
+}
+
+// ================================================================
+// AGENTS TAB
+// ================================================================
+
+let _agentsAutoRefresh = false;
+let _agentsRefreshInterval = null;
+let _agentSearchTimer = null;
+
+function agentDot(status) {
+  const cls = ['running', 'stopped', 'error', 'creating'].includes(status) ? status : 'stopped';
+  return `<span class="agent-dot ${cls}"></span>`;
+}
+
+function agentStatusColor(status) {
+  if (status === 'running') return '#4ade80';
+  if (status === 'error') return '#f87171';
+  if (status === 'creating') return '#fbbf24';
+  return '#6b7280';
+}
+
+function toggleAgentsAutoRefresh() {
+  _agentsAutoRefresh = !_agentsAutoRefresh;
+  const btn = document.getElementById('agents-refresh-btn');
+  const indicator = document.getElementById('agents-refresh-indicator');
+  if (_agentsAutoRefresh) {
+    btn.textContent = 'Stop auto-refresh';
+    btn.style.color = '#4ade80';
+    indicator.classList.remove('hidden');
+    _agentsRefreshInterval = setInterval(loadAgentFleet, 15000);
+  } else {
+    btn.textContent = 'Auto-refresh';
+    btn.style.color = '';
+    indicator.classList.add('hidden');
+    clearInterval(_agentsRefreshInterval);
+    _agentsRefreshInterval = null;
+  }
+}
+
+async function loadAgentFleet() {
+  const overviewEl = document.getElementById('agents-fleet-overview');
+  const contentEl = document.getElementById('agents-content');
+
+  try {
+    const d = await apiFetch('/v1/admin/agents/health');
+
+    const counts = d.status_counts || {};
+    const running = counts.running ?? 0;
+    const stopped = counts.stopped ?? 0;
+    const error = counts.error ?? 0;
+    const creating = counts.creating ?? 0;
+    const total = d.total_agents ?? (running + stopped + error + creating);
+
+    overviewEl.innerHTML = `
+      <div class="metric-card">
+        <div class="metric-num">${total}</div>
+        <div class="metric-label">Total Agents</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" style="color:#4ade80;">${running}</div>
+        <div class="metric-label">Running</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" style="color:#6b7280;">${stopped}</div>
+        <div class="metric-label">Stopped</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" style="color:#f87171;">${error}</div>
+        <div class="metric-label">Error</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" style="color:#fbbf24;">${creating}</div>
+        <div class="metric-label">Creating</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num text-sm" style="font-size:20px;">${d.running_memory_mb != null ? d.running_memory_mb + ' MB' : '-'}</div>
+        <div class="metric-label">Memory Used</div>
+        ${d.capacity?.max_memory_mb != null ? `<div class="metric-sub">of ${d.capacity.max_memory_mb} MB total</div>` : ''}
+      </div>
+    `;
+
+    const cap = d.capacity || {};
+    const resBarsEl = document.getElementById('agents-resource-bars');
+    if (cap.max_memory_mb || cap.max_cpu_vcpus) {
+      resBarsEl.classList.remove('hidden');
+      const memPct = cap.max_memory_mb ? Math.min(100, ((d.running_memory_mb || 0) / cap.max_memory_mb) * 100) : 0;
+      const cpuPct = cap.max_cpu_vcpus ? Math.min(100, ((d.running_cpu_vcpus || 0) / cap.max_cpu_vcpus) * 100) : 0;
+      document.getElementById('agents-mem-bar').style.width = memPct.toFixed(1) + '%';
+      document.getElementById('agents-mem-label').textContent = cap.max_memory_mb
+        ? `${d.running_memory_mb ?? 0} / ${cap.max_memory_mb} MB`
+        : '';
+      document.getElementById('agents-cpu-bar').style.width = cpuPct.toFixed(1) + '%';
+      document.getElementById('agents-cpu-label').textContent = cap.max_cpu_vcpus
+        ? `${d.running_cpu_vcpus ?? 0} / ${cap.max_cpu_vcpus} vCPU`
+        : '';
+    } else {
+      resBarsEl.classList.add('hidden');
+    }
+
+    if (total === 0) {
+      contentEl.innerHTML = '<div class="card p-6 text-gray-500 text-sm">No agents found.</div>';
+      return;
+    }
+
+    contentEl.innerHTML = `
+      <div class="section-heading mb-3">Agent Lookup</div>
+      <div class="card p-4 text-gray-500 text-sm">
+        Use the search above to look up an agent by ID or owner email, then view its details and take actions.
+      </div>
+    `;
+  } catch (e) {
+    overviewEl.innerHTML = `<div class="metric-card text-red-400 text-sm">Failed to load fleet: ${esc(e.message)}</div>`;
+    document.getElementById('agents-content').innerHTML = '';
+  }
+}
+
+async function searchAgentById() {
+  const q = document.getElementById('agent-search-input').value.trim();
+  if (!q) return;
+
+  const detailPanel = document.getElementById('agent-detail-panel');
+  detailPanel.classList.remove('hidden');
+  detailPanel.innerHTML = '<div class="card p-4"><span class="loader"></span> Looking up agent…</div>';
+
+  try {
+    const d = await apiFetch(`/v1/admin/agents/${encodeURIComponent(q)}`);
+    renderAgentDetail(d, detailPanel);
+  } catch (e) {
+    detailPanel.innerHTML = `<div class="card p-4 text-red-400 text-sm">Not found or error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderAgentDetail(d, el) {
+  const agent = d.agent || d;
+  const stats = d.container_stats || {};
+  const agentId = esc(agent.id || '');
+  const status = agent.status || 'unknown';
+  const statusColor = agentStatusColor(status);
+
+  const schedules = agent.schedules || [];
+  const webhooks = agent.webhooks || [];
+  const stateKeys = agent.state_key_count ?? (agent.state || {}).key_count ?? '-';
+  const stateSize = agent.state_total_bytes != null ? `${agent.state_total_bytes} B` : '-';
+  const recentRuns = agent.recent_runs || [];
+  const aiEngine = agent.ai_engine || {};
+
+  const schedulesHtml = schedules.length
+    ? schedules.map(s => `<div class="flex items-center gap-2 py-1" style="border-bottom:1px solid #1f2937;">
+        <span class="text-gray-300 text-xs font-mono">${esc(s.cron || s.interval || s.type || '-')}</span>
+        <span class="tag">${esc(s.status || 'active')}</span>
+      </div>`).join('')
+    : '<div class="text-gray-500 text-xs">No schedules.</div>';
+
+  const webhooksHtml = webhooks.length
+    ? webhooks.map(w => `<div class="flex items-center gap-2 py-1" style="border-bottom:1px solid #1f2937;">
+        <span class="text-gray-300 text-xs font-mono">${esc(w.path || w.id || '-')}</span>
+        <span class="tag">${esc(w.method || 'POST')}</span>
+      </div>`).join('')
+    : '<div class="text-gray-500 text-xs">No webhooks.</div>';
+
+  const runsHtml = recentRuns.length
+    ? `<table style="width:100%;">
+        <thead><tr><th>Run ID</th><th>Status</th><th>Duration</th><th>Time</th></tr></thead>
+        <tbody>${recentRuns.map(r => `<tr>
+          <td class="text-gray-400 text-xs font-mono">${esc(String(r.id || '').substring(0, 8))}…</td>
+          <td><span style="color:${agentStatusColor(r.status)}">${esc(r.status || '-')}</span></td>
+          <td class="text-gray-400 text-xs">${r.duration_seconds != null ? r.duration_seconds.toFixed(1) + 's' : '-'}</td>
+          <td class="text-gray-500 text-xs">${fmtDateTime(r.created_at)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`
+    : '<div class="text-gray-500 text-xs">No recent runs.</div>';
+
+  el.innerHTML = `
+    <div class="card p-5 fade-in">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          ${agentDot(status)}
+          <div>
+            <div class="text-white font-semibold font-display">${esc(agent.name || agent.id || 'Agent')}</div>
+            <div class="text-gray-500 text-xs font-mono">${agentId}</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="tag">${esc(agent.tier || '-')}</span>
+          <span style="color:${statusColor};font-weight:600;font-size:13px;">${esc(status)}</span>
+          <button class="btn" style="font-size:12px;padding:5px 12px;background:#166534;" onclick="agentRestart('${esc(agent.id || '')}')">Force Restart</button>
+          <button class="btn-danger" style="font-size:12px;padding:5px 12px;" onclick="agentDestroy('${esc(agent.id || '')}','${esc(agent.name || agent.id || '')}')">Force Destroy</button>
+        </div>
+      </div>
+
+      <div class="text-gray-500 text-sm mb-4">
+        Owner: <span class="text-gray-300">${esc(agent.owner_email || agent.owner_id || '-')}</span>
+        ${agent.created_at ? `&ensp;·&ensp; Created: <span class="text-gray-300">${fmtDate(agent.created_at)}</span>` : ''}
+        ${agent.uptime_seconds != null ? `&ensp;·&ensp; Uptime: <span class="text-gray-300">${formatUptime(agent.uptime_seconds)}</span>` : ''}
+      </div>
+
+      <div class="grid grid-cols-3 gap-4 mb-5">
+        <div>
+          <div class="section-heading">Container Stats</div>
+          <div class="card p-3">
+            <div class="flex items-center justify-between py-1" style="border-bottom:1px solid #374151;">
+              <span class="text-gray-500 text-xs">Memory</span>
+              <span class="text-gray-300 text-xs">${stats.memory_used_mb != null ? stats.memory_used_mb + ' / ' + (stats.memory_limit_mb ?? '?') + ' MB' : '-'}</span>
+            </div>
+            <div class="flex items-center justify-between py-1" style="border-bottom:1px solid #374151;">
+              <span class="text-gray-500 text-xs">CPU</span>
+              <span class="text-gray-300 text-xs">${stats.cpu_percent != null ? stats.cpu_percent.toFixed(1) + '%' : '-'}</span>
+            </div>
+            <div class="flex items-center justify-between py-1">
+              <span class="text-gray-500 text-xs">State keys</span>
+              <span class="text-gray-300 text-xs">${esc(String(stateKeys))} (${esc(stateSize)})</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-heading">AI Engine</div>
+          <div class="card p-3">
+            <div class="flex items-center justify-between py-1" style="border-bottom:1px solid #374151;">
+              <span class="text-gray-500 text-xs">Engine</span>
+              <span class="text-gray-300 text-xs">${esc(aiEngine.engine || aiEngine.provider || '-')}</span>
+            </div>
+            <div class="flex items-center justify-between py-1">
+              <span class="text-gray-500 text-xs">Model</span>
+              <span class="text-gray-300 text-xs">${esc(aiEngine.model || '-')}</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-heading">Triggers</div>
+          <div class="card p-3">
+            <div class="text-gray-500 text-xs mb-1" style="text-transform:uppercase;letter-spacing:0.04em;">Schedules</div>
+            ${schedulesHtml}
+            <div class="text-gray-500 text-xs mb-1 mt-3" style="text-transform:uppercase;letter-spacing:0.04em;">Webhooks</div>
+            ${webhooksHtml}
+          </div>
+        </div>
+      </div>
+
+      <div class="section-heading">Recent Runs</div>
+      <div class="card" style="overflow:auto;">${runsHtml}</div>
+    </div>
+  `;
+}
+
+async function agentRestart(agentId) {
+  if (!confirm(`Force restart agent ${agentId}?`)) return;
+  try {
+    const res = await fetch(`${API}/v1/admin/agents/${encodeURIComponent(agentId)}/restart`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || 'Failed'); return; }
+    alert('Restart initiated.');
+    searchAgentById();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function agentDestroy(agentId, agentName) {
+  const typed = prompt(`PERMANENT: Destroy agent "${agentName}"?\n\nType the agent name to confirm:`);
+  if (typed === null) return;
+  if (typed !== agentName) { alert('Name did not match. Aborted.'); return; }
+  try {
+    const res = await fetch(`${API}/v1/admin/agents/${encodeURIComponent(agentId)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || 'Failed'); return; }
+    document.getElementById('agent-detail-panel').classList.add('hidden');
+    document.getElementById('agent-search-input').value = '';
+    loadAgentFleet();
+  } catch (e) { alert('Error: ' + e.message); }
 }
 </script>
 
