@@ -712,6 +712,15 @@ async def configure_ai(
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
 
+    if not request.api_key and not agent.ai_api_key_encrypted and request.engine != "ollama":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "VALIDATION",
+                "message": "API key is required for initial configuration",
+            },
+        )
+
     agent = await svc.configure_ai(
         account_id=account.id,
         agent_name=agent.name,
