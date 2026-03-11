@@ -1789,7 +1789,10 @@ async function loadAgent(agentId) {
   } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }
 
+let _currentAgent = null;
+
 function renderAgentDetail(agent) {
+  _currentAgent = agent;
   const c = document.getElementById('content');
   const id = agent.id;
   const statusClass = agentStatusClass(agent.status);
@@ -1800,15 +1803,20 @@ function renderAgentDetail(agent) {
     ? `<div class="subsection" id="agent-ai-section">
         <div class="subsection-header">
           <span class="subsection-title">AI Engine</span>
-          <button class="btn btn-danger btn-sm" onclick="removeAgentAi('${esc(id)}')">Remove AI</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="showAgentAiForm('${esc(id)}', _currentAgent ? {engine:_currentAgent.ai_engine,model:_currentAgent.ai_model,system_prompt:_currentAgent.system_prompt} : null)">Update</button>
+            <button class="btn btn-danger btn-sm" onclick="removeAgentAi('${esc(id)}')">Remove</button>
+          </div>
         </div>
         <div style="font-size:13px;color:var(--text-2)">Engine: <span style="color:var(--text-1)">${esc(agent.ai_engine)}</span></div>
         ${agent.ai_model ? `<div style="font-size:13px;color:var(--text-2);margin-top:4px">Model: <span style="color:var(--text-1)">${esc(agent.ai_model)}</span></div>` : ''}
+        ${agent.system_prompt ? `<div style="margin-top:8px"><div style="font-size:12px;color:var(--text-3);margin-bottom:4px">System Prompt</div><pre class="schema-block" style="margin:0;white-space:pre-wrap;font-size:12px;max-height:200px;overflow-y:auto">${esc(agent.system_prompt)}</pre></div>` : '<div style="font-size:12px;color:var(--text-3);margin-top:6px">No system prompt set.</div>'}
+        <div id="agent-ai-form-wrap" data-agent-id="${esc(id)}"></div>
       </div>`
     : `<div class="subsection" id="agent-ai-section">
         <div class="subsection-header"><span class="subsection-title">AI Engine</span></div>
         <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">No AI engine configured.</div>
-        <div id="agent-ai-form-wrap">
+        <div id="agent-ai-form-wrap" data-agent-id="${esc(id)}">
           <button class="btn btn-ghost btn-sm" onclick="showAgentAiForm('${esc(id)}')">Configure AI</button>
         </div>
       </div>`;
@@ -1962,33 +1970,33 @@ async function removeAgentAi(agentId) {
   } catch (e) { alert('Failed to remove AI config: ' + e.message); }
 }
 
-function showAgentAiForm(agentId) {
+function showAgentAiForm(agentId, current) {
   const wrap = document.getElementById('agent-ai-form-wrap');
   if (!wrap) return;
   wrap.dataset.agentId = agentId;
-  wrap.innerHTML = `<div class="add-form" style="margin-top:0">
+  const cur = current || {};
+  const engines = [
+    ['anthropic', 'Anthropic (Claude)'], ['openai', 'OpenAI'], ['google', 'Google (Gemini)'],
+    ['grok', 'Grok (xAI)'], ['deepseek', 'DeepSeek'], ['kimi', 'Kimi (Moonshot)'],
+    ['openrouter', 'OpenRouter'], ['ollama', 'Ollama (self-hosted)'],
+  ];
+  const opts = engines.map(([v, l]) => `<option value="${v}" ${cur.engine === v ? 'selected' : ''}>${l}</option>`).join('');
+  const isUpdate = !!cur.engine;
+  wrap.innerHTML = `<div class="add-form" style="margin-top:8px">
     <label>Engine</label>
-    <select id="ai-engine" onchange="updateModelPlaceholder()">
-      <option value="anthropic">Anthropic (Claude)</option>
-      <option value="openai">OpenAI</option>
-      <option value="google">Google (Gemini)</option>
-      <option value="grok">Grok (xAI)</option>
-      <option value="deepseek">DeepSeek</option>
-      <option value="kimi">Kimi (Moonshot)</option>
-      <option value="openrouter">OpenRouter</option>
-      <option value="ollama">Ollama (self-hosted)</option>
-    </select>
+    <select id="ai-engine" onchange="updateModelPlaceholder()">${opts}</select>
     <label>Model</label>
-    <input id="ai-model" type="text" placeholder="claude-sonnet-4-20250514">
-    <label>API Key</label>
-    <input id="ai-api-key" type="password" placeholder="sk-...">
+    <input id="ai-model" type="text" placeholder="claude-sonnet-4-20250514" value="${esc(cur.model || '')}">
+    <label>API Key <span style="color:var(--text-3)">${isUpdate ? '(leave blank to keep current)' : ''}</span></label>
+    <input id="ai-api-key" type="password" placeholder="${isUpdate ? '••••••••' : 'sk-...'}">
     <label>System Prompt <span style="color:var(--text-3)">(optional)</span></label>
-    <textarea id="ai-system-prompt" placeholder="You are a helpful agent..."></textarea>
+    <textarea id="ai-system-prompt" rows="6" placeholder="You are a helpful agent...">${esc(cur.system_prompt || '')}</textarea>
     <div class="add-form-actions">
-      <button class="btn btn-primary btn-sm" onclick="saveAgentAi(document.getElementById('agent-ai-form-wrap').dataset.agentId)">Save</button>
+      <button class="btn btn-primary btn-sm" onclick="saveAgentAi('${esc(agentId)}', ${isUpdate})">${isUpdate ? 'Update' : 'Save'}</button>
       <button class="btn btn-ghost btn-sm" onclick="cancelAgentAiForm()">Cancel</button>
     </div>
   </div>`;
+  updateModelPlaceholder();
 }
 
 function updateModelPlaceholder() {
@@ -2017,17 +2025,18 @@ function cancelAgentAiForm() {
   wrap.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="showAgentAiForm(${JSON.stringify(agentId)})">Configure AI</button>`;
 }
 
-async function saveAgentAi(agentId) {
+async function saveAgentAi(agentId, isUpdate) {
   const engine = document.getElementById('ai-engine')?.value;
   const model = document.getElementById('ai-model')?.value.trim();
   const api_key = document.getElementById('ai-api-key')?.value.trim();
   const system_prompt = document.getElementById('ai-system-prompt')?.value.trim() || null;
-  if (!engine || !model || !api_key) { alert('Engine, model, and API key are required'); return; }
+  if (!engine || !model) { alert('Engine and model are required'); return; }
+  if (!isUpdate && !api_key) { alert('API key is required'); return; }
   try {
     await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/ai`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ engine, model, api_key, system_prompt }),
+      body: JSON.stringify(api_key ? { engine, model, api_key, system_prompt } : { engine, model, system_prompt }),
     });
     if (confirm('AI configuration saved. Restart the agent now to apply changes?')) {
       try {
