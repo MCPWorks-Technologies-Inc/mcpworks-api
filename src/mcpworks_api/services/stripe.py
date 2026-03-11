@@ -54,6 +54,15 @@ TIER_EXECUTIONS = {
     "builder": 25_000,
     "pro": 250_000,
     "enterprise": 1_000_000,
+    "builder-agent": 25_000,
+    "pro-agent": 250_000,
+    "enterprise-agent": 1_000_000,
+}
+
+AGENT_TIER_PRICE_IDS: dict[str, str] = {
+    "builder-agent": "price_agent_builder_placeholder",
+    "pro-agent": "price_agent_pro_placeholder",
+    "enterprise-agent": "price_agent_enterprise_placeholder",
 }
 
 

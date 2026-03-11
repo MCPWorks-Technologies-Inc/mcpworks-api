@@ -38,6 +38,26 @@ class SubscriptionTier(str, Enum):
     BUILDER = "builder"
     PRO = "pro"
     ENTERPRISE = "enterprise"
+    BUILDER_AGENT = "builder-agent"
+    PRO_AGENT = "pro-agent"
+    ENTERPRISE_AGENT = "enterprise-agent"
+
+    @property
+    def is_agent_tier(self) -> bool:
+        return self in (
+            SubscriptionTier.BUILDER_AGENT,
+            SubscriptionTier.PRO_AGENT,
+            SubscriptionTier.ENTERPRISE_AGENT,
+        )
+
+    @property
+    def functions_tier(self) -> "SubscriptionTier":
+        mapping = {
+            SubscriptionTier.BUILDER_AGENT: SubscriptionTier.BUILDER,
+            SubscriptionTier.PRO_AGENT: SubscriptionTier.PRO,
+            SubscriptionTier.ENTERPRISE_AGENT: SubscriptionTier.ENTERPRISE,
+        }
+        return mapping.get(self, self)
 
     @property
     def monthly_executions(self) -> int:
@@ -47,8 +67,42 @@ class SubscriptionTier(str, Enum):
             SubscriptionTier.BUILDER: 25_000,
             SubscriptionTier.PRO: 250_000,
             SubscriptionTier.ENTERPRISE: 1_000_000,
+            SubscriptionTier.BUILDER_AGENT: 25_000,
+            SubscriptionTier.PRO_AGENT: 250_000,
+            SubscriptionTier.ENTERPRISE_AGENT: 1_000_000,
         }
         return limits.get(self, 1_000)
+
+
+AGENT_TIER_CONFIG: dict[str, dict] = {
+    "builder-agent": {
+        "max_agents": 1,
+        "memory_limit_mb": 256,
+        "cpu_limit": 0.25,
+        "min_schedule_seconds": 300,
+        "max_state_bytes": 10 * 1024 * 1024,
+        "run_retention_days": 7,
+        "max_webhook_payload_bytes": 256 * 1024,
+    },
+    "pro-agent": {
+        "max_agents": 5,
+        "memory_limit_mb": 512,
+        "cpu_limit": 0.5,
+        "min_schedule_seconds": 30,
+        "max_state_bytes": 100 * 1024 * 1024,
+        "run_retention_days": 30,
+        "max_webhook_payload_bytes": 1 * 1024 * 1024,
+    },
+    "enterprise-agent": {
+        "max_agents": 20,
+        "memory_limit_mb": 1024,
+        "cpu_limit": 1.0,
+        "min_schedule_seconds": 15,
+        "max_state_bytes": 1024 * 1024 * 1024,
+        "run_retention_days": 90,
+        "max_webhook_payload_bytes": 5 * 1024 * 1024,
+    },
+}
 
 
 class Subscription(Base, UUIDMixin, TimestampMixin):

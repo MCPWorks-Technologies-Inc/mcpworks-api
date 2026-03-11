@@ -2350,3 +2350,254 @@ async def admin_delete_namespace(
         "services_deleted": svc_count,
         "functions_deleted": fn_count,
     }
+
+
+class AgentTierUpgradeRequest(BaseModel):
+    tier: str = Field(
+        ..., description="Target agent tier (builder-agent, pro-agent, enterprise-agent)"
+    )
+
+
+@router.post("/accounts/{account_id}/agent-tier")
+async def upgrade_agent_tier(
+    account_id: uuid_module.UUID,
+    body: AgentTierUpgradeRequest,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Upgrade (or set) an account's agent tier. Admin only.
+
+    Blocks downgrade if the account has existing agents that would exceed
+    the new tier's slot limit (FR-021).
+    """
+    from mcpworks_api.models.agent import Agent
+    from mcpworks_api.models.subscription import AGENT_TIER_CONFIG
+
+    valid_agent_tiers = {"builder-agent", "pro-agent", "enterprise-agent"}
+    if body.tier not in valid_agent_tiers:
+        raise HTTPException(status_code=422, detail=f"Invalid agent tier: {body.tier}")
+
+    account_q = await db.execute(
+        select(Account).options(selectinload(Account.user)).where(Account.id == account_id)
+    )
+    account = account_q.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    user = account.user
+    new_config = AGENT_TIER_CONFIG[body.tier]
+
+    agent_count_q = await db.execute(
+        select(func.count(Agent.id)).where(Agent.account_id == account_id)
+    )
+    agent_count = agent_count_q.scalar_one()
+
+    if agent_count > new_config["max_agents"]:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot set tier to {body.tier}: account has {agent_count} agents "
+            f"but tier allows {new_config['max_agents']}. "
+            f"Destroy excess agents before downgrading.",
+        )
+
+    old_tier = user.tier
+    user.tier = body.tier
+    await db.flush()
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="admin.agent_tier_upgrade",
+        resource_type="user",
+        resource_id=user.id,
+        event_data={
+            "old_tier": old_tier,
+            "new_tier": body.tier,
+            "account_id": str(account_id),
+        },
+    )
+    db.add(audit_log)
+    await db.commit()
+
+    logger.info(
+        "agent_tier_upgraded",
+        account_id=str(account_id),
+        old_tier=old_tier,
+        new_tier=body.tier,
+        admin_id=admin_id,
+    )
+
+    return {
+        "account_id": str(account_id),
+        "old_tier": old_tier,
+        "new_tier": body.tier,
+        "max_agents": new_config["max_agents"],
+        "current_agents": agent_count,
+    }
+
+
+@router.get("/agents")
+async def list_all_agents(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+) -> dict[str, Any]:
+    """List all agents across all accounts (paginated)."""
+    from mcpworks_api.models.agent import Agent
+
+    offset = (page - 1) * page_size
+    total_q = await db.execute(select(func.count(Agent.id)))
+    total = total_q.scalar_one()
+
+    agents_q = await db.execute(
+        select(Agent).order_by(Agent.created_at.desc()).offset(offset).limit(page_size)
+    )
+    agents = agents_q.scalars().all()
+
+    return {
+        "agents": [
+            {
+                "id": str(a.id),
+                "name": a.name,
+                "account_id": str(a.account_id),
+                "status": a.status,
+                "memory_limit_mb": a.memory_limit_mb,
+                "cpu_limit": a.cpu_limit,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in agents
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/agents/health")
+async def agent_fleet_health(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Fleet health overview: counts by status, memory/CPU usage, capacity."""
+    from mcpworks_api.models.agent import Agent
+
+    agents_q = await db.execute(select(Agent))
+    agents = list(agents_q.scalars().all())
+
+    status_counts: dict[str, int] = {}
+    total_memory_mb = 0
+    total_cpu = 0.0
+    for a in agents:
+        status_counts[a.status] = status_counts.get(a.status, 0) + 1
+        if a.status == "running":
+            total_memory_mb += a.memory_limit_mb
+            total_cpu += a.cpu_limit
+
+    return {
+        "total_agents": len(agents),
+        "status_counts": status_counts,
+        "running_memory_mb": total_memory_mb,
+        "running_cpu_vcpus": round(total_cpu, 2),
+        "capacity": {
+            "max_memory_mb": 6800,
+            "max_cpu_vcpus": 3.2,
+            "memory_available_mb": 6800 - total_memory_mb,
+            "cpu_available_vcpus": round(3.2 - total_cpu, 2),
+        },
+    }
+
+
+@router.get("/agents/{agent_id}")
+async def admin_agent_detail(
+    agent_id: uuid_module.UUID,
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get detailed agent info including container stats."""
+    from mcpworks_api.models.agent import Agent
+    from mcpworks_api.services.agent_service import AgentService
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    svc = AgentService(db)
+    stats = await svc.get_container_stats(agent)
+
+    return {
+        "id": str(agent.id),
+        "name": agent.name,
+        "account_id": str(agent.account_id),
+        "status": agent.status,
+        "container_id": agent.container_id,
+        "memory_limit_mb": agent.memory_limit_mb,
+        "cpu_limit": agent.cpu_limit,
+        "ai_engine": agent.ai_engine,
+        "ai_model": agent.ai_model,
+        "enabled": agent.enabled,
+        "created_at": agent.created_at.isoformat() if agent.created_at else None,
+        "container_stats": stats,
+    }
+
+
+@router.post("/agents/{agent_id}/restart")
+async def admin_force_restart(
+    agent_id: uuid_module.UUID,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Force restart an agent container."""
+    from mcpworks_api.models.agent import Agent
+    from mcpworks_api.services.agent_service import AgentService
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    svc = AgentService(db)
+    agent = await svc.force_restart_agent(agent)
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="admin.agent_force_restart",
+        resource_type="agent",
+        resource_id=agent.id,
+        event_data={"agent_name": agent.name, "status": agent.status},
+    )
+    db.add(audit_log)
+    await db.commit()
+
+    return {"id": str(agent.id), "name": agent.name, "status": agent.status}
+
+
+@router.delete("/agents/{agent_id}")
+async def admin_force_destroy(
+    agent_id: uuid_module.UUID,
+    admin_id: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Force destroy an agent (admin override)."""
+    from mcpworks_api.models.agent import Agent
+    from mcpworks_api.services.agent_service import AgentService
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    svc = AgentService(db)
+    destroyed = await svc.destroy_agent(agent.account_id, agent.name)
+
+    audit_log = AuditLog(
+        user_id=uuid_module.UUID(admin_id),
+        action="admin.agent_force_destroy",
+        resource_type="agent",
+        resource_id=destroyed.id,
+        event_data={"agent_name": destroyed.name},
+    )
+    db.add(audit_log)
+    await db.commit()
+
+    return {"id": str(destroyed.id), "name": destroyed.name, "destroyed": True}

@@ -46,10 +46,12 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@mcpworks.io}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - ENCRYPTION_KEK_B64=${ENCRYPTION_KEK_B64:-}
     volumes:
       - sandbox-tmp:/tmp/sandbox
       - ./keys/jwt_private.pem:/app/keys/private.pem:ro
       - ./keys/jwt_public.pem:/app/keys/public.pem:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     privileged: true
     security_opt:
       - seccomp:unconfined
@@ -59,6 +61,7 @@ services:
       - NET_ADMIN
     networks:
       - mcpworks-net
+      - mcpworks-agents
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/v1/health').raise_for_status()"]
       interval: 30s
@@ -74,3 +77,6 @@ volumes:
 networks:
   mcpworks-net:
     driver: bridge
+  mcpworks-agents:
+    driver: bridge
+    name: mcpworks-agents

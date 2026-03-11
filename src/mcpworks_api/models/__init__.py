@@ -1,6 +1,14 @@
 """SQLAlchemy models for mcpworks API."""
 
 from mcpworks_api.models.account import Account
+from mcpworks_api.models.agent import (
+    Agent,
+    AgentChannel,
+    AgentRun,
+    AgentSchedule,
+    AgentState,
+    AgentWebhook,
+)
 from mcpworks_api.models.api_key import APIKey
 from mcpworks_api.models.audit_log import AuditAction, AuditLog
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -14,7 +22,12 @@ from mcpworks_api.models.namespace_share import NamespaceShare, ShareStatus
 from mcpworks_api.models.oauth_account import OAuthAccount
 from mcpworks_api.models.security_event import ALLOWED_SEVERITIES, SecurityEvent
 from mcpworks_api.models.service import Service, ServiceStatus
-from mcpworks_api.models.subscription import Subscription, SubscriptionStatus, SubscriptionTier
+from mcpworks_api.models.subscription import (
+    AGENT_TIER_CONFIG,
+    Subscription,
+    SubscriptionStatus,
+    SubscriptionTier,
+)
 from mcpworks_api.models.user import User, UserStatus, UserTier
 from mcpworks_api.models.webhook import Webhook
 
@@ -25,6 +38,14 @@ __all__ = [
     "UUIDMixin",
     # Account (A0)
     "Account",
+    # Agent (Containerized Agents)
+    "Agent",
+    "AgentRun",
+    "AgentSchedule",
+    "AgentWebhook",
+    "AgentState",
+    "AgentChannel",
+    "AGENT_TIER_CONFIG",
     # User
     "User",
     "UserTier",
