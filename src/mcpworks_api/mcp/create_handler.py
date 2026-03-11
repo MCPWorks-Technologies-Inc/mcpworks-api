@@ -79,6 +79,7 @@ class CreateMCPHandler:
         "list_agent_state_keys": "read",
         "configure_agent_ai": "write",
         "remove_agent_ai": "write",
+        "chat_with_agent": "read",
         "add_channel": "write",
         "remove_channel": "write",
         "clone_agent": "write",
@@ -651,6 +652,21 @@ class CreateMCPHandler:
                     },
                 ),
                 MCPTool(
+                    name="chat_with_agent",
+                    description="Send a message to an agent's AI engine and get its response. Use this to talk to the agent, test its behavior, or ask it to suggest changes to its own configuration.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "message": {
+                                "type": "string",
+                                "description": "Message to send to the agent",
+                            },
+                        },
+                        "required": ["agent_name", "message"],
+                    },
+                ),
+                MCPTool(
                     name="add_channel",
                     description="Add a communication channel to an agent",
                     inputSchema={
@@ -783,6 +799,7 @@ class CreateMCPHandler:
             "list_agent_state_keys": self._list_agent_state_keys,
             "configure_agent_ai": self._configure_agent_ai,
             "remove_agent_ai": self._remove_agent_ai,
+            "chat_with_agent": self._chat_with_agent,
             "add_channel": self._add_channel,
             "remove_channel": self._remove_channel,
             "clone_agent": self._clone_agent,
@@ -1658,6 +1675,32 @@ class CreateMCPHandler:
         await service.remove_ai(self.account.id, agent_name)
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"agent_name": agent_name, "ai_removed": True}))]
+        )
+
+    async def _chat_with_agent(self, agent_name: str, message: str) -> MCPToolResult:
+        """Send a message to an agent's AI and return its response."""
+        from mcpworks_api.core.ai_client import AIClientError
+
+        service = AgentService(self.db)
+        try:
+            response = await service.chat_with_agent(
+                account_id=self.account.id,
+                agent_name=agent_name,
+                message=message,
+            )
+        except AIClientError as exc:
+            return MCPToolResult(content=[MCPContent(text=json.dumps({"error": str(exc)}))])
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent_name": agent_name,
+                            "response": response,
+                        }
+                    )
+                )
+            ]
         )
 
     async def _add_channel(
