@@ -1206,24 +1206,29 @@ async function tutCreateKey() {
   }
 }
 
-function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix) {
+function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix, agentName) {
   idPrefix = idPrefix || 'cfg';
   const createKey = `mcpworks-${nsName}`;
   const runKey = `mcpworks-${nsName}-run`;
   const createUrl = `https://${nsName}.create.mcpworks.io/mcp`;
   const runUrl = `https://${nsName}.run.mcpworks.io/mcp`;
+  const agentKey = agentName ? `mcpworks-${agentName}-agent` : null;
+  const agentUrl = agentName ? `https://${agentName}.agent.mcpworks.io/mcp` : null;
   const buildCfg = (urlField) => {
     const c = { mcpServers: {} };
     c.mcpServers[createKey] = { type: 'http', [urlField]: createUrl, headers: { Authorization: `Bearer ${apiKey}` } };
     c.mcpServers[runKey] = { type: 'http', [urlField]: runUrl, headers: { Authorization: `Bearer ${apiKey}` } };
     if (envKeys && envKeys.length) c.mcpServers[runKey].headers['X-MCPWorks-Env'] = envKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
+    if (agentKey) c.mcpServers[agentKey] = { type: 'http', [urlField]: agentUrl, headers: { Authorization: `Bearer ${apiKey}` } };
     return JSON.stringify(c, null, 2);
   };
   const claudeJson = buildCfg('url');
   const cursorJson = buildCfg('url');
   const windsurfJson = buildCfg('serverUrl');
+  const cliParts = [`claude mcp add ${createKey} --transport streamable-http ${createUrl}`, `claude mcp add ${runKey} --transport streamable-http ${runUrl}`];
+  if (agentKey) cliParts.push(`claude mcp add ${agentKey} --transport streamable-http ${agentUrl}`);
   const clients = [
-    { id: 'claude', label: 'Claude Code', hint: '.mcp.json', json: claudeJson, cli: `claude mcp add ${createKey} --transport streamable-http ${createUrl} && claude mcp add ${runKey} --transport streamable-http ${runUrl}` },
+    { id: 'claude', label: 'Claude Code', hint: '.mcp.json', json: claudeJson, cli: cliParts.join(' && ') },
     { id: 'cursor', label: 'Cursor', hint: '.cursor/mcp.json', json: cursorJson },
     { id: 'windsurf', label: 'Windsurf', hint: '~/.codeium/windsurf/mcp_config.json', json: windsurfJson },
   ];
@@ -1263,10 +1268,12 @@ async function loadNamespace(nsName) {
   c.innerHTML = '<div class="loading"><span class="loader"></span>Loading</div>';
   setBreadcrumb([{ label: 'Namespaces', onclick: 'loadNamespaces()' }, { label: nsName }]);
   try {
-    const [ns, svcData] = await Promise.all([
+    const [ns, svcData, agentsData] = await Promise.all([
       apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}`),
       apiFetch(`/v1/namespaces/${encodeURIComponent(nsName)}/services`),
+      apiFetch('/v1/agents').catch(() => ({ agents: [] })),
     ]);
+    const nsAgent = (agentsData.agents || []).find(a => a.name === nsName);
     const svcs = svcData.services || [];
     setInsights(svcs.length > 1 ? renderPieChart(svcs, 'name', 'call_count', s => `loadFunctions('${esc(nsName)}','${esc(s.name)}')`) : null);
 
@@ -1319,7 +1326,8 @@ async function loadNamespace(nsName) {
       <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
       ${ns.network_allowlist?.length ? `<div class="detail-meta">Allowlist: <span>${ns.network_allowlist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
       <div class="section-label" style="margin-top:18px">MCP Configuration</div>
-      ${renderMcpConfigTabs(nsName, 'YOUR_API_KEY', allEnvKeys, 'ns')}
+      ${nsAgent ? `<div style="margin-bottom:8px"><span class="tag" style="background:rgba(139,92,246,0.15);color:#a78bfa">Agent: ${esc(nsAgent.display_name || nsAgent.name)}</span> <span class="cell-dim" style="font-size:12px">Webhook endpoint included</span></div>` : ''}
+      ${renderMcpConfigTabs(nsName, 'YOUR_API_KEY', allEnvKeys, 'ns', nsAgent ? nsAgent.name : null)}
       ${envHtml}
       <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}
       <div class="danger-zone">
