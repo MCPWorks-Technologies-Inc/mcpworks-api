@@ -36,16 +36,13 @@ async def main() -> None:
 
     config = await load_agent_config()
 
-    scheduler = AgentScheduler(api_url=API_URL, agent_id=AGENT_ID)
-    await scheduler.load_schedules()
-    scheduler.start()
+    scheduler = AgentScheduler()
+    scheduler_task = asyncio.create_task(scheduler.start())
 
     if config.get("ai_engine"):
         AIEngine(
             engine=config["ai_engine"],
             model=config.get("ai_model", ""),
-            api_url=API_URL,
-            agent_id=AGENT_ID,
         )
         logger.info("ai_engine_initialized", engine=config["ai_engine"])
 
@@ -73,7 +70,8 @@ async def main() -> None:
 
     await stop_event.wait()
 
-    scheduler.shutdown()
+    scheduler.stop()
+    scheduler_task.cancel()
     server.should_exit = True
     await server_task
 
