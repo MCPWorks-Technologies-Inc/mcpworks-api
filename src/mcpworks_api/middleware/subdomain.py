@@ -5,6 +5,7 @@ Parse Host header to extract namespace and endpoint type.
 Examples:
   acme.create.mcpworks.io → namespace="acme", endpoint="create"
   acme.run.mcpworks.io → namespace="acme", endpoint="run"
+  acme.agent.mcpworks.io → namespace="acme", endpoint="agent"
 """
 
 import re
@@ -26,7 +27,7 @@ DEFAULT_DOMAIN = "mcpworks.io"
 #   - endpoint: "create" or "run"
 SUBDOMAIN_PATTERN = re.compile(
     r"^(?P<namespace>[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)"
-    r"\.(?P<endpoint>create|run)"
+    r"\.(?P<endpoint>create|run|agent)"
     r"\.(?P<domain>mcpworks\.io|localhost|127\.0\.0\.1(?::\d+)?)$"
 )
 
@@ -36,6 +37,7 @@ class EndpointType(str, Enum):
 
     CREATE = "create"  # Management endpoint (CRUD operations)
     RUN = "run"  # Execution endpoint (function invocation)
+    AGENT = "agent"  # Agent webhook endpoint
 
 
 class SubdomainMiddleware(BaseHTTPMiddleware):
@@ -106,12 +108,12 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
             namespace = request.query_params.get("namespace", "default")
             endpoint = request.query_params.get("endpoint", "create")
 
-            if endpoint not in ("create", "run"):
+            if endpoint not in ("create", "run", "agent"):
                 raise HTTPException(
                     status_code=400,
                     detail={
                         "code": "INVALID_ENDPOINT",
-                        "message": f"Invalid endpoint: {endpoint}. Must be 'create' or 'run'",
+                        "message": f"Invalid endpoint: {endpoint}. Must be 'create', 'run', or 'agent'",
                     },
                 )
 
@@ -127,7 +129,7 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
                 status_code=400,
                 detail={
                     "code": "INVALID_HOST",
-                    "message": f"Invalid host: {host}. Expected {{namespace}}.{{create|run}}.{self.domain}",
+                    "message": f"Invalid host: {host}. Expected {{namespace}}.{{create|run|agent}}.{self.domain}",
                 },
             )
 
