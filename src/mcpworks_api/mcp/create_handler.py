@@ -1380,6 +1380,7 @@ class CreateMCPHandler:
                             "status": agent.status,
                             "ai_engine": agent.ai_engine,
                             "ai_model": agent.ai_model,
+                            "system_prompt": agent.system_prompt,
                             "memory_limit_mb": agent.memory_limit_mb,
                             "cpu_limit": agent.cpu_limit,
                             "enabled": agent.enabled,
@@ -1643,6 +1644,7 @@ class CreateMCPHandler:
                             "agent_name": agent_name,
                             "engine": agent.ai_engine,
                             "model": agent.ai_model,
+                            "system_prompt": agent.system_prompt,
                             "configured": True,
                         }
                     )
