@@ -992,8 +992,8 @@ async def delete_user_account(
 class TierOverrideRequest(BaseModel):
     tier: str = Field(
         ...,
-        description="Tier to grant: builder, pro, or enterprise",
-        pattern="^(builder|pro|enterprise)$",
+        description="Tier to grant",
+        pattern="^(free|builder|pro|enterprise|builder-agent|pro-agent|enterprise-agent)$",
     )
     reason: str = Field(
         ...,

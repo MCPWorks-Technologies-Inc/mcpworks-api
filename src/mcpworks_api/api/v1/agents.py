@@ -148,7 +148,12 @@ async def list_agents(
     account: Account = Depends(get_current_account),
 ) -> AgentListResponse:
     """List all agents for the current account."""
-    _require_agent_tier(user.effective_tier)
+    try:
+        tier_enum = SubscriptionTier(user.effective_tier)
+    except ValueError:
+        tier_enum = None
+    if tier_enum is None or not tier_enum.is_agent_tier:
+        return AgentListResponse(agents=[], total=0, slots_used=0, slots_available=0)
 
     svc = AgentService(db)
     agents = await svc.list_agents(account.id)

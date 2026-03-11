@@ -10,8 +10,8 @@ class CreateSubscriptionRequest(BaseModel):
 
     tier: str = Field(
         ...,
-        description="Target subscription tier: builder, pro, or enterprise",
-        pattern="^(builder|pro|enterprise)$",
+        description="Target subscription tier",
+        pattern="^(builder|pro|enterprise|builder-agent|pro-agent|enterprise-agent)$",
     )
     interval: str = Field(
         default="monthly",
