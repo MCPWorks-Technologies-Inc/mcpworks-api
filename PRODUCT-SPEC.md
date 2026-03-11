@@ -1,8 +1,8 @@
 # MCPWorks Product Specification
 
-**Version:** 2.0.0
-**Date:** 2026-03-10
-**Status:** Developer Preview (A0)
+**Version:** 3.0.0
+**Date:** 2026-03-11
+**Status:** Developer Preview (A0) / Agents in Design
 **Author:** Simon Carr / Claude
 
 ---
@@ -15,23 +15,39 @@ A high-level product specification for MCPWorks as it exists today and where it'
 
 ## Product Summary
 
-MCPWorks is an AI-built autonomous agent platform on namespace-based infrastructure.
+MCPWorks is two products on one platform:
 
-Users describe automation in natural language. Their AI assistant builds agents using MCP tools. Agents run persistently on MCPWorks infrastructure on a schedule. Underneath, everything is a function executing in a secure Code Sandbox.
+**MCPWorks Functions** is namespace-based function hosting for AI assistants. Any agentic system can create and execute Python functions via MCP over HTTPS. Functions are the execution substrate. This is live in Developer Preview.
+
+**MCPWorks Agents** is an overlay product for autonomous, optionally intelligent, containerized AI entities that run on MCPWorks infrastructure. An agent has its own container, its own namespace, its own optional AI engine, and its own subdomain for receiving webhooks. Subscribing to MCPWorks Agents includes full access to MCPWorks Functions. We eat our own dogfood.
 
 **One-liner:** Describe the automation. Your AI builds it. MCPWorks runs it.
 
-**Two products, one platform:**
+---
 
-1. **MCPWorks Functions** (live now, Developer Preview) -- Namespace-based function hosting. AI assistants create and execute Python functions via MCP over HTTPS. The foundation.
+## Product Relationship
 
-2. **MCPWorks Agents** (shipping A0) -- Persistent, scheduled automations built on top of Functions. An agent is a function + cron schedule + persistent state + secrets. The AI builds it, MCPWorks runs it after the conversation ends.
+```
+MCPWorks Agents (overlay product)
+    |
+    | includes full access to
+    v
+MCPWorks Functions (foundation product)
+    |
+    | executes in
+    v
+Code Sandbox (nsjail, secure execution)
+```
+
+MCPWorks Functions has standalone value. Any MCP-compatible AI system can use it to create and run functions. You do not need Agents to use Functions.
+
+MCPWorks Agents builds on Functions. Agents use Functions as their execution substrate. An agent's scheduled jobs, event responses, and self-created tools are all Functions underneath.
 
 ---
 
 ## Product Status
 
-### What's Live (Developer Preview, March 10 2026)
+### MCPWorks Functions (Live, Developer Preview, March 10 2026)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -46,30 +62,36 @@ Users describe automation in natural language. Their AI assistant builds agents 
 | Subdomain routing | Production | Middleware parses namespace + endpoint type |
 | Admin dashboard | Production | Domain-restricted, token-auth |
 | CI/CD | Production | GitHub Actions, auto-deploy to DigitalOcean |
-| Welcome email | Production | Resend provider, triggered on registration |
 
-### What's Next (A0, Weeks 2-6)
+### MCPWorks Agents (In Design)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Agent data model | Not started | 3 new Postgres tables (Agent, AgentRun, AgentState) |
-| Agent dispatcher | Not started | Cron scheduler, fires agents on schedule via Code Sandbox |
-| Agent MCP tools | Not started | `make_agent`, `list_agents`, `describe_agent`, `update_agent`, `delete_agent` |
-| Persistent state | Not started | `mcpworks.state.get/set` for data between agent runs |
-| Secrets management | Not started | Envelope encryption (AES-256-GCM) for API keys/tokens |
-| Namespace sharing | Partial | Model exists, REST endpoints incomplete |
-| Webhooks | Partial | Model exists, integration incomplete |
-
-### Backends
-
-| Backend | Status | Notes |
-|---------|--------|-------|
-| Code Sandbox | Production | nsjail, Python, tier-based limits |
-| GitHub Repo | Future | MCPWorks framework functions from user repos |
+| Agent container runtime | Design | Docker-based, one container per agent |
+| Agent namespace provisioning | Design | Each agent gets its own create/run namespace |
+| Agent MCP endpoint | Design | `{agent-name}.agent.mcpworks.io` for webhooks/communication |
+| AI engine configuration | Design | User-supplied API key for agent's own LLM |
+| Cron scheduling | Design | Scheduled function execution within agent container |
+| Webhook ingress | Design | Reverse proxy to agent subdomain on :443 |
+| Persistent state | Design | Key-value store scoped per agent |
+| Secrets management | Design | Envelope encryption (AES-256-GCM) |
+| Function locking | Design | Protect Claude-authored functions from agent modification |
+| Agent cloning/forking | Design | Clone agent to new instance with divergent evolution |
+| Outbound communication | Design | Discord, WhatsApp, Slack, email channels |
+| Agent MCP tools | Design | `make_agent`, `list_agents`, `describe_agent`, `update_agent`, `delete_agent`, `clone_agent` |
 
 ---
 
-## Architecture Overview
+## MCPWorks Functions (Detailed)
+
+### Endpoint Pattern
+
+```
+*.create.mcpworks.io    Management (CRUD functions and services)
+*.run.mcpworks.io       Execution (call functions)
+```
+
+### Architecture
 
 ```
 AI Assistant (Claude Code / Copilot / Codex / Kimi / any MCP client)
@@ -77,25 +99,19 @@ AI Assistant (Claude Code / Copilot / Codex / Kimi / any MCP client)
     | HTTPS (direct connection, no proxy, no local install)
     |
     +---> {namespace}.create.mcpworks.io/mcp
-    |         Management tools:
     |         make_service, list_services, delete_service
     |         make_function, update_function, delete_function
     |         list_functions, describe_function
-    |         make_agent, list_agents, describe_agent       [A0 next]
-    |         update_agent, delete_agent                    [A0 next]
     |
     +---> {namespace}.run.mcpworks.io/mcp
-    |         Execution tools:
-    |         Dynamically generated from user's functions
+    |         Dynamically generated tools from user's functions
     |         e.g. service1/function1, service1/function2
-    |         Agent dispatcher calls these on schedule
     |
     +---> api.mcpworks.io/v1/*
-              REST API:
-              Auth, account management, billing, admin
+              REST: Auth, account management, billing, admin
 ```
 
-### Request Flow (Functions)
+### Request Flow
 
 1. AI assistant sends MCP request to namespace subdomain
 2. Caddy reverse proxy terminates TLS, routes to mcpworks-api container
@@ -109,168 +125,19 @@ AI Assistant (Claude Code / Copilot / Codex / Kimi / any MCP client)
 8. Usage counter incremented on successful execution
 9. Execution record written (with PII scrubbing)
 
-### Request Flow (Agents, planned)
+### Function Lifecycle
 
-1. User describes desired automation to their AI assistant
-2. AI calls `make_agent` via Create endpoint, which creates:
-   - A function (the agent's code)
-   - A cron schedule (when it runs)
-   - A state bucket (persistent data between runs)
-   - Encrypted secrets (API keys the agent needs)
-3. Dispatcher picks up the agent on its next scheduled tick
-4. Dispatcher calls the agent's function via the Run endpoint
-5. Agent code can read/write persistent state via `mcpworks.state.get/set`
-6. Agent code can access secrets injected into its sandbox environment
-7. Execution record written, next run scheduled
+**Creation:** AI calls `make_function` with code, parameters, and description. Function stored in Postgres. Immutable FunctionVersion v1 created. Function appears as MCP tool on Run endpoint.
 
----
+**Execution:** AI calls function via Run endpoint. Billing check. nsjail spawns isolated process with tier-based limits. Result returned. Execution recorded.
 
-## Functions
+**Versioning:** Every update creates a new immutable FunctionVersion. The `active_version` pointer determines which version executes. Instant rollback by pointing to a previous version.
 
-Functions are the building blocks. They are callable units of Python code that execute in a secure sandbox.
-
-### Lifecycle
-
-**Creation:**
-```
-AI: "Create a function that fetches weather data"
-    |
-    v
-make_function(
-    service: "weather",
-    name: "get_forecast",
-    description: "Fetch weather forecast for a city",
-    parameters: { city: { type: "string" } },
-    code: "import requests\ndef execute(city):\n    ...",
-    backend: "sandbox",
-    language: "python"
-)
-    |
-    v
-Function stored in Postgres
-FunctionVersion v1 created (immutable)
-Function appears as MCP tool on Run endpoint
-```
-
-**Execution:**
-```
-AI: calls weather/get_forecast(city="Vancouver")
-    |
-    v
-Run endpoint resolves function
-    |
-    v
-Billing check: executions_count < executions_limit?
-    |
-    v
-Code Sandbox: nsjail spawns isolated process
-    - Mounts function code as read-only
-    - Applies tier-based limits (timeout, memory, CPU)
-    - Executes with pre-installed libraries (requests, pandas, numpy, etc.)
-    - Network access available (Builder tier and above)
-    |
-    v
-Result returned to AI
-Execution record written
-Usage counter incremented
-```
-
-### Versioning
-
-Functions use immutable versioning. Every update creates a new FunctionVersion. The function's `active_version` pointer determines which version executes. This enables:
-
-- Instant rollback (point active_version to previous version)
-- Audit trail (every version preserved)
-- Safe updates (new version created before switching)
-
----
-
-## Agents (Shipping A0)
-
-Agents are the product. Functions are the building blocks.
-
-An agent is: **a function + cron schedule + persistent state + encrypted secrets.** The user describes what they want. The AI builds it via MCP tools. MCPWorks runs it autonomously after the conversation ends.
-
-### What Makes an Agent Different from a Function
-
-| | Function | Agent |
-|--|----------|-------|
-| Execution | On-demand (AI calls it) | Scheduled (cron dispatcher) |
-| State | Stateless (fresh each run) | Persistent (`mcpworks.state.get/set`) |
-| Secrets | None (sandbox is ephemeral) | Encrypted (AES-256-GCM, injected at runtime) |
-| Lifecycle | Exists until deleted | Runs autonomously until stopped |
-| Created by | AI via `make_function` | AI via `make_agent` |
-
-### Agent MCP Tools (5 new tools on Create endpoint)
-
-| Tool | Description |
-|------|-------------|
-| `make_agent` | Create agent: function code + schedule + state + secrets |
-| `list_agents` | List all agents in namespace |
-| `describe_agent` | Get agent details, recent runs, state summary |
-| `update_agent` | Update code, schedule, or secrets |
-| `delete_agent` | Stop and remove agent |
-
-### Agent Data Model (3 new Postgres tables)
-
-| Table | Purpose | Key Fields |
-|-------|---------|-----------|
-| Agent | Agent definition | function_id, schedule (cron), enabled, secrets_encrypted |
-| AgentRun | Execution history | agent_id, started_at, duration, status, error |
-| AgentState | Persistent key-value store | agent_id, key, value, updated_at |
-
-### Agent Tiers
-
-| Tier | Agents | Min Schedule | State Storage |
-|------|--------|-------------|---------------|
-| Free | 0 | - | - |
-| Builder ($29) | 1 | 5 min | 10MB |
-| Pro ($149) | 5 | 30 sec | 100MB |
-| Enterprise ($499+) | Unlimited | 15 sec | 1GB |
-
-### Secrets Management
-
-Agents need API keys, tokens, and credentials to interact with external services. These are stored using envelope encryption:
-
-- Each secret encrypted with AES-256-GCM using a per-agent data encryption key (DEK)
-- DEK encrypted with a key encryption key (KEK) stored separately
-- Secrets decrypted and injected into the sandbox environment at runtime
-- Secrets never stored in plaintext, never logged, never returned in API responses
-
-### Dispatcher Architecture (planned)
-
-The dispatcher is a background process that:
-
-1. Queries Postgres for agents whose next_run_at <= now
-2. For each due agent, calls the agent's function via the Run endpoint
-3. Injects persistent state and decrypted secrets into the sandbox
-4. Records the AgentRun result
-5. Updates next_run_at based on the cron schedule
-
-The dispatcher reuses the existing Code Sandbox execution path. An agent run is just a function execution with extra context (state + secrets).
-
----
-
-## Code-Mode Execution
+### Code-Mode Execution
 
 Code-mode execution is the architectural pattern that differentiates MCPWorks from traditional MCP servers.
 
-### Traditional MCP
-
-- Load ALL tool schemas into AI context (150K+ tokens for large toolsets)
-- AI calls tools one at a time
-- Every intermediate result flows back into AI context
-- Token cost scales linearly with tool count and data volume
-
-### MCPWorks Code-Mode
-
-- Load only function NAMES into AI context (~2K tokens)
-- AI writes compact code that calls multiple functions
-- Code runs in sandbox; intermediate data stays in sandbox
-- Only final result returns to AI context
-- Token cost is nearly flat regardless of data volume
-
-### Measured Savings (Anthropic Research, January 2026)
+Traditional MCP loads ALL tool schemas into AI context (150K+ tokens for large toolsets). Code-mode loads only function NAMES (~2K tokens). The AI writes compact code that runs in the sandbox. Intermediate data stays in the sandbox and never enters the AI's context.
 
 | Metric | Traditional MCP | Code-Mode | Savings |
 |--------|----------------|-----------|---------|
@@ -278,9 +145,173 @@ Code-mode execution is the architectural pattern that differentiates MCPWorks fr
 | Tool definition overhead | 150,000 | 2,000 | 98.7% |
 | Total cost per interaction | baseline | -70% | ~70% |
 
-### Privacy Benefit
+Source: Anthropic's Code Execution MCP research, January 2026.
 
-Intermediate data (customer records, financial figures, PII) stays in the sandbox execution environment. It never enters the AI's context window. This is architectural data minimization, not policy-based. Relevant for GDPR, HIPAA, and SOX compliance.
+Privacy benefit: Intermediate data (customer records, PII) stays in the sandbox. Architectural data minimization for GDPR/HIPAA/SOX compliance.
+
+### Fleet Management
+
+Functions live on MCPWorks infrastructure, not on individual machines. When an orchestrator updates a function, every connected agent's next call uses the new version. Rollback is instant. No git pulls, no config syncs, no fleet-wide deploys.
+
+---
+
+## MCPWorks Agents (Detailed)
+
+### What an Agent Is
+
+An MCPWorks Agent is a **containerized, optionally intelligent, autonomous entity** that runs on MCPWorks infrastructure. It is not a thin wrapper over functions. It is a persistent process with:
+
+- Its own Docker container
+- Its own namespace (create + run endpoints)
+- Its own subdomain (`{agent-name}.agent.mcpworks.io`) for webhook ingress
+- An optional AI engine (user-configured, BYOAI via API key)
+- Cron jobs for scheduled work
+- Webhook listeners for event-driven work
+- Persistent state between runs
+- Encrypted secrets for external service access
+- Outbound communication channels (Discord, WhatsApp, Slack, email)
+
+### Endpoint Pattern
+
+```
+*.create.mcpworks.io       Manage functions (user's namespace)
+*.run.mcpworks.io          Execute functions (user's namespace)
+*.agent.mcpworks.io        Agent webhook ingress + MCP communication
+```
+
+The agent endpoint is a third subdomain pattern alongside create and run. It serves two purposes: receiving inbound webhooks from external systems, and providing an MCP interface for communicating with the agent (including from the user's primary AI assistant).
+
+### Intelligence Levels
+
+An agent can operate at two levels:
+
+**Without intelligence (automation mode):** The agent runs functions on schedules and responds to webhooks with predefined logic. It executes what it was told to do. Powerful but static. No AI engine needed, no token costs.
+
+**With intelligence (autonomous mode):** The agent has its own LLM (user-supplied API key). It can reason, make decisions, and critically, it can use its own namespace's create and run interfaces to build and modify its own functions. It doesn't just execute. It evolves.
+
+### Agent Namespace
+
+When an agent is created, it gets its own namespace. This means the agent has:
+
+- `{agent-name}.create.mcpworks.io` for creating its own services and functions
+- `{agent-name}.run.mcpworks.io` for executing its own functions
+
+The user who created the agent has full admin access to this namespace. They can inspect, override, or delete anything the agent created. The agent operates within its namespace autonomously, but the user is always the authority.
+
+### The Intelligence Hierarchy
+
+```
+User (human, full admin over everything)
+    |
+    | natural language instructions
+    v
+Primary AI (Claude, Copilot, etc. -- the user's main LLM partner)
+    |
+    | writes high-quality functions, configures agent,
+    | sets locks, issues instructions via MCP
+    v
+MCPWorks Agent (autonomous entity, potentially cheaper LLM)
+    |
+    | executes functions, responds to events,
+    | can self-modify within its unlocked scope,
+    | communicates back via Discord/WhatsApp/Slack/email
+    v
+MCPWorks Functions (the execution layer)
+```
+
+This hierarchy enables a powerful pattern: the user's primary AI (often a more capable model) can write high-quality functions that are beyond what the agent's own LLM could produce, push them into the agent's namespace, and lock them. The agent uses these locked functions for its critical path while retaining the ability to create its own functions for things within its capability.
+
+### Function Locking
+
+Functions in an agent's namespace can be marked as **locked**. A locked function:
+
+- Cannot be modified or deleted by the agent's own AI
+- Can only be modified by the user or their primary AI (with admin access)
+- Ensures the critical path is protected from degradation by a less capable model
+- Can be unlocked by the admin at any time
+
+This creates a safety boundary: Claude writes the important functions and locks them. The agent (running on a cheaper model) handles day-to-day operations using those locked functions and can create its own unlocked functions for ad-hoc needs.
+
+### Event Model
+
+Agents respond to two types of triggers:
+
+**Scheduled (cron):** The agent has cron jobs that fire on a schedule. Each cron tick executes a function in the agent's namespace.
+
+**Event-driven (webhooks):** External systems or MCPWorks functions can POST to `{agent-name}.agent.mcpworks.io`. The agent receives the webhook and its AI (or predefined logic) decides what to do.
+
+**The watcher pattern:** A Function runs on a cron schedule monitoring something (price feeds, API changes, log patterns). When it detects a condition, it fires a webhook to an Agent. The Function is the sensor. The Agent is the brain.
+
+Example: Dogecoin monitoring
+
+```
+Function: "doge-watcher" (runs every 5 min via cron)
+    |
+    | monitors price feed, detects 5% drop in 1 hour
+    |
+    | POST to dogedetective.agent.mcpworks.io
+    v
+Agent: "dogedetective" (has Kimi K2 as its AI engine)
+    |
+    | receives webhook, reasons about the event
+    | searches news APIs (using functions in its namespace)
+    | correlates price drop with news events
+    | decides this is worth reporting
+    |
+    | sends message to user's Discord
+    v
+User (on phone, anywhere)
+    |
+    | replies on Discord: "dig deeper, compare last 3 times"
+    v
+Agent: receives instruction, runs deeper analysis
+    | creates a new function for historical comparison
+    | executes it, formats results, sends back to Discord
+```
+
+### Outbound Communication
+
+Agents can communicate with users through configured channels:
+
+- **Discord** (bot integration, channel messages, DMs)
+- **WhatsApp** (via API integration)
+- **Slack** (bot integration, channel messages)
+- **Email** (via transactional email provider)
+
+Users can respond through these same channels with direct instructions. The agent's AI interprets the response and acts on it. The user does not need to open Claude Code or any development environment. They're on their phone, responding to their agent.
+
+### Agent Cloning (Forking)
+
+If a user has available agent slots, they can clone an existing agent to a new instance:
+
+- The clone gets a new name, new namespace, new container
+- It inherits: function code, state snapshot, configuration, secrets
+- From that point, the original and clone evolve independently
+- The user (or their primary AI) can diverge the clone's behavior
+
+Use case: dogedetective is working well for volatility alerts. Clone it to dogedetective-contrarian. Tell the clone to look for buying opportunities during negative sentiment instead. Two agents, shared lineage, divergent strategies. Compare performance. Merge good ideas back by copying functions between namespaces.
+
+This is `git branch` for autonomous AI entities.
+
+### Agent Data Model
+
+| Table | Purpose | Key Fields |
+|-------|---------|-----------|
+| Agent | Agent definition | name, container_id, namespace_id, ai_engine, ai_api_key_encrypted, enabled |
+| AgentSchedule | Cron jobs | agent_id, function_id, cron_expression, enabled |
+| AgentWebhook | Webhook endpoints | agent_id, path, handler_function_id |
+| AgentRun | Execution history | agent_id, trigger_type (cron/webhook/manual), started_at, duration, status |
+| AgentState | Persistent key-value store | agent_id, key, value_encrypted, updated_at |
+| AgentChannel | Communication channels | agent_id, channel_type (discord/slack/whatsapp/email), config_encrypted |
+
+### Agent Tiers
+
+| Tier | Agents | Min Schedule | State Storage | Includes Functions |
+|------|--------|-------------|---------------|--------------------|
+| Free | 0 | - | - | Free tier |
+| Builder ($29) | 1 | 5 min | 10MB | Full Functions access |
+| Pro ($149) | 5 | 30 sec | 100MB | Full Functions access |
+| Enterprise ($499+) | Unlimited | 15 sec | 1GB | Full Functions access |
 
 ---
 
@@ -295,7 +326,7 @@ Intermediate data (customer records, financial figures, PII) stays in the sandbo
 | Syscall filtering | seccomp-bpf | Block dangerous system calls |
 | Orchestration | nsjail | Combines all three with config-driven policies |
 
-### Tier-Based Resource Limits
+### Tier-Based Resource Limits (Functions)
 
 | Tier | Timeout | Memory | CPU Time | Concurrent | Network |
 |------|---------|--------|----------|------------|---------|
@@ -307,50 +338,27 @@ Intermediate data (customer records, financial figures, PII) stays in the sandbo
 ### Safety Measures
 
 - Dangerous pattern detection (os.system, subprocess, eval, exec, __import__)
-- PII scrubbing from error messages before storage (regex for emails, phones, API keys, SSNs)
+- PII scrubbing from error messages before storage
 - Read-only function code mount
 - Ephemeral execution environment (destroyed after each run)
-- Agent state is the only persistence layer (scoped per-agent, not per-sandbox)
+- Agent state is the only persistence layer (scoped per-agent)
+- Locked functions cannot be modified by the agent's own AI
 
 ---
 
-## Fleet Management (Cluster Propagation)
+## Secrets Management
 
-### The Problem
+Both Functions (at the platform level) and Agents use envelope encryption:
 
-Teams running agent fleets (8, 16, 50+ agentic systems) face painful MCP management:
-- Function updates require git pulls/config syncs across every machine
-- Version drift between agents causes inconsistent behavior
-- Debugging failures across a fleet is slow and manual
-- Rolling back a bad update means touching every machine
+- Each secret encrypted with AES-256-GCM using a per-entity data encryption key (DEK)
+- DEK encrypted with a key encryption key (KEK) stored separately
+- Secrets decrypted and injected into the sandbox/container at runtime
+- Secrets never stored in plaintext, never logged, never returned in API responses
 
-### The MCPWorks Solution
-
-Functions live on MCPWorks infrastructure, not on individual machines. All agents connect to the same Run endpoint.
-
-```
-Orchestrator AI (e.g. Claude with Create access)
-    |
-    | make_function() or update_function()
-    v
-MCPWorks (single source of truth)
-    |
-    | Function immediately available
-    v
-Agent 1  Agent 2  Agent 3  ...  Agent N
-(all connected to {ns}.run.mcpworks.io)
-```
-
-**Propagation is instant.** When the orchestrator updates a function, every agent's next call to that function uses the new version. No deploy step. No sync step.
-
-**Rollback is instant.** Point active_version back to the previous FunctionVersion. Every agent immediately uses the old version.
-
-**Self-healing pattern:** The orchestrator monitors agent execution logs. If a function starts failing, the orchestrator can:
-1. Inspect the error via describe_function or execution logs
-2. Update or roll back the function
-3. Verify the fix by checking subsequent executions
-
-This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All without human intervention if desired.
+For agents, secrets include:
+- The agent's AI engine API key
+- External service credentials (Discord bot token, API keys, etc.)
+- User-provided secrets for the agent's functions
 
 ---
 
@@ -361,6 +369,7 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 - Generated per-namespace with configurable scopes (read, write, execute)
 - 12-character prefix for identification + argon2 hash for verification
 - Separate keys for Create (management) and Run (execution) access
+- Agent namespaces get their own keys (agent has write+execute, user has admin)
 - Keys can be rotated without downtime
 
 ### OAuth 2.1
@@ -371,11 +380,12 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 
 ### Scope-Based Access Control
 
-| Scope | Create Endpoint | Run Endpoint |
-|-------|----------------|--------------|
-| read | List/describe functions and agents | N/A |
-| write | Create/update/delete functions and agents | N/A |
-| execute | N/A | Call functions |
+| Scope | Create Endpoint | Run Endpoint | Agent Endpoint |
+|-------|----------------|--------------|----------------|
+| read | List/describe functions | N/A | Read agent state/logs |
+| write | Create/update/delete functions | N/A | Configure agent |
+| execute | N/A | Call functions | Send commands to agent |
+| admin | Full namespace control | Full namespace control | Full agent control |
 
 ---
 
@@ -393,7 +403,8 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 ### What Counts as an Execution
 
 - One function call via Run endpoint = one execution
-- One scheduled agent run = one execution
+- One scheduled agent cron tick = one execution
+- One webhook-triggered agent action = one execution
 - Failed executions count (prevents abuse)
 - Retries count separately
 
@@ -402,8 +413,7 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 - At 80%: email warning
 - At 90%: in-app one-click upgrade prompt (Stripe proration)
 - At 95%: email warning
-- At 100%: functions pause until next billing cycle (no overage charges)
-- Agents are paused at 100% and resume at next billing cycle
+- At 100%: functions and agents pause until next billing cycle (no overage charges)
 
 ### Rate Limits
 
@@ -416,7 +426,7 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 
 ## Data Models (Key Entities)
 
-### Existing (Production)
+### Functions (Production)
 
 | Entity | Purpose | Key Fields |
 |--------|---------|-----------|
@@ -424,26 +434,29 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 | Account | Billing unit (1:1 with User) | user_id, name |
 | Namespace | Organizational container | name, account_id, call_count |
 | Service | Groups functions within namespace | namespace_id, name |
-| Function | Callable unit | name, service_id, active_version, backend, call_count |
+| Function | Callable unit | name, service_id, active_version, backend, call_count, locked |
 | FunctionVersion | Immutable version record | function_id, version, code, config, requirements |
 | Execution | Execution history | function_id, user_id, status, duration, input/result (PII-scrubbed) |
 | APIKey | Auth credential | key_prefix, key_hash, namespace_id, scopes |
 | Subscription | Billing state | user_id, tier, auto_renew |
 | AuditLog | Compliance trail | event, user_id, resource_id |
 
-### Planned (Agents, A0 next)
+### Agents (Design)
 
 | Entity | Purpose | Key Fields |
 |--------|---------|-----------|
-| Agent | Agent definition | function_id, schedule, enabled, secrets_encrypted, state_size_limit |
-| AgentRun | Agent execution history | agent_id, started_at, duration, status, error |
+| Agent | Agent definition | name, container_id, namespace_id, ai_engine, ai_api_key_encrypted, enabled |
+| AgentSchedule | Cron jobs | agent_id, function_id, cron_expression, enabled |
+| AgentWebhook | Webhook endpoints | agent_id, path, handler_function_id |
+| AgentRun | Execution history | agent_id, trigger_type, started_at, duration, status |
 | AgentState | Persistent key-value store | agent_id, key, value_encrypted, updated_at |
+| AgentChannel | Communication channels | agent_id, channel_type, config_encrypted |
 
 ---
 
 ## Infrastructure
 
-### Current (A0 Developer Preview)
+### Current (A0 Developer Preview - Functions)
 
 | Component | Provider | Details |
 |-----------|----------|---------|
@@ -457,56 +470,57 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 | Payments | Stripe | Subscriptions, prorated upgrades |
 | CI/CD | GitHub Actions | Lint, test, build, deploy on push to main |
 
-### Planned (A1)
+### Required for Agents
 
-- Dedicated sandbox execution nodes (separate from API)
-- Horizontal scaling for execution capacity
-- Geographic distribution if demand warrants
+- Docker runtime for agent containers (likely same droplet initially, dedicated nodes later)
+- Wildcard routing for `*.agent.mcpworks.io` (Cloudflare + Caddy)
+- Container orchestration (lightweight, not K8s -- possibly Docker Compose or Podman pods)
+- Agent container image with pre-installed Python, MCP SDK, and communication libraries
 
 ---
 
 ## Developer Preview Program
 
 - **Duration:** Up to 90 days from March 10, 2026
-- **Access:** Full Builder tier at no cost (includes 1 agent when agents ship)
+- **Access:** Full Builder tier at no cost
 - **Obligation:** None. Cancel any time.
 - **After preview:** 14 days written notice before downgrade to Free tier
 - **Goal:** Real feedback from real engineers building real things
+- **Agents:** Will be available to preview users when the agent product ships
 
 ---
 
 ## Product Roadmap (High Level)
 
-### Now (A0: Developer Preview)
+### Live (A0: Functions Developer Preview)
 
-**Functions (live):**
 - Code Sandbox backend (Python, nsjail)
 - Namespace/service/function CRUD via MCP and REST
 - Auth, billing, usage tracking
 - Fleet propagation and instant rollback
 
-**Agents (shipping weeks 2-6):**
-- Agent data model (3 Postgres tables)
-- Dispatcher (cron scheduler)
-- 5 agent MCP tools on Create endpoint
-- Persistent state (`mcpworks.state.get/set`)
-- Secrets management (envelope encryption, AES-256-GCM)
+### Next (A0: Agents)
 
-### Next (A1: General Availability)
+- Agent container runtime and namespace provisioning
+- Agent MCP endpoint (`*.agent.mcpworks.io`)
+- AI engine configuration (BYOAI at the agent level)
+- Cron scheduling within agent containers
+- Webhook ingress via agent subdomain
+- Persistent state and secrets management
+- Function locking (protect Claude-authored functions)
+- Outbound communication (Discord, Slack, email)
+- Agent cloning/forking
+- Agent MCP tools on Create endpoint
 
+### Later (A1+)
+
+- WhatsApp integration for agent communication
 - Function templates (pre-built starting points)
 - TypeScript sandbox support
-- Package/dependency management for functions
-- Enhanced execution logging and debugging tools
-- Webhook event listeners for agents (supplement cron scheduling)
-- nanobot.ai partnership exploration (Obot AI's MCP agent framework as inspiration)
-
-### Later (A2+)
-
+- Agent marketplace (share/sell agent configurations)
+- Inter-agent communication (agents calling each other)
 - GitHub Repo backend (MCPWorks framework)
-- Data backends (persistent storage beyond agent state)
 - SOC 2 Type I certification
-- Namespace sharing (cross-account collaboration)
 
 ---
 
@@ -514,15 +528,17 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 
 | Decision | Rationale |
 |----------|-----------|
-| Direct HTTPS, no proxy | Zero install friction. AI connects with two URLs. |
-| Agents = functions + schedule + state | Minimal delta over existing function infrastructure (3 tables, 1 dispatcher, 5 tools) |
+| Two branded products (Functions + Agents) | Functions has standalone value for any MCP client. Agents is the premium overlay. |
+| Agents include full Functions access | Dogfooding. Agents are built on Functions. |
+| Each agent gets its own namespace | Isolation, self-modification capability, admin visibility |
+| Third subdomain pattern (*.agent.mcpworks.io) | Webhook ingress + MCP communication with agents |
+| Optional AI engine (BYOAI per agent) | Agents can be pure automation or intelligent. User controls cost. |
+| Function locking | Protects high-quality functions from degradation by less capable agent LLMs |
+| Agent cloning/forking | Enables evolutionary divergence without risking working agents |
+| Outbound communication channels | Agents are persistent presences, not scripts. Users interact naturally. |
+| Direct HTTPS, no proxy | Zero install friction for Functions. |
 | Immutable function versions | Safe rollback, audit trail, no accidental overwrites |
-| Per-account billing (not per-namespace) | Namespaces are organizational, not cost centers |
-| nsjail over Docker/K8s for sandbox | Lighter weight, faster spawn, direct Linux primitives |
-| Stateless MCP sessions | Simpler scaling, no session affinity required |
-| PII scrubbing on execution records | Compliance by default, not by policy |
-| Free tier: no network, no agents | Natural conversion lever to Builder |
-| Envelope encryption for agent secrets | Defense in depth; KEK/DEK separation limits blast radius |
+| nsjail for sandbox, Docker for agents | Right tool for each job: nsjail for ephemeral execution, Docker for persistent processes |
 | BYOAI (no token selling) | 75-85% gross margins, no AI vendor dependency |
 
 ---
@@ -536,6 +552,6 @@ This creates a closed loop: deploy, observe, fix, redeploy. All through MCP. All
 | Database Models | `docs/implementation/database-models-specification.md` | A0 data model spec |
 | Namespace Architecture | `../mcpworks-internals/docs/implementation/namespace-architecture.md` | Create/run pattern |
 | Sandbox Specification | `../mcpworks-internals/docs/implementation/code-execution-sandbox-specification.md` | nsjail isolation |
-| Strategy | `../mcpworks-internals/STRATEGY.md` | Business strategy (v5.0.0: agents pivot) |
+| Strategy | `../mcpworks-internals/STRATEGY.md` | Business strategy |
 | Pricing | `../mcpworks-internals/PRICING.md` | Tier details, rate limits, agent tiers |
 | Funding Action Plan | `../mcpworks-internals/docs/business/funding-action-plan-2026-03.md` | A0 execution timeline |
