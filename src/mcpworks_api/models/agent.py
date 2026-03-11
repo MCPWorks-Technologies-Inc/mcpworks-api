@@ -27,7 +27,16 @@ AGENT_STATUSES = ("creating", "running", "stopped", "error", "destroying")
 RUN_STATUSES = ("running", "completed", "failed", "timeout")
 TRIGGER_TYPES = ("cron", "webhook", "manual", "ai")
 CHANNEL_TYPES = ("discord", "slack", "whatsapp", "email")
-AI_ENGINES = ("anthropic", "openai", "google", "openrouter")
+AI_ENGINES = (
+    "anthropic",
+    "openai",
+    "google",
+    "openrouter",
+    "grok",
+    "deepseek",
+    "kimi",
+    "ollama",
+)
 
 
 class Agent(Base, UUIDMixin, TimestampMixin):

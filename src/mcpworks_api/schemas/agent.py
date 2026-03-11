@@ -191,8 +191,10 @@ class ConfigureAIRequest(BaseModel):
     @field_validator("engine")
     @classmethod
     def validate_engine(cls, v: str) -> str:
-        if v not in ("anthropic", "openai", "google", "openrouter"):
-            raise ValueError("engine must be 'anthropic', 'openai', 'google', or 'openrouter'")
+        from mcpworks_api.models.agent import AI_ENGINES
+
+        if v not in AI_ENGINES:
+            raise ValueError(f"engine must be one of: {', '.join(AI_ENGINES)}")
         return v
 
 
