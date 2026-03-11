@@ -631,15 +631,16 @@ class AgentService:
         agent_name: str,
         engine: str,
         model: str,
-        api_key: str,
+        api_key: str | None = None,
         system_prompt: str | None = None,
     ) -> Agent:
         agent = await self.get_agent(account_id, agent_name)
-        ciphertext, encrypted_dek = encrypt_value(api_key)
         agent.ai_engine = engine
         agent.ai_model = model
-        agent.ai_api_key_encrypted = ciphertext
-        agent.ai_api_key_dek_encrypted = encrypted_dek
+        if api_key:
+            ciphertext, encrypted_dek = encrypt_value(api_key)
+            agent.ai_api_key_encrypted = ciphertext
+            agent.ai_api_key_dek_encrypted = encrypted_dek
         agent.system_prompt = system_prompt
         await self.db.flush()
         await self.db.refresh(agent)

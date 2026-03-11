@@ -33,6 +33,7 @@ class AgentResponse(BaseModel):
     status: str
     ai_engine: str | None = None
     ai_model: str | None = None
+    system_prompt: str | None = None
     memory_limit_mb: int
     cpu_limit: float
     enabled: bool
@@ -185,7 +186,7 @@ class StateKeyListResponse(BaseModel):
 class ConfigureAIRequest(BaseModel):
     engine: str = Field(...)
     model: str = Field(..., max_length=100)
-    api_key: str = Field(...)
+    api_key: str | None = Field(None)
     system_prompt: str | None = None
 
     @field_validator("engine")
