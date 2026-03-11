@@ -228,10 +228,10 @@ async def handle_mcp_request(
             "Missing namespace. Use {namespace}.create.mcpworks.io or {namespace}.run.mcpworks.io",
         ).model_dump()
 
-    if endpoint_type not in ("create", "run"):
+    if endpoint_type not in ("create", "run", "agent"):
         return make_error_response(
             MCPErrorCodes.INVALID_REQUEST,
-            f"Invalid endpoint type: {endpoint_type}. Must be 'create' or 'run'",
+            f"Invalid endpoint type: {endpoint_type}. Must be 'create', 'run', or 'agent'",
         ).model_dump()
 
     # Parse JSON-RPC request
@@ -276,7 +276,7 @@ async def handle_mcp_request(
         ).model_dump()
 
     # Route to appropriate handler
-    if endpoint_type == "create":
+    if endpoint_type in ("create", "agent"):
         handler = CreateMCPHandler(
             namespace=namespace_name,
             account=account,

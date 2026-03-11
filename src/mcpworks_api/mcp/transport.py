@@ -236,7 +236,7 @@ async def list_tools() -> list[Tool]:
             if not api_key.has_scope("read"):
                 return []
 
-            if endpoint_type == EndpointType.CREATE:
+            if endpoint_type in (EndpointType.CREATE, EndpointType.AGENT):
                 handler = CreateMCPHandler(
                     namespace=namespace, account=account, db=db, api_key=api_key
                 )
@@ -268,7 +268,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
     endpoint_type = getattr(request.state, "endpoint_type", None)
     if not namespace or not endpoint_type:
         raise ValueError(
-            "Missing namespace or endpoint type. Use {namespace}.{create|run}.mcpworks.io"
+            "Missing namespace or endpoint type. Use {namespace}.{create|run|agent}.mcpworks.io"
         )
 
     args = arguments or {}
@@ -290,7 +290,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
         account, api_key = await _authenticate(request, db)
         _check_namespace_scope_mcp(api_key, namespace)
 
-        if endpoint_type == EndpointType.CREATE:
+        if endpoint_type in (EndpointType.CREATE, EndpointType.AGENT):
             handler = CreateMCPHandler(namespace=namespace, account=account, db=db, api_key=api_key)
         else:
             run_mode = request.query_params.get("mode", "code")
