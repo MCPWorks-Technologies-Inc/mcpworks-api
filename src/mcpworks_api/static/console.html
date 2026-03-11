@@ -1968,14 +1968,18 @@ function showAgentAiForm(agentId) {
   wrap.dataset.agentId = agentId;
   wrap.innerHTML = `<div class="add-form" style="margin-top:0">
     <label>Engine</label>
-    <select id="ai-engine">
-      <option value="anthropic">Anthropic</option>
+    <select id="ai-engine" onchange="updateModelPlaceholder()">
+      <option value="anthropic">Anthropic (Claude)</option>
       <option value="openai">OpenAI</option>
-      <option value="google">Google</option>
+      <option value="google">Google (Gemini)</option>
+      <option value="grok">Grok (xAI)</option>
+      <option value="deepseek">DeepSeek</option>
+      <option value="kimi">Kimi (Moonshot)</option>
       <option value="openrouter">OpenRouter</option>
+      <option value="ollama">Ollama (self-hosted)</option>
     </select>
     <label>Model</label>
-    <input id="ai-model" type="text" placeholder="claude-3-5-sonnet-20241022">
+    <input id="ai-model" type="text" placeholder="claude-sonnet-4-20250514">
     <label>API Key</label>
     <input id="ai-api-key" type="password" placeholder="sk-...">
     <label>System Prompt <span style="color:var(--text-3)">(optional)</span></label>
@@ -1985,6 +1989,25 @@ function showAgentAiForm(agentId) {
       <button class="btn btn-ghost btn-sm" onclick="cancelAgentAiForm()">Cancel</button>
     </div>
   </div>`;
+}
+
+function updateModelPlaceholder() {
+  const engine = document.getElementById('ai-engine')?.value;
+  const modelInput = document.getElementById('ai-model');
+  const keyInput = document.getElementById('ai-api-key');
+  if (!modelInput) return;
+  const placeholders = {
+    anthropic: 'claude-sonnet-4-20250514',
+    openai: 'gpt-4o',
+    google: 'gemini-2.5-pro',
+    grok: 'grok-3',
+    deepseek: 'deepseek-chat',
+    kimi: 'moonshot-v1-128k',
+    openrouter: 'anthropic/claude-sonnet-4',
+    ollama: 'llama3.1:70b',
+  };
+  modelInput.placeholder = placeholders[engine] || 'model-name';
+  if (keyInput) keyInput.placeholder = engine === 'ollama' ? 'ollama (or leave blank)' : 'sk-...';
 }
 
 function cancelAgentAiForm() {
