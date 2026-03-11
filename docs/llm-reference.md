@@ -29,10 +29,17 @@ All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
         "Authorization": "Bearer {API_KEY}",
         "X-MCPWorks-Env": "base64:{base64-encoded JSON of env vars}"
       }
+    },
+    "{ns}-agent": {
+      "type": "http",
+      "url": "https://{ns}.agent.mcpworks.io/mcp",
+      "headers": { "Authorization": "Bearer {API_KEY}" }
     }
   }
 }
 ```
+
+The `{ns}-agent` entry is only needed for namespaces with a running agent.
 
 ---
 
@@ -43,8 +50,9 @@ All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
 | Create | `{ns}.create.mcpworks.io/mcp` | Namespace/service/function CRUD | No |
 | Run (code mode) | `{ns}.run.mcpworks.io/mcp` | Single `execute` tool, write Python | Yes |
 | Run (tool mode) | `{ns}.run.mcpworks.io/mcp?mode=tools` | One tool per function | Yes |
+| Agent | `{ns}.agent.mcpworks.io/mcp` | Webhook delivery to agent containers | No |
 
-Default run mode is **code** (no query param needed).
+Default run mode is **code** (no query param needed). Agent endpoint is only active for namespaces with a running agent.
 
 ---
 
@@ -207,16 +215,67 @@ Usage: `make_function(service="x", name="y", backend="code_sandbox", template="h
 
 ---
 
+## Agents
+
+Agents = long-running containers with AI engine, schedules, webhooks, state, and channels. Require agent-enabled tier (admin-provisioned).
+
+### Agent MCP Tools (on create endpoint, agent tier required)
+
+| Tool | Required Params | Notes |
+|------|----------------|-------|
+| `make_agent` | `name` | Creates container + namespace |
+| `list_agents` | — | All agents for account |
+| `describe_agent` | `name` | Full details: status, AI, schedules, webhooks, state |
+| `start_agent` | `name` | Start stopped container |
+| `stop_agent` | `name` | Stop running container |
+| `destroy_agent` | `name` | Remove container and resources |
+| `clone_agent` | `source_name`, `new_name` | Copy namespace, functions, state, schedules |
+| `configure_ai` | `name`, `engine`, `model`, `api_key` | Set AI engine (restart agent to apply) |
+| `add_schedule` | `name`, `function_name`, `cron_expression` | Cron schedule with tier min interval |
+| `add_webhook` | `name`, `path` | Register webhook path |
+| `set_state` | `name`, `key`, `value` | Encrypted K/V store |
+| `get_state` | `name`, `key` | Retrieve state value |
+
+### AI Engines
+
+| Engine | Provider | API Style |
+|--------|----------|-----------|
+| `anthropic` | Anthropic (Claude) | Native SDK |
+| `openai` | OpenAI | OpenAI-compatible |
+| `google` | Google (Gemini) | Native SDK |
+| `grok` | xAI | OpenAI-compatible |
+| `deepseek` | DeepSeek | OpenAI-compatible |
+| `kimi` | Moonshot (Kimi) | OpenAI-compatible |
+| `openrouter` | OpenRouter | OpenAI-compatible |
+| `ollama` | Self-hosted | OpenAI-compatible |
+
+### Agent Resources (per container)
+
+| Resource | builder-agent | pro-agent | enterprise-agent |
+|----------|--------------|-----------|-----------------|
+| Agents | 1 | 5 | 20 |
+| RAM | 256 MB | 512 MB | 1 GB |
+| CPU | 0.25 vCPU | 0.5 vCPU | 1.0 vCPU |
+| Min schedule | 5 min | 30 sec | 15 sec |
+| State storage | 10 MB | 100 MB | 1 GB |
+
+---
+
 ## Tier Limits
 
 ### Execution Quotas (per month)
 
-| Tier | Price | Executions |
-|------|-------|------------|
-| free | $0 | 1,000 |
-| builder | $29 | 25,000 |
-| pro | $149 | 250,000 |
-| enterprise | $499 | 1,000,000 |
+| Tier | Price | Executions | Agents |
+|------|-------|------------|--------|
+| free | $0 | 1,000 | — |
+| builder | $29 | 25,000 | — |
+| pro | $149 | 250,000 | — |
+| enterprise | $499 | 1,000,000 | — |
+| builder-agent | $29 | 25,000 | 1 |
+| pro-agent | $179 | 250,000 | 5 |
+| enterprise-agent | $599 | 1,000,000 | 20 |
+
+Agent tiers include full access to the corresponding Functions tier.
 
 ### Sandbox Resources (per execution)
 
