@@ -1,6 +1,6 @@
 # MCPWorks Sandbox Security Audit
 
-**Date:** 2026-03-06 (Round 1), 2026-03-07 (Rounds 2, 3 & 4), 2026-03-08 (Rounds 5, 6, 7 & 8), 2026-03-09 (Rounds 9, 10 & 11)
+**Date:** 2026-03-06 (Round 1), 2026-03-07 (Rounds 2, 3 & 4), 2026-03-08 (Rounds 5, 6, 7 & 8), 2026-03-09 (Rounds 9, 10 & 11), 2026-03-10 (Round 12)
 **Auditor:** Claude Opus 4.6 (automated red-team via MCP tools)
 **Namespace:** `redteam`
 **Tier tested:** `builder`
@@ -49,7 +49,9 @@ The sandbox runs user code inside **nsjail** (Google's security sandbox) within 
 | `172.18.0.5` | Caddy Proxy | 80/443 | Reverse proxy, many connections to :8000 |
 | `127.0.0.11` | Docker DNS | 36605 | Embedded DNS resolver |
 
-Network topology was mapped by decoding `/proc/net/tcp` and `/proc/net/arp` from inside the sandbox. Service names are **not** resolvable from jailed code.
+Network topology was mapped by decoding `/proc/net/tcp` and `/proc/net/arp` from inside the sandbox (R1-R11). Service names are **not** resolvable from jailed code.
+
+**R12 UPDATE:** `clone_newnet: true` implemented. Sandbox now has its own network namespace with MACVLAN interface (`vs`). `/proc/net/tcp` shows only headers (no host connections). `/proc/net/arp` is empty. Sandbox gets unique IP from `172.18.128.0/17` range (e.g., `172.18.194.30`). Internal services (PostgreSQL, Redis, API) are unreachable. **However:** Docker gateway (`172.18.0.1:80/443`) is reachable — responds as Caddy with 308 redirect. See FINDING-38.
 
 ---
 
@@ -124,7 +126,7 @@ Security headers present: `x-content-type-options: nosniff`, `x-frame-options: D
 
 | Control | Configuration |
 |---------|--------------|
-| Namespaces | user, mount, PID, IPC, UTS, cgroup (**net is shared**) |
+| Namespaces | user, mount, PID, IPC, UTS, cgroup, **net** (clone_newnet since R12) |
 | UID/GID | 65534:65534 (`nobody`) |
 | Seccomp | Mode 2 (strict filter), 1 policy file |
 | NoNewPrivs | Enabled |
@@ -1067,9 +1069,78 @@ with real_open('/proc/self/mountinfo') as f: data = f.read()  # 26407 bytes — 
 2. **C extension wrapper** — a custom `.so` that holds the real function pointer in C memory (not a Python object)
 3. **Out-of-process architecture** — run user code in a subprocess where the parent never shares its function references
 
+### FINDING-38: Docker Gateway Reachable via MACVLAN — Caddy Exposed (Medium)
+
+**Issue:** With `clone_newnet:true` and MACVLAN, the sandbox can no longer reach internal Docker services (PostgreSQL, Redis, API) directly. However, the Docker gateway (`172.18.0.1`) is still reachable on ports 80 and 443. Caddy reverse proxy responds on both ports with a 308 redirect to HTTPS.
+
+**Evidence (Round 12):**
+```python
+# Gateway port 80 — CONNECTED, Caddy responds
+s.connect(('172.18.0.1', 80))
+s.sendall(b'GET / HTTP/1.1\r\nHost: 172.18.0.1\r\n\r\n')
+# → HTTP/1.1 308 Permanent Redirect
+# → Server: Caddy
+# → Location: https://172.18.0.1/
+
+# Gateway port 443 — CONNECTED
+s.connect(('172.18.0.1', 443))  # → SUCCESS
+
+# Other gateway ports — blocked
+172.18.0.1:8000 → errno=11 (timeout)
+172.18.0.1:5432 → errno=11 (timeout)
+
+# Internal services — all blocked
+172.18.0.2:5432 → errno=11 (PostgreSQL blocked)
+172.18.0.3:6379 → errno=111 (Redis refused)
+172.18.0.4:8000 → errno=11 (API blocked — MACVLAN parent-child isolation)
+172.18.0.5:80   → errno=11 (Caddy direct blocked)
+```
+
+**Impact:** Low-medium. The gateway Caddy responds but only with redirects. An attacker could potentially:
+- Probe Caddy for version info or misconfigurations
+- Attempt to reach the API via the gateway's Caddy (if Caddy proxies `Host: *.mcpworks.io` from the gateway IP)
+- Use the gateway as a reference point for network reconnaissance
+
+**Recommendation:** Add iptables rule on the host to block MACVLAN subnet (`172.18.128.0/17`) from reaching the Docker gateway:
+```bash
+iptables -I FORWARD -s 172.18.128.0/17 -d 172.18.0.1 -j DROP
+```
+
+### FINDING-39: /proc/self/mountinfo Still Leaks 26KB of Container Build Info (Medium)
+
+**Issue:** Despite `clone_newnet:true` fixing `/proc/net/*` leakage, `/proc/self/mountinfo` (26,406 bytes, 26 lines) still reveals the complete containerd overlay filesystem structure including 26+ snapshot layer IDs and paths. This exposes the container image build history and layer composition.
+
+**Evidence (Round 12):**
+```
+containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/5156/fs (upperdir)
+containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/5155/fs
+... through ...
+containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/1358/fs
+```
+
+**Impact:** Reveals container build internals. Not directly exploitable but provides intelligence about the image structure, number of layers, and build patterns.
+
+**Recommendation:** Bind-mount a minimal fake mountinfo (nsjail's `remountPt()` may reject this for procfs — if so, accept as low-priority informational leak).
+
+### FINDING-40: /proc/self/maps, /proc/self/status, /proc/uptime Still Readable (Low)
+
+**Issue:** Several `/proc` entries remain readable via the `__call__` closure bypass (F-37):
+
+| File | Leaks | Bytes |
+|------|-------|-------|
+| `/proc/self/maps` | Full memory layout (43 regions), library paths | 4,344 |
+| `/proc/self/status` | VM details, FD count, capability sets | 1,392 |
+| `/proc/self/smaps` | Detailed memory mapping with RSS per region | 30,393 |
+| `/proc/uptime` | Host uptime: 27.3 days | 23 |
+| `/proc/loadavg` | Host load average | 25 |
+| `/proc/sys/kernel/random/boot_id` | `3cf680aa-b03f-4e32-b285-ef8200dd4e0d` | 37 |
+| `/proc/self/environ` | 5 env vars (PYTHONPATH, HOME, LANG, SSL_CERT_FILE, OPENBLAS_NUM_THREADS) | 148 |
+
+**Impact:** Low — no secrets exposed. Process name shows as "4" (obfuscated from `/sandbox/.e`). Environment has no sensitive values. Host uptime and boot_id are informational.
+
 ---
 
-## Security Testing — Negative Results (Rounds 4–9)
+## Security Testing — Negative Results (Rounds 4–12)
 
 The following attacks were tested and **did not succeed**, indicating proper defenses:
 
@@ -1121,15 +1192,26 @@ The following attacks were tested and **did not succeed**, indicating proper def
 | Internal hostname resolution | All Docker service names unresolvable |
 | ctypes env var extraction | No secrets in process environment (only 4 safe vars) |
 | gc object scan for secrets | No secret strings found in garbage collector objects |
+| `/proc/net/tcp` host connections (R12) | **FIXED** — clone_newnet: only shows sandbox's own connections (header only) |
+| `/proc/net/arp` Docker container MACs (R12) | **FIXED** — clone_newnet: empty (header only) |
+| Internal service TCP (PostgreSQL R12) | **BLOCKED** — errno=11 timeout (MACVLAN isolation) |
+| Internal service TCP (Redis R12) | **BLOCKED** — errno=111 refused (MACVLAN isolation) |
+| Internal service TCP (API :8000 R12) | **BLOCKED** — errno=11 timeout (MACVLAN parent-child isolation) |
+| Internal service TCP (Caddy :80 R12) | **BLOCKED** — errno=11 timeout |
+| Cloud metadata (R12) | **BLOCKED** — errno=11 timeout |
+| Stored XSS `<script>` in name (R12) | **FIXED** — tags stripped, stored as `alert('xss')` |
+| Namespace squatting (R12) | **BLOCKED** — 403 requires email verification (reserved list also implemented) |
+| Docker service DNS (R12) | **BLOCKED** — all service names unresolvable |
+| `_posixsubprocess` .so reload (R12) | **FIXED** — 0 bytes (hollowed via bind-mount) |
 
 ---
 
 ## Remediation Progress
 
-| Finding | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | Change |
-|---------|----|----|----|----|-----|-----|-----|-----|-----|------|------|--------|
-| Internal service network access | REFUSED | TIMEOUT | — | — | TIMEOUT | — | TIMEOUT | — | — | — | — | Fixed |
-| /proc cpuinfo/meminfo/version | Real data | Fake | — | — | — | — | Fake | — | — | — | — | Fixed |
+| Finding | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | Change |
+|---------|----|----|----|----|-----|-----|-----|-----|-----|------|------|------|--------|
+| Internal service network access | REFUSED | TIMEOUT | — | — | TIMEOUT | — | TIMEOUT | — | — | — | — | **MACVLAN isolated** | **Fixed R12 (clone_newnet)** |
+| /proc cpuinfo/meminfo/version | Real data | Fake | — | — | — | — | Fake | — | — | — | — | Fake | Fixed |
 | Cloud metadata (169.254.169.254) | Not tested | Blocked | — | — | Blocked | — | Blocked | — | — | — | — | Fixed |
 | Email verification bypass | — | — | Bypass | **Fixed** | — | — | — | — | — | — | — | Fixed R3→R4 |
 | Registration rate limiting | — | — | Unlimited | **3/hour** | — | — | 3/hour | — | — | — | — | Fixed R3→R4 |
@@ -1160,7 +1242,14 @@ The following attacks were tested and **did not succeed**, indicating proper def
 | Closure open bypass (F-34) | — | — | — | — | — | — | — | — | — | NEW REGRESSION | **Blocked** → F-37 | Fixed R10→R11 |
 | __import__ _f regression (F-35) | — | — | — | — | — | — | — | — | — | NEW REGRESSION | **Blocked** → F-37 | Fixed R10→R11 |
 | execute.pyc decompile (F-36) | — | — | — | — | — | — | — | — | — | NEW | **.e self-delete** | Mitigated R11 |
-| `__call__` closure bypass (F-37) | — | — | — | — | — | — | — | — | — | — | **NEW** | New R11 |
+| `__call__` closure bypass (F-37) | — | — | — | — | — | — | — | — | — | — | **NEW** | **CONFIRMED** | Still open |
+| /proc/net host leakage (F-08) | Full | Full | Full | Full | Full | open | `_f` | obj.__getattr__ | obj.__getattr__ | closure | `__call__` | **FIXED (clone_newnet)** | **Fixed R12** |
+| **Stored XSS (F-01)** | — | — | Confirmed | — | — | — | Untestable | — | — | — | — | **FIXED (tags stripped)** | **Fixed R12** |
+| **Namespace squatting (F-06)** | — | — | Confirmed | — | — | — | Untestable | — | — | — | — | **FIXED (reserved list)** | **Fixed R12** |
+| **_posixsubprocess .so (F-32)** | — | — | — | — | — | — | — | — | 27KB | — | — | **0 bytes (hollowed)** | **Fixed R12** |
+| Gateway reachable (F-38) | — | — | — | — | — | — | — | — | — | — | — | **NEW** | New R12 |
+| mountinfo leak (F-39) | — | — | — | — | — | — | — | — | — | — | — | **26KB readable** | New R12 |
+| /proc misc leak (F-40) | — | — | — | — | — | — | — | — | — | — | — | **maps/status/uptime** | New R12 (low) |
 
 ---
 
@@ -1212,6 +1301,11 @@ The following attacks were tested and **did not succeed**, indicating proper def
 44. **`gc.get_objects` blocked** — `gc.get_objects/get_referrers/get_referents` replaced with `_blocked` (fixed R9)
 45. **`execve` blocked by seccomp** — no binary execution possible; `_posixsubprocess.fork_exec` forks but exec returns `OSError:9:noexec` (fixed R9)
 46. **`ctypes.CDLL` blocked** — returns "Subprocess execution is not permitted" (fixed R9)
+47. **`clone_newnet: true`** — each sandbox gets its own network namespace; `/proc/net/tcp` shows only sandbox connections; host TCP table no longer visible (fixed R12)
+48. **MACVLAN network isolation** — paid tiers get MACVLAN interface on container eth0; sandbox gets unique IP from `172.18.128.0/17`; parent-child isolation prevents reaching container's own IP (fixed R12)
+49. **Stored XSS sanitized** — server-side HTML tag stripping on registration name field; `<script>` tags stripped to text content (fixed R12)
+50. **Reserved namespace list** — `admin`, `api`, `www`, `internal` and other sensitive names blocked from registration; squatted namespaces hard-deleted (fixed R12)
+51. **`_posixsubprocess` .so hollowed** — bind-mounted to 0-byte empty file, same technique as `_ctypes`; defense-in-depth alongside seccomp execve block (fixed R12)
 
 ---
 
@@ -1221,15 +1315,17 @@ The following attacks were tested and **did not succeed**, indicating proper def
 
 | Priority | Finding | Status | Action |
 |----------|---------|--------|--------|
-| **CRITICAL** | `__call__` closure bypass (F-37) | NEW R11 | `type(builtins.open).__dict__['__call__'].__closure__[0].cell_contents`. **Third iteration of same fundamental problem.** |
-| **CRITICAL** | Data exfiltration chain (F-33) | CONFIRMED R11 | F-37 + F-16 = exfil without shell. Mitigate by reducing readable data (bind-mount empties). |
-| **ACCEPTED** | Outbound internet (F-16) | BY DESIGN | Paid tiers require outbound for API calls. Mitigate via egress monitoring + account approval. |
-| **CRITICAL** | object.__getattribute__ bypass (F-28) | Evolved → F-37 | Superseded by `__call__` closure bypass. Fundamental Python limitation. |
-| **CRITICAL** | Stored XSS via registration name (F-01) | UNTESTED R7-10 | Sanitize input server-side; add CSP header |
+| **ACCEPTED** | `__call__` closure bypass (F-37) | CONFIRMED R12 | Fundamental CPython limitation. Cannot be fixed. Accepted. |
+| **ACCEPTED** | Data exfiltration chain (F-33) | CONFIRMED R12 | F-37 + F-16. Inherent to platforms with file access + outbound networking. |
+| **ACCEPTED** | Outbound internet (F-16) | BY DESIGN | Paid tiers require outbound for API calls. |
+| **MEDIUM** | Gateway reachable (F-38) | NEW R12 | Docker gateway `172.18.0.1:80/443` responds as Caddy. Block via iptables. |
+| **LOW** | mountinfo leak (F-39) | NEW R12 | `/proc/self/mountinfo` (26 KB) — overlay hashes. Bind-mount empty. |
+| **LOW** | /proc misc leak (F-40) | NEW R12 | maps, status, uptime readable. Bind-mount empties. |
+| ~~CRITICAL~~ | ~~Stored XSS (F-01)~~ | **FIXED R12** | Server-side HTML tag stripping on registration name. |
+| ~~HIGH~~ | ~~Namespace squatting (F-06)~~ | **FIXED R12** | Reserved name list + hard-deleted squatted names. |
+| ~~MEDIUM~~ | ~~_posixsubprocess .so (F-32)~~ | **FIXED R12** | Bind-mounted to 0-byte empty file. |
 | ~~HIGH~~ | ~~__import__ _f regression (F-35)~~ | **FIXED R11** | `_f` slot removed, but superseded by F-37 (`__call__` closure) |
-| **HIGH** | Namespace name squatting (F-06) | OPEN | Add reserved name list |
 | **MEDIUM** | ~~execute.pyc decompilable (F-36)~~ | MITIGATED R11 | Wrapper now self-deletes (`/sandbox/.e`), but code objects remain in memory via `__globals__` |
-| **MEDIUM** | _posixsubprocess .so not hollowed (F-32) | R9 | Bind-mount `.empty` over the .so file (defense-in-depth; execve blocked by seccomp) |
 | ~~CRITICAL~~ | ~~posix.system unblocked (F-29)~~ | **FIXED R9** | posix.system/execv/popen/fork all blocked by `_harden_sandbox()` |
 | ~~CRITICAL~~ | ~~Real subprocess recoverable (F-30)~~ | **FIXED R9** | `_GuardedImport` class (no closure); `_posixsubprocess` poisoned |
 | ~~MEDIUM~~ | ~~gc.get_objects recovery (F-31)~~ | **FIXED R9** | `gc.get_objects/get_referrers/get_referents` replaced with `_blocked` |
@@ -1279,72 +1375,64 @@ No shell, no subprocess, no ctypes. Three iterations of hiding the real `open` �
 
 ### Overall Assessment
 
-**Rounds 10-11 demonstrate the futility of Python-level function hiding.** Three different hiding strategies have been tried across R8-R11 — all bypassed:
+**Round 12 confirms that all 5 SECURITY_RECOMMENDATIONS.md items have been implemented.** The platform's security posture has significantly improved since R11:
 
-| Round | Hiding Strategy | Bypass |
-|-------|----------------|--------|
-| R8-R9 | `__slots__ = ('_f',)` + `__getattribute__` override | `object.__getattribute__(instance, '_f')` (F-28) |
-| R10 | Closure-based function wrappers | `func.__closure__[0].cell_contents` (F-34) |
-| R11 | Empty `__slots__`, real fn in `__call__` method closure | `type(obj).__dict__['__call__'].__closure__[N]` (F-37) |
+**R12 fixes verified (5 recommendations implemented):**
+1. **clone_newnet with MACVLAN** — `/proc/net/tcp` now shows only sandbox connections (header-only). `/proc/net/arp` empty. Network namespace inode unique per sandbox. Internal services (PostgreSQL, Redis, API) unreachable via MACVLAN parent-child isolation.
+2. **Stored XSS fixed (F-01)** — `<script>alert('xss')</script>` stored as `alert('xss')`. HTML tags properly stripped server-side.
+3. **Namespace squatting fixed (F-06)** — `admin`, `api`, `www`, `internal` all return "reserved" errors. Squatted namespaces hard-deleted.
+4. **_posixsubprocess .so hollowed (F-32)** — 0 bytes on disk. Defense-in-depth alongside seccomp execve block.
+5. **Python-level hiding accepted as deterrence-only** — no new iteration attempted (correct decision).
 
-**R11 changes:**
-- `__slots__ = ()` (empty) — blocks F-28 (`_f` access) ✓
-- No instance closure — blocks F-34 (direct closure access) ✓
-- Real function moved to `__call__` method closure — **bypassed via F-37** ✗
-- Wrapper moved to `/sandbox/.e` (self-deleting) — code still in memory via `__globals__`
-- `/opt/mcpworks/bin/` removed — but function objects retain all code info
-- Class names shortened (`_R`, `_G`) — cosmetic obfuscation only
-
-**R11 fixes (2 R10 regressions resolved):**
-- F-34 (closure-based open): blocked — wrappers are class instances now, not closures
-- F-35 (__import__ _f): blocked — `_f` slot removed
-
-**R11 new findings (1):**
+**R12 new findings (3):**
 
 | Finding | Severity | Description |
 |---------|----------|-------------|
-| F-37: `__call__` closure bypass | Critical | `type(obj).__dict__['__call__'].__closure__[N].cell_contents` — recovers all real functions AND config data (poisoned modules, stdlib prefixes, allowed signals) |
+| F-38: Gateway reachable | Medium | Docker gateway `172.18.0.1:80/443` reachable via MACVLAN — Caddy responds with 308 redirect |
+| F-39: mountinfo leak | Low | `/proc/self/mountinfo` still readable (26 KB) — exposes containerd overlay layer hashes |
+| F-40: /proc misc leak | Low | `/proc/self/maps`, `/proc/self/status`, `/proc/uptime` still readable — process/host info |
 
-**Current security posture:**
+**Current security posture (R12):**
 
 | Layer | Status | Notes |
 |-------|--------|-------|
-| nsjail process isolation | Strong | User/mount/PID/IPC/UTS namespaces isolated |
+| nsjail process isolation | **Strong** | User/mount/PID/IPC/UTS/NET namespaces all isolated |
 | seccomp syscall filter | **Strong** | `execve` blocked — no binary execution possible |
-| Network isolation | **Weak** | Shared network namespace, full outbound internet access |
-| Python-level hardening | **Ineffective** | 3 iterations of function hiding all bypassed (F-28→F-34→F-37) |
-| File access control | **None effective** | All `_is_blocked_path` checks bypassed via F-37 |
+| Network isolation | **Strong** | `clone_newnet` + MACVLAN — each sandbox gets own namespace; internal services unreachable |
+| Outbound internet | **By design** | Paid tiers have outbound access for API calls; accepted risk |
+| Python-level hardening | **Deterrence only** | 3 iterations bypassed (F-28→F-34→F-37); accepted as defense-in-depth |
+| File access control | **Partial** | `/proc/net/*` fixed by clone_newnet; `/proc/self/mountinfo`, maps, status still readable |
+| XSS/input sanitization | **Fixed** | Server-side HTML tag stripping on registration |
 
-**Attack surface (R10 → R11):**
+**Attack surface (R11 → R12):**
 - Shell access: **0 paths** (unchanged — seccomp blocks execve)
-- File read bypass: `type(builtins.open).__dict__['__call__'].__closure__[0].cell_contents` (F-37)
-- Import bypass: `type(__import__).__dict__['__call__'].__closure__[1].cell_contents` (F-37)
-- Config leak: Poisoned modules list, stdlib prefixes, allowed signals — all in closures (F-37)
-- Exfil chain: **Still fully working** (F-37 + F-16)
+- File read bypass: `type(builtins.open).__dict__['__call__'].__closure__[0].cell_contents` (F-37) — **still works**
+- Network topology leakage: **FIXED** — `/proc/net/tcp` shows only sandbox; ARP empty
+- Internal service access: **FIXED** — MACVLAN parent-child isolation blocks container IP
+- Exfil chain: F-37 + F-16 — **still works** (by design for paid tiers)
 - Reverse shell: **Still impossible** (execve blocked)
+- Stored XSS: **FIXED** — tags stripped server-side
+- Namespace squatting: **FIXED** — reserved list enforced
 
-**Remaining critical issues (4):**
-1. **`__call__` closure bypass (F-37)** — third iteration of unfixable Python introspection. Recovers all wrapped functions.
-2. **Outbound internet (F-16)** — **by design** for paid tiers (builder/pro/enterprise need to call external APIs). Cannot be blocked. This means the exfiltration chain is an accepted risk for paid accounts, mitigated by account approval and monitoring.
-3. **Data exfiltration chain (F-33)** — F-37 + F-16 = read any file and POST to internet. Confirmed R11. Inherent to any platform that grants both file access and outbound networking.
-4. **Stored XSS (F-01)** — untested R7-11, attack chain mostly broken.
+**Remaining issues (by severity):**
+1. **F-37 `__call__` closure bypass** (Critical, unfixable) — Python introspection cannot be defeated. Accepted.
+2. **F-16 outbound internet** (By design) — required for paid tier API calls. Accepted risk.
+3. **F-33 data exfiltration chain** (Critical, inherent) — consequence of F-37 + F-16. Any platform with file access + outbound networking has this.
+4. **F-38 gateway reachable** (Medium) — Docker gateway responds as Caddy. Consider iptables rule to block MACVLAN→gateway.
+5. **F-39 mountinfo leak** (Low) — 26 KB of overlay hashes. Consider bind-mount empty.
+6. **F-40 /proc misc leak** (Low) — maps, status, uptime. Consider bind-mount empty.
 
-**Recommended next steps:**
+**Recommended next steps (post-R12):**
+1. **Block gateway access** (F-38) — add iptables rule to prevent MACVLAN subnet from reaching 172.18.0.1:80/443
+2. **Bind-mount empties over /proc/self/mountinfo, maps, status** (F-39, F-40) — reduces information leakage
+3. **Egress monitoring** — log outbound connection metadata for anomaly detection
+4. **No further Python-level hardening** — confirmed futile across 3 iterations
 
-> **Constraint:** Outbound internet is a product requirement for paid tiers. F-16 cannot be "fixed" — it is intentional. Mitigations must focus on reducing what can be *read* (information leakage), not what can be *sent* (egress).
-
-1. **Stop iterating on Python-level function hiding** — 3 attempts, 3 bypasses. CPython closures, `__slots__`, and method descriptors are ALL introspectable. This approach cannot work.
-2. **Bind-mount empty files over sensitive /proc entries** — `/proc/net/tcp`, `/proc/net/arp`, `/proc/net/route`, `/proc/self/mountinfo`, `/proc/self/maps`, `/proc/self/status`, `/proc/self/cgroup`. Same technique used for `/proc/cpuinfo`/`meminfo`/`version`. This is **unforgeable** regardless of Python-level bypass.
-3. **`clone_newnet:true` with veth + NAT** — each sandbox gets its own network namespace with outbound internet (via veth pair + masquerade). Eliminates `/proc/net/*` host leakage, port hijacking risk, and ARP/MAC exposure. Outbound HTTP still works for legitimate use.
-4. **Hollow _posixsubprocess .so** (F-32) — bind-mount `.empty` over it, same as _ctypes. Defense-in-depth.
-5. **Stored XSS fix** (F-01) — server-side HTML sanitization on registration name field.
-6. **Egress monitoring** — since outbound can't be blocked, consider logging outbound connection metadata (destination, size, timing) for anomaly detection. Alert on large POST bodies to unknown domains.
-7. **Accept `_harden_sandbox()` as defense-in-depth only** — keep it for casual deterrence but do not invest further in Python-level hiding. The security boundary is nsjail + seccomp + filesystem controls.
-
-**Fixed across all rounds:** 17 findings (F-02, F-03, F-04, F-05, F-07, F-09, F-10, F-25, F-26, F-27, F-29, F-30, F-31, F-34, F-35, internal firewall, /proc fake entries)
-**Persistently bypassed (3 iterations):** File access (F-08→F-28→F-34→F-37), Frame traversal (F-17), Signal override (F-19), sys.modules (F-20)
+**Fixed across all rounds:** 22 findings (F-01, F-02, F-03, F-04, F-05, F-06, F-07, F-08, F-09, F-10, F-25, F-26, F-27, F-29, F-30, F-31, F-32, F-34, F-35, internal firewall, /proc fake entries, /proc/net isolation)
+**Persistently bypassed (accepted):** File access via F-37, Frame traversal (F-17), Signal override (F-19), sys.modules (F-20)
 **Fixed at seccomp level:** F-18 (subprocess/shell — execve blocked)
-**Still open:** 5 findings (F-01 XSS, F-06 namespace squatting, F-16 outbound, F-33 exfil chain, F-37 `__call__` closure)
+**Accepted risk:** F-16 (outbound internet by design), F-33 (exfil chain, consequence of F-16 + F-37)
+**New low-priority:** F-38 (gateway), F-39 (mountinfo), F-40 (/proc misc)
 
 ### Test Account Cleanup
 
@@ -1359,5 +1447,6 @@ Round 7: No new test accounts were created (registration rate-limited from earli
 Round 9: No new test accounts or namespaces created. XSS registration test timed out (sandbox→API egress blocked).
 Round 10: No new test accounts or namespaces created. Testing focused on bypass regression analysis.
 Round 11: No new test accounts or namespaces created. Testing focused on `__call__` closure bypass (F-37).
+Round 12: No new test accounts or namespaces created. Comprehensive retest of all 5 SECURITY_RECOMMENDATIONS.md items. Confirmed clone_newnet, XSS fix, namespace reservation, _posixsubprocess hollowed. New findings: F-38, F-39, F-40.
 
 All namespaces created during testing (`audit-test`, `audit-unverified`, `admin`, `api`, `www`, `internal`, `r4-test`) were deleted during the audit. They remain recoverable for 30 days.

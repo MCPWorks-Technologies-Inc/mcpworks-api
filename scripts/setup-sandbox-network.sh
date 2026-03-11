@@ -36,9 +36,12 @@ for BLOCKED in 169.254.169.254/32 127.0.0.0/8 10.0.0.0/8; do
 done
 echo "[OK] Blocked sandbox -> metadata, localhost, 10/8"
 
-# FORWARD: block sandbox -> Docker low-range IPs (containers, but not gateway)
-# Docker assigns container IPs in 172.18.0.2-127 range. Block sandbox access
-# to other containers. Gateway 172.18.0.1 is handled at L2, not FORWARD.
+# FORWARD: block sandbox -> Docker gateway (F-38: Caddy responds on 80/443)
+iptables -C FORWARD -s "${SANDBOX_SUBNET}" -d 172.18.0.1 -j DROP 2>/dev/null || \
+iptables -I FORWARD -s "${SANDBOX_SUBNET}" -d 172.18.0.1 -j DROP
+echo "[OK] Blocked sandbox -> Docker gateway (172.18.0.1)"
+
+# FORWARD: block sandbox -> Docker low-range IPs (other containers)
 iptables -C FORWARD -s "${SANDBOX_SUBNET}" -d 172.18.0.0/25 -j DROP 2>/dev/null || \
 iptables -I FORWARD -s "${SANDBOX_SUBNET}" -d 172.18.0.0/25 -j DROP
 echo "[OK] Blocked sandbox -> Docker containers (172.18.0.0/25)"

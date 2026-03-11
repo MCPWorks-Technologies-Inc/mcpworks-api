@@ -1,6 +1,6 @@
 # MCPWorks Product Specification
 
-**Version:** 3.0.0
+**Version:** 3.1.0
 **Date:** 2026-03-11
 **Status:** Developer Preview (A0) / Agents in Design
 **Author:** Simon Carr / Claude
@@ -306,12 +306,14 @@ This is `git branch` for autonomous AI entities.
 
 ### Agent Tiers
 
-| Tier | Agents | Min Schedule | State Storage | Includes Functions |
-|------|--------|-------------|---------------|--------------------|
-| Free | 0 | - | - | Free tier |
-| Builder ($29) | 1 | 5 min | 10MB | Full Functions access |
-| Pro ($149) | 5 | 30 sec | 100MB | Full Functions access |
-| Enterprise ($499+) | Unlimited | 15 sec | 1GB | Full Functions access |
+| Tier | Agents | Container Resources | Min Schedule | State Storage | Includes Functions |
+|------|--------|-------------------|-------------|---------------|--------------------|
+| Free | 0 | - | - | - | Free tier |
+| Builder ($29) | 1 | 256 MB / 0.25 vCPU | 5 min | 10 MB | Full Functions access |
+| Pro ($179) | 5 | 512 MB / 0.5 vCPU | 30 sec | 100 MB | Full Functions access |
+| Enterprise ($599) | 20 (included) | 1 GB / 1.0 vCPU | 15 sec | 1 GB | Full Functions access |
+
+Agent add-ons beyond tier allocation: $9 (Builder), $19 (Pro), $29/$49 (Enterprise standard/heavy).
 
 ---
 
@@ -397,8 +399,8 @@ For agents, secrets include:
 |------|---------|--------|-----------|---------------|------------|--------|
 | Free | $0 | - | 5 | 1,000 | 1 | 0 |
 | Builder | $29 | $290/yr | Unlimited | 25,000 | 3 | 1 |
-| Pro | $149 | $1,490/yr | Unlimited | 250,000 | Unlimited | 5 |
-| Enterprise | $499+ | $4,990+/yr | Unlimited | 1,000,000 | Unlimited | Unlimited |
+| Pro | $179 | $1,790/yr | Unlimited | 250,000 | Unlimited | 5 |
+| Enterprise | $599 | $5,990/yr | Unlimited | 1,000,000 | Unlimited | 20 (included) |
 
 ### What Counts as an Execution
 
@@ -474,8 +476,10 @@ For agents, secrets include:
 
 - Docker runtime for agent containers (likely same droplet initially, dedicated nodes later)
 - Wildcard routing for `*.agent.mcpworks.io` (Cloudflare + Caddy)
-- Container orchestration (lightweight, not K8s -- possibly Docker Compose or Podman pods)
-- Agent container image with pre-installed Python, MCP SDK, and communication libraries
+- Container management via Docker SDK for Python (not Compose files, not K8s)
+- Scaling path: single droplet → dedicated agent nodes → Docker Swarm
+- Droplet upgrade from s-2vcpu-4gb to s-4vcpu-8gb ($48/mo)
+- Agent container image with pre-installed Python, APScheduler, FastAPI, AI SDKs, and communication libraries
 
 ---
 
@@ -548,6 +552,7 @@ For agents, secrets include:
 | Document | Location | Purpose |
 |----------|----------|---------|
 | API Specification | `SPEC.md` | Complete API spec with data models and endpoints |
+| Agents Tech Spec | `docs/specs/AGENTS-TECH-SPEC.md` | Engineering specification for Agents implementation |
 | Constitution | `docs/implementation/specs/CONSTITUTION.md` | Development principles |
 | Database Models | `docs/implementation/database-models-specification.md` | A0 data model spec |
 | Namespace Architecture | `../mcpworks-internals/docs/implementation/namespace-architecture.md` | Create/run pattern |
@@ -555,3 +560,12 @@ For agents, secrets include:
 | Strategy | `../mcpworks-internals/STRATEGY.md` | Business strategy |
 | Pricing | `../mcpworks-internals/PRICING.md` | Tier details, rate limits, agent tiers |
 | Funding Action Plan | `../mcpworks-internals/docs/business/funding-action-plan-2026-03.md` | A0 execution timeline |
+| Investor Pitch | `../mcpworks-internals/docs/business/investor-pitch-narrative.md` | Angel investor pitch narrative |
+
+---
+
+## Changelog
+
+**v3.1.0 (2026-03-11):** Updated to v6.0.0 pricing (Pro $179, Enterprise $599, Enterprise agents 20 included). Added container resources and agent add-ons to Agent Tiers table. Updated infrastructure section with Docker SDK approach, s-4vcpu-8gb upgrade, and scaling path. Added Agents Tech Spec and Investor Pitch to related documents.
+
+**v3.0.0 (2026-03-11):** Two-product specification (Functions + Agents). Agent architecture: containerized entities, intelligence hierarchy, function locking, cloning, communication channels, BYOAI.
