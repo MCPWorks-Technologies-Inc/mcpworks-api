@@ -113,6 +113,12 @@ class Settings(BaseSettings):
     tier_executions_pro: int = Field(default=250_000)
     tier_executions_enterprise: int = Field(default=1_000_000)
 
+    # Envelope Encryption (AES-256-GCM KEK for agent secrets)
+    encryption_kek_b64: str = Field(
+        default="",
+        description="Base64-encoded 32-byte KEK for envelope encryption of agent secrets",
+    )
+
     # Discord Alerts
     discord_alert_webhook_url: str = Field(default="")
 

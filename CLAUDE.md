@@ -710,6 +710,8 @@ This project is on a **15-month acquisition timeline** targeting $10M-$15M exit.
 - PostgreSQL 15+ (env var names only — never values), tmpfs (transient env file during execution) (002-env-passthrough)
 - Python 3.11+ (existing) + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, Authlib 1.3+ (new), httpx (existing) (002-oauth-email-system)
 - PostgreSQL 15+ (existing), Redis 7+ (existing, also used for OAuth state storage) (002-oauth-email-system)
+- Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, Docker SDK 7.0+, APScheduler 3.10+, cryptography (AES-256-GCM), httpx, discord.py (003-containerized-agents)
+- PostgreSQL 15+ (primary, via DO Managed Database), Redis/Valkey 7+ (rate limiting, sessions) (003-containerized-agents)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe

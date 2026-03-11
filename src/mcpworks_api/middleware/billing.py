@@ -36,6 +36,9 @@ class BillingMiddleware(BaseHTTPMiddleware):
         "builder": 25_000,
         "pro": 250_000,
         "enterprise": 1_000_000,
+        "builder-agent": 25_000,
+        "pro-agent": 250_000,
+        "enterprise-agent": 1_000_000,
     }
 
     # Default limit for unknown tiers
