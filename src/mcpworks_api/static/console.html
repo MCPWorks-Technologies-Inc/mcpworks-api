@@ -1984,11 +1984,11 @@ function showAgentAiForm(agentId, current) {
   const isUpdate = !!cur.engine;
   wrap.innerHTML = `<div class="add-form" style="margin-top:8px">
     <label>Engine</label>
-    <select id="ai-engine" onchange="updateModelPlaceholder()">${opts}</select>
+    <select id="ai-engine" autocomplete="off" onchange="updateModelPlaceholder()">${opts}</select>
     <label>Model</label>
-    <input id="ai-model" type="text" placeholder="claude-sonnet-4-20250514" value="${esc(cur.model || '')}">
+    <input id="ai-model" type="text" autocomplete="off" placeholder="claude-sonnet-4-20250514" value="${esc(cur.model || '')}">
     <label>API Key <span style="color:var(--text-3)">${isUpdate ? '(leave blank to keep current)' : ''}</span></label>
-    <input id="ai-api-key" type="password" placeholder="${isUpdate ? '••••••••' : 'sk-...'}">
+    <input id="ai-api-key" type="password" autocomplete="off" placeholder="${isUpdate ? '••••••••' : 'sk-...'}">
     <label>System Prompt <span style="color:var(--text-3)">(optional)</span></label>
     <textarea id="ai-system-prompt" rows="6" placeholder="You are a helpful agent...">${esc(cur.system_prompt || '')}</textarea>
     <div class="add-form-actions">
