@@ -84,6 +84,28 @@ api.mcpworks.io {
     }
 }
 
+# Agent Webhook Interface (*.agent.mcpworks.io)
+# All traffic routed to API; API handles webhook forwarding to agent containers
+*.agent.mcpworks.io {
+    tls {
+        on_demand
+    }
+
+    reverse_proxy api:8000
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
 # Health check endpoint (no SSL required)
 :80 {
     respond /health "OK" 200
