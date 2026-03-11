@@ -824,10 +824,17 @@ async function loadUser(userId) {
           <div class="flex items-center gap-2 mt-3">
             <select id="tier-select" style="background:#030712;border:1px solid #374151;color:#fff;padding:6px 10px;border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;">
               <option value="">Change plan…</option>
-              <option value="free" ${(u.effective_tier || u.tier) === 'free' ? 'disabled' : ''}>Free</option>
-              <option value="builder" ${(u.effective_tier || u.tier) === 'builder' ? 'disabled' : ''}>Builder</option>
-              <option value="pro" ${(u.effective_tier || u.tier) === 'pro' ? 'disabled' : ''}>Pro</option>
-              <option value="enterprise" ${(u.effective_tier || u.tier) === 'enterprise' ? 'disabled' : ''}>Enterprise</option>
+              <optgroup label="Standard">
+                <option value="free" ${(u.effective_tier || u.tier) === 'free' ? 'disabled' : ''}>Free</option>
+                <option value="builder" ${(u.effective_tier || u.tier) === 'builder' ? 'disabled' : ''}>Builder</option>
+                <option value="pro" ${(u.effective_tier || u.tier) === 'pro' ? 'disabled' : ''}>Pro</option>
+                <option value="enterprise" ${(u.effective_tier || u.tier) === 'enterprise' ? 'disabled' : ''}>Enterprise</option>
+              </optgroup>
+              <optgroup label="Agent-Enabled">
+                <option value="builder-agent" ${(u.effective_tier || u.tier) === 'builder-agent' ? 'disabled' : ''}>Builder Agent</option>
+                <option value="pro-agent" ${(u.effective_tier || u.tier) === 'pro-agent' ? 'disabled' : ''}>Pro Agent</option>
+                <option value="enterprise-agent" ${(u.effective_tier || u.tier) === 'enterprise-agent' ? 'disabled' : ''}>Enterprise Agent</option>
+              </optgroup>
             </select>
             <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="setTierOverride('${esc(u.id)}')">Apply</button>
             ${u.tier_override ? `<button class="btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="clearTierOverride('${esc(u.id)}')">Clear Override</button>` : ''}
