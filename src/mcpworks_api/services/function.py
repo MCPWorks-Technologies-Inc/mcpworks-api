@@ -2,6 +2,7 @@
 
 import builtins
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -10,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from mcpworks_api.core.exceptions import (
     ConflictError,
+    ForbiddenError,
     NotFoundError,
 )
 from mcpworks_api.models import Function, FunctionVersion
@@ -250,6 +252,7 @@ class FunctionService:
         optional_env: builtins.list[str] | None = None,
         created_by: str | None = None,
         activate: bool = True,
+        is_admin: bool = False,
     ) -> FunctionVersion:
         """Create a new version of a function.
 
@@ -272,6 +275,9 @@ class FunctionService:
             NotFoundError: If function not found.
         """
         function = await self.get_by_id(function_id)
+
+        if function.locked and not is_admin:
+            raise ForbiddenError(f"Function '{function.name}' is locked and cannot be modified")
 
         # Determine next version number
         next_version = 1
@@ -381,18 +387,71 @@ class FunctionService:
     async def delete(
         self,
         function_id: uuid.UUID,
+        is_admin: bool = False,
     ) -> None:
         """Delete a function and all its versions.
 
         Args:
             function_id: The function UUID.
+            is_admin: Whether caller has admin privileges (bypasses lock check).
+
+        Raises:
+            NotFoundError: If function not found.
+            ForbiddenError: If function is locked.
+        """
+        function = await self.get_by_id(function_id)
+        if function.locked and not is_admin:
+            raise ForbiddenError(f"Function '{function.name}' is locked and cannot be deleted")
+        await self.db.delete(function)
+        await self.db.flush()
+
+    async def lock_function(
+        self,
+        function_id: uuid.UUID,
+        locked_by: uuid.UUID,
+    ) -> Function:
+        """Lock a function to prevent modification.
+
+        Args:
+            function_id: The function UUID.
+            locked_by: The user UUID locking the function.
+
+        Returns:
+            The updated function.
 
         Raises:
             NotFoundError: If function not found.
         """
         function = await self.get_by_id(function_id)
-        await self.db.delete(function)
+        function.locked = True
+        function.locked_by = locked_by
+        function.locked_at = datetime.now(tz=UTC)
         await self.db.flush()
+        await self.db.refresh(function)
+        return function
+
+    async def unlock_function(
+        self,
+        function_id: uuid.UUID,
+    ) -> Function:
+        """Unlock a function to allow modification.
+
+        Args:
+            function_id: The function UUID.
+
+        Returns:
+            The updated function.
+
+        Raises:
+            NotFoundError: If function not found.
+        """
+        function = await self.get_by_id(function_id)
+        function.locked = False
+        function.locked_by = None
+        function.locked_at = None
+        await self.db.flush()
+        await self.db.refresh(function)
+        return function
 
     async def list_all_for_namespace(
         self,

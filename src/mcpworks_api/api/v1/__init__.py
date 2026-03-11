@@ -4,6 +4,8 @@ from fastapi import APIRouter
 
 from mcpworks_api.api.v1.account import router as account_router
 from mcpworks_api.api.v1.admin import router as admin_router
+from mcpworks_api.api.v1.agents import lock_router as agent_lock_router
+from mcpworks_api.api.v1.agents import router as agents_router
 from mcpworks_api.api.v1.audit import router as audit_router
 from mcpworks_api.api.v1.auth import router as auth_router
 from mcpworks_api.api.v1.health import router as health_router
@@ -33,6 +35,8 @@ router.include_router(users_router)
 router.include_router(subscriptions_router)
 router.include_router(webhook_router)
 router.include_router(namespaces_router)  # A0: Namespace management
+router.include_router(agents_router)  # A0: Containerized agents
+router.include_router(agent_lock_router)  # A0: Function locking (admin)
 router.include_router(shares_router)  # Namespace sharing
 router.include_router(audit_router)  # ORDER-022: Security audit logs
 router.include_router(admin_router)  # Admin dashboard

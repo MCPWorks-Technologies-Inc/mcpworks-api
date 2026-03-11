@@ -25,6 +25,9 @@ class UserTier(str, Enum):
     BUILDER = "builder"
     PRO = "pro"
     ENTERPRISE = "enterprise"
+    BUILDER_AGENT = "builder-agent"
+    PRO_AGENT = "pro-agent"
+    ENTERPRISE_AGENT = "enterprise-agent"
 
 
 class UserStatus(str, Enum):

@@ -1,11 +1,14 @@
-"""Create MCP Handler - Management interface for namespaces, services, functions.
+"""Create MCP Handler - Management interface for namespaces, services, functions, agents.
 
-Exposes 13 tools:
+Exposes 13 tools (all accounts):
 - make_namespace, list_namespaces
 - make_service, list_services, delete_service
 - make_function, update_function, delete_function, list_functions, describe_function
 - list_packages
 - list_templates, describe_template
+
+Exposes 6 additional tools (agent-enabled tiers only):
+- make_agent, list_agents, describe_agent, start_agent, stop_agent, destroy_agent
 """
 
 import json
@@ -28,6 +31,7 @@ from mcpworks_api.mcp.protocol import (
     make_success_response,
 )
 from mcpworks_api.models import Account, APIKey, Namespace
+from mcpworks_api.services.agent_service import AgentService
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.services.namespace import (
     NamespaceServiceManager,
@@ -57,6 +61,29 @@ class CreateMCPHandler:
         "make_function": "write",
         "update_function": "write",
         "delete_function": "write",
+        "list_agents": "read",
+        "describe_agent": "read",
+        "make_agent": "write",
+        "start_agent": "write",
+        "stop_agent": "write",
+        "destroy_agent": "write",
+        "add_schedule": "write",
+        "remove_schedule": "write",
+        "list_schedules": "read",
+        "add_webhook": "write",
+        "remove_webhook": "write",
+        "list_webhooks": "read",
+        "set_agent_state": "write",
+        "get_agent_state": "read",
+        "delete_agent_state": "write",
+        "list_agent_state_keys": "read",
+        "configure_agent_ai": "write",
+        "remove_agent_ai": "write",
+        "add_channel": "write",
+        "remove_channel": "write",
+        "clone_agent": "write",
+        "lock_function": "write",
+        "unlock_function": "write",
     }
 
     def __init__(
@@ -128,7 +155,7 @@ class CreateMCPHandler:
     def get_tools(self) -> list[MCPTool]:
         """Return static list of management tools with tier-aware descriptions."""
         tier_notice = self._tier_notice()
-        return [
+        tools = [
             MCPTool(
                 name="make_namespace",
                 description="Create a new namespace for organizing services and functions",
@@ -355,6 +382,344 @@ class CreateMCPHandler:
             ),
         ]
 
+        agent_tiers = ("builder-agent", "pro-agent", "enterprise-agent")
+        if self.account.user.effective_tier in agent_tiers:
+            tools += [
+                MCPTool(
+                    name="make_agent",
+                    description="Create a new autonomous agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name (lowercase, alphanumeric, hyphens)",
+                            },
+                            "display_name": {
+                                "type": "string",
+                                "description": "Optional human-readable display name",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                ),
+                MCPTool(
+                    name="list_agents",
+                    description="List all agents for the current account",
+                    inputSchema={"type": "object", "properties": {}},
+                ),
+                MCPTool(
+                    name="describe_agent",
+                    description="Get full details for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                ),
+                MCPTool(
+                    name="start_agent",
+                    description="Start a stopped agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                ),
+                MCPTool(
+                    name="stop_agent",
+                    description="Stop a running agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                ),
+                MCPTool(
+                    name="destroy_agent",
+                    description="Permanently destroy an agent and all its data",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                            "confirm": {
+                                "type": "boolean",
+                                "description": "Must be true to confirm destruction",
+                            },
+                        },
+                        "required": ["name", "confirm"],
+                    },
+                ),
+                MCPTool(
+                    name="add_schedule",
+                    description="Add a cron schedule to an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "function_name": {
+                                "type": "string",
+                                "description": "Function to call (service.function)",
+                            },
+                            "cron_expression": {
+                                "type": "string",
+                                "description": "Cron expression (e.g. '0 * * * *' for hourly)",
+                            },
+                            "timezone": {
+                                "type": "string",
+                                "description": "Timezone (default: UTC)",
+                                "default": "UTC",
+                            },
+                            "failure_policy": {
+                                "type": "object",
+                                "description": "Failure policy: {strategy: 'continue'|'auto_disable'|'backoff', max_failures?: int, backoff_factor?: float}",
+                            },
+                        },
+                        "required": [
+                            "agent_name",
+                            "function_name",
+                            "cron_expression",
+                            "failure_policy",
+                        ],
+                    },
+                ),
+                MCPTool(
+                    name="remove_schedule",
+                    description="Remove a schedule from an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "schedule_id": {"type": "string", "description": "Schedule UUID"},
+                        },
+                        "required": ["agent_name", "schedule_id"],
+                    },
+                ),
+                MCPTool(
+                    name="list_schedules",
+                    description="List all schedules for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
+                MCPTool(
+                    name="add_webhook",
+                    description="Add a webhook receiver to an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "path": {
+                                "type": "string",
+                                "description": "Webhook path (e.g. 'github/push')",
+                            },
+                            "handler_function_name": {
+                                "type": "string",
+                                "description": "Function to call (service.function)",
+                            },
+                            "secret": {
+                                "type": "string",
+                                "description": "Optional HMAC secret",
+                            },
+                        },
+                        "required": ["agent_name", "path", "handler_function_name"],
+                    },
+                ),
+                MCPTool(
+                    name="remove_webhook",
+                    description="Remove a webhook from an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "webhook_id": {"type": "string", "description": "Webhook UUID"},
+                        },
+                        "required": ["agent_name", "webhook_id"],
+                    },
+                ),
+                MCPTool(
+                    name="list_webhooks",
+                    description="List all webhooks for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
+                MCPTool(
+                    name="set_agent_state",
+                    description="Set a persistent state key for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "key": {"type": "string", "description": "State key"},
+                            "value": {"description": "Value to store (any JSON type)"},
+                        },
+                        "required": ["agent_name", "key", "value"],
+                    },
+                ),
+                MCPTool(
+                    name="get_agent_state",
+                    description="Get a persistent state value for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "key": {"type": "string", "description": "State key"},
+                        },
+                        "required": ["agent_name", "key"],
+                    },
+                ),
+                MCPTool(
+                    name="delete_agent_state",
+                    description="Delete a persistent state key for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "key": {"type": "string", "description": "State key"},
+                        },
+                        "required": ["agent_name", "key"],
+                    },
+                ),
+                MCPTool(
+                    name="list_agent_state_keys",
+                    description="List all state keys for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
+                MCPTool(
+                    name="configure_agent_ai",
+                    description="Configure an AI engine for an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "engine": {
+                                "type": "string",
+                                "enum": ["anthropic", "openai", "google", "openrouter"],
+                            },
+                            "model": {"type": "string", "description": "Model name"},
+                            "api_key": {"type": "string", "description": "API key"},
+                            "system_prompt": {
+                                "type": "string",
+                                "description": "Optional system prompt",
+                            },
+                        },
+                        "required": ["agent_name", "engine", "model", "api_key"],
+                    },
+                ),
+                MCPTool(
+                    name="remove_agent_ai",
+                    description="Remove AI engine configuration from an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
+                MCPTool(
+                    name="add_channel",
+                    description="Add a communication channel to an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "channel_type": {
+                                "type": "string",
+                                "enum": ["discord", "slack", "whatsapp", "email"],
+                            },
+                            "config": {"type": "object", "description": "Channel config"},
+                        },
+                        "required": ["agent_name", "channel_type", "config"],
+                    },
+                ),
+                MCPTool(
+                    name="remove_channel",
+                    description="Remove a communication channel from an agent",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "channel_type": {"type": "string", "description": "Channel type"},
+                        },
+                        "required": ["agent_name", "channel_type"],
+                    },
+                ),
+                MCPTool(
+                    name="clone_agent",
+                    description="Clone an agent with state, schedules, and channels",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Source agent name"},
+                            "new_name": {"type": "string", "description": "New agent name"},
+                        },
+                        "required": ["agent_name", "new_name"],
+                    },
+                ),
+                MCPTool(
+                    name="lock_function",
+                    description="Lock a function to prevent modification (admin only)",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "namespace": {"type": "string"},
+                            "service": {"type": "string"},
+                            "function": {"type": "string"},
+                        },
+                        "required": ["namespace", "service", "function"],
+                    },
+                ),
+                MCPTool(
+                    name="unlock_function",
+                    description="Unlock a function to allow modification (admin only)",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "namespace": {"type": "string"},
+                            "service": {"type": "string"},
+                            "function": {"type": "string"},
+                        },
+                        "required": ["namespace", "service", "function"],
+                    },
+                ),
+            ]
+
+        return tools
+
     def _check_scope(self, tool_name: str) -> None:
         """Check that the API key has the required scope for a tool.
 
@@ -400,6 +765,29 @@ class CreateMCPHandler:
             "list_packages": self._list_packages,
             "list_templates": self._list_templates,
             "describe_template": self._describe_template,
+            "make_agent": self._make_agent,
+            "list_agents": self._list_agents,
+            "describe_agent": self._describe_agent,
+            "start_agent": self._start_agent,
+            "stop_agent": self._stop_agent,
+            "destroy_agent": self._destroy_agent,
+            "add_schedule": self._add_schedule,
+            "remove_schedule": self._remove_schedule,
+            "list_schedules": self._list_schedules,
+            "add_webhook": self._add_webhook,
+            "remove_webhook": self._remove_webhook,
+            "list_webhooks": self._list_webhooks,
+            "set_agent_state": self._set_agent_state,
+            "get_agent_state": self._get_agent_state,
+            "delete_agent_state": self._delete_agent_state,
+            "list_agent_state_keys": self._list_agent_state_keys,
+            "configure_agent_ai": self._configure_agent_ai,
+            "remove_agent_ai": self._remove_agent_ai,
+            "add_channel": self._add_channel,
+            "remove_channel": self._remove_channel,
+            "clone_agent": self._clone_agent,
+            "lock_function": self._lock_function,
+            "unlock_function": self._unlock_function,
         }
 
         handler = handlers.get(name)
@@ -922,3 +1310,469 @@ class CreateMCPHandler:
                 isError=True,
             )
         return MCPToolResult(content=[MCPContent(text=json.dumps(tmpl.to_full_dict()))])
+
+    async def _make_agent(
+        self,
+        name: str,
+        display_name: str | None = None,
+    ) -> MCPToolResult:
+        """Create a new agent."""
+        service = AgentService(self.db)
+        agent = await service.create_agent(
+            account_id=self.account.id,
+            user_id=self.account.user_id,
+            tier=self.account.user.effective_tier,
+            name=name,
+            display_name=display_name,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "id": str(agent.id),
+                            "name": agent.name,
+                            "status": agent.status,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_agents(self) -> MCPToolResult:
+        """List all agents for the current account."""
+        service = AgentService(self.db)
+        agents = await service.list_agents(self.account.id)
+        slots = await service.get_agent_slots(self.account.id, self.account.user.effective_tier)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agents": [
+                                {
+                                    "id": str(a.id),
+                                    "name": a.name,
+                                    "display_name": a.display_name,
+                                    "status": a.status,
+                                }
+                                for a in agents
+                            ],
+                            "slots": slots,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _describe_agent(self, name: str) -> MCPToolResult:
+        """Get full details for an agent."""
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, name)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "id": str(agent.id),
+                            "name": agent.name,
+                            "display_name": agent.display_name,
+                            "status": agent.status,
+                            "ai_engine": agent.ai_engine,
+                            "ai_model": agent.ai_model,
+                            "memory_limit_mb": agent.memory_limit_mb,
+                            "cpu_limit": agent.cpu_limit,
+                            "enabled": agent.enabled,
+                            "created_at": agent.created_at.isoformat(),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _start_agent(self, name: str) -> MCPToolResult:
+        """Start a stopped agent."""
+        service = AgentService(self.db)
+        agent = await service.start_agent(self.account.id, name)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"name": agent.name, "status": agent.status}))]
+        )
+
+    async def _stop_agent(self, name: str) -> MCPToolResult:
+        """Stop a running agent."""
+        service = AgentService(self.db)
+        agent = await service.stop_agent(self.account.id, name)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"name": agent.name, "status": agent.status}))]
+        )
+
+    async def _destroy_agent(self, name: str, confirm: bool = False) -> MCPToolResult:
+        """Permanently destroy an agent."""
+        if not confirm:
+            raise ValueError("Must confirm=true to destroy agent")
+        service = AgentService(self.db)
+        agent = await service.destroy_agent(self.account.id, name)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"name": agent.name, "destroyed": True}))]
+        )
+
+    async def _add_schedule(
+        self,
+        agent_name: str,
+        function_name: str,
+        cron_expression: str,
+        failure_policy: dict,
+        timezone: str = "UTC",
+    ) -> MCPToolResult:
+        """Add a cron schedule to an agent."""
+        service = AgentService(self.db)
+        schedule = await service.add_schedule(
+            account_id=self.account.id,
+            agent_name=agent_name,
+            function_name=function_name,
+            cron_expression=cron_expression,
+            timezone=timezone,
+            failure_policy=failure_policy,
+            tier=self.account.user.effective_tier,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "schedule_id": str(schedule.id),
+                            "agent_name": agent_name,
+                            "function_name": function_name,
+                            "cron_expression": cron_expression,
+                            "timezone": timezone,
+                            "enabled": schedule.enabled,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_schedule(
+        self,
+        agent_name: str,
+        schedule_id: str,
+    ) -> MCPToolResult:
+        """Remove a schedule from an agent."""
+        import uuid as uuid_module
+
+        service = AgentService(self.db)
+        await service.remove_schedule(self.account.id, agent_name, uuid_module.UUID(schedule_id))
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"schedule_id": schedule_id, "removed": True}))]
+        )
+
+    async def _list_schedules(self, agent_name: str) -> MCPToolResult:
+        """List all schedules for an agent."""
+        service = AgentService(self.db)
+        schedules = await service.list_schedules(self.account.id, agent_name)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "schedules": [
+                                {
+                                    "id": str(s.id),
+                                    "function_name": s.function_name,
+                                    "cron_expression": s.cron_expression,
+                                    "timezone": s.timezone,
+                                    "enabled": s.enabled,
+                                    "consecutive_failures": s.consecutive_failures,
+                                }
+                                for s in schedules
+                            ],
+                            "total": len(schedules),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _add_webhook(
+        self,
+        agent_name: str,
+        path: str,
+        handler_function_name: str,
+        secret: str | None = None,
+    ) -> MCPToolResult:
+        """Add a webhook to an agent."""
+        service = AgentService(self.db)
+        webhook = await service.add_webhook(
+            account_id=self.account.id,
+            agent_name=agent_name,
+            path=path,
+            handler_function_name=handler_function_name,
+            secret=secret,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "webhook_id": str(webhook.id),
+                            "agent_name": agent_name,
+                            "path": path,
+                            "handler_function_name": handler_function_name,
+                            "enabled": webhook.enabled,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_webhook(
+        self,
+        agent_name: str,
+        webhook_id: str,
+    ) -> MCPToolResult:
+        """Remove a webhook from an agent."""
+        import uuid as uuid_module
+
+        service = AgentService(self.db)
+        await service.remove_webhook(self.account.id, agent_name, uuid_module.UUID(webhook_id))
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"webhook_id": webhook_id, "removed": True}))]
+        )
+
+    async def _list_webhooks(self, agent_name: str) -> MCPToolResult:
+        """List all webhooks for an agent."""
+        service = AgentService(self.db)
+        webhooks = await service.list_webhooks(self.account.id, agent_name)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "webhooks": [
+                                {
+                                    "id": str(w.id),
+                                    "path": w.path,
+                                    "handler_function_name": w.handler_function_name,
+                                    "enabled": w.enabled,
+                                }
+                                for w in webhooks
+                            ],
+                            "total": len(webhooks),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _set_agent_state(
+        self,
+        agent_name: str,
+        key: str,
+        value: Any,
+    ) -> MCPToolResult:
+        """Set a persistent state key for an agent."""
+        service = AgentService(self.db)
+        state_entry = await service.set_state(
+            account_id=self.account.id,
+            agent_name=agent_name,
+            key=key,
+            value=value,
+            tier=self.account.user.effective_tier,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {"key": key, "size_bytes": state_entry.size_bytes, "stored": True}
+                    )
+                )
+            ]
+        )
+
+    async def _get_agent_state(self, agent_name: str, key: str) -> MCPToolResult:
+        """Get a persistent state value for an agent."""
+        service = AgentService(self.db)
+        value, state_entry = await service.get_state(self.account.id, agent_name, key)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {"key": key, "value": value, "size_bytes": state_entry.size_bytes}
+                    )
+                )
+            ]
+        )
+
+    async def _delete_agent_state(self, agent_name: str, key: str) -> MCPToolResult:
+        """Delete a persistent state key for an agent."""
+        service = AgentService(self.db)
+        await service.delete_state(self.account.id, agent_name, key)
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"key": key, "deleted": True}))])
+
+    async def _list_agent_state_keys(self, agent_name: str) -> MCPToolResult:
+        """List all state keys for an agent."""
+        service = AgentService(self.db)
+        result = await service.list_state_keys(
+            self.account.id, agent_name, self.account.user.effective_tier
+        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _configure_agent_ai(
+        self,
+        agent_name: str,
+        engine: str,
+        model: str,
+        api_key: str,
+        system_prompt: str | None = None,
+    ) -> MCPToolResult:
+        """Configure an AI engine for an agent."""
+        service = AgentService(self.db)
+        agent = await service.configure_ai(
+            account_id=self.account.id,
+            agent_name=agent_name,
+            engine=engine,
+            model=model,
+            api_key=api_key,
+            system_prompt=system_prompt,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent_name": agent_name,
+                            "engine": agent.ai_engine,
+                            "model": agent.ai_model,
+                            "configured": True,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_agent_ai(self, agent_name: str) -> MCPToolResult:
+        """Remove AI engine configuration from an agent."""
+        service = AgentService(self.db)
+        await service.remove_ai(self.account.id, agent_name)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"agent_name": agent_name, "ai_removed": True}))]
+        )
+
+    async def _add_channel(
+        self,
+        agent_name: str,
+        channel_type: str,
+        config: dict,
+    ) -> MCPToolResult:
+        """Add a communication channel to an agent."""
+        service = AgentService(self.db)
+        channel = await service.add_channel(
+            account_id=self.account.id,
+            agent_name=agent_name,
+            channel_type=channel_type,
+            config=config,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "channel_id": str(channel.id),
+                            "agent_name": agent_name,
+                            "channel_type": channel_type,
+                            "enabled": channel.enabled,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_channel(self, agent_name: str, channel_type: str) -> MCPToolResult:
+        """Remove a communication channel from an agent."""
+        service = AgentService(self.db)
+        await service.remove_channel(self.account.id, agent_name, channel_type)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {"agent_name": agent_name, "channel_type": channel_type, "removed": True}
+                    )
+                )
+            ]
+        )
+
+    async def _clone_agent(self, agent_name: str, new_name: str) -> MCPToolResult:
+        """Clone an agent."""
+        service = AgentService(self.db)
+        new_agent = await service.clone_agent(
+            account_id=self.account.id,
+            source_agent_name=agent_name,
+            new_name=new_name,
+            tier=self.account.user.effective_tier,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "id": str(new_agent.id),
+                            "name": new_agent.name,
+                            "status": new_agent.status,
+                            "cloned_from": agent_name,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _lock_function(self, namespace: str, service: str, function: str) -> MCPToolResult:
+        """Lock a function (admin only)."""
+        from mcpworks_api.services.namespace import NamespaceServiceManager, NamespaceServiceService
+
+        ns_manager = NamespaceServiceManager(self.db)
+        svc_service = NamespaceServiceService(self.db)
+
+        ns = await ns_manager.get_by_name(namespace)
+        svc = await svc_service.get_by_name(ns.id, service)
+        fn = await self.function_service.get_by_name(svc.id, function)
+        await self.function_service.lock_function(fn.id, self.account.user_id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "namespace": namespace,
+                            "service": service,
+                            "function": function,
+                            "locked": True,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _unlock_function(self, namespace: str, service: str, function: str) -> MCPToolResult:
+        """Unlock a function (admin only)."""
+        from mcpworks_api.services.namespace import NamespaceServiceManager, NamespaceServiceService
+
+        ns_manager = NamespaceServiceManager(self.db)
+        svc_service = NamespaceServiceService(self.db)
+
+        ns = await ns_manager.get_by_name(namespace)
+        svc = await svc_service.get_by_name(ns.id, service)
+        fn = await self.function_service.get_by_name(svc.id, function)
+        await self.function_service.unlock_function(fn.id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "namespace": namespace,
+                            "service": service,
+                            "function": function,
+                            "locked": False,
+                        }
+                    )
+                )
+            ]
+        )
