@@ -111,8 +111,45 @@ input::placeholder { color: var(--text-3); }
 .login-card .btn { margin-top: 4px; }
 .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; padding: 8px 12px; background: rgba(255, 107, 107, 0.08); border-radius: 6px; border: 1px solid rgba(255, 107, 107, 0.15); }
 
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 12px; }
-@media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 12px; }
+@media (max-width: 860px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.agent-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.agent-status-dot.running { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+.agent-status-dot.stopped { background: #6b7280; }
+.agent-status-dot.error { background: #f87171; }
+.agent-status-dot.creating { background: #fbbf24; }
+.agent-status-dot.unknown { background: #6b7280; }
+
+.agent-card { background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: all 0.2s ease; }
+.agent-card:hover { border-color: var(--border-2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+.agent-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.agent-card-name { font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--link); }
+.agent-card-meta { font-size: 12px; color: var(--text-3); }
+.agent-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+
+.slots-bar-wrap { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 16px; }
+.slots-bar-label { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.slots-bar-track { flex: 1; height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+.slots-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+
+.subsection { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 16px; margin-top: 14px; }
+.subsection-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.subsection-title { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.item-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(31,41,55,0.5); gap: 10px; }
+.item-row:last-child { border-bottom: none; }
+.item-row-main { flex: 1; min-width: 0; }
+.item-row-label { font-size: 13px; color: var(--text-1); font-family: var(--mono); }
+.item-row-meta { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.add-form { background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; padding: 14px; margin-top: 12px; }
+.add-form label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 4px; margin-top: 10px; font-family: var(--sans); text-transform: uppercase; letter-spacing: 0.04em; }
+.add-form label:first-child { margin-top: 0; }
+.add-form input, .add-form select, .add-form textarea { display: block; width: 100%; background: var(--bg-0); border: 1px solid var(--border-1); color: var(--text-1); padding: 8px 12px; border-radius: 6px; font-family: var(--body); font-size: 13px; outline: none; transition: border-color 0.15s ease; }
+.add-form input:focus, .add-form select:focus, .add-form textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-sub); }
+.add-form textarea { resize: vertical; min-height: 80px; }
+.add-form-actions { display: flex; gap: 8px; margin-top: 12px; }
+.add-form select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
 
 .insights-drawer { margin-bottom: 14px; }
 .insights-header { display: flex; align-items: center; padding: 0 14px; height: 36px; background: var(--bg-1); border: 1px solid var(--border-1); border-radius: var(--radius); cursor: pointer; user-select: none; gap: 6px; transition: border-color 0.15s; }
@@ -405,6 +442,10 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
       <div class="stat-card" onclick="loadApiKeys()">
         <div class="stat-num" id="stat-keys">&mdash;</div>
         <div class="stat-label">API Keys</div>
+      </div>
+      <div class="stat-card" onclick="loadAgents()">
+        <div class="stat-num" id="stat-agents">&mdash;</div>
+        <div class="stat-label">Agents</div>
       </div>
     </div>
 
@@ -710,16 +751,18 @@ function countUp(el, target, duration) {
 
 async function loadStats() {
   try {
-    const [nsData, usageData, profile, keysData] = await Promise.all([
+    const [nsData, usageData, profile, keysData, agentsData] = await Promise.all([
       apiFetch('/v1/namespaces?page=1&page_size=100'),
       apiFetch('/v1/account/usage'),
       apiFetch('/v1/users/me'),
       apiFetch('/v1/users/me/api-keys'),
+      apiFetch('/v1/agents').catch(() => ({ total: 0 })),
     ]);
 
     cachedNamespaces = nsData.namespaces || [];
     countUp(document.getElementById('stat-namespaces'), nsData.total);
     countUp(document.getElementById('stat-keys'), (keysData.items || []).length);
+    countUp(document.getElementById('stat-agents'), agentsData.total || 0);
 
     if (profile.tier) {
       const badge = document.getElementById('tier-badge');
@@ -1670,6 +1713,614 @@ async function confirmCreateNamespace() {
   }
 }
 
+async function loadAgents() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading agents</div>';
+  setBreadcrumb([{ label: 'Agents' }]);
+  setInsights(null);
+  try {
+    const data = await apiFetch('/v1/agents');
+    const agents = data.agents || [];
+    const slotsUsed = data.slots_used || 0;
+    const slotsAvail = data.slots_available || 0;
+    const slotsTotal = slotsUsed + slotsAvail;
+    const slotPct = slotsTotal > 0 ? Math.round((slotsUsed / slotsTotal) * 100) : 0;
+
+    const slotBar = `<div class="slots-bar-wrap">
+      <span class="slots-bar-label">${slotsUsed} of ${slotsTotal} agent slot${slotsTotal !== 1 ? 's' : ''} used</span>
+      <div class="slots-bar-track"><div class="slots-bar-fill" style="width:${slotPct}%"></div></div>
+      ${slotsAvail > 0 ? `<button class="btn btn-primary btn-sm" onclick="openCreateAgentModal()">+ Create Agent</button>` : `<span style="font-size:12px;color:var(--text-3)">No slots available</span>`}
+    </div>`;
+
+    if (!agents.length) {
+      c.innerHTML = slotBar + emptyState('\u{1F916}', 'No agents yet', slotsAvail > 0 ? '<button class="btn btn-primary btn-sm" onclick="openCreateAgentModal()">Create your first agent</button>' : '');
+      return;
+    }
+
+    const cards = agents.map((a, i) => {
+      const dot = agentStatusDot(a.status);
+      const engine = a.ai_engine ? `<span class="tag">${esc(a.ai_engine)}</span>` : '';
+      return `<div class="agent-card stagger" style="--i:${i}" onclick="loadAgent('${esc(a.id)}')">
+        <div class="agent-card-header">
+          <span class="agent-status-dot ${agentStatusClass(a.status)}"></span>
+          <span class="agent-card-name">${esc(a.name)}</span>
+          ${engine}
+        </div>
+        ${a.display_name ? `<div class="agent-card-meta">${esc(a.display_name)}</div>` : ''}
+        <div class="agent-card-meta" style="margin-top:4px">Created ${fmtDate(a.created_at)}</div>
+      </div>`;
+    }).join('');
+
+    c.innerHTML = slotBar + `<div class="agent-cards-grid">${cards}</div>`;
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+function agentStatusClass(status) {
+  if (!status) return 'unknown';
+  const s = status.toLowerCase();
+  if (s === 'running') return 'running';
+  if (s === 'stopped' || s === 'idle') return 'stopped';
+  if (s === 'error' || s === 'failed') return 'error';
+  if (s === 'creating' || s === 'starting' || s === 'stopping') return 'creating';
+  return 'unknown';
+}
+
+function agentStatusDot(status) {
+  return `<span class="agent-status-dot ${agentStatusClass(status)}"></span>`;
+}
+
+async function loadAgent(agentId) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading"><span class="loader"></span>Loading agent</div>';
+  setBreadcrumb([{ label: 'Agents', onclick: 'loadAgents()' }, { label: agentId }]);
+  setInsights(null);
+  try {
+    const agent = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}`);
+    setBreadcrumb([{ label: 'Agents', onclick: 'loadAgents()' }, { label: agent.name }]);
+    renderAgentDetail(agent);
+  } catch (e) { c.innerHTML = `<div class="loading" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+function renderAgentDetail(agent) {
+  const c = document.getElementById('content');
+  const id = agent.id;
+  const statusClass = agentStatusClass(agent.status);
+  const isRunning = agent.status === 'running';
+  const isStopped = !isRunning;
+
+  const aiSection = agent.ai_engine
+    ? `<div class="subsection" id="agent-ai-section">
+        <div class="subsection-header">
+          <span class="subsection-title">AI Engine</span>
+          <button class="btn btn-danger btn-sm" onclick="removeAgentAi('${esc(id)}')">Remove AI</button>
+        </div>
+        <div style="font-size:13px;color:var(--text-2)">Engine: <span style="color:var(--text-1)">${esc(agent.ai_engine)}</span></div>
+        ${agent.ai_model ? `<div style="font-size:13px;color:var(--text-2);margin-top:4px">Model: <span style="color:var(--text-1)">${esc(agent.ai_model)}</span></div>` : ''}
+      </div>`
+    : `<div class="subsection" id="agent-ai-section">
+        <div class="subsection-header"><span class="subsection-title">AI Engine</span></div>
+        <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">No AI engine configured.</div>
+        <div id="agent-ai-form-wrap">
+          <button class="btn btn-ghost btn-sm" onclick="showAgentAiForm('${esc(id)}')">Configure AI</button>
+        </div>
+      </div>`;
+
+  c.innerHTML = `<div class="detail-section">
+    <div class="detail-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="agent-status-dot ${statusClass}" style="width:10px;height:10px"></span>
+        <div class="detail-title">${esc(agent.name)}</div>
+        ${agent.display_name ? `<span style="color:var(--text-3);font-size:13px">${esc(agent.display_name)}</span>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${isStopped ? `<button class="btn btn-primary btn-sm" onclick="startAgent('${esc(id)}')">Start</button>` : ''}
+        ${isRunning ? `<button class="btn btn-ghost btn-sm" onclick="stopAgent('${esc(id)}')">Stop</button>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="openDestroyAgentModal('${esc(id)}','${esc(agent.name)}')">Destroy</button>
+        <button class="btn btn-ghost btn-sm" onclick="openCloneAgentModal('${esc(id)}','${esc(agent.name)}')">Clone</button>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--text-3);margin-bottom:4px">Status: <span style="color:var(--text-2)">${esc(agent.status || 'unknown')}</span> &middot; Created: <span>${fmtDate(agent.created_at)}</span></div>
+
+    ${aiSection}
+
+    <div class="subsection" id="agent-schedules-section">
+      <div class="subsection-header">
+        <span class="subsection-title">Schedules</span>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-schedule-form')">+ Add</button>
+      </div>
+      <div id="agent-schedules-list"><div class="loading"><span class="loader"></span></div></div>
+      <div id="agent-schedule-form" class="add-form hidden">
+        <label>Function Name</label>
+        <input id="sched-fn" type="text" placeholder="my-function">
+        <label>Cron Expression</label>
+        <input id="sched-cron" type="text" placeholder="0 * * * *">
+        <label>Timezone</label>
+        <input id="sched-tz" type="text" value="UTC" placeholder="UTC">
+        <label>Failure Policy</label>
+        <select id="sched-policy">
+          <option value="retry">retry</option>
+          <option value="ignore">ignore</option>
+          <option value="stop">stop</option>
+        </select>
+        <div class="add-form-actions">
+          <button class="btn btn-primary btn-sm" onclick="addAgentSchedule('${esc(id)}')">Add Schedule</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-schedule-form')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection" id="agent-webhooks-section">
+      <div class="subsection-header">
+        <span class="subsection-title">Webhooks</span>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-webhook-form')">+ Add</button>
+      </div>
+      <div id="agent-webhooks-list"><div class="loading"><span class="loader"></span></div></div>
+      <div id="agent-webhook-form" class="add-form hidden">
+        <label>Path</label>
+        <input id="wh-path" type="text" placeholder="my-hook">
+        <label>Handler Function Name</label>
+        <input id="wh-handler" type="text" placeholder="handle-webhook">
+        <label>Secret <span style="color:var(--text-3)">(optional)</span></label>
+        <input id="wh-secret" type="text" placeholder="">
+        <div class="add-form-actions">
+          <button class="btn btn-primary btn-sm" onclick="addAgentWebhook('${esc(id)}')">Add Webhook</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-webhook-form')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection" id="agent-state-section">
+      <div class="subsection-header">
+        <span class="subsection-title">State</span>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-state-form')">+ Set Key</button>
+      </div>
+      <div id="agent-state-list"><div class="loading"><span class="loader"></span></div></div>
+      <div id="agent-state-form" class="add-form hidden">
+        <label>Key</label>
+        <input id="state-key" type="text" placeholder="my-key">
+        <label>Value (JSON)</label>
+        <textarea id="state-value" placeholder='"hello"'></textarea>
+        <div class="add-form-actions">
+          <button class="btn btn-primary btn-sm" onclick="setAgentState('${esc(id)}')">Set</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-state-form')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection" id="agent-channels-section">
+      <div class="subsection-header">
+        <span class="subsection-title">Channels</span>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-channel-form')">+ Add</button>
+      </div>
+      <div id="agent-channels-list"><div class="loading"><span class="loader"></span></div></div>
+      <div id="agent-channel-form" class="add-form hidden">
+        <label>Channel Type</label>
+        <select id="ch-type">
+          <option value="discord">Discord</option>
+          <option value="slack">Slack</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="email">Email</option>
+        </select>
+        <label>Config (JSON)</label>
+        <textarea id="ch-config" placeholder='{"token": "..."}'></textarea>
+        <div class="add-form-actions">
+          <button class="btn btn-primary btn-sm" onclick="addAgentChannel('${esc(id)}')">Add Channel</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-channel-form')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection" id="agent-runs-section">
+      <div class="subsection-header"><span class="subsection-title">Recent Runs</span></div>
+      <div id="agent-runs-list"><div class="loading"><span class="loader"></span></div></div>
+    </div>
+
+  </div>`;
+
+  loadAgentSchedules(id);
+  loadAgentWebhooks(id);
+  loadAgentState(id);
+  loadAgentChannels(id);
+  loadAgentRuns(id);
+}
+
+function toggleAgentAddForm(formId) {
+  const el = document.getElementById(formId);
+  if (el) el.classList.toggle('hidden');
+}
+
+async function startAgent(agentId) {
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/start`, { method: 'POST' });
+    loadAgent(agentId);
+    loadStats();
+  } catch (e) { alert('Failed to start agent: ' + e.message); }
+}
+
+async function stopAgent(agentId) {
+  if (!confirm('Stop this agent?')) return;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/stop`, { method: 'POST' });
+    loadAgent(agentId);
+    loadStats();
+  } catch (e) { alert('Failed to stop agent: ' + e.message); }
+}
+
+async function removeAgentAi(agentId) {
+  if (!confirm('Remove AI engine configuration from this agent?')) return;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/ai`, { method: 'DELETE' });
+    loadAgent(agentId);
+  } catch (e) { alert('Failed to remove AI config: ' + e.message); }
+}
+
+function showAgentAiForm(agentId) {
+  const wrap = document.getElementById('agent-ai-form-wrap');
+  if (!wrap) return;
+  wrap.dataset.agentId = agentId;
+  wrap.innerHTML = `<div class="add-form" style="margin-top:0">
+    <label>Engine</label>
+    <select id="ai-engine">
+      <option value="anthropic">Anthropic</option>
+      <option value="openai">OpenAI</option>
+      <option value="google">Google</option>
+      <option value="openrouter">OpenRouter</option>
+    </select>
+    <label>Model</label>
+    <input id="ai-model" type="text" placeholder="claude-3-5-sonnet-20241022">
+    <label>API Key</label>
+    <input id="ai-api-key" type="password" placeholder="sk-...">
+    <label>System Prompt <span style="color:var(--text-3)">(optional)</span></label>
+    <textarea id="ai-system-prompt" placeholder="You are a helpful agent..."></textarea>
+    <div class="add-form-actions">
+      <button class="btn btn-primary btn-sm" onclick="saveAgentAi(document.getElementById('agent-ai-form-wrap').dataset.agentId)">Save</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelAgentAiForm()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function cancelAgentAiForm() {
+  const wrap = document.getElementById('agent-ai-form-wrap');
+  if (!wrap) return;
+  const agentId = wrap.dataset.agentId || '';
+  wrap.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="showAgentAiForm(${JSON.stringify(agentId)})">Configure AI</button>`;
+}
+
+async function saveAgentAi(agentId) {
+  const engine = document.getElementById('ai-engine')?.value;
+  const model = document.getElementById('ai-model')?.value.trim();
+  const api_key = document.getElementById('ai-api-key')?.value.trim();
+  const system_prompt = document.getElementById('ai-system-prompt')?.value.trim() || null;
+  if (!engine || !model || !api_key) { alert('Engine, model, and API key are required'); return; }
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ engine, model, api_key, system_prompt }),
+    });
+    loadAgent(agentId);
+  } catch (e) { alert('Failed to save AI config: ' + e.message); }
+}
+
+async function loadAgentSchedules(agentId) {
+  const el = document.getElementById('agent-schedules-list');
+  if (!el) return;
+  try {
+    const data = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/schedules`);
+    const scheds = data.schedules || data || [];
+    if (!scheds.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-3)">No schedules configured.</div>'; return; }
+    el.innerHTML = scheds.map(s => `<div class="item-row">
+      <div class="item-row-main">
+        <div class="item-row-label">${esc(s.function_name)}</div>
+        <div class="item-row-meta"><code style="font-size:11px">${esc(s.cron_expression)}</code> &middot; ${esc(s.timezone || 'UTC')} &middot; ${s.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'} &middot; on failure: ${esc(s.failure_policy || 'retry')}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteAgentSchedule('${esc(agentId)}','${esc(s.id)}')">delete</button>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function addAgentSchedule(agentId) {
+  const fn = document.getElementById('sched-fn')?.value.trim();
+  const cron = document.getElementById('sched-cron')?.value.trim();
+  const tz = document.getElementById('sched-tz')?.value.trim() || 'UTC';
+  const policy = document.getElementById('sched-policy')?.value || 'retry';
+  if (!fn || !cron) { alert('Function name and cron expression are required'); return; }
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ function_name: fn, cron_expression: cron, timezone: tz, failure_policy: policy }),
+    });
+    toggleAgentAddForm('agent-schedule-form');
+    loadAgentSchedules(agentId);
+  } catch (e) { alert('Failed to add schedule: ' + e.message); }
+}
+
+async function deleteAgentSchedule(agentId, schedId) {
+  if (!confirm('Delete this schedule?')) return;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/schedules/${encodeURIComponent(schedId)}`, { method: 'DELETE' });
+    loadAgentSchedules(agentId);
+  } catch (e) { alert('Failed to delete schedule: ' + e.message); }
+}
+
+async function loadAgentWebhooks(agentId) {
+  const el = document.getElementById('agent-webhooks-list');
+  if (!el) return;
+  try {
+    const data = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/webhooks`);
+    const hooks = data.webhooks || data || [];
+    if (!hooks.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-3)">No webhooks configured.</div>'; return; }
+    el.innerHTML = hooks.map(h => `<div class="item-row">
+      <div class="item-row-main">
+        <div class="item-row-label"><code style="font-size:12px">/${esc(h.path)}</code> &rarr; ${esc(h.handler_function_name)}</div>
+        <div class="item-row-meta">URL: <code style="font-size:11px">https://${esc(agentId)}.agent.mcpworks.io/webhook/${esc(h.path)}</code> &middot; ${h.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'}</div>
+      </div>
+      <button class="btn btn-copy btn-sm" onclick="copyText('https://${esc(agentId)}.agent.mcpworks.io/webhook/${esc(h.path)}',this)">copy url</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteAgentWebhook('${esc(agentId)}','${esc(h.id)}')">delete</button>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function addAgentWebhook(agentId) {
+  const path = document.getElementById('wh-path')?.value.trim();
+  const handler = document.getElementById('wh-handler')?.value.trim();
+  const secret = document.getElementById('wh-secret')?.value.trim() || null;
+  if (!path || !handler) { alert('Path and handler function name are required'); return; }
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, handler_function_name: handler, secret }),
+    });
+    toggleAgentAddForm('agent-webhook-form');
+    loadAgentWebhooks(agentId);
+  } catch (e) { alert('Failed to add webhook: ' + e.message); }
+}
+
+async function deleteAgentWebhook(agentId, webhookId) {
+  if (!confirm('Delete this webhook?')) return;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/webhooks/${encodeURIComponent(webhookId)}`, { method: 'DELETE' });
+    loadAgentWebhooks(agentId);
+  } catch (e) { alert('Failed to delete webhook: ' + e.message); }
+}
+
+async function loadAgentState(agentId) {
+  const el = document.getElementById('agent-state-list');
+  if (!el) return;
+  try {
+    const data = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/state`);
+    const keys = data.keys || [];
+    const totalBytes = data.total_size_bytes || 0;
+    const maxBytes = data.max_size_bytes || 0;
+    const pct = maxBytes > 0 ? Math.round((totalBytes / maxBytes) * 100) : 0;
+    const sizeBar = maxBytes > 0 ? `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--text-3)">
+      <span>${fmtBytes(totalBytes)} / ${fmtBytes(maxBytes)}</span>
+      <div style="flex:1;height:4px;background:var(--bg-3);border-radius:2px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px"></div></div>
+    </div>` : '';
+    if (!keys.length) { el.innerHTML = sizeBar + '<div style="font-size:13px;color:var(--text-3)">No state keys.</div>'; return; }
+    el.innerHTML = sizeBar + keys.map(k => `<div class="item-row">
+      <div class="item-row-main">
+        <div class="item-row-label"><code style="font-size:12px">${esc(k.key || k)}</code></div>
+        ${k.size_bytes != null ? `<div class="item-row-meta">${fmtBytes(k.size_bytes)}${k.updated_at ? ' &middot; ' + fmtDate(k.updated_at) : ''}</div>` : ''}
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteAgentStateKey('${esc(agentId)}','${esc(k.key || k)}')">delete</button>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function setAgentState(agentId) {
+  const key = document.getElementById('state-key')?.value.trim();
+  const rawVal = document.getElementById('state-value')?.value.trim();
+  if (!key) { alert('Key is required'); return; }
+  let value;
+  try { value = JSON.parse(rawVal); } catch { alert('Value must be valid JSON'); return; }
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/state/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    toggleAgentAddForm('agent-state-form');
+    loadAgentState(agentId);
+  } catch (e) { alert('Failed to set state: ' + e.message); }
+}
+
+async function deleteAgentStateKey(agentId, key) {
+  if (!confirm(`Delete state key "${key}"?`)) return;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/state/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    loadAgentState(agentId);
+  } catch (e) { alert('Failed to delete state key: ' + e.message); }
+}
+
+async function loadAgentChannels(agentId) {
+  const el = document.getElementById('agent-channels-list');
+  if (!el) return;
+  try {
+    const data = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/channels`);
+    const channels = data.channels || data || [];
+    if (!channels.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-3)">No channels configured.</div>'; return; }
+    el.innerHTML = channels.map(ch => `<div class="item-row">
+      <div class="item-row-main">
+        <div class="item-row-label"><span class="tag">${esc(ch.channel_type)}</span></div>
+        <div class="item-row-meta">${ch.status ? esc(ch.status) : ''}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteAgentChannel('${esc(agentId)}','${esc(ch.channel_type)}')">remove</button>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+async function addAgentChannel(agentId) {
+  const channel_type = document.getElementById('ch-type')?.value;
+  const rawConfig = document.getElementById('ch-config')?.value.trim();
+  let config;
+  try { config = JSON.parse(rawConfig); } catch { alert('Config must be valid JSON'); return; }
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/channels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_type, config }),
+    });
+    toggleAgentAddForm('agent-channel-form');
+    loadAgentChannels(agentId);
+  } catch (e) { alert('Failed to add channel: ' + e.message); }
+}
+
+async function deleteAgentChannel(agentId, channelType) {
+  if (!confirm(`Remove ${channelType} channel?`)) return;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/channels/${encodeURIComponent(channelType)}`, { method: 'DELETE' });
+    loadAgentChannels(agentId);
+  } catch (e) { alert('Failed to remove channel: ' + e.message); }
+}
+
+async function loadAgentRuns(agentId) {
+  const el = document.getElementById('agent-runs-list');
+  if (!el) return;
+  try {
+    const data = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/runs`);
+    const runs = data.runs || [];
+    if (!runs.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-3)">No runs yet.</div>'; return; }
+    el.innerHTML = `<table style="font-size:12px"><thead><tr><th>Trigger</th><th>Status</th><th>Started</th><th>Duration</th></tr></thead><tbody>${runs.map(r => {
+      const statusCls = r.status === 'completed' ? 'status-completed' : r.status === 'failed' ? 'status-failed' : r.status === 'running' ? 'status-running' : 'status-pending';
+      const dur = r.duration_ms != null ? (r.duration_ms < 1000 ? r.duration_ms + 'ms' : (r.duration_ms / 1000).toFixed(1) + 's') : '\u2014';
+      return `<tr><td class="cell-dim">${esc(r.trigger_type || '\u2014')}</td><td class="${statusCls}">${esc(r.status)}</td><td class="cell-muted">${fmtDate(r.started_at)}</td><td class="cell-muted">${dur}</td></tr>`;
+    }).join('')}</tbody></table>`;
+  } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+function fmtBytes(bytes) {
+  if (bytes == null) return '\u2014';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function openCreateAgentModal() {
+  document.getElementById('createAgentName').value = '';
+  document.getElementById('createAgentDisplayName').value = '';
+  document.getElementById('createAgentError').classList.add('hidden');
+  document.getElementById('createAgentBtn').disabled = false;
+  document.getElementById('createAgentBtn').textContent = 'Create';
+  document.getElementById('createAgentModal').classList.add('open');
+  setTimeout(() => document.getElementById('createAgentName').focus(), 100);
+}
+function closeCreateAgentModal() {
+  document.getElementById('createAgentModal').classList.remove('open');
+}
+async function confirmCreateAgent() {
+  const nameInput = document.getElementById('createAgentName');
+  const displayNameInput = document.getElementById('createAgentDisplayName');
+  const errEl = document.getElementById('createAgentError');
+  const btn = document.getElementById('createAgentBtn');
+  const name = nameInput.value.trim().toLowerCase();
+  if (!name) { errEl.textContent = 'Name is required'; errEl.classList.remove('hidden'); return; }
+  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(name)) {
+    errEl.textContent = 'Must be lowercase letters, numbers, and hyphens';
+    errEl.classList.remove('hidden'); return;
+  }
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Creating\u2026';
+  try {
+    const body = { name };
+    if (displayNameInput.value.trim()) body.display_name = displayNameInput.value.trim();
+    const agent = await apiFetch('/v1/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    closeCreateAgentModal();
+    loadStats();
+    loadAgent(agent.id || agent.name);
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to create agent';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Create';
+  }
+}
+
+let _destroyAgentTarget = '';
+let _destroyAgentName = '';
+function openDestroyAgentModal(agentId, agentName) {
+  _destroyAgentTarget = agentId;
+  _destroyAgentName = agentName;
+  document.getElementById('destroyAgentNameDisplay').textContent = agentName;
+  document.getElementById('destroyAgentNameConfirm').textContent = agentName;
+  document.getElementById('destroyAgentInput').value = '';
+  document.getElementById('destroyAgentBtn').disabled = true;
+  document.getElementById('destroyAgentModal').classList.add('open');
+  setTimeout(() => document.getElementById('destroyAgentInput').focus(), 100);
+}
+function closeDestroyAgentModal() {
+  document.getElementById('destroyAgentModal').classList.remove('open');
+  _destroyAgentTarget = '';
+  _destroyAgentName = '';
+}
+function checkDestroyAgentInput() {
+  document.getElementById('destroyAgentBtn').disabled =
+    document.getElementById('destroyAgentInput').value !== _destroyAgentName;
+}
+async function confirmDestroyAgent() {
+  const btn = document.getElementById('destroyAgentBtn');
+  btn.disabled = true;
+  btn.textContent = 'Destroying\u2026';
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(_destroyAgentTarget)}?confirm=true`, { method: 'DELETE' });
+    closeDestroyAgentModal();
+    loadAgents();
+    loadStats();
+  } catch (e) {
+    btn.textContent = 'Destroy agent';
+    btn.disabled = false;
+    alert('Destroy failed: ' + e.message);
+  }
+}
+
+let _cloneAgentSource = '';
+function openCloneAgentModal(agentId, agentName) {
+  _cloneAgentSource = agentId;
+  document.getElementById('cloneAgentSourceName').textContent = agentName;
+  document.getElementById('cloneAgentNewName').value = '';
+  document.getElementById('cloneAgentError').classList.add('hidden');
+  document.getElementById('cloneAgentBtn').disabled = false;
+  document.getElementById('cloneAgentBtn').textContent = 'Clone';
+  document.getElementById('cloneAgentModal').classList.add('open');
+  setTimeout(() => document.getElementById('cloneAgentNewName').focus(), 100);
+}
+function closeCloneAgentModal() {
+  document.getElementById('cloneAgentModal').classList.remove('open');
+  _cloneAgentSource = '';
+}
+async function confirmCloneAgent() {
+  const nameInput = document.getElementById('cloneAgentNewName');
+  const errEl = document.getElementById('cloneAgentError');
+  const btn = document.getElementById('cloneAgentBtn');
+  const new_name = nameInput.value.trim().toLowerCase();
+  if (!new_name) { errEl.textContent = 'New name is required'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Cloning\u2026';
+  try {
+    const agent = await apiFetch(`/v1/agents/${encodeURIComponent(_cloneAgentSource)}/clone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name }),
+    });
+    closeCloneAgentModal();
+    loadStats();
+    loadAgent(agent.id || new_name);
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to clone agent';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Clone';
+  }
+}
+
 let _deleteNsTarget = '';
 function openDeleteModal(nsName, svcCount, fnCount) {
   _deleteNsTarget = nsName;
@@ -1737,6 +2388,53 @@ async function confirmDeleteNamespace() {
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
       <button id="delNsBtn" class="btn btn-danger-solid" disabled onclick="confirmDeleteNamespace()">Delete namespace</button>
+    </div>
+  </div>
+</div>
+<div id="createAgentModal" class="modal-backdrop" onclick="if(event.target===this)closeCreateAgentModal()">
+  <div class="modal-box">
+    <h3 style="color:var(--text-1)">Create Agent</h3>
+    <div class="modal-warn">An agent is an autonomous entity that can run on a schedule, respond to webhooks, and maintain state.</div>
+    <div id="createAgentError" class="error-msg hidden" style="margin-bottom:12px"></div>
+    <label>Name</label>
+    <input id="createAgentName" type="text" placeholder="my-agent" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')confirmCreateAgent()">
+    <label>Display Name <span style="color:var(--text-3)">(optional)</span></label>
+    <input id="createAgentDisplayName" type="text" placeholder="My Agent" autocomplete="off" onkeydown="if(event.key==='Enter')confirmCreateAgent()">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeCreateAgentModal()">Cancel</button>
+      <button id="createAgentBtn" class="btn btn-primary" onclick="confirmCreateAgent()">Create</button>
+    </div>
+  </div>
+</div>
+<div id="destroyAgentModal" class="modal-backdrop" onclick="if(event.target===this)closeDestroyAgentModal()">
+  <div class="modal-box">
+    <h3>Destroy Agent</h3>
+    <div class="modal-warn">Permanently destroy <strong id="destroyAgentNameDisplay"></strong> and all its configuration:</div>
+    <ul class="modal-impact">
+      <li>All schedules will be removed</li>
+      <li>All webhooks will be removed</li>
+      <li>All stored state will be deleted</li>
+      <li>All channel connections will be removed</li>
+    </ul>
+    <div class="modal-recovery">This action cannot be undone.</div>
+    <label>Type <strong id="destroyAgentNameConfirm"></strong> to confirm:</label>
+    <input id="destroyAgentInput" type="text" autocomplete="off" spellcheck="false" oninput="checkDestroyAgentInput()">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDestroyAgentModal()">Cancel</button>
+      <button id="destroyAgentBtn" class="btn btn-danger-solid" disabled onclick="confirmDestroyAgent()">Destroy agent</button>
+    </div>
+  </div>
+</div>
+<div id="cloneAgentModal" class="modal-backdrop" onclick="if(event.target===this)closeCloneAgentModal()">
+  <div class="modal-box">
+    <h3 style="color:var(--text-1)">Clone Agent</h3>
+    <div class="modal-warn">Create a copy of <strong id="cloneAgentSourceName"></strong> with a new name. The clone will inherit AI configuration, schedules, webhooks, and channel settings.</div>
+    <div id="cloneAgentError" class="error-msg hidden" style="margin-bottom:12px"></div>
+    <label>New Name</label>
+    <input id="cloneAgentNewName" type="text" placeholder="my-agent-copy" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')confirmCloneAgent()">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeCloneAgentModal()">Cancel</button>
+      <button id="cloneAgentBtn" class="btn btn-primary" onclick="confirmCloneAgent()">Clone</button>
     </div>
   </div>
 </div>
