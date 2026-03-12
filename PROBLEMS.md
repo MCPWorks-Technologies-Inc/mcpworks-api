@@ -6,54 +6,51 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
-### PROBLEM-013: Agent Orchestration Architecture Undocumented — Schedule/Channel/Function Integration Unclear
-
-**Filed:** 2026-03-11
-**Status:** OPEN
-**Severity:** High (blocking agent usability)
-**Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io — DogeDetective agent
-**Namespace:** `dogedetective`
-
-**Problem:** User built a full agent with functions, schedules, webhooks, and a Discord channel, but cannot determine how the pieces connect. The agent's AI model is configured but never invoked by the platform. All functions are self-contained because the orchestration model is undocumented.
-
-**Specific questions requiring answers:**
-
-1. **Schedule → AI flow:** When a scheduled function runs and returns output, does that output get passed to the agent's AI model for processing? Or does the schedule just silently execute the function?
-
-2. **Agent as tool-caller:** When the AI agent is invoked, does it automatically see all functions in its namespace as callable tools? Can it decide to call `search-news` or `analyze-price` during reasoning?
-
-3. **Channel output routing:** When a Discord channel is configured via `add_channel`, how does the AI agent post to it? Is there an implicit `send_message` / `post_to_channel` tool, or does the agent's text output automatically route to the channel?
-
-4. **Webhook external URL:** `add_webhook` returns a webhook ID and path but no callable external URL. What is the full URL to POST to for triggering a webhook?
-
-5. **Environment isolation:** Functions cannot access the agent's AI config (e.g., OpenRouter API key). The key is configured on the agent via `configure_agent_ai` but the sandbox only exposes `PYTHONPATH`, `HOME`, `LANG`, and SSL vars. Users are forced to duplicate API keys as function env vars.
-
-6. **Complete lifecycle:** What is the intended trigger → AI → action flow?
-   `Schedule fires → [?] → AI agent processes → [how does it call tools?] → [how does it output to channels?]`
-
-**Impact:** Users build agents but end up with disconnected parts — functions that do everything themselves, an AI model that's never invoked, and channels that receive nothing. The agent abstraction isn't delivering its value.
-
-**User's observation:** *"Right now? Nothing. The agent is running with an AI model and system prompt configured, but everything is handled by standalone functions that never involve it."*
-
----
-
-### NOTE: Safe Logging Strategy — Implementation Tracked in ORDERS.md
-
-**Filed:** 2026-02-20
-**Status:** Spec complete, implementation pending (ORDER-020 through ORDER-023)
-
-The question of how to safely log MCP server requests (given PII, credentials, and sensitive data in request/response bodies) has been fully spec'd:
-
-- **Spec:** `../mcpworks-internals/docs/implementation/logging-specification.md` (v1.0.0)
-- **Implementation orders:** ORDER-020 (stop logging PII in execution records), ORDER-021 (structured JSON logging), ORDER-022 (security events table), ORDER-023 (truncate/PII-scrub error messages)
-
-**Core principles:** Log metadata never content. Hash IPs, reference API keys by prefix only. `input_data` and `result_data` fields must be NULL by default — only populated with opt-in debug logging (A1). Error messages truncated to 255 chars with PII scrub (email patterns, phone patterns, API key patterns).
-
-**Iain Harper's "decision logging" gap** (from iain.so MCP tooling article, Feb 2026): Most observability tools log *what happened* but not *why it was allowed*. Consider adding policy-context logging for HITL approvals in A1. See `../mcpworks-internals/docs/research/competitive/2026-02-20_mcp-tooling-security-crisis-analysis.md`.
+No open issues.
 
 ---
 
 ## Resolved Issues
+
+### ~~NOTE: Safe Logging Strategy — ORDER-020 through ORDER-023~~
+
+**Filed:** 2026-02-20
+**Status:** RESOLVED (2026-03-12)
+
+All four logging orders implemented:
+- **ORDER-020:** `input_data`/`result_data` never persisted (Execution model unused; admin endpoint hardcoded to NULL)
+- **ORDER-021:** Structured JSON logging via structlog (`main.py:62-110`, `request_logging.py`)
+- **ORDER-022:** Security events table with `hash_ip()`, `fire_security_event()`, wired to auth/billing/sandbox, `GET /v1/audit/logs` endpoint
+- **ORDER-023:** PII scrub + 255-char truncation in `_scrub_error_message()` (`execution.py:26-32`)
+
+Future consideration: decision logging for HITL approvals (A1 scope).
+
+---
+
+### ~~PROBLEM-015: `orchestration_mode` Locked to "direct" — No Way to Route Function Output to Agent AI~~
+
+**Filed:** 2026-03-12
+**Status:** RESOLVED (2026-03-12, commit `6dc5b59`)
+**Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io — DogeDetective agent (Report #2)
+
+`orchestration_mode` existed on schedules/webhooks but was not exposed as a settable parameter in the MCP tool schemas. Fixed by adding `orchestration_mode` as an enum parameter (`direct`, `reason_first`, `run_then_reason`) to both `add_schedule` and `add_webhook` MCP tools. Added full server-side orchestration pipeline: AI client (`chat_with_tools` for Anthropic/OpenAI/Google), orchestrator loop with per-tier safety limits, auto-channel posting, and webhook ingress handler. See spec `specs/004-agent-orchestration/`.
+
+---
+
+### ~~PROBLEM-013: Agent Orchestration Architecture Undocumented — Schedule/Channel/Function Integration Unclear~~
+
+**Filed:** 2026-03-11
+**Status:** RESOLVED (2026-03-12, commit `6dc5b59`)
+**Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io — DogeDetective agent
+
+All questions answered by the 004-agent-orchestration implementation:
+- **Agent as tool-caller:** Yes — all namespace functions are presented as callable tools to the AI (format: `service__function`)
+- **Channel output routing:** AI can call `send_to_channel` platform tool; `auto_channel` field on agents auto-posts final AI responses
+- **Webhook external URL:** `https://{agent-name}.agent.mcpworks.io/webhook/{path}`
+- **Three orchestration modes:** `direct` (no AI), `reason_first` (AI decides), `run_then_reason` (run function, AI analyzes output)
+- Platform tools: `send_to_channel`, `get_state`, `set_state`
+
+---
 
 ### ~~PROBLEM-014: Schedules Not Executing — Zero Observed Runs Despite Enabled Status~~
 
