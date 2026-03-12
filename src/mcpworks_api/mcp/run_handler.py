@@ -12,7 +12,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
-from mcpworks_api.backends.sandbox import TIER_CONFIG, ExecutionTier
+from mcpworks_api.backends.sandbox import TIER_CONFIG, resolve_execution_tier
 from mcpworks_api.core.exceptions import NotFoundError
 from mcpworks_api.mcp.env_passthrough import check_required_env, filter_env_for_function
 from mcpworks_api.mcp.protocol import (
@@ -67,10 +67,7 @@ class RunMCPHandler:
     def _get_tier_config(self) -> dict:
         """Get sandbox tier config for the current user's effective tier."""
         tier_str = self.account.user.effective_tier
-        try:
-            tier = ExecutionTier(tier_str)
-        except ValueError:
-            tier = ExecutionTier.FREE
+        tier = resolve_execution_tier(tier_str)
         return TIER_CONFIG[tier]
 
     def _tier_notice(self) -> str:
@@ -186,18 +183,31 @@ class RunMCPHandler:
             MCPTool(
                 name="execute",
                 description=(
-                    "Execute Python code in a sandbox with access to all namespace functions.\n"
-                    "Discover available functions: import functions; print(functions.__doc__)\n"
-                    "Call a function: from functions import hello; result = hello(name='World')\n"
-                    "Set `result = ...` to return data to the conversation." + tier_notice
+                    "Execute Python code in a secure sandbox with access to all namespace functions.\n"
+                    "\n"
+                    "RETURNING DATA: Set `result = ...` to return data to the conversation. "
+                    "Without this, the result will be null.\n"
+                    "\n"
+                    "CALLING FUNCTIONS: Import from the `functions` package:\n"
+                    "  from functions import hello; result = hello(name='World')\n"
+                    "\n"
+                    "DISCOVERING FUNCTIONS: import functions; print(functions.__doc__)\n"
+                    "\n"
+                    "FUNCTION ARGUMENTS: Pass arguments as keyword args matching the function's input_schema. "
+                    "Only parameters defined in the function's input_schema will be passed through.\n"
+                    + tier_notice
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "code": {
                             "type": "string",
-                            "description": "Python code to execute. "
-                            "Available functions are importable from the `functions` package.",
+                            "description": (
+                                "Python code to execute. "
+                                "Set `result = ...` to return data. "
+                                "Import functions via `from functions import func_name`. "
+                                "Example: from functions import hello; result = hello(name='World')"
+                            ),
                         }
                     },
                     "required": ["code"],
