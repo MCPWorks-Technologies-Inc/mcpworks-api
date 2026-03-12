@@ -76,6 +76,23 @@ TIER_CONFIG = {
 
 DEFAULT_TIER = ExecutionTier.FREE
 
+AGENT_TIER_MAP = {
+    "builder-agent": ExecutionTier.BUILDER,
+    "pro-agent": ExecutionTier.PRO,
+    "enterprise-agent": ExecutionTier.ENTERPRISE,
+}
+
+
+def resolve_execution_tier(tier_str: str) -> ExecutionTier:
+    """Map a tier string (including agent tiers) to an ExecutionTier."""
+    if tier_str in AGENT_TIER_MAP:
+        return AGENT_TIER_MAP[tier_str]
+    try:
+        return ExecutionTier(tier_str)
+    except ValueError:
+        return DEFAULT_TIER
+
+
 # Dangerous patterns to check (defense-in-depth; seccomp is the real protection)
 DANGEROUS_PATTERNS = [
     "os.system",
@@ -150,11 +167,7 @@ class SandboxBackend(Backend):
         tier_value = DEFAULT_TIER.value
         if hasattr(account, "user") and account.user is not None:
             tier_value = account.user.effective_tier
-        try:
-            tier = ExecutionTier(tier_value)
-        except ValueError:
-            tier = DEFAULT_TIER
-
+        tier = resolve_execution_tier(tier_value)
         return TIER_CONFIG.get(tier, TIER_CONFIG[DEFAULT_TIER])
 
     async def execute(
