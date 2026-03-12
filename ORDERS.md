@@ -115,6 +115,7 @@ The spec warns: "Database credentials should NEVER be on the execution host."
 **Effort:** 0.5 days
 **Location:** `src/mcpworks_api/models/execution.py`, `src/mcpworks_api/services/`
 **Spec:** `../mcpworks-internals/docs/implementation/logging-specification.md`
+**Status: COMPLETE**
 
 The Execution model stores `input_data` and `result_data` as JSONB by default. These fields will contain user-supplied function arguments -- potentially PII, financial data, credentials, health data. This is over-logging and creates liability before pilot users.
 
@@ -129,6 +130,7 @@ The Execution model stores `input_data` and `result_data` as JSONB by default. T
 **Priority:** HIGH
 **Effort:** 0.5 days
 **Location:** `src/mcpworks_api/`, dependencies
+**Status: COMPLETE**
 
 Bare `logging.getLogger(__name__)` calls produce unstructured logs. Structured JSON enables log forwarding and operational debugging.
 
@@ -143,6 +145,7 @@ Bare `logging.getLogger(__name__)` calls produce unstructured logs. Structured J
 **Priority:** HIGH
 **Effort:** 1 day
 **Location:** `src/mcpworks_api/models/`, `src/mcpworks_api/middleware/`
+**Status: COMPLETE**
 
 The A0 plan schema includes `security_events` but it is not yet implemented. Needed for auth failure tracking, quota exceeded visibility, and sandbox violation logging.
 
@@ -157,6 +160,7 @@ The A0 plan schema includes `security_events` but it is not yet implemented. Nee
 **Priority:** HIGH
 **Effort:** 0.5 days
 **Location:** `src/mcpworks_api/models/execution.py`, `src/mcpworks_api/services/`
+**Status: COMPLETE**
 
 Error messages from backend execution may contain user data (embedded in tracebacks, exception strings).
 
@@ -222,7 +226,7 @@ The Privacy Policy, Terms of Service, and Acceptable Use Policy have been drafte
 **Priority:** CRITICAL
 **Effort:** 0.5 days
 **Location:** `src/mcpworks_api/api/` (auth routes), `src/mcpworks_api/models/`
-**Status:** LEGAL DOCS DRAFTED — Ready for implementation
+**Status: COMPLETE**
 **Depends on:** ORDER-007 (legal docs must be published first)
 
 **Requirements:**
@@ -433,11 +437,11 @@ By March 16, 2026 (30-day review), the following should be true:
 - [ ] Sandbox mounts corrected (ORDER-004)
 - [ ] Package audit complete (ORDER-005)
 - [ ] DB credential isolation verified (ORDER-006)
-- [ ] Execution model stops logging PII by default (ORDER-020)
-- [ ] Structured JSON logging in place (ORDER-021)
-- [ ] Security events table capturing auth failures and quota hits (ORDER-022)
-- [ ] Error messages truncated and PII-scrubbed (ORDER-023)
-- [ ] Legal documents served and consent required (ORDER-007, ORDER-008)
+- [x] Execution model stops logging PII by default (ORDER-020)
+- [x] Structured JSON logging in place (ORDER-021)
+- [x] Security events table capturing auth failures and quota hits (ORDER-022)
+- [x] Error messages truncated and PII-scrubbed (ORDER-023)
+- [x] Legal documents served and consent required (ORDER-007, ORDER-008)
 - [ ] Web registration live (ORDER-009)
 - [ ] .mcp.json config generator working (ORDER-010)
 - [ ] At least hello-world template available (ORDER-011)

@@ -1,8 +1,8 @@
 # MCPWorks Product Specification
 
-**Version:** 3.1.0
+**Version:** 3.2.0
 **Date:** 2026-03-11
-**Status:** Developer Preview (A0) / Agents in Design
+**Status:** Developer Preview (A0) / Agents: Invite-Only Preview
 **Author:** Simon Carr / Claude
 
 ---
@@ -63,22 +63,24 @@ MCPWorks Agents builds on Functions. Agents use Functions as their execution sub
 | Admin dashboard | Production | Domain-restricted, token-auth |
 | CI/CD | Production | GitHub Actions, auto-deploy to DigitalOcean |
 
-### MCPWorks Agents (In Design)
+> **Availability:** Agent functionality is production-ready and available to invited users. Public launch pending funding (SAFE Tranche 1). Contact simon.carr@mcpworks.io for early access.
+
+### MCPWorks Agents (Production — Invite-Only)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Agent container runtime | Design | Docker-based, one container per agent |
-| Agent namespace provisioning | Design | Each agent gets its own create/run namespace |
-| Agent MCP endpoint | Design | `{agent-name}.agent.mcpworks.io` for webhooks/communication |
-| AI engine configuration | Design | User-supplied API key for agent's own LLM |
-| Cron scheduling | Design | Scheduled function execution within agent container |
-| Webhook ingress | Design | Reverse proxy to agent subdomain on :443 |
-| Persistent state | Design | Key-value store scoped per agent |
-| Secrets management | Design | Envelope encryption (AES-256-GCM) |
-| Function locking | Design | Protect Claude-authored functions from agent modification |
-| Agent cloning/forking | Design | Clone agent to new instance with divergent evolution |
-| Outbound communication | Design | Discord, WhatsApp, Slack, email channels |
-| Agent MCP tools | Design | `make_agent`, `list_agents`, `describe_agent`, `update_agent`, `delete_agent`, `clone_agent` |
+| Agent container runtime | Production (Invite-Only) | Docker-based, one container per agent |
+| Agent namespace provisioning | Production (Invite-Only) | Each agent gets its own create/run namespace |
+| Agent MCP endpoint | Production (Invite-Only) | `{agent-name}.agent.mcpworks.io` for webhooks/communication |
+| AI engine configuration | Production (Invite-Only) | User-supplied API key for agent's own LLM |
+| Cron scheduling | Production (Invite-Only) | Scheduled function execution within agent container |
+| Webhook ingress | Production (Invite-Only) | Reverse proxy to agent subdomain on :443 |
+| Persistent state | Production (Invite-Only) | Key-value store scoped per agent |
+| Secrets management | Production (Invite-Only) | Envelope encryption (AES-256-GCM) |
+| Function locking | Production (Invite-Only) | Protect Claude-authored functions from agent modification |
+| Agent cloning/forking | Production (Invite-Only) | Clone agent to new instance with divergent evolution |
+| Outbound communication | Production (Invite-Only) | Discord, WhatsApp, Slack, email channels |
+| Agent MCP tools | Production (Invite-Only) | `make_agent`, `list_agents`, `describe_agent`, `update_agent`, `delete_agent`, `clone_agent` |
 
 ---
 
@@ -164,7 +166,7 @@ An MCPWorks Agent is a **containerized, optionally intelligent, autonomous entit
 - Its own Docker container
 - Its own namespace (create + run endpoints)
 - Its own subdomain (`{agent-name}.agent.mcpworks.io`) for webhook ingress
-- An optional AI engine (user-configured, BYOAI via API key)
+- An optional AI engine (user-configured, BYOAI via API key: OpenAI, Anthropic, Google Gemini, xAI Grok, Mistral, DeepSeek, Moonshot Kimi, OpenRouter (200+ models), Groq, Together AI, Fireworks AI, Cohere, Cerebras, or Ollama (local). Any provider with OpenAI-compatible function calling works.)
 - Cron jobs for scheduled work
 - Webhook listeners for event-driven work
 - Persistent state between runs
@@ -240,6 +242,22 @@ Agents respond to two types of triggers:
 
 **Event-driven (webhooks):** External systems or MCPWorks functions can POST to `{agent-name}.agent.mcpworks.io`. The agent receives the webhook and its AI (or predefined logic) decides what to do.
 
+### Orchestration Modes
+
+When an agent trigger fires (cron or webhook), the agent can process it in one of three modes:
+
+**Direct:** Execute the handler function immediately and return its result. No AI involvement. Fastest, cheapest, most predictable. Use for automation-mode agents.
+
+**Reason First:** Send the trigger payload to the agent's AI engine. The AI reasons about the event and decides which functions to call (if any). Use when the appropriate response depends on context.
+
+**Run Then Reason:** Execute the handler function first, then send the result to the agent's AI for analysis and follow-up actions. Use for monitoring patterns where you want raw data plus intelligent interpretation.
+
+| Mode | AI Required | Latency | Token Cost | Best For |
+|------|------------|---------|------------|----------|
+| Direct | No | Lowest | $0 | Predictable automation |
+| Reason First | Yes | Medium | Per-invocation | Context-dependent decisions |
+| Run Then Reason | Yes | Highest | Per-invocation | Monitoring + analysis |
+
 **The watcher pattern:** A Function runs on a cron schedule monitoring something (price feeds, API changes, log patterns). When it detects a condition, it fires a webhook to an Agent. The Function is the sensor. The Agent is the brain.
 
 Example: Dogecoin monitoring
@@ -314,6 +332,17 @@ This is `git branch` for autonomous AI entities.
 | Enterprise ($599) | 20 (included) | 1 GB / 1.0 vCPU | 15 sec | 1 GB | Full Functions access |
 
 Agent add-ons beyond tier allocation: $9 (Builder), $19 (Pro), $29/$49 (Enterprise standard/heavy).
+
+### Agent AI Orchestration Limits
+
+When agents use AI reasoning (Reason First or Run Then Reason modes), orchestration is bounded per-invocation:
+
+| Limit | Builder | Pro | Enterprise |
+|-------|---------|-----|------------|
+| Max iterations per invocation | 5 | 10 | 25 |
+| Max tokens per invocation | 50,000 | 200,000 | 1,000,000 |
+| Max orchestration timeout | 60s | 120s | 300s |
+| Max functions per invocation | 3 | 10 | 25 |
 
 ---
 
@@ -443,7 +472,7 @@ For agents, secrets include:
 | Subscription | Billing state | user_id, tier, auto_renew |
 | AuditLog | Compliance trail | event, user_id, resource_id |
 
-### Agents (Design)
+### Agents (Production — Invite-Only)
 
 | Entity | Purpose | Key Fields |
 |--------|---------|-----------|
@@ -503,11 +532,12 @@ For agents, secrets include:
 - Auth, billing, usage tracking
 - Fleet propagation and instant rollback
 
-### Next (A0: Agents)
+### Live (A0: Agents — Invite-Only Preview)
 
 - Agent container runtime and namespace provisioning
 - Agent MCP endpoint (`*.agent.mcpworks.io`)
 - AI engine configuration (BYOAI at the agent level)
+- Orchestration modes (direct, reason_first, run_then_reason)
 - Cron scheduling within agent containers
 - Webhook ingress via agent subdomain
 - Persistent state and secrets management
@@ -565,6 +595,8 @@ For agents, secrets include:
 ---
 
 ## Changelog
+
+**v3.2.0 (2026-03-11):** Agents status updated from "Design" to "Production (Invite-Only)". Added orchestration modes (direct, reason_first, run_then_reason). Added AI orchestration tier limits. Expanded BYOAI supported provider list. Added agent availability note.
 
 **v3.1.0 (2026-03-11):** Updated to v6.0.0 pricing (Pro $179, Enterprise $599, Enterprise agents 20 included). Added container resources and agent add-ons to Agent Tiers table. Updated infrastructure section with Docker SDK approach, s-4vcpu-8gb upgrade, and scaling path. Added Agents Tech Spec and Investor Pitch to related documents.
 
