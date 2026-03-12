@@ -39,11 +39,19 @@ def _compute_next_run(cron_expression: str, _timezone: str = "UTC") -> datetime:
     return cron.get_next(datetime).replace(tzinfo=UTC)
 
 
-async def _execute_scheduled_function(
+async def _get_schedule_account(agent: Agent, db: AsyncSession) -> Account | None:
+    """Load the account for a scheduled agent execution."""
+    result = await db.execute(
+        select(Account).where(Account.id == agent.account_id).options(selectinload(Account.user))
+    )
+    return result.scalar_one_or_none()
+
+
+async def _execute_function_direct(
     schedule: AgentSchedule,
     agent: Agent,
-) -> None:
-    """Execute a single scheduled function and record the result."""
+) -> str | None:
+    """Execute a scheduled function directly. Returns output string or None."""
     function_name = schedule.function_name
     schedule_id = str(schedule.id)
 
@@ -53,7 +61,7 @@ async def _execute_scheduled_function(
             schedule_id=schedule_id,
             function_name=function_name,
         )
-        return
+        return None
 
     service_name, fn_name = function_name.split(".", 1)
 
@@ -70,15 +78,10 @@ async def _execute_scheduled_function(
         await db.flush()
         run_id = run.id
 
-        account_result = await db.execute(
-            select(Account)
-            .where(Account.id == agent.account_id)
-            .options(selectinload(Account.user))
-        )
-        account = account_result.scalar_one_or_none()
+        account = await _get_schedule_account(agent, db)
         if not account:
             logger.error("schedule_account_not_found", agent_id=str(agent.id))
-            return
+            return None
 
         namespace_result = await db.execute(
             select(Namespace).where(
@@ -93,7 +96,7 @@ async def _execute_scheduled_function(
                 agent_name=agent.name,
                 account_id=str(account.id),
             )
-            return
+            return None
 
         function_service = FunctionService(db)
         try:
@@ -110,12 +113,12 @@ async def _execute_scheduled_function(
                 error=str(e),
             )
             await _record_failure(db, run_id, schedule, str(e))
-            return
+            return None
 
         backend = get_backend(version.backend)
         if not backend:
             await _record_failure(db, run_id, schedule, f"Backend not available: {version.backend}")
-            return
+            return None
 
         execution_id = str(uuid_mod.uuid4())
         start_time = datetime.now(UTC)
@@ -130,11 +133,12 @@ async def _execute_scheduled_function(
             )
         except Exception as e:
             await _record_failure(db, run_id, schedule, str(e))
-            return
+            return None
 
         duration_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
         if result.success:
+            output_str = str(result.output)[:2000] if result.output else None
             await db.execute(
                 update(AgentRun)
                 .where(AgentRun.id == run_id)
@@ -142,7 +146,7 @@ async def _execute_scheduled_function(
                     status="completed",
                     completed_at=datetime.now(UTC),
                     duration_ms=duration_ms,
-                    result_summary=str(result.output)[:1000] if result.output else None,
+                    result_summary=output_str[:1000] if output_str else None,
                 )
             )
             await db.execute(
@@ -160,10 +164,84 @@ async def _execute_scheduled_function(
                 function=function_name,
                 duration_ms=duration_ms,
             )
+            return output_str
         else:
             await _record_failure(
                 db, run_id, schedule, result.error or "Unknown error", duration_ms
             )
+            return None
+
+
+async def _execute_scheduled_function(
+    schedule: AgentSchedule,
+    agent: Agent,
+) -> None:
+    """Execute a single scheduled function, respecting orchestration_mode."""
+    from mcpworks_api.tasks.orchestrator import run_orchestration
+
+    orch_mode = getattr(schedule, "orchestration_mode", "direct") or "direct"
+
+    if orch_mode != "direct" and not agent.ai_engine:
+        logger.warning(
+            "schedule_ai_fallback_direct",
+            schedule_id=str(schedule.id),
+            reason="no_ai_configured",
+        )
+        orch_mode = "direct"
+
+    if orch_mode == "direct":
+        await _execute_function_direct(schedule, agent)
+        return
+
+    async with get_db_context() as db:
+        account = await _get_schedule_account(agent, db)
+    if not account:
+        logger.error("schedule_account_not_found", agent_id=str(agent.id))
+        return
+
+    tier = account.user.effective_tier if account.user else "builder-agent"
+
+    if orch_mode == "run_then_reason":
+        output = await _execute_function_direct(schedule, agent)
+        trigger_context = (
+            f"Scheduled execution of {schedule.function_name} completed.\n"
+            f"Output: {output or '(no output)'}"
+        )
+    else:
+        trigger_context = (
+            f"Scheduled trigger for function {schedule.function_name}. Decide what actions to take."
+        )
+
+    orch_result = await run_orchestration(
+        agent=agent,
+        trigger_type="cron",
+        trigger_context=trigger_context,
+        trigger_data={"schedule_id": str(schedule.id), "function_name": schedule.function_name},
+        tier=tier,
+        account=account,
+    )
+
+    async with get_db_context() as db:
+        await db.execute(
+            update(AgentSchedule)
+            .where(AgentSchedule.id == schedule.id)
+            .values(
+                consecutive_failures=0
+                if orch_result.success
+                else schedule.consecutive_failures + 1,
+                last_run_at=datetime.now(UTC),
+                next_run_at=_compute_next_run(schedule.cron_expression, schedule.timezone),
+            )
+        )
+
+    logger.info(
+        "schedule_orchestration_complete",
+        schedule_id=str(schedule.id),
+        mode=orch_mode,
+        success=orch_result.success,
+        iterations=orch_result.iterations,
+        functions_called=len(orch_result.functions_called),
+    )
 
 
 async def _record_failure(
