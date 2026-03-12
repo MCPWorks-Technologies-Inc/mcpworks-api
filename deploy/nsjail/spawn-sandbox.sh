@@ -81,6 +81,7 @@ mount -t tmpfs -o "size=${TMPFS_SIZE}m,mode=0755" tmpfs "${WORKSPACE}"
 cleanup() {
     if [ -n "${NETNS:-}" ]; then
         local _iface="${DEFAULT_IFACE:-eth0}"
+        iptables -D INPUT -i "${VETH_HOST}" -j DROP 2>/dev/null || true
         iptables -t nat -D POSTROUTING -s "${SANDBOX_IP}/32" -o "${_iface}" -j MASQUERADE 2>/dev/null || true
         iptables -D FORWARD -i "${VETH_HOST}" -o "${_iface}" -j ACCEPT 2>/dev/null || true
         iptables -D FORWARD -i "${_iface}" -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
@@ -205,6 +206,12 @@ if [ "${TIER}" != "free" ]; then
 
     ip addr add "${VETH_GW}/24" dev "${VETH_HOST}"
     ip link set "${VETH_HOST}" up
+
+    # Block sandbox from reaching container services (API on :8000, etc).
+    # Without this, traffic to the gateway IP (10.X.Y.1) is locally delivered
+    # and bypasses the FORWARD chain entirely. MACVLAN had inherent parent-child
+    # isolation; veth does not — INPUT DROP is the equivalent.
+    iptables -I INPUT -i "${VETH_HOST}" -j DROP
 
     iptables -I FORWARD -i "${VETH_HOST}" -d 169.254.169.254/32 -j DROP
     iptables -I FORWARD -i "${VETH_HOST}" -d 172.16.0.0/12 -j DROP
