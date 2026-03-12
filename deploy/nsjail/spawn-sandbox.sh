@@ -77,8 +77,20 @@ WORKSPACE="${WORKSPACE_BASE}/ws-${EXEC_ID}"
 mkdir -p "${WORKSPACE}"
 mount -t tmpfs -o "size=${TMPFS_SIZE}m,mode=0755" tmpfs "${WORKSPACE}"
 
-# Cleanup function: unmount tmpfs and remove directory
+# Cleanup function: unmount tmpfs, remove network namespace, clean iptables
 cleanup() {
+    if [ -n "${NETNS:-}" ]; then
+        iptables -t nat -D POSTROUTING -s "${SANDBOX_IP}/32" -o eth0 -j MASQUERADE 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -o eth0 -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i eth0 -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -p udp --dport 53 -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -p udp -j DROP 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -d 169.254.169.254/32 -j DROP 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -d 172.16.0.0/12 -j DROP 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -d 10.0.0.0/8 -j DROP 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -d 192.168.0.0/16 -j DROP 2>/dev/null || true
+        ip netns del "${NETNS}" 2>/dev/null || true
+    fi
     umount "${WORKSPACE}" 2>/dev/null || true
     rmdir "${WORKSPACE}" 2>/dev/null || true
 }
@@ -133,33 +145,71 @@ cat > "${WORKSPACE}/.fake_version" <<'VERSION'
 Linux version 0.0.0 (sandbox)
 VERSION
 
-# clone_newnet: each sandbox gets its own network namespace.
-# /proc/net is automatically empty (no host network info visible).
-# Free tier: empty network namespace = zero connectivity (no MACVLAN).
-# Paid tiers: MACVLAN on eth0 gives outbound internet access.
+# Network isolation:
+# Free tier: nsjail creates empty network namespace (clone_newnet) = zero connectivity.
+# Paid tiers: Pre-configured network namespace with veth pair for internet access.
+#   nsjail runs inside this namespace with clone_newnet DISABLED.
+#
+# Architecture (paid tiers):
+#   sandbox (10.X.Y.2) --[veth]--> container (10.X.Y.1) --[NAT/eth0]--> internet
+#
+# Why veth instead of MACVLAN: MACVLAN on Docker veth pairs is unreliable.
+# Docker bridges filter unknown MAC addresses created by MACVLAN child
+# interfaces, causing zero connectivity (PROBLEM-016). Veth pairs with NAT
+# is how Docker itself does networking — proven on all kernel versions.
 
-# All tiers use UID 65534 (nobody). Network isolation is per-namespace
-# via clone_newnet, not per-UID via iptables.
 SANDBOX_UID=65534
 
 chown -R "${SANDBOX_UID}:${SANDBOX_UID}" "${WORKSPACE}"
 
-# Derive unique MACVLAN IP from exec_id for paid tiers.
-# Must be on the same subnet as the container (172.18.0.0/16) so the
-# gateway (172.18.0.1) is directly reachable from the MACVLAN interface.
-# Use 172.18.128-254.1-254 range to avoid conflicts with Docker-assigned IPs
-# (Docker assigns from the low end of the subnet).
+# Derive unique subnet octets from exec_id hash for veth pair addressing.
+# Each sandbox gets its own /24 subnet: 10.{octet3}.{octet4}.0/24
 _exec_hash=$(echo -n "${EXEC_ID}" | md5sum | cut -c1-4)
 _hex3=$(echo "${_exec_hash}" | cut -c1-2)
 _hex4=$(echo "${_exec_hash}" | cut -c3-4)
 _octet3=$(( 16#${_hex3} ))
 _octet4=$(( 16#${_hex4} ))
-# Clamp octet3 to 128-254 (high range, away from Docker's low-range allocations)
-_octet3=$(( (_octet3 % 127) + 128 ))
-# Clamp octet4 to 1-254
+# Clamp to 1-254 to avoid network/broadcast addresses
+_octet3=$(( (_octet3 % 254) + 1 ))
 [ "${_octet4}" -eq 0 ] && _octet4=1
 [ "${_octet4}" -eq 255 ] && _octet4=254
-MACVLAN_IP="172.18.${_octet3}.${_octet4}"
+
+NETNS=""
+VETH_HOST=""
+SANDBOX_IP=""
+if [ "${TIER}" != "free" ]; then
+    SHORT_ID="${EXEC_ID:0:8}"
+    NETNS="mcpw-${SHORT_ID}"
+    VETH_HOST="vh${SHORT_ID}"
+    VETH_SANDBOX="vs${SHORT_ID}"
+    VETH_GW="10.${_octet3}.${_octet4}.1"
+    SANDBOX_IP="10.${_octet3}.${_octet4}.2"
+
+    echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
+
+    ip netns add "${NETNS}"
+
+    ip link add "${VETH_HOST}" type veth peer name "${VETH_SANDBOX}"
+    ip link set "${VETH_SANDBOX}" netns "${NETNS}"
+
+    ip netns exec "${NETNS}" ip link set lo up
+    ip netns exec "${NETNS}" ip addr add "${SANDBOX_IP}/24" dev "${VETH_SANDBOX}"
+    ip netns exec "${NETNS}" ip link set "${VETH_SANDBOX}" up
+    ip netns exec "${NETNS}" ip route add default via "${VETH_GW}"
+
+    ip addr add "${VETH_GW}/24" dev "${VETH_HOST}"
+    ip link set "${VETH_HOST}" up
+
+    iptables -I FORWARD -i "${VETH_HOST}" -d 169.254.169.254/32 -j DROP
+    iptables -I FORWARD -i "${VETH_HOST}" -d 172.16.0.0/12 -j DROP
+    iptables -I FORWARD -i "${VETH_HOST}" -d 10.0.0.0/8 -j DROP
+    iptables -I FORWARD -i "${VETH_HOST}" -d 192.168.0.0/16 -j DROP
+    iptables -A FORWARD -i "${VETH_HOST}" -p udp --dport 53 -j ACCEPT
+    iptables -A FORWARD -i "${VETH_HOST}" -p udp -j DROP
+    iptables -A FORWARD -i "${VETH_HOST}" -o eth0 -j ACCEPT
+    iptables -A FORWARD -i eth0 -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -t nat -A POSTROUTING -s "${SANDBOX_IP}/32" -o eth0 -j MASQUERADE
+fi
 
 # Build nsjail arguments
 NSJAIL_ARGS=(
@@ -201,21 +251,20 @@ if [ -d "${CGROUP_PARENT}" ]; then
     NSJAIL_ARGS+=(--cgroup_cpu_parent "${CGROUP_PARENT}")
 fi
 
-# Network isolation via clone_newnet:
-# Free tier: empty network namespace (no MACVLAN) = zero connectivity.
-# Paid tiers: MACVLAN on eth0 gives internet access via container gateway.
-if [ "${TIER}" != "free" ]; then
-    NSJAIL_ARGS+=(--macvlan_iface eth0)
-    NSJAIL_ARGS+=(--macvlan_vs_ip "${MACVLAN_IP}")
-    NSJAIL_ARGS+=(--macvlan_vs_nm "255.255.0.0")
-    NSJAIL_ARGS+=(--macvlan_vs_gw "172.18.0.1")
+# Network: paid tiers use pre-configured namespace (veth pair).
+# nsjail must NOT create a new network namespace for paid tiers.
+NSJAIL_PREFIX=""
+if [ -n "${NETNS}" ]; then
+    NSJAIL_ARGS+=(--disable_clone_newnet)
+    NSJAIL_PREFIX="ip netns exec ${NETNS}"
 fi
 
 # Execute nsjail with tier-specific overrides.
 # --execute_fd: use execveat(fd) instead of execve(path), required because
 # seccomp blocks execve. This prevents any shell execution (posix.system,
 # subprocess, /bin/sh) at the kernel level after Python starts.
-"${NSJAIL}" \
+# Paid tiers: run inside pre-configured network namespace via ip netns exec.
+${NSJAIL_PREFIX} "${NSJAIL}" \
     "${NSJAIL_ARGS[@]}" \
     --execute_fd \
     -- \

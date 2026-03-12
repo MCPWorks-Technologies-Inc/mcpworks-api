@@ -65,17 +65,14 @@ if [ "${SANDBOX_DEV_MODE:-true}" != "true" ]; then
         echo "WARNING: Sandbox packages not found"
     fi
 
-    # Network isolation via clone_newnet (per-sandbox network namespaces).
+    # Network isolation (per-sandbox network namespaces).
     #
-    # Free tier:  empty network namespace = zero connectivity (no setup needed).
-    # Paid tiers: MACVLAN on container's eth0, unique IP per sandbox.
-    #
-    # MACVLAN traffic bypasses the container's network namespace entirely,
-    # so iptables rules must be on the HOST, not here.
-    # See: scripts/setup-sandbox-network.sh (run on host after deployment).
-    echo "Network isolation: clone_newnet (per-sandbox network namespaces)"
+    # Free tier:  nsjail clone_newnet creates empty namespace = zero connectivity.
+    # Paid tiers: spawn-sandbox.sh creates veth pair with NAT through eth0.
+    #             iptables filtering happens inside container (not on host).
+    echo "Network isolation: per-sandbox network namespaces"
     echo "  Free tier:  empty netns (zero connectivity)"
-    echo "  Paid tiers: MACVLAN on eth0 (host iptables required)"
+    echo "  Paid tiers: veth pair + NAT through eth0"
 
     echo "Sandbox initialization complete"
 fi
