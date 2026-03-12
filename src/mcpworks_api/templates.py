@@ -19,6 +19,7 @@ class FunctionTemplate:
         output_schema: dict[str, Any],
         tags: list[str],
         requirements: list[str] | None = None,
+        requires_network: bool = False,
     ):
         self.name = name
         self.description = description
@@ -27,19 +28,23 @@ class FunctionTemplate:
         self.output_schema = output_schema
         self.tags = tags
         self.requirements = requirements or []
+        self.requires_network = requires_network
 
     def to_dict(self) -> dict[str, Any]:
         """Return template as a dict for MCP response."""
-        return {
+        d: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "tags": self.tags,
             "requirements": self.requirements,
         }
+        if self.requires_network:
+            d["requires_network"] = True
+        return d
 
     def to_full_dict(self) -> dict[str, Any]:
         """Return template with code and schemas for cloning."""
-        return {
+        d: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "code": self.code,
@@ -48,6 +53,9 @@ class FunctionTemplate:
             "tags": self.tags,
             "requirements": self.requirements,
         }
+        if self.requires_network:
+            d["requires_network"] = True
+        return d
 
 
 TEMPLATES: dict[str, FunctionTemplate] = {
@@ -137,7 +145,7 @@ def main(input_data):
     ),
     "api-connector": FunctionTemplate(
         name="api-connector",
-        description="Call an external API and transform the response",
+        description="Call an external API and transform the response. REQUIRES NETWORK ACCESS (Builder tier or above).",
         code="""\
 import httpx
 
@@ -186,10 +194,11 @@ def main(input_data):
         },
         tags=["http", "integration"],
         requirements=["httpx"],
+        requires_network=True,
     ),
     "slack-notifier": FunctionTemplate(
         name="slack-notifier",
-        description="Send a formatted message to a Slack webhook",
+        description="Send a formatted message to a Slack webhook. REQUIRES NETWORK ACCESS (Builder tier or above).",
         code="""\
 import httpx
 
@@ -234,6 +243,7 @@ def main(input_data):
         },
         tags=["notification", "slack", "integration"],
         requirements=["httpx"],
+        requires_network=True,
     ),
     "scheduled-report": FunctionTemplate(
         name="scheduled-report",

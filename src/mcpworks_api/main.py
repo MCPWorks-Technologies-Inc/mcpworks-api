@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+import asyncio
+import contextlib
 import logging
 import sys
 from collections.abc import AsyncGenerator
@@ -37,14 +39,22 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     - Startup: Initialize database, Redis, and MCP session manager
     - Shutdown: Close all connections gracefully
     """
+    from mcpworks_api.tasks.scheduler import run_scheduler_loop
+
     # Startup
     await init_db()
     await init_redis()
+
+    scheduler_task = asyncio.create_task(run_scheduler_loop())
 
     async with session_manager.run():
         yield
 
     # Shutdown
+    scheduler_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await scheduler_task
+
     await close_db()
     await close_redis()
 
