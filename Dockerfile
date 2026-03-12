@@ -4,7 +4,7 @@
 # All packages from the package registry (src/mcpworks_api/sandbox/packages.py)
 # are pre-installed here. Keep this list in sync with PACKAGE_REGISTRY.
 # =============================================================================
-FROM python:3.11-slim AS sandbox-builder
+FROM python:3.14-slim AS sandbox-builder
 
 # Install build deps for packages with C extensions (lxml, cryptography, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -131,7 +131,7 @@ RUN git clone https://github.com/google/nsjail.git /nsjail \
 # =============================================================================
 # Stage 3: API venv — existing build stage
 # =============================================================================
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 ARG DEV_MODE=0
 
@@ -156,7 +156,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # =============================================================================
 # Stage 4: Production image
 # =============================================================================
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
