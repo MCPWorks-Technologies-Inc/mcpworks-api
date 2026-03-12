@@ -1256,6 +1256,20 @@ class CreateMCPHandler:
             result["created_by"] = created_by
         if credential_warnings:
             result["warnings"] = credential_warnings
+
+        tier = resolve_execution_tier(self.account.user.effective_tier)
+        cfg = TIER_CONFIG[tier]
+        if not cfg["network"] and code:
+            network_libs = {"httpx", "requests", "aiohttp", "urllib.request", "socket"}
+            used = [lib for lib in network_libs if lib in code]
+            if used:
+                warnings = result.setdefault("warnings", [])
+                warnings.append(
+                    f"Your code imports network libraries ({', '.join(used)}) but your tier "
+                    f"does not have network access. These will fail at runtime. "
+                    f"Upgrade to Builder tier or above for network access."
+                )
+
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _update_function(
@@ -1456,10 +1470,19 @@ class CreateMCPHandler:
         )
 
     async def _list_templates(self) -> MCPToolResult:
-        """List available function templates."""
+        """List available function templates, with network warnings for blocked tiers."""
         from mcpworks_api.templates import list_templates
 
-        return MCPToolResult(content=[MCPContent(text=json.dumps({"templates": list_templates()}))])
+        tier = resolve_execution_tier(self.account.user.effective_tier)
+        cfg = TIER_CONFIG[tier]
+        templates = list_templates()
+        if not cfg["network"]:
+            for t in templates:
+                if t.get("requires_network"):
+                    t["warning"] = (
+                        "This template requires network access. Your tier does not have network access."
+                    )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"templates": templates}))])
 
     async def _describe_template(self, name: str) -> MCPToolResult:
         """Get full template details including code and schemas."""
