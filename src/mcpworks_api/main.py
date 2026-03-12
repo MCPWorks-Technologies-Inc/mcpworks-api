@@ -208,6 +208,10 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(v1_router)
 
+    from mcpworks_api.api.v1.webhooks import router as webhook_router
+
+    app.include_router(webhook_router)
+
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:
         setup_metrics(app)

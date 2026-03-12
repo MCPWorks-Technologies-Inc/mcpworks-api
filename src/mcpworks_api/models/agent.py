@@ -27,6 +27,7 @@ AGENT_STATUSES = ("creating", "running", "stopped", "error", "destroying")
 RUN_STATUSES = ("running", "completed", "failed", "timeout")
 TRIGGER_TYPES = ("cron", "webhook", "manual", "ai")
 CHANNEL_TYPES = ("discord", "slack", "whatsapp", "email")
+ORCHESTRATION_MODES = ("direct", "reason_first", "run_then_reason")
 AI_ENGINES = (
     "anthropic",
     "openai",
@@ -66,6 +67,7 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     memory_limit_mb: Mapped[int] = mapped_column(Integer, nullable=False, default=256)
     cpu_limit: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auto_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
     cloned_from_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agents.id", ondelete="SET NULL"),
@@ -118,6 +120,12 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     def validate_status(self, key: str, value: str) -> str:
         if value not in AGENT_STATUSES:
             raise ValueError(f"Invalid agent status: {value}")
+        return value
+
+    @validates("auto_channel")
+    def validate_auto_channel(self, key: str, value: str | None) -> str | None:
+        if value is not None and value not in CHANNEL_TYPES:
+            raise ValueError(f"Invalid auto_channel type: {value}")
         return value
 
 
@@ -177,6 +185,7 @@ class AgentSchedule(Base, UUIDMixin):
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="UTC")
     failure_policy: Mapped[dict] = mapped_column(JSONB, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    orchestration_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="direct")
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -187,6 +196,12 @@ class AgentSchedule(Base, UUIDMixin):
     agent: Mapped["Agent"] = relationship("Agent", back_populates="schedules")
 
     __table_args__ = (Index("ix_agent_schedules_agent_id", "agent_id"),)
+
+    @validates("orchestration_mode")
+    def validate_orchestration_mode(self, key: str, value: str) -> str:
+        if value not in ORCHESTRATION_MODES:
+            raise ValueError(f"Invalid orchestration mode: {value}")
+        return value
 
 
 class AgentWebhook(Base, UUIDMixin):
@@ -200,6 +215,7 @@ class AgentWebhook(Base, UUIDMixin):
     path: Mapped[str] = mapped_column(String(255), nullable=False)
     handler_function_name: Mapped[str] = mapped_column(String(255), nullable=False)
     secret_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    orchestration_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="direct")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default="now()"
@@ -211,6 +227,12 @@ class AgentWebhook(Base, UUIDMixin):
         UniqueConstraint("agent_id", "path", name="uq_agent_webhook_path"),
         Index("ix_agent_webhooks_agent_id", "agent_id"),
     )
+
+    @validates("orchestration_mode")
+    def validate_orchestration_mode(self, key: str, value: str) -> str:
+        if value not in ORCHESTRATION_MODES:
+            raise ValueError(f"Invalid orchestration mode: {value}")
+        return value
 
 
 class AgentState(Base, UUIDMixin):
