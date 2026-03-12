@@ -80,9 +80,10 @@ mount -t tmpfs -o "size=${TMPFS_SIZE}m,mode=0755" tmpfs "${WORKSPACE}"
 # Cleanup function: unmount tmpfs, remove network namespace, clean iptables
 cleanup() {
     if [ -n "${NETNS:-}" ]; then
-        iptables -t nat -D POSTROUTING -s "${SANDBOX_IP}/32" -o eth0 -j MASQUERADE 2>/dev/null || true
-        iptables -D FORWARD -i "${VETH_HOST}" -o eth0 -j ACCEPT 2>/dev/null || true
-        iptables -D FORWARD -i eth0 -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+        local _iface="${DEFAULT_IFACE:-eth0}"
+        iptables -t nat -D POSTROUTING -s "${SANDBOX_IP}/32" -o "${_iface}" -j MASQUERADE 2>/dev/null || true
+        iptables -D FORWARD -i "${VETH_HOST}" -o "${_iface}" -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i "${_iface}" -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
         iptables -D FORWARD -i "${VETH_HOST}" -p udp --dport 53 -j ACCEPT 2>/dev/null || true
         iptables -D FORWARD -i "${VETH_HOST}" -p udp -j DROP 2>/dev/null || true
         iptables -D FORWARD -i "${VETH_HOST}" -d 169.254.169.254/32 -j DROP 2>/dev/null || true
@@ -185,6 +186,11 @@ if [ "${TIER}" != "free" ]; then
     VETH_GW="10.${_octet3}.${_octet4}.1"
     SANDBOX_IP="10.${_octet3}.${_octet4}.2"
 
+    # Detect the container's default outbound interface (may not be eth0 when
+    # the container is on multiple Docker networks).
+    DEFAULT_IFACE=$(ip route show default | awk '{print $5}' | head -1)
+    DEFAULT_IFACE="${DEFAULT_IFACE:-eth0}"
+
     echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
 
     ip netns add "${NETNS}"
@@ -206,9 +212,9 @@ if [ "${TIER}" != "free" ]; then
     iptables -I FORWARD -i "${VETH_HOST}" -d 192.168.0.0/16 -j DROP
     iptables -A FORWARD -i "${VETH_HOST}" -p udp --dport 53 -j ACCEPT
     iptables -A FORWARD -i "${VETH_HOST}" -p udp -j DROP
-    iptables -A FORWARD -i "${VETH_HOST}" -o eth0 -j ACCEPT
-    iptables -A FORWARD -i eth0 -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -t nat -A POSTROUTING -s "${SANDBOX_IP}/32" -o eth0 -j MASQUERADE
+    iptables -A FORWARD -i "${VETH_HOST}" -o "${DEFAULT_IFACE}" -j ACCEPT
+    iptables -A FORWARD -i "${DEFAULT_IFACE}" -o "${VETH_HOST}" -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -t nat -A POSTROUTING -s "${SANDBOX_IP}/32" -o "${DEFAULT_IFACE}" -j MASQUERADE
 fi
 
 # Build nsjail arguments
