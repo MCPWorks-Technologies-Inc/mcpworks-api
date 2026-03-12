@@ -6,7 +6,125 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
-No open issues.
+### PROBLEM-016: Sandbox Network Connectivity Failure — Paid Tiers Cannot Reach External Services
+
+**Filed:** 2026-03-12
+**Status:** OPEN (investigating)
+**Severity:** P1 — All paid-tier sandbox executions requiring network access are broken
+**Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io — DogeDetective agent
+**Affected tiers:** Builder, Pro, Enterprise (Free tier correctly has no network — working as designed)
+
+#### Symptoms
+
+Agent functions that make HTTP requests (e.g., CoinGecko API, Reddit API) fail with:
+```
+[Errno -3] Temporary failure in name resolution
+```
+
+User-initiated diagnostics from inside the sandbox revealed:
+- `resolv.conf` correctly points to `8.8.8.8` and `8.8.4.4` (Google DNS)
+- TCP `connect_ex` to `8.8.8.8:53` returns error 11 (`EAGAIN`) — not a timeout, actively rejected
+- TCP `connect_ex` to `1.1.1.1:53` returns error 11 (`EAGAIN`) — same
+- `/proc/net/route` access denied — can't inspect routing table
+- Hostname: `unknown`, can't resolve itself
+- No IPv6 available
+- All domain resolution fails: `api.coingecko.com`, `google.com`, `reddit.com`
+
+This is **not a DNS issue** — it's **zero network connectivity**. The sandbox has a network namespace with no working egress path.
+
+#### Architecture Context
+
+Network isolation uses `clone_newnet: true` (nsjail config) to give each sandbox its own network namespace:
+
+- **Free tier:** Empty network namespace, no MACVLAN → zero connectivity (correct, per spec)
+- **Paid tiers:** MACVLAN interface on container's `eth0` with unique IP from `172.18.128-254.X.Y`
+
+The MACVLAN is configured in `spawn-sandbox.sh` lines 207-212:
+```bash
+if [ "${TIER}" != "free" ]; then
+    NSJAIL_ARGS+=(--macvlan_iface eth0)
+    NSJAIL_ARGS+=(--macvlan_vs_ip "${MACVLAN_IP}")
+    NSJAIL_ARGS+=(--macvlan_vs_nm "255.255.0.0")
+    NSJAIL_ARGS+=(--macvlan_vs_gw "172.18.0.1")
+fi
+```
+
+#### Root Cause Analysis (In Progress)
+
+**What we've confirmed works in the code:**
+
+| Component | Status | Evidence |
+|-----------|--------|---------|
+| `clone_newnet: true` | Correct | `python.cfg` line 27 |
+| MACVLAN creation for paid tiers | Correct | `spawn-sandbox.sh` lines 207-212 |
+| IP assignment (172.18.128-254.X.Y) | Correct | Hash-based derivation, same /16 subnet as gateway |
+| Gateway specification (172.18.0.1) | Correct | Docker bridge gateway |
+| Seccomp allows networking | Correct | `socket`, `connect`, `bind`, `sendto`, `recvfrom`, `ioctl` all in ALLOW list |
+| nsjail adds default route via `--macvlan_vs_gw` | Confirmed | nsjail source `net.cc`: `ioctl(SIOCADDRT)` with dst=0.0.0.0 via gateway |
+| Host iptables rules (if applied) | Correct | `setup-sandbox-network.sh` allows DNS, blocks internal, NATs outbound |
+
+**Probable failure points (need production host verification):**
+
+1. **MACVLAN on Docker veth:** The container's `eth0` is a veth pair endpoint connected to the Docker bridge. MACVLAN on veth has known kernel limitations — some configurations don't support it, or the Docker bridge may not forward traffic from MACVLAN-originated MAC addresses. This is the most likely root cause.
+
+2. **Host iptables not applied or lost:** `setup-sandbox-network.sh` must run on the HOST (not inside the container) because MACVLAN traffic bypasses the container's network namespace. If the host's FORWARD chain has a default DROP policy and these rules haven't been applied (or were lost on reboot), all sandbox traffic is silently dropped.
+
+3. **Docker bridge MAC filtering:** Docker bridges may only forward traffic from known MAC addresses (the container's veth MAC). MACVLAN creates a new virtual MAC address that the bridge hasn't seen, and the bridge may drop it.
+
+4. **ARP resolution failure:** The sandbox needs to ARP for the gateway (172.18.0.1) before sending any packets. If the Docker bridge doesn't respond to ARP from the MACVLAN interface's MAC, no traffic flows. Error 11 (EAGAIN) from `connect_ex` is consistent with ARP failing silently.
+
+#### Verification Steps Needed (on production host)
+
+```bash
+# 1. Check if host iptables rules exist
+iptables -L FORWARD -n -v | grep 172.18.128
+iptables -t nat -L POSTROUTING -n -v | grep 172.18.128
+
+# 2. Check Docker bridge settings
+brctl show  # or: bridge link show
+# Check if promiscuous mode is enabled on the bridge
+
+# 3. Test MACVLAN on Docker veth from host
+# Create a test MACVLAN interface on the container's veth and try to ping gateway
+docker exec mcpworks-api ip link show eth0
+ip link add test-mv link <container-veth-on-host> type macvlan mode bridge
+ip addr add 172.18.200.1/16 dev test-mv
+ip link set test-mv up
+ping -c 1 172.18.0.1  # Does gateway respond?
+
+# 4. Check kernel support
+cat /proc/sys/net/ipv4/conf/all/forwarding  # Must be 1
+dmesg | grep -i macvlan  # Any kernel errors?
+```
+
+#### Workaround Options (if MACVLAN is fundamentally broken on Docker veth)
+
+**Option A — veth pair instead of MACVLAN (most robust):**
+Replace MACVLAN with a veth pair: create one end on the host/container, move the other into the sandbox namespace, add IP/route. This is how Docker itself does networking and works reliably on all kernel versions.
+
+**Option B — `--disable_clone_newnet` + iptables isolation (simpler, less isolated):**
+Disable network namespacing and use UID-based iptables rules for network access control. Reduces isolation but avoids the MACVLAN-on-veth problem entirely. Was the previous architecture before commit `4a01d99`.
+
+**Option C — Docker `--net=host` + MACVLAN on physical interface:**
+Run the container with host networking so MACVLAN attaches to the physical NIC instead of a veth. Simpler but reduces container isolation.
+
+#### Related
+
+- **PROBLEM-011** (RESOLVED): Agent tiers falling back to free tier — fixed the tier mapping but didn't address underlying network connectivity
+- **SECURITY_AUDIT.md FINDING-38:** Docker gateway reachable on 80/443 during audit — implies MACVLAN worked at some point, or was tested differently
+- **Commit `4a01d99`** (Mar 9): Original clone_newnet + MACVLAN implementation
+- **Commit `16490da`** (Mar 9): Subnet fix (10.200 → 172.18) — addressed "route unreachable" but not the deeper MACVLAN-on-veth question
+- **Commit `0b4df92`** (Mar 8): Disabled clone_newnet in smoketest because it broke network for tiktoken — early signal that network in sandboxes wasn't working
+
+#### Files
+
+| File | Purpose |
+|------|---------|
+| `deploy/nsjail/python.cfg` | nsjail config — `clone_newnet: true` (line 27) |
+| `deploy/nsjail/spawn-sandbox.sh` | MACVLAN setup for paid tiers (lines 207-212) |
+| `src/mcpworks_api/backends/sandbox.py` | Tier config with network flags (lines 50-75) |
+| `scripts/setup-sandbox-network.sh` | Host-level iptables rules (must be applied on HOST) |
+| `deploy/nsjail/seccomp.policy` | Seccomp allowlist — networking syscalls allowed (lines 180-198) |
 
 ---
 

@@ -86,8 +86,8 @@ NSJAIL_ARGS=(
 )
 
 # Smoketest needs network access (tiktoken downloads encoding data).
-# Config has clone_newnet:true for production, but smoketest runs in CI
-# without MACVLAN setup. Disable network namespace isolation for smoketest.
+# Config has clone_newnet:true for production (free tier isolation).
+# Smoketest runs in CI without veth pair setup, so disable clone_newnet.
 NSJAIL_ARGS+=(--disable_clone_newnet)
 
 # Overlay fake /proc files (matches spawn-sandbox.sh)

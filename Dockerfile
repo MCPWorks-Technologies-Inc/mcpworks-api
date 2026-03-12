@@ -166,6 +166,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libprotobuf32 \
     libnl-3-200 \
     libnl-route-3-200 \
+    iproute2 \
     iptables \
     uidmap \
     curl \
