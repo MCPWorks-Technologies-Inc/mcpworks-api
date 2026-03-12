@@ -6,13 +6,34 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
-### ~~PROBLEM-006: Code-Mode Execution Not Exposed via MCP Run Server~~
+### PROBLEM-013: Agent Orchestration Architecture Undocumented — Schedule/Channel/Function Integration Unclear
 
-**Status:** RESOLVED (2026-02-20)
+**Filed:** 2026-03-11
+**Status:** OPEN
+**Severity:** High (blocking agent usability)
+**Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io — DogeDetective agent
+**Namespace:** `dogedetective`
 
-Code-mode was fully implemented but hidden behind a `?mode=code` query parameter, while the default was `"tools"`. Flipped the default: `{ns}.run.mcpworks.io/mcp` now serves code-mode by default (single `execute` tool). Per-function tools mode available via `?mode=tools`.
+**Problem:** User built a full agent with functions, schedules, webhooks, and a Discord channel, but cannot determine how the pieces connect. The agent's AI model is configured but never invoked by the platform. All functions are self-contained because the orchestration model is undocumented.
 
-Remaining sub-issue: functions created mid-session aren't discoverable until MCP client reconnects (client-side `tools/list` snapshot limitation). Code-mode sidesteps this since the AI writes code that imports from the `functions` package — no tool discovery needed.
+**Specific questions requiring answers:**
+
+1. **Schedule → AI flow:** When a scheduled function runs and returns output, does that output get passed to the agent's AI model for processing? Or does the schedule just silently execute the function?
+
+2. **Agent as tool-caller:** When the AI agent is invoked, does it automatically see all functions in its namespace as callable tools? Can it decide to call `search-news` or `analyze-price` during reasoning?
+
+3. **Channel output routing:** When a Discord channel is configured via `add_channel`, how does the AI agent post to it? Is there an implicit `send_message` / `post_to_channel` tool, or does the agent's text output automatically route to the channel?
+
+4. **Webhook external URL:** `add_webhook` returns a webhook ID and path but no callable external URL. What is the full URL to POST to for triggering a webhook?
+
+5. **Environment isolation:** Functions cannot access the agent's AI config (e.g., OpenRouter API key). The key is configured on the agent via `configure_agent_ai` but the sandbox only exposes `PYTHONPATH`, `HOME`, `LANG`, and SSL vars. Users are forced to duplicate API keys as function env vars.
+
+6. **Complete lifecycle:** What is the intended trigger → AI → action flow?
+   `Schedule fires → [?] → AI agent processes → [how does it call tools?] → [how does it output to channels?]`
+
+**Impact:** Users build agents but end up with disconnected parts — functions that do everything themselves, an AI model that's never invoked, and channels that receive nothing. The agent abstraction isn't delivering its value.
+
+**User's observation:** *"Right now? Nothing. The agent is running with an AI model and system prompt configured, but everything is handled by standalone functions that never involve it."*
 
 ---
 
@@ -32,58 +53,54 @@ The question of how to safely log MCP server requests (given PII, credentials, a
 
 ---
 
----
+## Resolved Issues
 
-### ~~PROBLEM-007: Legacy ServiceRouter and math/agent endpoints~~
+### ~~PROBLEM-014: Schedules Not Executing — Zero Observed Runs Despite Enabled Status~~
 
-**Status:** RESOLVED (2026-03-01)
+**Filed:** 2026-03-12
+**Status:** RESOLVED (2026-03-12, commit `f2df73c`)
+**Reported by:** External user (simon.carr@gmail.com) + internal testing
+**Namespaces affected:** `dogedetective` (builder-agent), `mcpworkssocial` (pro-agent)
 
-Deleted all legacy gateway-era dead code:
-- `services/router.py`, `services/execution.py`, `api/v1/services.py`, `schemas/service.py`, `scripts/seed_data.py`
-- `tests/unit/test_service_router.py`, `tests/unit/test_execution_service.py`, `tests/unit/test_router_service.py`, `tests/integration/test_agent_endpoints.py`
-- Removed `services_router` import/include from `api/v1/__init__.py`
-- Removed legacy service schema exports from `schemas/__init__.py`
-- Removed legacy config fields (`math_service_url`, `agent_service_url`, `agent_callback_secret`, `service_timeout_seconds`) from `config.py`
-- Removed dead `verify_agent_callback_secret()` dependency from `dependencies.py`
+`add_schedule` stored metadata but nothing executed it. The `agent-runtime/` scheduler existed but was never deployed (no docker-compose reference). Fixed by adding an in-process scheduler to the API server that polls `AgentSchedule` rows every 30s, executes due functions via the sandbox backend, records `AgentRun` results, and applies failure policies (continue, auto_disable, backoff). Added `croniter` dependency for cron expression parsing.
 
 ---
 
-### ~~PROBLEM-008: Misleading commit message in git history~~
+### ~~PROBLEM-011: Network Blocked for pro-agent Tier — Misleading Tool Descriptions~~
 
-**Status:** RESOLVED (2026-03-01, documented — cannot rewrite shared history)
+**Filed:** 2026-03-11
+**Status:** RESOLVED (2026-03-12, commit `3aa5704`)
 
-Commit `7fc38ff` message says "switch seccomp to denylist" but the implementation actually added an **allowlist** (seccomp default-deny with explicit syscall permits). This was later corrected in commit `7c7b892`. No code issue — the seccomp policy is correct — but the original commit message is misleading if read without context.
+Agent tiers (`pro-agent`, `builder-agent`, `enterprise-agent`) were not recognized by `ExecutionTier` enum, silently falling back to free tier resource limits. The `_tier_notice()` then reported "Network: BLOCKED" even though network actually worked (the shell script's `!= "free"` check gave MACVLAN access). Also: `api-connector` and `slack-notifier` templates were shown to all tiers without warning.
+
+**Fixes:**
+- Added `resolve_execution_tier()` to map agent tiers to base tiers
+- Updated `spawn-sandbox.sh` case statement for agent tier variants
+- Templates marked with `requires_network=True`; `list_templates` adds warnings for blocked tiers
+- `make_function` warns when code imports network libraries on network-blocked tiers (commit `f2df73c`)
 
 ---
 
-### ~~PROBLEM-009: "whitelist" → "allowlist" terminology migration~~
+### ~~PROBLEM-012: create_service and create_function Return "Service not found"~~
 
-**Status:** RESOLVED (2026-03-01)
+**Filed:** 2026-03-11
+**Status:** RESOLVED (2026-03-12, commit `3aa5704` — mitigated via documentation)
+**Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io
 
-Full rename completed across all source, templates, tests, and documentation. Only remaining "whitelist" references are in alembic migration history (correct — migrations are immutable).
+Could not reproduce on internal namespace. Investigation showed the underlying code path is correct — `make_service` and `make_function` resolve services by name within the namespace set by the MCP server connection URL. The user's LLM (kimi-k2-thinking via OpenRouter) likely passed extra parameters like `namespace="alice"` that the tool doesn't accept, causing confusing errors.
 
-**Changes applied:**
-- **Models:** `network_whitelist` → `network_allowlist`, `whitelist_updated_at` → `allowlist_updated_at`, `whitelist_changes_today` → `allowlist_changes_today`, `can_update_whitelist()` → `can_update_allowlist()`, constraint `whitelist_changes_positive` → `allowlist_changes_positive`
-- **Schemas/API:** `network_whitelist` field → `network_allowlist` in all request/response models
-- **Services:** Parameter names, error messages, method calls updated
-- **MCP protocol:** `WHITELIST_RATE_LIMITED` → `ALLOWLIST_RATE_LIMITED`
-- **HTML templates:** console.html, admin.html labels and field references
-- **Tests:** test names, fixture names, assertions
-- **Docs:** ~110 instances across 7 doc files + "agentic service(s)" terminology cleanup
-- **DB migration:** `alembic/versions/20260301_000001_rename_whitelist_to_allowlist.py` (pre-existing)
-
-**Legacy gateway docs archived:**
-- `specs/001-api-gateway-mvp/` → `specs/archive/001-api-gateway-mvp/`
-- `docs/implementation/gateway-architecture-specification.md` → `docs/archive/gateway-architecture-specification.md`
+**Fix:** Rewrote all MCP tool descriptions with comprehensive guidance for less capable models: workflow ordering, parameter explanations, examples, and explicit notes that namespace is set by the connection URL.
 
 ---
 
 ### ~~PROBLEM-010: MCP `make_function` Convention Not Documented — `handler()` Silently Fails~~
 
 **Filed:** 2026-03-05
-**Status:** RESOLVED (2026-03-05)
+**Status:** RESOLVED (2026-03-05; nsjail regression fixed 2026-03-12 commit `2eb23ae`)
 
-Sandbox wrapper now recognizes `handler(input, context)` as a valid entry point (called with empty dict context). The `make_function` tool description for the `code` field now documents all four recognized patterns: `main(input)`, `handler(input, context)`, top-level `result`, top-level `output`.
+Sandbox wrapper now recognizes `handler(input, context)` as a valid entry point (called with empty dict context). The `make_function` tool description documents all four recognized patterns: `main(input)`, `handler(input, context)`, top-level `result`, top-level `output`.
+
+**Regression found 2026-03-12:** The fix was only applied to dev-mode `_wrap_code` in `sandbox.py` but missed the production nsjail `execute.py`. Fixed in commit `2eb23ae`.
 
 ---
 
@@ -96,123 +113,51 @@ Updated all execution limits 10x across billing middleware, config, Stripe servi
 
 ---
 
-## Resolved Issues
+### ~~PROBLEM-009: "whitelist" → "allowlist" terminology migration~~
+
+**Status:** RESOLVED (2026-03-01)
+
+Full rename completed across all source, templates, tests, and documentation. Only remaining "whitelist" references are in alembic migration history (correct — migrations are immutable).
+
+---
+
+### ~~PROBLEM-008: Misleading commit message in git history~~
+
+**Status:** RESOLVED (2026-03-01, documented — cannot rewrite shared history)
+
+Commit `7fc38ff` message says "switch seccomp to denylist" but the implementation actually added an allowlist. Corrected in commit `7c7b892`. No code issue.
+
+---
+
+### ~~PROBLEM-007: Legacy ServiceRouter and math/agent endpoints~~
+
+**Status:** RESOLVED (2026-03-01)
+
+Deleted all legacy gateway-era dead code.
+
+---
+
+### ~~PROBLEM-006: Code-Mode Execution Not Exposed via MCP Run Server~~
+
+**Status:** RESOLVED (2026-02-20)
+
+Flipped default from tools mode to code mode. `{ns}.run.mcpworks.io/mcp` now serves code-mode by default (single `execute` tool).
+
+---
 
 ### ~~PROBLEM-005: MCP Run Server Tools Not Discoverable / Returning Null~~
 
 **Status:** RESOLVED (2026-02-12)
 
-Two root causes found and fixed:
-
-1. **`str(EndpointType.CREATE)` != `"create"` in Python 3.11+** — The `transport.py` endpoint routing used `str(endpoint_type) == "create"` which always evaluated to `False` (returns `"EndpointType.CREATE"`). Both create and run endpoints fell through to RunMCPHandler. Fixed with direct enum comparison: `endpoint_type == EndpointType.CREATE`.
-
-2. **Sandbox wrapper never called `main(input_data)`** — The code_sandbox execution harness only checked for explicit `result` or `output` variables after `exec()`. Functions defining `main(input_data)` (the platform convention) returned `None`. Fixed by adding a `callable(exec_globals.get('main'))` check.
-
-Verified end-to-end: `tools.hello` returns `{"greeting": "Hello, Simon! Welcome to MCPWorks."}` via both curl and Claude Code MCP client.
+Two root causes: `str(EndpointType.CREATE)` enum comparison bug, and sandbox wrapper not calling `main(input_data)`. Both fixed.
 
 ---
 
-### ~~PROBLEM-001: Usage Tracking Endpoint Not Implemented~~
+### ~~PROBLEM-001–004: Auth, Services, Usage, API Keys~~
 
 **Status:** RESOLVED (2026-02-11)
 
-The `/v1/account/usage` endpoint is now implemented and returns:
-```json
-{
-  "executions_count": 0,
-  "executions_limit": 100,
-  "executions_remaining": 100,
-  "billing_period_start": "2026-02-01T00:00:00Z",
-  "billing_period_end": "2026-03-01T00:00:00Z",
-  "tier": "free"
-}
-```
-HTTP Status: 200
-
----
-
-### ~~PROBLEM-002: List Services Endpoint Returns INTERNAL_ERROR~~
-
-**Status:** RESOLVED (2026-02-11)
-
-The endpoint now works correctly:
-```json
-{"services":[...],"namespace":"test-ns-xxx"}
-```
-HTTP Status: 200
-
----
-
-### ~~PROBLEM-003: Create Service Returns Wrong Error on Success~~
-
-**Status:** RESOLVED (2026-02-11)
-
-The endpoint now returns proper response:
-```json
-{"id":"...","name":"utils","description":"...","namespace_id":"...","function_count":0,"created_at":"..."}
-```
-HTTP Status: 201
-
----
-
-### ~~PROBLEM-004: API Key Prefix Mismatch~~
-
-**Status:** RESOLVED (2026-02-11)
-
-API now correctly uses `mcpw_` prefix:
-```json
-{"api_key":{"key_prefix":"mcpw_0d57f8b",...},"raw_key":"mcpw_..."}
-```
-
----
-
-## Test Summary (2026-02-11, Run 3 - All Issues Resolved)
-
-### Passing Endpoints
-
-| Endpoint | Method | Status |
-|----------|--------|--------|
-| `/v1/health` | GET | Pass |
-| `/v1/health/ready` | GET | Pass |
-| `/v1/auth/register` | POST | Pass |
-| `/v1/auth/login` | POST | Pass |
-| `/v1/auth/refresh` | POST | Pass |
-| `/v1/auth/token` | POST | Pass (API key exchange) |
-| `/v1/auth/api-keys` | POST | Pass (new endpoint) |
-| `/v1/users/me` | GET | Pass (no credits fields) |
-| `/v1/users/me/api-keys` | POST | Pass (legacy, still works) |
-| `/v1/namespaces` | POST | Pass |
-| `/v1/namespaces` | GET | Pass |
-| `/v1/namespaces/{ns}` | GET | Pass |
-| `/v1/namespaces/{ns}` | DELETE | Pass |
-| `/v1/namespaces/{ns}/services` | POST | Pass (FIXED) |
-| `/v1/namespaces/{ns}/services` | GET | Pass (FIXED) |
-| `/v1/namespaces/{ns}/services/{svc}/functions` | POST | Pass |
-| `/v1/namespaces/{ns}/services/{svc}/functions` | GET | Pass |
-| `/v1/namespaces/{ns}/services/{svc}/functions/{fn}` | GET | Pass |
-| `/v1/subscriptions/current` | GET | Pass (404 for free tier = expected) |
-| `/v1/account/usage` | GET | Pass (FIXED - PROBLEM-001) |
-
-### All Endpoints Implemented
-
-All planned endpoints are now implemented and passing.
-
-### Removed (Correctly)
-
-| Endpoint | Method | Status |
-|----------|--------|--------|
-| `/v1/credits` | GET | 404 (removed) |
-| `/v1/credits/hold` | POST | 404 (removed) |
-
-### Error Handling
-
-| Scenario | Expected | Actual | Status |
-|----------|----------|--------|--------|
-| Missing auth | 401 | 401 MISSING_TOKEN | Pass |
-| Invalid token | 401 | 401 INVALID_TOKEN | Pass |
-| Wrong password | 401 | 401 INVALID_CREDENTIALS | Pass |
-| Duplicate email | 409 | 409 EMAIL_EXISTS | Pass |
-| Not found | 404 | 404 NOT_FOUND | Pass |
+All initial API endpoint issues resolved: usage tracking implemented, list services fixed, create service error handling fixed, API key prefix corrected to `mcpw_`.
 
 ---
 
