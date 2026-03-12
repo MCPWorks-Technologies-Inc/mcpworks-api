@@ -32,11 +32,20 @@ POLL_INTERVAL_SECONDS = 30
 MAX_CONCURRENT_EXECUTIONS = 5
 
 
-def _compute_next_run(cron_expression: str, _timezone: str = "UTC") -> datetime:
-    """Compute the next run time from a cron expression."""
-    now = datetime.now(UTC)
-    cron = croniter(cron_expression, now)
-    return cron.get_next(datetime).replace(tzinfo=UTC)
+def _compute_next_run(cron_expression: str, timezone: str = "UTC") -> datetime:
+    """Compute the next run time from a cron expression in the given timezone."""
+    from zoneinfo import ZoneInfo
+
+    try:
+        tz = ZoneInfo(timezone)
+    except (KeyError, Exception):
+        tz = ZoneInfo("UTC")
+    now_local = datetime.now(tz)
+    cron = croniter(cron_expression, now_local)
+    next_local = cron.get_next(datetime)
+    if next_local.tzinfo is None:
+        next_local = next_local.replace(tzinfo=tz)
+    return next_local.astimezone(UTC).replace(tzinfo=UTC)
 
 
 async def _get_schedule_account(agent: Agent, db: AsyncSession) -> Account | None:
@@ -340,14 +349,9 @@ async def _poll_and_execute() -> int:
 
 
 async def _initialize_next_run_times() -> None:
-    """Set next_run_at for any schedules that don't have one yet."""
+    """Recalculate next_run_at for all enabled schedules on startup."""
     async with get_db_context() as db:
-        result = await db.execute(
-            select(AgentSchedule).where(
-                AgentSchedule.enabled.is_(True),
-                AgentSchedule.next_run_at.is_(None),
-            )
-        )
+        result = await db.execute(select(AgentSchedule).where(AgentSchedule.enabled.is_(True)))
         schedules = list(result.scalars().all())
 
         for schedule in schedules:

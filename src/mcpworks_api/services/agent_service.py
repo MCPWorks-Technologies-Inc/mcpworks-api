@@ -348,6 +348,8 @@ class AgentService:
                 f"Minimum schedule interval for {tier} is {tier_config['min_schedule_seconds']}s; "
                 f"cron expression resolves to {min_seconds}s"
             )
+        from mcpworks_api.tasks.scheduler import _compute_next_run
+
         schedule = AgentSchedule(
             agent_id=agent.id,
             function_name=function_name,
@@ -357,6 +359,7 @@ class AgentService:
             orchestration_mode=orchestration_mode,
             enabled=True,
             consecutive_failures=0,
+            next_run_at=_compute_next_run(cron_expression, timezone),
         )
         self.db.add(schedule)
         await self.db.flush()
