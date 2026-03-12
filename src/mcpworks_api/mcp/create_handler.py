@@ -16,7 +16,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mcpworks_api.backends.sandbox import TIER_CONFIG, ExecutionTier
+from mcpworks_api.backends.sandbox import TIER_CONFIG, resolve_execution_tier
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from mcpworks_api.mcp.protocol import (
     JSONRPCRequest,
@@ -137,10 +137,7 @@ class CreateMCPHandler:
     def _tier_notice(self) -> str:
         """Build a terse sandbox constraint notice for tool descriptions."""
         tier_str = self.account.user.effective_tier
-        try:
-            tier = ExecutionTier(tier_str)
-        except ValueError:
-            tier = ExecutionTier.FREE
+        tier = resolve_execution_tier(tier_str)
         cfg = TIER_CONFIG[tier]
         parts = [
             f"Sandbox limits ({tier_str} tier): timeout={cfg['timeout_sec']}s, memory={cfg['memory_mb']}MB."
@@ -159,18 +156,22 @@ class CreateMCPHandler:
         tools = [
             MCPTool(
                 name="make_namespace",
-                description="Create a new namespace for organizing services and functions",
+                description=(
+                    "Create a new namespace for organizing services and functions. "
+                    "A namespace is the top-level container — you must have one before creating services or functions. "
+                    "Your current namespace is already set by the MCP server connection URL."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "Namespace name (lowercase, alphanumeric, hyphens, 1-63 chars)",
+                            "description": "Namespace name (lowercase, alphanumeric, hyphens, 1-63 chars). Example: 'my-project'",
                             "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
                         },
                         "description": {
                             "type": "string",
-                            "description": "Optional description",
+                            "description": "Optional human-readable description of what this namespace is for",
                         },
                     },
                     "required": ["name"],
@@ -178,22 +179,27 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="list_namespaces",
-                description="List all namespaces for the current account",
+                description="List all namespaces owned by or shared with the current account. Returns namespace names and descriptions.",
                 inputSchema={"type": "object", "properties": {}},
             ),
             MCPTool(
                 name="make_service",
-                description="Create a new service within the current namespace",
+                description=(
+                    "Create a new service within the current namespace. "
+                    "A service is a group of related functions. You must create a service before creating functions. "
+                    "The service is automatically created in the namespace this MCP server is connected to — do NOT pass a namespace parameter. "
+                    "Example workflow: make_service(name='utils') → make_function(service='utils', name='hello', ...)"
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "Service name",
+                            "description": "Service name (lowercase, alphanumeric, hyphens). Example: 'utils', 'data-tools', 'api-helpers'",
                         },
                         "description": {
                             "type": "string",
-                            "description": "Optional description",
+                            "description": "Optional description of what this service does",
                         },
                     },
                     "required": ["name"],
@@ -201,73 +207,108 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="list_services",
-                description="List all services in the current namespace",
+                description=(
+                    "List all services in the current namespace. "
+                    "Returns service names, descriptions, and function counts. "
+                    "Use this to discover existing services before creating functions."
+                ),
                 inputSchema={"type": "object", "properties": {}},
             ),
             MCPTool(
                 name="delete_service",
-                description="Delete a service and all its functions",
+                description="Permanently delete a service and ALL its functions. This cannot be undone.",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string", "description": "Service name"},
+                        "name": {
+                            "type": "string",
+                            "description": "Service name to delete (must exist in current namespace)",
+                        },
                     },
                     "required": ["name"],
                 },
             ),
             MCPTool(
                 name="make_function",
-                description="Create a new function in a service. " + tier_notice,
+                description=(
+                    "Create a new function in an existing service. The service must already exist (use make_service first). "
+                    + tier_notice
+                    + "\n\nWorkflow: 1) make_service if needed → 2) make_function with service name → 3) execute via run server. "
+                    "The 'service' parameter is just the service name (e.g. 'utils'), NOT a namespace or fully-qualified path."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "service": {"type": "string", "description": "Service name"},
-                        "name": {"type": "string", "description": "Function name"},
+                        "service": {
+                            "type": "string",
+                            "description": "Name of an existing service in the current namespace. Must be created first with make_service. Example: 'utils'",
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Function name (lowercase, alphanumeric, hyphens). Example: 'hello', 'process-data'",
+                        },
                         "backend": {
                             "type": "string",
                             "enum": ["code_sandbox", "activepieces", "nanobot", "github_repo"],
-                            "description": "Execution backend",
+                            "description": "Execution backend. Use 'code_sandbox' for Python functions (most common).",
                         },
                         "code": {
                             "type": "string",
-                            "description": "Function code (for code_sandbox). Use def main(input): to define the entry point. Also supports handler(input, context), or top-level result/output variables.",
+                            "description": (
+                                "Python source code for code_sandbox backend. "
+                                "Entry point patterns (in priority order): "
+                                "1) 'result = ...' — assign to result variable. "
+                                "2) 'output = ...' — alias for result. "
+                                "3) 'def main(input):' — function receiving input dict, return value is the result. "
+                                "4) 'def handler(input, context):' — function receiving input dict and context dict. "
+                                "The input dict contains the caller's arguments. Example: "
+                                "def main(input):\\n    name = input.get('name', 'World')\\n    return {'greeting': f'Hello, {name}!'}"
+                            ),
                         },
                         "config": {
                             "type": "object",
-                            "description": "Backend-specific configuration",
+                            "description": "Backend-specific configuration (not needed for code_sandbox)",
                         },
                         "input_schema": {
                             "type": "object",
-                            "description": "JSON Schema for input",
+                            "description": (
+                                "JSON Schema defining the function's input parameters. "
+                                "IMPORTANT: Only parameters defined here will be passed to the function when called. "
+                                "If you add a new parameter to the code, you must also add it to input_schema. "
+                                'Example: {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}'
+                            ),
                         },
                         "output_schema": {
                             "type": "object",
-                            "description": "JSON Schema for output",
+                            "description": "JSON Schema defining the expected output format (optional, for documentation)",
                         },
-                        "description": {"type": "string"},
+                        "description": {
+                            "type": "string",
+                            "description": "Human-readable description of what this function does",
+                        },
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "requirements": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Python packages required (from allowed list). Use list_packages to see available.",
+                            "description": "Python packages needed (must be from the allowed list). Use list_packages to see what's available. Example: ['httpx', 'beautifulsoup4']",
                         },
                         "required_env": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Environment variables required for execution (e.g. ['OPENAI_API_KEY']). Caller must provide these via X-MCPWorks-Env header.",
+                            "description": "Environment variables that MUST be provided for the function to run. The caller provides these via X-MCPWorks-Env header. Example: ['OPENAI_API_KEY']",
                         },
                         "optional_env": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Optional environment variables the function can use if provided.",
+                            "description": "Environment variables the function can optionally use if provided.",
                         },
                         "created_by": {
                             "type": "string",
-                            "description": "Who created this function (e.g. 'Claude Opus 4.6'). Optional attribution.",
+                            "description": "Attribution for who created this function. Example: 'Claude Opus 4.6', 'GPT-4o'",
                         },
                         "template": {
                             "type": "string",
-                            "description": "Clone from a template (e.g. hello-world). Overrides code/schemas/requirements. Use list_templates to see available.",
+                            "description": "Start from a template instead of writing code. Overrides code/schemas/requirements. Use list_templates to see available templates.",
                         },
                     },
                     "required": ["service", "name", "backend"],
@@ -275,16 +316,33 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="update_function",
-                description="Update a function (creates new version)",
+                description=(
+                    "Update an existing function, creating a new version. "
+                    "Each update creates a new version — previous versions are preserved and can be restored. "
+                    "Only provide the fields you want to change. "
+                    "To restore a previous version, use restore_version with the version number."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "service": {"type": "string"},
-                        "name": {"type": "string"},
+                        "service": {
+                            "type": "string",
+                            "description": "Service name containing the function",
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Function name to update",
+                        },
                         "backend": {"type": "string"},
-                        "code": {"type": "string"},
+                        "code": {
+                            "type": "string",
+                            "description": "New Python code. Same entry point rules as make_function.",
+                        },
                         "config": {"type": "object"},
-                        "input_schema": {"type": "object"},
+                        "input_schema": {
+                            "type": "object",
+                            "description": "Updated input schema. Remember: only parameters defined here are passed to the function.",
+                        },
                         "output_schema": {"type": "object"},
                         "description": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}},
@@ -305,11 +363,11 @@ class CreateMCPHandler:
                         },
                         "created_by": {
                             "type": "string",
-                            "description": "Who created this function (e.g. 'Claude Opus 4.6'). Optional attribution.",
+                            "description": "Attribution for who made this update.",
                         },
                         "restore_version": {
                             "type": "integer",
-                            "description": "Restore from a previous version number",
+                            "description": "Restore code and config from a previous version number. Use describe_function to see version history.",
                         },
                     },
                     "required": ["service", "name"],
@@ -317,43 +375,71 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="delete_function",
-                description="Delete a function",
+                description="Permanently delete a function and all its versions. This cannot be undone.",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "service": {"type": "string"},
-                        "name": {"type": "string"},
+                        "service": {
+                            "type": "string",
+                            "description": "Service name containing the function",
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Function name to delete",
+                        },
                     },
                     "required": ["service", "name"],
                 },
             ),
             MCPTool(
                 name="list_functions",
-                description="List functions in a service",
+                description=(
+                    "List all functions in a service. "
+                    "Returns function names, descriptions, versions, tags, and call counts. "
+                    "The 'service' parameter is just the service name — use list_services first to see available services."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "service": {"type": "string"},
-                        "tag": {"type": "string", "description": "Filter by tag"},
+                        "service": {
+                            "type": "string",
+                            "description": "Service name to list functions from. Use list_services to see available services.",
+                        },
+                        "tag": {
+                            "type": "string",
+                            "description": "Optional: filter functions by tag",
+                        },
                     },
                     "required": ["service"],
                 },
             ),
             MCPTool(
                 name="describe_function",
-                description="Get detailed function info including version history",
+                description=(
+                    "Get detailed information about a function including its current code, "
+                    "input/output schemas, requirements, environment variables, and full version history."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "service": {"type": "string"},
-                        "name": {"type": "string"},
+                        "service": {
+                            "type": "string",
+                            "description": "Service name containing the function",
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Function name to describe",
+                        },
                     },
                     "required": ["service", "name"],
                 },
             ),
             MCPTool(
                 name="list_packages",
-                description="List available Python packages for sandbox functions, grouped by category",
+                description=(
+                    "List all Python packages available for use in sandbox functions, grouped by category. "
+                    "Only packages from this list can be used in the 'requirements' field of make_function/update_function."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -361,7 +447,7 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="list_templates",
-                description="List available function templates for quick-start",
+                description="List available function templates for quick-start. Templates provide pre-built code, schemas, and requirements.",
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -369,13 +455,13 @@ class CreateMCPHandler:
             ),
             MCPTool(
                 name="describe_template",
-                description="Get full template details including code and schemas",
+                description="Get full template details including source code, input/output schemas, and required packages. Use this before cloning a template with make_function.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "Template name (e.g. hello-world, csv-analyzer)",
+                            "description": "Template name (e.g. 'hello-world', 'csv-analyzer'). Use list_templates to see available templates.",
                         },
                     },
                     "required": ["name"],
@@ -388,17 +474,23 @@ class CreateMCPHandler:
             tools += [
                 MCPTool(
                     name="make_agent",
-                    description="Create a new autonomous agent",
+                    description=(
+                        "Create a new autonomous agent. "
+                        "An agent is a container that groups functions, schedules, webhooks, channels, and AI config together. "
+                        "After creating an agent, use make_service and make_function to add capabilities, "
+                        "then configure_agent_ai to give it an AI brain, add_schedule for cron jobs, "
+                        "add_webhook for HTTP triggers, and add_channel for messaging integrations."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "name": {
                                 "type": "string",
-                                "description": "Agent name (lowercase, alphanumeric, hyphens)",
+                                "description": "Agent name (lowercase, alphanumeric, hyphens). This becomes the agent's namespace.",
                             },
                             "display_name": {
                                 "type": "string",
-                                "description": "Optional human-readable display name",
+                                "description": "Human-readable display name. Example: 'Social Media Bot'",
                             },
                         },
                         "required": ["name"],
@@ -406,12 +498,12 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="list_agents",
-                    description="List all agents for the current account",
+                    description="List all agents for the current account. Returns agent names, display names, status (running/stopped), and slot usage.",
                     inputSchema={"type": "object", "properties": {}},
                 ),
                 MCPTool(
                     name="describe_agent",
-                    description="Get full details for an agent",
+                    description="Get full details for an agent including status, AI engine config, resource limits, and creation date.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -425,13 +517,13 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="start_agent",
-                    description="Start a stopped agent",
+                    description="Start a stopped agent. The agent must exist and be in 'stopped' status.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "name": {
                                 "type": "string",
-                                "description": "Agent name",
+                                "description": "Agent name to start",
                             },
                         },
                         "required": ["name"],
@@ -439,13 +531,13 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="stop_agent",
-                    description="Stop a running agent",
+                    description="Stop a running agent. Pauses scheduled tasks and webhook processing. The agent can be restarted with start_agent.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "name": {
                                 "type": "string",
-                                "description": "Agent name",
+                                "description": "Agent name to stop",
                             },
                         },
                         "required": ["name"],
@@ -453,17 +545,17 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="destroy_agent",
-                    description="Permanently destroy an agent and all its data",
+                    description="Permanently destroy an agent and ALL its data (state, schedules, webhooks, channels). This cannot be undone.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "name": {
                                 "type": "string",
-                                "description": "Agent name",
+                                "description": "Agent name to destroy",
                             },
                             "confirm": {
                                 "type": "boolean",
-                                "description": "Must be true to confirm destruction",
+                                "description": "Must be true to confirm destruction. Safety check to prevent accidental deletion.",
                             },
                         },
                         "required": ["name", "confirm"],
@@ -471,27 +563,31 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="add_schedule",
-                    description="Add a cron schedule to an agent",
+                    description=(
+                        "Add a cron schedule to an agent. The schedule will periodically execute the specified function. "
+                        "The function must exist in the agent's namespace (format: 'service.function'). "
+                        "The schedule runs independently — it calls the function directly, not through the AI engine."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
                             "function_name": {
                                 "type": "string",
-                                "description": "Function to call (service.function)",
+                                "description": "Function to call, in 'service.function' format. Example: 'utils.check-status'. The function must already exist.",
                             },
                             "cron_expression": {
                                 "type": "string",
-                                "description": "Cron expression (e.g. '0 * * * *' for hourly)",
+                                "description": "Standard cron expression. Examples: '0 * * * *' (hourly), '*/5 * * * *' (every 5 min), '0 9 * * 1-5' (weekdays at 9am)",
                             },
                             "timezone": {
                                 "type": "string",
-                                "description": "Timezone (default: UTC)",
+                                "description": "IANA timezone for schedule. Default: UTC. Example: 'America/New_York'",
                                 "default": "UTC",
                             },
                             "failure_policy": {
                                 "type": "object",
-                                "description": "Failure policy: {strategy: 'continue'|'auto_disable'|'backoff', max_failures?: int, backoff_factor?: float}",
+                                "description": 'What to do when the function fails. Required. Options: {"strategy": "continue"} (keep running), {"strategy": "auto_disable", "max_failures": 5} (disable after N failures), {"strategy": "backoff", "backoff_factor": 2.0} (exponential backoff)',
                             },
                         },
                         "required": [
@@ -504,19 +600,22 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="remove_schedule",
-                    description="Remove a schedule from an agent",
+                    description="Remove a cron schedule from an agent. Use list_schedules to find the schedule_id.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
-                            "schedule_id": {"type": "string", "description": "Schedule UUID"},
+                            "schedule_id": {
+                                "type": "string",
+                                "description": "Schedule UUID (from list_schedules or add_schedule response)",
+                            },
                         },
                         "required": ["agent_name", "schedule_id"],
                     },
                 ),
                 MCPTool(
                     name="list_schedules",
-                    description="List all schedules for an agent",
+                    description="List all cron schedules for an agent. Returns schedule IDs, function names, cron expressions, and failure counts.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -527,22 +626,26 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="add_webhook",
-                    description="Add a webhook receiver to an agent",
+                    description=(
+                        "Add a webhook endpoint to an agent. "
+                        "When the webhook URL receives an HTTP POST, it triggers the specified handler function. "
+                        "The webhook URL will be: https://{agent_name}.agent.mcpworks.io/webhook/{path}"
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
                             "path": {
                                 "type": "string",
-                                "description": "Webhook path (e.g. 'github/push')",
+                                "description": "Webhook path segment. Example: 'github/push' creates URL https://{agent}.agent.mcpworks.io/webhook/github/push",
                             },
                             "handler_function_name": {
                                 "type": "string",
-                                "description": "Function to call (service.function)",
+                                "description": "Function to call when webhook fires, in 'service.function' format. Example: 'hooks.handle-push'",
                             },
                             "secret": {
                                 "type": "string",
-                                "description": "Optional HMAC secret",
+                                "description": "Optional HMAC secret for webhook signature verification",
                             },
                         },
                         "required": ["agent_name", "path", "handler_function_name"],
@@ -550,19 +653,22 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="remove_webhook",
-                    description="Remove a webhook from an agent",
+                    description="Remove a webhook from an agent. Use list_webhooks to find the webhook_id.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
-                            "webhook_id": {"type": "string", "description": "Webhook UUID"},
+                            "webhook_id": {
+                                "type": "string",
+                                "description": "Webhook UUID (from list_webhooks or add_webhook response)",
+                            },
                         },
                         "required": ["agent_name", "webhook_id"],
                     },
                 ),
                 MCPTool(
                     name="list_webhooks",
-                    description="List all webhooks for an agent",
+                    description="List all webhooks for an agent. Returns webhook IDs, paths, handler functions, and enabled status.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -573,44 +679,53 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="set_agent_state",
-                    description="Set a persistent state key for an agent",
+                    description=(
+                        "Store a persistent key-value pair for an agent. "
+                        "State survives agent restarts and can be read by the agent's functions. "
+                        "Values can be any JSON type (string, number, boolean, object, array)."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
-                            "key": {"type": "string", "description": "State key"},
-                            "value": {"description": "Value to store (any JSON type)"},
+                            "key": {
+                                "type": "string",
+                                "description": "State key. Example: 'last_run', 'config', 'user_prefs'",
+                            },
+                            "value": {
+                                "description": "Value to store. Any JSON type: string, number, boolean, object, or array."
+                            },
                         },
                         "required": ["agent_name", "key", "value"],
                     },
                 ),
                 MCPTool(
                     name="get_agent_state",
-                    description="Get a persistent state value for an agent",
+                    description="Retrieve a stored state value for an agent by key.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
-                            "key": {"type": "string", "description": "State key"},
+                            "key": {"type": "string", "description": "State key to retrieve"},
                         },
                         "required": ["agent_name", "key"],
                     },
                 ),
                 MCPTool(
                     name="delete_agent_state",
-                    description="Delete a persistent state key for an agent",
+                    description="Delete a stored state key for an agent. The key and its value are permanently removed.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
-                            "key": {"type": "string", "description": "State key"},
+                            "key": {"type": "string", "description": "State key to delete"},
                         },
                         "required": ["agent_name", "key"],
                     },
                 ),
                 MCPTool(
                     name="list_agent_state_keys",
-                    description="List all state keys for an agent",
+                    description="List all stored state keys for an agent. Returns key names and total storage used.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -621,7 +736,12 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="configure_agent_ai",
-                    description="Configure an AI engine for an agent",
+                    description=(
+                        "Configure an AI engine (LLM) for an agent. "
+                        "This sets up the agent's 'brain' — the AI model it uses for chat_with_agent conversations. "
+                        "NOTE: The AI API key is stored securely but is NOT passed to sandbox functions as an environment variable. "
+                        "If your functions need API keys, set them via required_env on the function."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -629,12 +749,19 @@ class CreateMCPHandler:
                             "engine": {
                                 "type": "string",
                                 "enum": ["anthropic", "openai", "google", "openrouter"],
+                                "description": "AI provider. Use 'openrouter' for access to many models.",
                             },
-                            "model": {"type": "string", "description": "Model name"},
-                            "api_key": {"type": "string", "description": "API key"},
+                            "model": {
+                                "type": "string",
+                                "description": "Model identifier. Examples: 'claude-sonnet-4-20250514' (anthropic), 'gpt-4o' (openai), 'google/gemini-2.0-flash-exp:free' (openrouter)",
+                            },
+                            "api_key": {
+                                "type": "string",
+                                "description": "API key for the chosen engine. Stored encrypted, never exposed to sandbox functions.",
+                            },
                             "system_prompt": {
                                 "type": "string",
-                                "description": "Optional system prompt",
+                                "description": "System prompt that defines the agent's personality and behavior for chat_with_agent conversations.",
                             },
                         },
                         "required": ["agent_name", "engine", "model", "api_key"],
@@ -642,7 +769,7 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="remove_agent_ai",
-                    description="Remove AI engine configuration from an agent",
+                    description="Remove the AI engine configuration from an agent. The agent will no longer be able to respond to chat_with_agent messages.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -653,14 +780,21 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="chat_with_agent",
-                    description="Send a message to an agent's AI engine and get its response. Use this to talk to the agent, test its behavior, or ask it to suggest changes to its own configuration.",
+                    description=(
+                        "Send a message to an agent's AI engine and get its response. "
+                        "The agent must have an AI engine configured (use configure_agent_ai first). "
+                        "Use this to talk to the agent, test its behavior, or ask it to suggest changes to its own configuration."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "agent_name": {
+                                "type": "string",
+                                "description": "Agent name (must have AI engine configured)",
+                            },
                             "message": {
                                 "type": "string",
-                                "description": "Message to send to the agent",
+                                "description": "Message to send to the agent's AI engine",
                             },
                         },
                         "required": ["agent_name", "message"],
@@ -668,7 +802,11 @@ class CreateMCPHandler:
                 ),
                 MCPTool(
                     name="add_channel",
-                    description="Add a communication channel to an agent",
+                    description=(
+                        "Add a communication channel to an agent. "
+                        "Channels allow the agent to send and receive messages on external platforms. "
+                        "Each channel type requires specific config keys (e.g., discord needs bot_token and guild_id)."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -676,20 +814,27 @@ class CreateMCPHandler:
                             "channel_type": {
                                 "type": "string",
                                 "enum": ["discord", "slack", "whatsapp", "email"],
+                                "description": "Platform type",
                             },
-                            "config": {"type": "object", "description": "Channel config"},
+                            "config": {
+                                "type": "object",
+                                "description": 'Channel-specific config. Discord: {"bot_token": "...", "guild_id": "..."}. Slack: {"bot_token": "...", "channel_id": "..."}. Email: {"smtp_host": "...", "from": "..."}.',
+                            },
                         },
                         "required": ["agent_name", "channel_type", "config"],
                     },
                 ),
                 MCPTool(
                     name="remove_channel",
-                    description="Remove a communication channel from an agent",
+                    description="Remove a communication channel from an agent by its type (discord, slack, etc.).",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "agent_name": {"type": "string", "description": "Agent name"},
-                            "channel_type": {"type": "string", "description": "Channel type"},
+                            "channel_type": {
+                                "type": "string",
+                                "description": "Channel type to remove: 'discord', 'slack', 'whatsapp', or 'email'",
+                            },
                         },
                         "required": ["agent_name", "channel_type"],
                     },
