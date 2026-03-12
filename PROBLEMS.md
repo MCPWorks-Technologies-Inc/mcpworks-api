@@ -6,11 +6,17 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
-### PROBLEM-016: Sandbox Network Connectivity Failure — Paid Tiers Cannot Reach External Services
+No open issues.
+
+---
+
+## Resolved Issues
+
+### ~~PROBLEM-016: Sandbox Network Connectivity Failure — Paid Tiers Cannot Reach External Services~~
 
 **Filed:** 2026-03-12
-**Status:** OPEN (investigating)
-**Severity:** P1 — All paid-tier sandbox executions requiring network access are broken
+**Status:** RESOLVED (2026-03-12, commits `6cff3ff`, `09965e5`, `f950343`)
+**Severity:** P1 — All paid-tier sandbox executions requiring network access were broken
 **Reported by:** External user (simon.carr@gmail.com) via support@mcpworks.io — DogeDetective agent
 **Affected tiers:** Builder, Pro, Enterprise (Free tier correctly has no network — working as designed)
 
@@ -108,27 +114,36 @@ Disable network namespacing and use UID-based iptables rules for network access 
 **Option C — Docker `--net=host` + MACVLAN on physical interface:**
 Run the container with host networking so MACVLAN attaches to the physical NIC instead of a veth. Simpler but reduces container isolation.
 
+#### Resolution
+
+**Root cause:** MACVLAN on Docker veth pairs is unreliable. Docker bridges filter unknown MAC addresses created by MACVLAN child interfaces, causing zero network connectivity. The container's `eth0` is a veth pair endpoint (not a physical NIC), and MACVLAN requires a physical parent or a bridge that accepts unknown MACs.
+
+**Fix (Option A — veth pair):** Replaced MACVLAN with veth pair + NAT in `spawn-sandbox.sh`:
+1. `ip netns add` creates a pre-configured network namespace per sandbox
+2. Veth pair connects sandbox namespace to container namespace
+3. Container acts as gateway with IP forwarding + MASQUERADE through default interface
+4. iptables FORWARD chain blocks RFC1918, cloud metadata, non-DNS UDP
+5. iptables INPUT chain blocks sandbox access to container services (API on :8000)
+6. nsjail runs inside the namespace with `--disable_clone_newnet`
+
+**Secondary fix:** Initial deploy hardcoded `eth0` for iptables rules, but the container has two Docker networks (`mcpworks-net` + `mcpworks-agents`), so the default route used a different interface. Fixed by auto-detecting via `ip route show default`.
+
+**Security hardening:** veth pairs lack MACVLAN's inherent parent-child isolation, so added `iptables -I INPUT -i $VETH_HOST -j DROP` to prevent sandbox from reaching the container's gateway IP (and therefore the API, bypassing Caddy rate limiting).
+
+**Accepted security deltas from MACVLAN approach:**
+- `/proc/net` in paid-tier sandboxes shows veth topology (transient per-execution, low risk)
+- Container is now an active NAT router (inherent veth tradeoff; container is already the trust boundary)
+- Subnet collision possible at ~300 concurrent sandboxes (hash-based; sequential allocator is a future improvement)
+
+**Commits:** `6cff3ff` (veth replacement), `09965e5` (interface detection), `f950343` (INPUT chain hardening)
+
 #### Related
 
 - **PROBLEM-011** (RESOLVED): Agent tiers falling back to free tier — fixed the tier mapping but didn't address underlying network connectivity
-- **SECURITY_AUDIT.md FINDING-38:** Docker gateway reachable on 80/443 during audit — implies MACVLAN worked at some point, or was tested differently
 - **Commit `4a01d99`** (Mar 9): Original clone_newnet + MACVLAN implementation
-- **Commit `16490da`** (Mar 9): Subnet fix (10.200 → 172.18) — addressed "route unreachable" but not the deeper MACVLAN-on-veth question
-- **Commit `0b4df92`** (Mar 8): Disabled clone_newnet in smoketest because it broke network for tiktoken — early signal that network in sandboxes wasn't working
-
-#### Files
-
-| File | Purpose |
-|------|---------|
-| `deploy/nsjail/python.cfg` | nsjail config — `clone_newnet: true` (line 27) |
-| `deploy/nsjail/spawn-sandbox.sh` | MACVLAN setup for paid tiers (lines 207-212) |
-| `src/mcpworks_api/backends/sandbox.py` | Tier config with network flags (lines 50-75) |
-| `scripts/setup-sandbox-network.sh` | Host-level iptables rules (must be applied on HOST) |
-| `deploy/nsjail/seccomp.policy` | Seccomp allowlist — networking syscalls allowed (lines 180-198) |
+- **Commit `0b4df92`** (Mar 8): Disabled clone_newnet in smoketest because it broke network for tiktoken — early signal
 
 ---
-
-## Resolved Issues
 
 ### ~~NOTE: Safe Logging Strategy — ORDER-020 through ORDER-023~~
 
