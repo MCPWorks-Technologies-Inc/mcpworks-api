@@ -566,7 +566,9 @@ class CreateMCPHandler:
                     description=(
                         "Add a cron schedule to an agent. The schedule will periodically execute the specified function. "
                         "The function must exist in the agent's namespace (format: 'service.function'). "
-                        "The schedule runs independently — it calls the function directly, not through the AI engine."
+                        "Use orchestration_mode to control AI involvement: 'direct' (default) runs the function, "
+                        "'reason_first' sends the trigger to the AI and lets it decide what to do, "
+                        "'run_then_reason' runs the function first then passes output to the AI for analysis."
                     ),
                     inputSchema={
                         "type": "object",
@@ -588,6 +590,17 @@ class CreateMCPHandler:
                             "failure_policy": {
                                 "type": "object",
                                 "description": 'What to do when the function fails. Required. Options: {"strategy": "continue"} (keep running), {"strategy": "auto_disable", "max_failures": 5} (disable after N failures), {"strategy": "backoff", "backoff_factor": 2.0} (exponential backoff)',
+                            },
+                            "orchestration_mode": {
+                                "type": "string",
+                                "enum": ["direct", "reason_first", "run_then_reason"],
+                                "description": (
+                                    "How the schedule interacts with the agent's AI engine. "
+                                    "'direct' (default): execute function without AI. "
+                                    "'reason_first': send trigger to AI, let it decide which functions to call. "
+                                    "'run_then_reason': execute function first, pass output to AI for analysis."
+                                ),
+                                "default": "direct",
                             },
                         },
                         "required": [
@@ -646,6 +659,17 @@ class CreateMCPHandler:
                             "secret": {
                                 "type": "string",
                                 "description": "Optional HMAC secret for webhook signature verification",
+                            },
+                            "orchestration_mode": {
+                                "type": "string",
+                                "enum": ["direct", "reason_first", "run_then_reason"],
+                                "description": (
+                                    "How the webhook interacts with the agent's AI engine. "
+                                    "'direct' (default): execute handler function without AI. "
+                                    "'reason_first': send webhook payload to AI, let it decide which functions to call. "
+                                    "'run_then_reason': execute handler first, pass output to AI for analysis."
+                                ),
+                                "default": "direct",
                             },
                         },
                         "required": ["agent_name", "path", "handler_function_name"],
@@ -738,9 +762,9 @@ class CreateMCPHandler:
                     name="configure_agent_ai",
                     description=(
                         "Configure an AI engine (LLM) for an agent. "
-                        "This sets up the agent's 'brain' — the AI model it uses for chat_with_agent conversations. "
-                        "NOTE: The AI API key is stored securely but is NOT passed to sandbox functions as an environment variable. "
-                        "If your functions need API keys, set them via required_env on the function."
+                        "This sets up the agent's 'brain' — the AI model it uses for orchestration (schedule/webhook with AI modes) and chat_with_agent. "
+                        "When a schedule or webhook has orchestration_mode='reason_first' or 'run_then_reason', the AI can call namespace functions as tools. "
+                        "NOTE: The AI API key is stored securely but is NOT passed to sandbox functions as an environment variable."
                     ),
                     inputSchema={
                         "type": "object",
@@ -761,7 +785,12 @@ class CreateMCPHandler:
                             },
                             "system_prompt": {
                                 "type": "string",
-                                "description": "System prompt that defines the agent's personality and behavior for chat_with_agent conversations.",
+                                "description": "System prompt that defines the agent's personality and behavior for AI orchestration and chat_with_agent conversations.",
+                            },
+                            "auto_channel": {
+                                "type": "string",
+                                "enum": ["discord", "slack", "email"],
+                                "description": "Automatically post the AI's final response to this channel type after orchestration runs. The channel must be configured via add_channel.",
                             },
                         },
                         "required": ["agent_name", "engine", "model", "api_key"],
@@ -1566,6 +1595,7 @@ class CreateMCPHandler:
                             "ai_engine": agent.ai_engine,
                             "ai_model": agent.ai_model,
                             "system_prompt": agent.system_prompt,
+                            "auto_channel": agent.auto_channel,
                             "memory_limit_mb": agent.memory_limit_mb,
                             "cpu_limit": agent.cpu_limit,
                             "enabled": agent.enabled,
@@ -1609,6 +1639,7 @@ class CreateMCPHandler:
         cron_expression: str,
         failure_policy: dict,
         timezone: str = "UTC",
+        orchestration_mode: str = "direct",
     ) -> MCPToolResult:
         """Add a cron schedule to an agent."""
         service = AgentService(self.db)
@@ -1620,6 +1651,7 @@ class CreateMCPHandler:
             timezone=timezone,
             failure_policy=failure_policy,
             tier=self.account.user.effective_tier,
+            orchestration_mode=orchestration_mode,
         )
         return MCPToolResult(
             content=[
@@ -1631,6 +1663,7 @@ class CreateMCPHandler:
                             "function_name": function_name,
                             "cron_expression": cron_expression,
                             "timezone": timezone,
+                            "orchestration_mode": schedule.orchestration_mode,
                             "enabled": schedule.enabled,
                         }
                     )
@@ -1667,6 +1700,7 @@ class CreateMCPHandler:
                                     "function_name": s.function_name,
                                     "cron_expression": s.cron_expression,
                                     "timezone": s.timezone,
+                                    "orchestration_mode": s.orchestration_mode,
                                     "enabled": s.enabled,
                                     "consecutive_failures": s.consecutive_failures,
                                 }
@@ -1685,6 +1719,7 @@ class CreateMCPHandler:
         path: str,
         handler_function_name: str,
         secret: str | None = None,
+        orchestration_mode: str = "direct",
     ) -> MCPToolResult:
         """Add a webhook to an agent."""
         service = AgentService(self.db)
@@ -1694,6 +1729,7 @@ class CreateMCPHandler:
             path=path,
             handler_function_name=handler_function_name,
             secret=secret,
+            orchestration_mode=orchestration_mode,
         )
         return MCPToolResult(
             content=[
@@ -1704,6 +1740,7 @@ class CreateMCPHandler:
                             "agent_name": agent_name,
                             "path": path,
                             "handler_function_name": handler_function_name,
+                            "orchestration_mode": webhook.orchestration_mode,
                             "enabled": webhook.enabled,
                         }
                     )
@@ -1739,6 +1776,7 @@ class CreateMCPHandler:
                                     "id": str(w.id),
                                     "path": w.path,
                                     "handler_function_name": w.handler_function_name,
+                                    "orchestration_mode": w.orchestration_mode,
                                     "enabled": w.enabled,
                                 }
                                 for w in webhooks
@@ -1810,6 +1848,7 @@ class CreateMCPHandler:
         model: str,
         api_key: str,
         system_prompt: str | None = None,
+        auto_channel: str | None = None,
     ) -> MCPToolResult:
         """Configure an AI engine for an agent."""
         service = AgentService(self.db)
@@ -1820,6 +1859,7 @@ class CreateMCPHandler:
             model=model,
             api_key=api_key,
             system_prompt=system_prompt,
+            auto_channel=auto_channel,
         )
         return MCPToolResult(
             content=[
@@ -1830,6 +1870,7 @@ class CreateMCPHandler:
                             "engine": agent.ai_engine,
                             "model": agent.ai_model,
                             "system_prompt": agent.system_prompt,
+                            "auto_channel": agent.auto_channel,
                             "configured": True,
                         }
                     )

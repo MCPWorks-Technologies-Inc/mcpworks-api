@@ -338,6 +338,7 @@ class AgentService:
         timezone: str,
         failure_policy: dict,
         tier: str,
+        orchestration_mode: str = "direct",
     ) -> AgentSchedule:
         agent = await self.get_agent(account_id, agent_name)
         tier_config = self._get_tier_config(tier)
@@ -353,6 +354,7 @@ class AgentService:
             cron_expression=cron_expression,
             timezone=timezone,
             failure_policy=failure_policy,
+            orchestration_mode=orchestration_mode,
             enabled=True,
             consecutive_failures=0,
         )
@@ -428,6 +430,7 @@ class AgentService:
         path: str,
         handler_function_name: str,
         secret: str | None = None,
+        orchestration_mode: str = "direct",
     ) -> AgentWebhook:
         agent = await self.get_agent(account_id, agent_name)
         existing = await self.db.execute(
@@ -448,6 +451,7 @@ class AgentService:
             path=path,
             handler_function_name=handler_function_name,
             secret_hash=secret_hash,
+            orchestration_mode=orchestration_mode,
             enabled=True,
         )
         self.db.add(webhook)
@@ -633,6 +637,7 @@ class AgentService:
         model: str,
         api_key: str | None = None,
         system_prompt: str | None = None,
+        auto_channel: str | None = None,
     ) -> Agent:
         agent = await self.get_agent(account_id, agent_name)
         agent.ai_engine = engine
@@ -642,6 +647,7 @@ class AgentService:
             agent.ai_api_key_encrypted = ciphertext
             agent.ai_api_key_dek_encrypted = encrypted_dek
         agent.system_prompt = system_prompt
+        agent.auto_channel = auto_channel
         await self.db.flush()
         await self.db.refresh(agent)
         logger.info("agent_ai_configured", agent_id=str(agent.id), engine=engine, model=model)
@@ -804,6 +810,7 @@ class AgentService:
             ai_api_key_encrypted=source.ai_api_key_encrypted,
             ai_api_key_dek_encrypted=source.ai_api_key_dek_encrypted,
             system_prompt=source.system_prompt,
+            auto_channel=source.auto_channel,
             cloned_from_id=source.id,
         )
         self.db.add(new_agent)
@@ -827,6 +834,7 @@ class AgentService:
                 cron_expression=schedule.cron_expression,
                 timezone=schedule.timezone,
                 failure_policy=schedule.failure_policy,
+                orchestration_mode=schedule.orchestration_mode,
                 enabled=False,
                 consecutive_failures=0,
             )
