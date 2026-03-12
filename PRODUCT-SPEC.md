@@ -1,7 +1,7 @@
 # MCPWorks Product Specification
 
-**Version:** 3.2.0
-**Date:** 2026-03-11
+**Version:** 3.3.0
+**Date:** 2026-03-12
 **Status:** Developer Preview (A0) / Agents: Invite-Only Preview
 **Author:** Simon Carr / Claude
 
@@ -169,6 +169,8 @@ An MCPWorks Agent is a **containerized, optionally intelligent, autonomous entit
 - An optional AI engine (user-configured, BYOAI via API key: OpenAI, Anthropic, Google Gemini, xAI Grok, Mistral, DeepSeek, Moonshot Kimi, OpenRouter (200+ models), Groq, Together AI, Fireworks AI, Cohere, Cerebras, or Ollama (local). Any provider with OpenAI-compatible function calling works.)
 - Cron jobs for scheduled work
 - Webhook listeners for event-driven work
+- Heartbeat mode for proactive autonomy (agent wakes and decides what to do)
+- Optional soul document for persistent identity (LLM-configurable, user-viewable)
 - Persistent state between runs
 - Encrypted secrets for external service access
 - Outbound communication channels (Discord, WhatsApp, Slack, email)
@@ -234,17 +236,63 @@ Functions in an agent's namespace can be marked as **locked**. A locked function
 
 This creates a safety boundary: Claude writes the important functions and locks them. The agent (running on a cheaper model) handles day-to-day operations using those locked functions and can create its own unlocked functions for ad-hoc needs.
 
+### Agent Soul (Persistent Identity)
+
+An agent can optionally have a **soul** — a persistent identity document that shapes its reasoning, personality, and decision-making across every invocation. The soul is:
+
+- **Optional:** Agents work without one (automation-mode agents typically don't need one)
+- **LLM-configurable:** The agent's own AI engine can read and update its soul document, enabling self-refinement over time
+- **User-viewable:** Always visible and editable in the user console — the user is the ultimate authority
+- **Injected before every AI turn:** When an agent uses AI orchestration, the soul document is loaded into context before the LLM reasons about the trigger
+- **Stored as agent state:** Uses the reserved key `__soul__` in the agent's key-value store
+
+The soul document contains:
+- **Identity:** Who the agent is, what it's for, its name and role
+- **Values:** Decision-making principles, priorities, risk tolerance
+- **Long-term instructions:** Standing orders that persist across all invocations
+- **Accumulated context:** Knowledge the agent has gathered that should inform future decisions
+
+The primary AI (Claude, Copilot) can write the initial soul when creating the agent. The agent's own LLM can refine it over time — adding context it's learned, adjusting its approach based on outcomes. The user can inspect and override at any time via the console.
+
+This is distinct from configuration. Configuration says *what* the agent does. The soul says *who* the agent is.
+
+### Heartbeat Mode
+
+In addition to scheduled (cron) and event-driven (webhook) triggers, agents with AI engines can run in **heartbeat mode** — a proactive autonomy loop where the agent wakes on a configurable interval, evaluates its goals, and decides whether action is needed.
+
+Heartbeat is fundamentally different from a cron schedule:
+- A **cron schedule** runs a specific function at a specific time. The action is predetermined.
+- A **heartbeat** runs the agent's *reasoning loop itself*. The agent decides what to do — or whether to do anything at all.
+
+On each heartbeat tick:
+1. The agent's soul document is loaded (if present)
+2. The agent's goals/checklist from state storage (`__heartbeat_goals__`) is loaded
+3. Recent run history and state changes are summarized
+4. The full context is sent to the agent's AI engine
+5. The AI decides: act (call functions, send messages), update goals, or return `HEARTBEAT_OK` (nothing to do)
+
+Heartbeat intervals follow the same tier minimums as schedules:
+- **Builder:** Minimum 5 minutes
+- **Pro:** Minimum 30 seconds
+- **Enterprise:** Minimum 15 seconds
+
+Heartbeat ticks count as executions. Each tick that invokes AI orchestration is bounded by the same orchestration limits (iterations, tokens, timeout) as any other AI-mode trigger.
+
+**Heartbeat + Soul together** enable truly autonomous agents: the soul provides persistent identity and values, the heartbeat provides proactive initiative. The agent doesn't just respond to events — it pursues goals.
+
 ### Event Model
 
-Agents respond to two types of triggers:
+Agents respond to three types of triggers:
 
 **Scheduled (cron):** The agent has cron jobs that fire on a schedule. Each cron tick executes a function in the agent's namespace.
 
 **Event-driven (webhooks):** External systems or MCPWorks functions can POST to `{agent-name}.agent.mcpworks.io`. The agent receives the webhook and its AI (or predefined logic) decides what to do.
 
+**Heartbeat (proactive):** The agent wakes on a configurable interval, loads its soul and goals, and its AI decides whether to act. Requires an AI engine. See Heartbeat Mode above.
+
 ### Orchestration Modes
 
-When an agent trigger fires (cron or webhook), the agent can process it in one of three modes:
+When an agent trigger fires (cron, webhook, or heartbeat), the agent can process it in one of three modes:
 
 **Direct:** Execute the handler function immediately and return its result. No AI involvement. Fastest, cheapest, most predictable. Use for automation-mode agents.
 
@@ -259,6 +307,8 @@ When an agent trigger fires (cron or webhook), the agent can process it in one o
 | Run Then Reason | Yes | Highest | Per-invocation | Monitoring + analysis |
 
 **The watcher pattern:** A Function runs on a cron schedule monitoring something (price feeds, API changes, log patterns). When it detects a condition, it fires a webhook to an Agent. The Function is the sensor. The Agent is the brain.
+
+**The heartbeat pattern:** An agent with a soul and heartbeat mode enabled wakes every N minutes, reviews its goals and recent activity, and decides what to do next. No external trigger needed. The agent pursues its mission autonomously.
 
 Example: Dogecoin monitoring
 
@@ -315,7 +365,7 @@ This is `git branch` for autonomous AI entities.
 
 | Table | Purpose | Key Fields |
 |-------|---------|-----------|
-| Agent | Agent definition | name, container_id, namespace_id, ai_engine, ai_api_key_encrypted, enabled |
+| Agent | Agent definition | name, container_id, namespace_id, ai_engine, ai_api_key_encrypted, heartbeat_enabled, heartbeat_interval, enabled |
 | AgentSchedule | Cron jobs | agent_id, function_id, cron_expression, enabled |
 | AgentWebhook | Webhook endpoints | agent_id, path, handler_function_id |
 | AgentRun | Execution history | agent_id, trigger_type (cron/webhook/manual), started_at, duration, status |
@@ -476,7 +526,7 @@ For agents, secrets include:
 
 | Entity | Purpose | Key Fields |
 |--------|---------|-----------|
-| Agent | Agent definition | name, container_id, namespace_id, ai_engine, ai_api_key_encrypted, enabled |
+| Agent | Agent definition | name, container_id, namespace_id, ai_engine, ai_api_key_encrypted, heartbeat_enabled, heartbeat_interval, enabled |
 | AgentSchedule | Cron jobs | agent_id, function_id, cron_expression, enabled |
 | AgentWebhook | Webhook endpoints | agent_id, path, handler_function_id |
 | AgentRun | Execution history | agent_id, trigger_type, started_at, duration, status |
