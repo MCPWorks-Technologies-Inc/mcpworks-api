@@ -5,10 +5,11 @@ Runs INSIDE the nsjail sandbox. Stdlib only (no API packages visible).
 Reads /sandbox/input.json, executes /sandbox/user_code.py,
 writes structured output to /sandbox/output.json.
 
-Supports three result patterns (matching dev-mode _wrap_code):
+Supports four result patterns (matching dev-mode _wrap_code):
   1. `result = ...`       — explicit result variable
   2. `output = ...`       — alias for result
   3. `def main(input_data)` — callable that receives input
+  4. `def handler(input, context)` — callable that receives input and context dict
 """
 
 import json
@@ -506,6 +507,8 @@ def run():
             result = exec_globals["output"]
         elif callable(exec_globals.get("main")):
             result = exec_globals["main"](input_data)
+        elif callable(exec_globals.get("handler")):
+            result = exec_globals["handler"](input_data, {})
 
     except Exception as e:
         success = False
