@@ -109,22 +109,11 @@ async def _chat_openai_compatible(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": message})
 
-    auth_header = f"Bearer {api_key}"
-    logger.warning(
-        "openai_compat_request_diag",
-        base_url=base_url,
-        model=model,
-        api_key_type=type(api_key).__name__,
-        api_key_len=len(api_key) if isinstance(api_key, str) else -1,
-        api_key_prefix=api_key[:8] if isinstance(api_key, str) and len(api_key) > 8 else "SHORT",
-        auth_header_len=len(auth_header),
-    )
-
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
             headers={
-                "Authorization": auth_header,
+                "Authorization": f"Bearer {api_key}",
                 "content-type": "application/json",
             },
             json={
@@ -346,22 +335,11 @@ async def _tools_openai(
         "max_tokens": max_tokens,
     }
 
-    auth_header = f"Bearer {api_key}"
-    logger.warning(
-        "openai_tools_request_diag",
-        base_url=base_url,
-        model=model,
-        api_key_type=type(api_key).__name__,
-        api_key_len=len(api_key) if isinstance(api_key, str) else -1,
-        api_key_prefix=api_key[:8] if isinstance(api_key, str) and len(api_key) > 8 else "SHORT",
-        auth_header_len=len(auth_header),
-    )
-
     async with httpx.AsyncClient(timeout=300.0) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
             headers={
-                "Authorization": auth_header,
+                "Authorization": f"Bearer {api_key}",
                 "content-type": "application/json",
             },
             json=payload,
