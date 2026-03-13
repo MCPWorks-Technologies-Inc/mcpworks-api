@@ -93,6 +93,7 @@ async def run_orchestration(
 
     async with get_db_context() as db:
         tools = await build_tool_definitions(agent.namespace_id, db)
+        agent_state = await AgentService(db).get_all_state(agent.id)
 
     mcp_pool: McpServerPool | None = None
     if agent.mcp_servers:
@@ -220,6 +221,7 @@ async def run_orchestration(
                     account,
                     tier,
                     mcp_pool=mcp_pool,
+                    agent_state=agent_state,
                 )
                 _emit(
                     "tool_result",
@@ -288,6 +290,7 @@ async def _dispatch_tool(
     account: Account,
     tier: str,
     mcp_pool: McpServerPool | None = None,
+    agent_state: dict | None = None,
 ) -> str:
     """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
     if tool_name in PLATFORM_TOOL_NAMES:
@@ -309,6 +312,7 @@ async def _dispatch_tool(
         tool_input,
         agent,
         account,
+        agent_state=agent_state,
     )
 
 
@@ -359,6 +363,7 @@ async def _execute_namespace_function(
     input_data: dict,
     agent: Agent,
     account: Account,
+    agent_state: dict | None = None,
 ) -> str:
     """Execute a namespace function via the sandbox backend."""
     try:
@@ -374,6 +379,8 @@ async def _execute_namespace_function(
             if not backend:
                 return json.dumps({"error": f"Backend not available: {version.backend}"})
 
+            context = {"state": agent_state or {}}
+
             execution_id = str(uuid_mod.uuid4())
             result = await backend.execute(
                 code=version.code,
@@ -381,6 +388,7 @@ async def _execute_namespace_function(
                 input_data=input_data,
                 account=account,
                 execution_id=execution_id,
+                context=context,
             )
 
         if result.success:

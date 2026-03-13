@@ -473,6 +473,16 @@ def run():
     except Exception:
         input_data = {}
 
+    # Read context (agent state, metadata)
+    context_data = {}
+    try:
+        with open("/sandbox/context.json") as f:
+            context_data = json.load(f)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
     # Read user code
     try:
         with open(CODE_PATH) as f:
@@ -508,7 +518,7 @@ def run():
         elif callable(exec_globals.get("main")):
             result = exec_globals["main"](input_data)
         elif callable(exec_globals.get("handler")):
-            result = exec_globals["handler"](input_data, {})
+            result = exec_globals["handler"](input_data, context_data)
 
     except Exception as e:
         success = False

@@ -180,6 +180,7 @@ class SandboxBackend(Backend):
         timeout_ms: int = 30000,
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """Execute Python code in sandbox.
 
@@ -223,6 +224,7 @@ class SandboxBackend(Backend):
                 namespace=namespace,
                 extra_files=extra_files,
                 sandbox_env=sandbox_env,
+                context=context,
             )
         else:
             return await self._execute_nsjail(
@@ -236,6 +238,7 @@ class SandboxBackend(Backend):
                 namespace=namespace,
                 extra_files=extra_files,
                 sandbox_env=sandbox_env,
+                context=context,
             )
 
     async def _execute_dev_mode(
@@ -248,6 +251,7 @@ class SandboxBackend(Backend):
         namespace: str = "unknown",
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """Execute code in development mode (subprocess, no isolation).
 
@@ -277,6 +281,9 @@ class SandboxBackend(Backend):
             output_file = exec_dir / "output.json"
 
             input_file.write_text(json.dumps(input_data, default=str))
+
+            if context:
+                (exec_dir / "context.json").write_text(json.dumps(context, default=str))
 
             # Wrap code with execution harness
             wrapped_code = self._wrap_code(code)
@@ -387,6 +394,7 @@ class SandboxBackend(Backend):
         namespace: str = "unknown",
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """Execute code in nsjail sandbox.
 
@@ -410,8 +418,10 @@ class SandboxBackend(Backend):
                 (exec_dir / ".sandbox_env.json").write_text(json.dumps(sandbox_env))
                 sandbox_env.clear()
 
-            # Write input and code files
+            # Write input, context, and code files
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))
+            if context:
+                (exec_dir / "context.json").write_text(json.dumps(context, default=str))
             (exec_dir / "user_code.py").write_text(code)
 
             # ORDER-003: Generate execution token via file (never env var or /proc)
@@ -607,6 +617,15 @@ def main():
     except Exception as e:
         input_data = {{}}
 
+    # Read context (agent state, metadata)
+    import os
+    context_path = os.path.join(os.path.dirname(input_path), 'context.json')
+    try:
+        with open(context_path, 'r') as f:
+            context_data = json.load(f)
+    except Exception:
+        context_data = {{}}
+
     # Capture stdout/stderr
     old_stdout = sys.stdout
     old_stderr = sys.stderr
@@ -635,7 +654,7 @@ def main():
         elif callable(exec_globals.get('main')):
             result = exec_globals['main'](input_data)
         elif callable(exec_globals.get('handler')):
-            result = exec_globals['handler'](input_data, {{}})
+            result = exec_globals['handler'](input_data, context_data)
 
     except Exception as e:
         success = False
