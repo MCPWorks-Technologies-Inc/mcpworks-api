@@ -24,6 +24,7 @@ from mcpworks_api.core.database import get_db_context
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import Agent, AgentRun, AgentSchedule
 from mcpworks_api.models.namespace import Namespace
+from mcpworks_api.services.agent_service import AgentService
 from mcpworks_api.services.function import FunctionService
 
 logger = structlog.get_logger(__name__)
@@ -129,6 +130,10 @@ async def _execute_function_direct(
             await _record_failure(db, run_id, schedule, f"Backend not available: {version.backend}")
             return None
 
+        agent_service = AgentService(db)
+        agent_state = await agent_service.get_all_state(agent.id)
+        context = {"state": agent_state}
+
         execution_id = str(uuid_mod.uuid4())
         start_time = datetime.now(UTC)
 
@@ -139,6 +144,7 @@ async def _execute_function_direct(
                 input_data={},
                 account=account,
                 execution_id=execution_id,
+                context=context,
             )
         except Exception as e:
             await _record_failure(db, run_id, schedule, str(e))

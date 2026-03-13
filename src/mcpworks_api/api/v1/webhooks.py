@@ -162,6 +162,12 @@ async def _execute_webhook_function_direct(
             run.completed_at = datetime.now(UTC)
             return {"error": f"Backend not available: {version.backend}"}
 
+        from mcpworks_api.services.agent_service import AgentService
+
+        agent_service = AgentService(db)
+        agent_state = await agent_service.get_all_state(agent.id)
+        context = {"state": agent_state}
+
         execution_id = str(uuid_mod.uuid4())
         start_time = datetime.now(UTC)
 
@@ -172,6 +178,7 @@ async def _execute_webhook_function_direct(
                 input_data=payload,
                 account=account,
                 execution_id=execution_id,
+                context=context,
             )
         except Exception as e:
             run.status = "failed"

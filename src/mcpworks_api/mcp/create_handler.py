@@ -257,12 +257,16 @@ class CreateMCPHandler:
                             "type": "string",
                             "description": (
                                 "Python source code for code_sandbox backend. "
+                                "NEVER hardcode API keys, tokens, secrets, or credentials in code — "
+                                "use required_env for caller-provided secrets or agent state (via context['state']) for stored secrets. "
                                 "Entry point patterns (in priority order): "
                                 "1) 'result = ...' — assign to result variable. "
                                 "2) 'output = ...' — alias for result. "
                                 "3) 'def main(input):' — function receiving input dict, return value is the result. "
                                 "4) 'def handler(input, context):' — function receiving input dict and context dict. "
-                                "The input dict contains the caller's arguments. Example: "
+                                "The input dict contains the caller's arguments. "
+                                "The context dict contains 'state' (dict of agent state key/value pairs) when called via agent orchestration. "
+                                "Example: "
                                 "def main(input):\\n    name = input.get('name', 'World')\\n    return {'greeting': f'Hello, {name}!'}"
                             ),
                         },
@@ -337,7 +341,7 @@ class CreateMCPHandler:
                         "backend": {"type": "string"},
                         "code": {
                             "type": "string",
-                            "description": "New Python code. Same entry point rules as make_function.",
+                            "description": "New Python code. Same entry point rules as make_function. NEVER hardcode API keys, tokens, or secrets — use required_env or agent state (context['state']) instead.",
                         },
                         "config": {"type": "object"},
                         "input_schema": {
