@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 AGENT_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
@@ -118,6 +118,7 @@ class ScheduleResponse(BaseModel):
     agent_id: uuid.UUID
     function_name: str
     cron_expression: str
+    cron_description: str = ""
     timezone: str
     failure_policy: dict[str, Any]
     enabled: bool
@@ -127,6 +128,17 @@ class ScheduleResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def set_cron_description(self) -> "ScheduleResponse":
+        if self.cron_expression and not self.cron_description:
+            try:
+                from cron_descriptor import get_description
+
+                self.cron_description = get_description(self.cron_expression)
+            except Exception:
+                self.cron_description = self.cron_expression
+        return self
 
 
 class ScheduleListResponse(BaseModel):
