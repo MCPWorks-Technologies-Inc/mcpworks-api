@@ -127,7 +127,7 @@ input::placeholder { color: var(--text-3); }
 .agent-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .agent-card-name { font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--link); }
 .agent-card-meta { font-size: 12px; color: var(--text-3); }
-.agent-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.agent-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 
 .slots-bar-wrap { background: var(--bg-0); border: 1px solid var(--border-1); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 16px; }
 .slots-bar-label { font-size: 13px; color: var(--text-2); white-space: nowrap; }
@@ -1926,6 +1926,46 @@ function renderAgentDetail(agent) {
       </div>
     </div>
 
+    <div class="subsection" id="agent-mcp-section">
+      <div class="subsection-header">
+        <span class="subsection-title">MCP Servers</span>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-mcp-form')">+ Add</button>
+      </div>
+      <div id="agent-mcp-list"><div class="loading"><span class="loader"></span></div></div>
+      <div id="agent-mcp-form" class="add-form hidden">
+        <label>Server Name</label>
+        <input id="mcp-name" type="text" placeholder="weather">
+        <label>Type</label>
+        <select id="mcp-type" onchange="toggleMcpFields()">
+          <option value="sse">SSE</option>
+          <option value="streamable_http">Streamable HTTP</option>
+          <option value="stdio">stdio</option>
+        </select>
+        <div id="mcp-url-fields">
+          <label>URL</label>
+          <input id="mcp-url" type="text" placeholder="https://server.example.com/sse">
+        </div>
+        <div id="mcp-stdio-fields" class="hidden">
+          <label>Command</label>
+          <input id="mcp-cmd" type="text" placeholder="npx">
+          <label>Args (comma-separated)</label>
+          <input id="mcp-args" type="text" placeholder="-y,@modelcontextprotocol/server-filesystem,/tmp">
+        </div>
+        <div class="add-form-actions">
+          <button class="btn btn-primary btn-sm" onclick="addMcpServer('${esc(id)}')">Add Server</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAgentAddForm('agent-mcp-form')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection" id="agent-telemetry-section">
+      <div class="subsection-header">
+        <span class="subsection-title">Live Telemetry</span>
+        <button id="telemetry-toggle" class="btn btn-ghost btn-sm" onclick="toggleTelemetry('${esc(id)}')">Connect</button>
+      </div>
+      <div id="agent-telemetry-log" style="max-height:400px;overflow-y:auto;font-size:12px;font-family:var(--font-mono);background:var(--bg-2);border-radius:6px;padding:8px;display:none"></div>
+    </div>
+
     <div class="subsection" id="agent-runs-section">
       <div class="subsection-header"><span class="subsection-title">Recent Runs</span></div>
       <div id="agent-runs-list"><div class="loading"><span class="loader"></span></div></div>
@@ -1937,6 +1977,7 @@ function renderAgentDetail(agent) {
   loadAgentWebhooks(id);
   loadAgentState(id);
   loadAgentChannels(id);
+  loadMcpServers(id);
   loadAgentRuns(id);
 }
 
@@ -2235,6 +2276,148 @@ async function loadAgentRuns(agentId) {
       return `<tr><td class="cell-dim">${esc(r.trigger_type || '\u2014')}</td><td class="${statusCls}">${esc(r.status)}</td><td class="cell-muted">${fmtDate(r.started_at)}</td><td class="cell-muted">${dur}</td></tr>`;
     }).join('')}</tbody></table>`;
   } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+// --- MCP Servers ---
+async function loadMcpServers(agentId) {
+  const el = document.getElementById('agent-mcp-list');
+  if (!el) return;
+  try {
+    const data = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/mcp-servers`);
+    const servers = data.servers || {};
+    const names = Object.keys(servers);
+    if (!names.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-3)">No MCP servers configured.</div>'; return; }
+    el.innerHTML = names.map(name => {
+      const cfg = servers[name];
+      const detail = cfg.type === 'stdio' ? `${cfg.command} ${(cfg.args||[]).join(' ')}` : (cfg.url || '');
+      return `<div class="item-row">
+        <div class="item-row-main">
+          <div class="item-row-label"><span class="tag">${esc(name)}</span> <span style="color:var(--text-3);font-size:11px">${esc(cfg.type)}</span></div>
+          <div class="item-row-meta" style="font-size:11px;word-break:break-all">${esc(detail)}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="removeMcpServer('${esc(agentId)}','${esc(name)}')">remove</button>
+      </div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
+}
+
+function toggleMcpFields() {
+  const t = document.getElementById('mcp-type')?.value;
+  const urlF = document.getElementById('mcp-url-fields');
+  const stdioF = document.getElementById('mcp-stdio-fields');
+  if (t === 'stdio') { urlF?.classList.add('hidden'); stdioF?.classList.remove('hidden'); }
+  else { urlF?.classList.remove('hidden'); stdioF?.classList.add('hidden'); }
+}
+
+async function addMcpServer(agentId) {
+  const name = document.getElementById('mcp-name')?.value.trim();
+  const type = document.getElementById('mcp-type')?.value;
+  if (!name) { alert('Server name is required'); return; }
+  let existing = {};
+  try {
+    const cur = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/mcp-servers`);
+    existing = cur.servers || {};
+  } catch {}
+  const cfg = { type };
+  if (type === 'stdio') {
+    cfg.command = document.getElementById('mcp-cmd')?.value.trim();
+    const argsStr = document.getElementById('mcp-args')?.value.trim();
+    if (argsStr) cfg.args = argsStr.split(',').map(s => s.trim()).filter(Boolean);
+  } else {
+    cfg.url = document.getElementById('mcp-url')?.value.trim();
+  }
+  existing[name] = cfg;
+  try {
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/mcp-servers`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ servers: existing }),
+    });
+    toggleAgentAddForm('agent-mcp-form');
+    loadMcpServers(agentId);
+  } catch (e) { alert('Failed to add MCP server: ' + e.message); }
+}
+
+async function removeMcpServer(agentId, serverName) {
+  if (!confirm(`Remove MCP server "${serverName}"?`)) return;
+  try {
+    const cur = await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/mcp-servers`);
+    const servers = cur.servers || {};
+    delete servers[serverName];
+    if (Object.keys(servers).length === 0) {
+      await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/mcp-servers`, { method: 'DELETE' });
+    } else {
+      await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/mcp-servers`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ servers }),
+      });
+    }
+    loadMcpServers(agentId);
+  } catch (e) { alert('Failed to remove MCP server: ' + e.message); }
+}
+
+// --- Live Telemetry ---
+let _telemetrySource = null;
+
+function toggleTelemetry(agentId) {
+  const btn = document.getElementById('telemetry-toggle');
+  const logEl = document.getElementById('agent-telemetry-log');
+  if (_telemetrySource) {
+    _telemetrySource.close();
+    _telemetrySource = null;
+    if (btn) btn.textContent = 'Connect';
+    if (logEl) logEl.style.display = 'none';
+    return;
+  }
+  if (!logEl) return;
+  logEl.style.display = 'block';
+  logEl.innerHTML = '<div style="color:var(--text-3)">Connecting...</div>';
+  if (btn) btn.textContent = 'Disconnect';
+
+  const url = `/v1/agents/${encodeURIComponent(agentId)}/telemetry`;
+  _telemetrySource = new EventSource(url + `?token=${encodeURIComponent(TOKEN)}`);
+
+  const badgeColors = {
+    orchestration_start: '#6b7280', completion: '#6b7280',
+    ai_thinking: '#3b82f6', ai_text: '#3b82f6',
+    tool_call: '#eab308', tool_result: '#22c55e',
+    error: '#ef4444',
+  };
+
+  function appendEvent(eventType, data) {
+    const ts = data.timestamp ? new Date(data.timestamp * 1000).toLocaleTimeString() : '';
+    const color = badgeColors[eventType] || '#6b7280';
+    const info = data.data || {};
+    let detail = '';
+    if (eventType === 'tool_call') detail = `${info.name || ''} (${info.source || ''})`;
+    else if (eventType === 'tool_result') detail = `${info.name || ''} ${info.duration_ms || 0}ms`;
+    else if (eventType === 'ai_text') detail = (info.text || '').substring(0, 120);
+    else if (eventType === 'ai_thinking') detail = `iter ${info.iteration || '?'}`;
+    else if (eventType === 'error') detail = info.message || '';
+    else if (eventType === 'orchestration_start') detail = `${info.tools_count || 0} tools, ${info.mcp_servers_count || 0} MCP servers`;
+    else if (eventType === 'completion') detail = `${info.success ? 'OK' : 'FAIL'} — ${info.iterations || 0} iters, ${info.total_tokens || 0} tokens`;
+
+    const line = document.createElement('div');
+    line.style.cssText = 'margin-bottom:3px;line-height:1.5';
+    line.innerHTML = `<span style="color:var(--text-3);font-size:10px">${esc(ts)}</span> <span style="background:${color};color:#fff;padding:1px 5px;border-radius:3px;font-size:10px">${esc(eventType)}</span> <span style="color:var(--text-2)">${esc(detail)}</span>`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  const eventTypes = ['orchestration_start', 'ai_thinking', 'ai_text', 'tool_call', 'tool_result', 'error', 'completion'];
+  eventTypes.forEach(et => {
+    _telemetrySource.addEventListener(et, (e) => {
+      try { appendEvent(et, JSON.parse(e.data)); } catch {}
+    });
+  });
+
+  _telemetrySource.onerror = () => {
+    appendEvent('error', { timestamp: Date.now()/1000, data: { message: 'Connection lost' } });
+    _telemetrySource.close();
+    _telemetrySource = null;
+    if (btn) btn.textContent = 'Connect';
+  };
 }
 
 function fmtBytes(bytes) {

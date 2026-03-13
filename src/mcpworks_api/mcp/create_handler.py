@@ -79,6 +79,7 @@ class CreateMCPHandler:
         "list_agent_state_keys": "read",
         "configure_agent_ai": "write",
         "remove_agent_ai": "write",
+        "configure_mcp_servers": "write",
         "chat_with_agent": "read",
         "add_channel": "write",
         "remove_channel": "write",
@@ -808,6 +809,42 @@ class CreateMCPHandler:
                     },
                 ),
                 MCPTool(
+                    name="configure_mcp_servers",
+                    description=(
+                        "Configure external MCP servers that an agent can connect to as a client. "
+                        "When AI orchestration runs, the agent will connect to these servers and make their tools available alongside namespace functions. "
+                        "Supports SSE, streamable_http, and stdio transports. Pass an empty servers dict to clear all."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "servers": {
+                                "type": "object",
+                                "description": "Map of server_name -> config. Each config has 'type' (sse/streamable_http/stdio), 'url' (for sse/streamable_http), 'command'+'args' (for stdio), optional 'headers'.",
+                                "additionalProperties": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "enum": ["sse", "streamable_http", "stdio"],
+                                        },
+                                        "url": {"type": "string"},
+                                        "command": {"type": "string"},
+                                        "args": {"type": "array", "items": {"type": "string"}},
+                                        "headers": {
+                                            "type": "object",
+                                            "additionalProperties": {"type": "string"},
+                                        },
+                                    },
+                                    "required": ["type"],
+                                },
+                            },
+                        },
+                        "required": ["agent_name", "servers"],
+                    },
+                ),
+                MCPTool(
                     name="chat_with_agent",
                     description=(
                         "Send a message to an agent's AI engine and get its response. "
@@ -973,6 +1010,7 @@ class CreateMCPHandler:
             "list_agent_state_keys": self._list_agent_state_keys,
             "configure_agent_ai": self._configure_agent_ai,
             "remove_agent_ai": self._remove_agent_ai,
+            "configure_mcp_servers": self._configure_mcp_servers,
             "chat_with_agent": self._chat_with_agent,
             "add_channel": self._add_channel,
             "remove_channel": self._remove_channel,
@@ -1884,6 +1922,33 @@ class CreateMCPHandler:
         await service.remove_ai(self.account.id, agent_name)
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"agent_name": agent_name, "ai_removed": True}))]
+        )
+
+    async def _configure_mcp_servers(
+        self,
+        agent_name: str,
+        servers: dict,
+    ) -> MCPToolResult:
+        """Configure external MCP servers for an agent."""
+        service = AgentService(self.db)
+        agent = await service.configure_mcp_servers(
+            account_id=self.account.id,
+            agent_name=agent_name,
+            servers=servers,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent_name": agent_name,
+                            "mcp_servers": agent.mcp_servers or {},
+                            "count": len(agent.mcp_servers or {}),
+                            "configured": True,
+                        }
+                    )
+                )
+            ]
         )
 
     async def _chat_with_agent(self, agent_name: str, message: str) -> MCPToolResult:

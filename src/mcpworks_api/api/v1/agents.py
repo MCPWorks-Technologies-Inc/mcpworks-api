@@ -5,12 +5,14 @@ scheduling, webhooks, state, AI config, channels, and cloning.
 All endpoints require an agent-enabled subscription tier.
 """
 
+import json
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
@@ -27,11 +29,13 @@ from mcpworks_api.schemas.agent import (
     ChannelResponse,
     CloneAgentRequest,
     ConfigureAIRequest,
+    ConfigureMcpServersRequest,
     CreateAgentRequest,
     CreateChannelRequest,
     CreateScheduleRequest,
     CreateWebhookRequest,
     DestroyResponse,
+    McpServersResponse,
     ScheduleListResponse,
     ScheduleResponse,
     SetStateRequest,
@@ -763,6 +767,90 @@ async def remove_ai(
     await db.commit()
 
 
+@router.put(
+    "/{agent_id}/mcp-servers",
+    response_model=McpServersResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def configure_mcp_servers(
+    agent_id: uuid.UUID,
+    request: ConfigureMcpServersRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    account: Account = Depends(get_current_account),
+) -> McpServersResponse:
+    """Configure MCP servers for an agent."""
+    _require_agent_tier(user.effective_tier)
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    servers_dict = {
+        name: cfg.model_dump(exclude_none=True) for name, cfg in request.servers.items()
+    }
+    agent = await svc.configure_mcp_servers(account.id, agent.name, servers_dict)
+    await db.commit()
+
+    return McpServersResponse(
+        servers=agent.mcp_servers or {},
+        count=len(agent.mcp_servers or {}),
+    )
+
+
+@router.get(
+    "/{agent_id}/mcp-servers",
+    response_model=McpServersResponse,
+    dependencies=[Depends(require_scope("read"))],
+)
+async def get_mcp_servers(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    account: Account = Depends(get_current_account),
+) -> McpServersResponse:
+    """Get MCP server configuration for an agent."""
+    _require_agent_tier(user.effective_tier)
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    servers = await svc.get_mcp_servers(account.id, agent.name)
+    return McpServersResponse(
+        servers=servers or {},
+        count=len(servers or {}),
+    )
+
+
+@router.delete(
+    "/{agent_id}/mcp-servers",
+    status_code=204,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def remove_mcp_servers(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    account: Account = Depends(get_current_account),
+) -> None:
+    """Remove all MCP server configuration from an agent."""
+    _require_agent_tier(user.effective_tier)
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    await svc.remove_mcp_servers(account.id, agent.name)
+    await db.commit()
+
+
 @router.post(
     "/{agent_id}/channels",
     response_model=ChannelResponse,
@@ -865,6 +953,69 @@ async def clone_agent(
         raise HTTPException(status_code=403, detail={"error": "FORBIDDEN", "message": str(e)})
 
     return AgentResponse.model_validate(new_agent)
+
+
+@router.get("/{agent_id}/telemetry")
+async def agent_telemetry(
+    agent_id: uuid.UUID,
+    request: Request,
+    token: str = Query(..., description="JWT access token (EventSource can't send headers)"),
+    db: AsyncSession = Depends(get_db),
+) -> EventSourceResponse:
+    """Stream live telemetry events for an agent via SSE.
+
+    Uses query-param auth because the browser EventSource API cannot set
+    custom headers.
+    """
+    from mcpworks_api.core.exceptions import InvalidTokenError, TokenExpiredError
+    from mcpworks_api.core.security import verify_access_token
+
+    try:
+        payload = verify_access_token(token)
+        user_id = payload["sub"]
+    except (TokenExpiredError, InvalidTokenError, KeyError):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    _require_agent_tier(user.effective_tier)
+
+    result = await db.execute(select(Account).where(Account.user_id == user_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=401, detail="Account not found")
+
+    svc = AgentService(db)
+    try:
+        await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    from mcpworks_api.core.telemetry import telemetry_bus
+
+    agent_id_str = str(agent_id)
+
+    async def event_generator():
+        async for event in telemetry_bus.subscribe(agent_id_str):
+            if await request.is_disconnected():
+                break
+            yield {
+                "event": event.event_type,
+                "data": json.dumps(
+                    {
+                        "event_type": event.event_type,
+                        "timestamp": event.timestamp,
+                        "run_id": event.run_id,
+                        "agent_id": event.agent_id,
+                        "data": event.data,
+                    }
+                ),
+            }
+
+    return EventSourceResponse(event_generator(), ping=15)
 
 
 lock_router = APIRouter(prefix="/namespaces", tags=["agents"])

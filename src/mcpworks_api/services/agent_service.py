@@ -764,6 +764,43 @@ class AgentService:
             channel_type=channel_type,
         )
 
+    async def configure_mcp_servers(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+        servers: dict,
+    ) -> Agent:
+        agent = await self.get_agent(account_id, agent_name)
+        agent.mcp_servers = servers if servers else None
+        await self.db.flush()
+        await self.db.refresh(agent)
+        logger.info(
+            "agent_mcp_servers_configured",
+            agent_id=str(agent.id),
+            server_count=len(servers) if servers else 0,
+        )
+        return agent
+
+    async def get_mcp_servers(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+    ) -> dict | None:
+        agent = await self.get_agent(account_id, agent_name)
+        return agent.mcp_servers
+
+    async def remove_mcp_servers(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+    ) -> Agent:
+        agent = await self.get_agent(account_id, agent_name)
+        agent.mcp_servers = None
+        await self.db.flush()
+        await self.db.refresh(agent)
+        logger.info("agent_mcp_servers_removed", agent_id=str(agent.id))
+        return agent
+
     async def clone_agent(
         self,
         account_id: uuid.UUID,
@@ -814,6 +851,7 @@ class AgentService:
             ai_api_key_dek_encrypted=source.ai_api_key_dek_encrypted,
             system_prompt=source.system_prompt,
             auto_channel=source.auto_channel,
+            mcp_servers=source.mcp_servers,
             cloned_from_id=source.id,
         )
         self.db.add(new_agent)

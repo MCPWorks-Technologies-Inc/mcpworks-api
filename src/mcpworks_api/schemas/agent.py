@@ -228,6 +228,46 @@ class ChannelResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+MCP_SERVER_TYPES = ("sse", "streamable_http", "stdio")
+
+
+class McpServerConfig(BaseModel):
+    type: str = Field(...)
+    url: str | None = None
+    command: str | None = None
+    args: list[str] | None = None
+    headers: dict[str, str] | None = None
+    env: dict[str, str] | None = None
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in MCP_SERVER_TYPES:
+            raise ValueError(f"type must be one of: {', '.join(MCP_SERVER_TYPES)}")
+        return v
+
+
+class ConfigureMcpServersRequest(BaseModel):
+    servers: dict[str, McpServerConfig] = Field(...)
+
+    @field_validator("servers")
+    @classmethod
+    def validate_servers(cls, v: dict[str, McpServerConfig]) -> dict[str, McpServerConfig]:
+        if len(v) > 10:
+            raise ValueError("Maximum 10 MCP servers per agent")
+        for name in v:
+            if not re.match(r"^[a-z0-9][a-z0-9_-]{0,30}[a-z0-9]?$", name):
+                raise ValueError(
+                    f"Server name '{name}' must be lowercase alphanumeric with hyphens/underscores"
+                )
+        return v
+
+
+class McpServersResponse(BaseModel):
+    servers: dict[str, dict[str, Any]]
+    count: int
+
+
 class CloneAgentRequest(BaseModel):
     new_name: str = Field(..., min_length=1, max_length=63)
 

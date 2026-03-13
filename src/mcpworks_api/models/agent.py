@@ -68,6 +68,7 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     cpu_limit: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     auto_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    mcp_servers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     cloned_from_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agents.id", ondelete="SET NULL"),
