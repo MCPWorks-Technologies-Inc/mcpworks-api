@@ -2099,7 +2099,7 @@ async function loadAgentSchedules(agentId) {
     el.innerHTML = scheds.map(s => `<div class="item-row">
       <div class="item-row-main">
         <div class="item-row-label">${esc(s.function_name)}</div>
-        <div class="item-row-meta"><code style="font-size:11px">${esc(s.cron_expression)}</code> &middot; ${esc(s.timezone || 'UTC')} &middot; ${s.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'} &middot; on failure: ${esc(s.failure_policy || 'retry')}</div>
+        <div class="item-row-meta">${esc(s.cron_description || s.cron_expression)} <code style="font-size:10px;color:var(--text-3)">${esc(s.cron_expression)}</code> &middot; ${esc(s.timezone || 'UTC')} &middot; ${s.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'}</div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="deleteAgentSchedule('${esc(agentId)}','${esc(s.id)}')">delete</button>
     </div>`).join('');
