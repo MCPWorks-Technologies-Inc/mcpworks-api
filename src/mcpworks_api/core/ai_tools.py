@@ -78,9 +78,13 @@ async def build_tool_definitions(
 def parse_tool_name(tool_name: str) -> tuple[str, str] | None:
     """Parse a namespace function tool name into (service_name, function_name).
 
-    Returns None if the tool_name is a platform tool or doesn't contain '__'.
+    Returns None if the tool_name is a platform tool, MCP tool, or doesn't contain '__'.
     """
     if tool_name in PLATFORM_TOOL_NAMES:
+        return None
+    from mcpworks_api.core.mcp_client import is_mcp_tool
+
+    if is_mcp_tool(tool_name):
         return None
     if "__" not in tool_name:
         return None

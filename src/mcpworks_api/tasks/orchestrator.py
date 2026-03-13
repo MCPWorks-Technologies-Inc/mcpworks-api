@@ -20,6 +20,8 @@ from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
 from mcpworks_api.core.ai_tools import PLATFORM_TOOL_NAMES, build_tool_definitions, parse_tool_name
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
+from mcpworks_api.core.mcp_client import McpServerPool, is_mcp_tool
+from mcpworks_api.core.telemetry import make_event, telemetry_bus
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import Agent, AgentChannel, AgentRun
 from mcpworks_api.services.agent_service import AgentService
@@ -92,10 +94,37 @@ async def run_orchestration(
     async with get_db_context() as db:
         tools = await build_tool_definitions(agent.namespace_id, db)
 
+    mcp_pool: McpServerPool | None = None
+    if agent.mcp_servers:
+        try:
+            mcp_pool = McpServerPool(agent.mcp_servers)
+            await mcp_pool.__aenter__()
+            tools.extend(mcp_pool.get_tool_definitions())
+            logger.info(
+                "orchestration_mcp_tools_loaded",
+                agent_name=agent.name,
+                mcp_tools_count=len(mcp_pool.get_tool_definitions()),
+            )
+        except Exception:
+            logger.exception("orchestration_mcp_pool_failed", agent_name=agent.name)
+            mcp_pool = None
+
     messages: list[dict] = [{"role": "user", "content": trigger_context}]
     functions_called: list[str] = []
     total_tokens = 0
     iterations = 0
+    agent_id_str = str(agent.id)
+    run_id = str(uuid_mod.uuid4())
+
+    def _emit(etype: str, **kw: object) -> None:
+        telemetry_bus.emit(agent_id_str, make_event(etype, agent_id_str, run_id, **kw))
+
+    _emit(
+        "orchestration_start",
+        trigger_type=trigger_type,
+        tools_count=len(tools),
+        mcp_servers_count=len(agent.mcp_servers or {}),
+    )
 
     try:
         while iterations < limits["max_iterations"]:
@@ -127,9 +156,14 @@ async def run_orchestration(
             iterations += 1
             usage = response.get("usage", {})
             total_tokens += usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+            _emit("ai_thinking", iteration=iterations, usage=usage)
 
             content_blocks = response.get("content", [])
             stop_reason = response.get("stop_reason", "end_turn")
+
+            for block in content_blocks:
+                if block.get("type") == "text" and block.get("text"):
+                    _emit("ai_text", text=block["text"][:500])
 
             if stop_reason != "tool_use":
                 final_text = _extract_text(content_blocks)
@@ -140,6 +174,13 @@ async def run_orchestration(
                     iterations=iterations,
                     total_tokens=total_tokens,
                     duration_ms=_elapsed_ms(start_time),
+                )
+                _emit(
+                    "completion",
+                    success=True,
+                    iterations=iterations,
+                    functions_called=functions_called,
+                    total_tokens=total_tokens,
                 )
                 await _post_orchestration(agent, trigger_type, result)
                 return result
@@ -165,12 +206,26 @@ async def run_orchestration(
                     )
                     continue
 
+                source = (
+                    "mcp"
+                    if is_mcp_tool(tool_name)
+                    else ("platform" if tool_name in PLATFORM_TOOL_NAMES else "namespace")
+                )
+                _emit("tool_call", name=tool_name, args=tool_input, source=source)
+                tc_start = time.monotonic()
                 result_str = await _dispatch_tool(
                     tool_name,
                     tool_input,
                     agent,
                     account,
                     tier,
+                    mcp_pool=mcp_pool,
+                )
+                _emit(
+                    "tool_result",
+                    name=tool_name,
+                    result_preview=result_str[:200],
+                    duration_ms=_elapsed_ms(tc_start),
                 )
                 functions_called.append(tool_name)
                 tool_results.append(_tool_result(tool_id, tool_name, result_str))
@@ -186,6 +241,7 @@ async def run_orchestration(
         )
 
     except AIClientError as e:
+        _emit("error", message=str(e)[:300], phase="ai_call")
         logger.error(
             "orchestration_ai_error",
             agent_name=agent.name,
@@ -204,6 +260,7 @@ async def run_orchestration(
         await _record_run(agent, trigger_type, result)
         return result
     except Exception as e:
+        _emit("error", message=str(e)[:300], phase="orchestration")
         logger.exception("orchestration_unexpected_error", agent_name=agent.name)
         result = OrchestrationResult(
             success=False,
@@ -216,6 +273,12 @@ async def run_orchestration(
         )
         await _record_run(agent, trigger_type, result)
         return result
+    finally:
+        if mcp_pool is not None:
+            try:
+                await mcp_pool.__aexit__(None, None, None)
+            except Exception:
+                logger.exception("orchestration_mcp_pool_cleanup_failed")
 
 
 async def _dispatch_tool(
@@ -224,10 +287,16 @@ async def _dispatch_tool(
     agent: Agent,
     account: Account,
     tier: str,
+    mcp_pool: McpServerPool | None = None,
 ) -> str:
-    """Dispatch a tool call to either a platform tool or namespace function."""
+    """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
     if tool_name in PLATFORM_TOOL_NAMES:
         return await _execute_platform_tool(tool_name, tool_input, agent, account, tier)
+
+    if is_mcp_tool(tool_name):
+        if mcp_pool is None:
+            return json.dumps({"error": "MCP server pool not available"})
+        return await mcp_pool.call_tool(tool_name, tool_input)
 
     parsed = parse_tool_name(tool_name)
     if not parsed:
