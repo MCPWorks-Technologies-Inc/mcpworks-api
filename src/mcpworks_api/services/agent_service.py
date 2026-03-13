@@ -685,6 +685,14 @@ class AgentService:
             raise NotFoundError("Agent has no AI engine configured")
 
         api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
+        logger.warning(
+            "chat_with_agent_decrypt_diag",
+            agent_name=agent_name,
+            engine=agent.ai_engine,
+            api_key_type=type(api_key).__name__,
+            api_key_len=len(api_key) if isinstance(api_key, str) else -1,
+            api_key_truthy=bool(api_key),
+        )
 
         try:
             response = await chat(
