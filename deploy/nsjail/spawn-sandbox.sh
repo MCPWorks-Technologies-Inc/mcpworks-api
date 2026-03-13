@@ -125,6 +125,11 @@ if [ -f "${EXEC_DIR}/.sandbox_env.json" ]; then
     rm -f "${EXEC_DIR}/.sandbox_env.json"
 fi
 
+# CONTEXT: Copy agent state/context if present (read by execute.py, passed to handler).
+if [ -f "${EXEC_DIR}/context.json" ]; then
+    cp "${EXEC_DIR}/context.json" "${WORKSPACE}/context.json"
+fi
+
 # Generate fake /proc files to hide host details (SECURITY_AUDIT.md FINDING-02)
 cat > "${WORKSPACE}/.fake_cpuinfo" <<'CPUINFO'
 processor	: 0

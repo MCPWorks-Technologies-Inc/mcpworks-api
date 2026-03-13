@@ -1,5 +1,6 @@
 """Agent service — container lifecycle, scheduling, state, cloning."""
 
+import contextlib
 import hashlib
 import json
 import uuid
@@ -631,6 +632,15 @@ class AgentService:
             "total_size_bytes": total_size,
             "max_size_bytes": tier_config["max_state_bytes"],
         }
+
+    async def get_all_state(self, agent_id: uuid.UUID) -> dict[str, Any]:
+        result = await self.db.execute(select(AgentState).where(AgentState.agent_id == agent_id))
+        state_entries = result.scalars().all()
+        state = {}
+        for entry in state_entries:
+            with contextlib.suppress(Exception):
+                state[entry.key] = decrypt_value(entry.value_encrypted, entry.value_dek_encrypted)
+        return state
 
     async def configure_ai(
         self,

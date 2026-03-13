@@ -47,6 +47,7 @@ class StubBackend(Backend):
         timeout_ms: int = 30000,
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """Mock execution returning predictable results.
 

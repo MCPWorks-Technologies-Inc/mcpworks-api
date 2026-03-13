@@ -87,6 +87,7 @@ class Backend(ABC):
         timeout_ms: int = 30000,
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """Execute function code/config with input data.
 
@@ -102,6 +103,8 @@ class Backend(ABC):
             sandbox_env: User-provided environment variables to inject into
                 the sandbox. Already validated and filtered to declared vars.
                 Values are NEVER logged or persisted.
+            context: Optional context dict passed to handler(input, context).
+                Contains agent state and metadata when called via orchestration.
 
         Returns:
             ExecutionResult with output or error details.
