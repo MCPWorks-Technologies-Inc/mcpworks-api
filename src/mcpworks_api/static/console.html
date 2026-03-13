@@ -2378,6 +2378,10 @@ function toggleTelemetry(agentId) {
   const url = `/v1/agents/${encodeURIComponent(agentId)}/telemetry`;
   _telemetrySource = new EventSource(url + `?token=${encodeURIComponent(TOKEN)}`);
 
+  _telemetrySource.onopen = () => {
+    logEl.innerHTML = '<div style="color:var(--text-3);font-size:11px">Connected — waiting for agent activity...</div>';
+  };
+
   const badgeColors = {
     orchestration_start: '#6b7280', completion: '#6b7280',
     ai_thinking: '#3b82f6', ai_text: '#3b82f6',
@@ -2413,10 +2417,13 @@ function toggleTelemetry(agentId) {
   });
 
   _telemetrySource.onerror = () => {
-    appendEvent('error', { timestamp: Date.now()/1000, data: { message: 'Connection lost' } });
-    _telemetrySource.close();
-    _telemetrySource = null;
-    if (btn) btn.textContent = 'Connect';
+    if (_telemetrySource && _telemetrySource.readyState === EventSource.CLOSED) {
+      logEl.innerHTML = '<div style="color:var(--danger);font-size:12px">Failed to connect — check authentication or agent ID</div>';
+      _telemetrySource = null;
+      if (btn) btn.textContent = 'Connect';
+      return;
+    }
+    appendEvent('error', { timestamp: Date.now()/1000, data: { message: 'Connection interrupted — reconnecting...' } });
   };
 }
 
