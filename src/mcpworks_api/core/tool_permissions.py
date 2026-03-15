@@ -54,6 +54,7 @@ _BUILDER_TOOLS: frozenset[str] = _STANDARD_TOOLS | frozenset(
         "add_channel",
         "configure_agent_ai",
         "configure_mcp_servers",
+        "configure_orchestration_limits",
         "lock_function",
         "unlock_function",
         "clone_agent",

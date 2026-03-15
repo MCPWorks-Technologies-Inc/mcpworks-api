@@ -294,6 +294,18 @@ class McpServersResponse(BaseModel):
     count: int
 
 
+class ConfigureOrchestrationLimitsRequest(BaseModel):
+    max_iterations: int | None = Field(None, ge=1, le=200)
+    max_ai_tokens: int | None = Field(None, ge=1000, le=10_000_000)
+    max_execution_seconds: int | None = Field(None, ge=10, le=3600)
+    max_functions_called: int | None = Field(None, ge=1, le=500)
+
+
+class OrchestrationLimitsResponse(BaseModel):
+    limits: dict[str, int]
+    source: str = Field(description="'custom' if agent has overrides, 'tier_default' otherwise")
+
+
 class CloneAgentRequest(BaseModel):
     new_name: str = Field(..., min_length=1, max_length=63)
 

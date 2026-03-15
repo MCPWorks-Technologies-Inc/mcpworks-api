@@ -30,12 +30,14 @@ from mcpworks_api.schemas.agent import (
     CloneAgentRequest,
     ConfigureAIRequest,
     ConfigureMcpServersRequest,
+    ConfigureOrchestrationLimitsRequest,
     CreateAgentRequest,
     CreateChannelRequest,
     CreateScheduleRequest,
     CreateWebhookRequest,
     DestroyResponse,
     McpServersResponse,
+    OrchestrationLimitsResponse,
     ScheduleListResponse,
     ScheduleResponse,
     SetStateRequest,
@@ -914,6 +916,93 @@ async def remove_channel(
         await db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+
+@router.put(
+    "/{agent_id}/orchestration-limits",
+    response_model=OrchestrationLimitsResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def configure_orchestration_limits(
+    agent_id: uuid.UUID,
+    request: ConfigureOrchestrationLimitsRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    account: Account = Depends(get_current_account),
+) -> OrchestrationLimitsResponse:
+    """Set custom orchestration limits for an agent. Overrides tier defaults."""
+    _require_agent_tier(user.effective_tier)
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    overrides = {k: v for k, v in request.model_dump().items() if v is not None}
+    agent.orchestration_limits = overrides if overrides else None
+    await db.commit()
+
+    from mcpworks_api.tasks.orchestrator import resolve_orchestration_limits
+
+    limits = resolve_orchestration_limits(user.effective_tier, agent)
+    return OrchestrationLimitsResponse(
+        limits=limits,
+        source="custom" if overrides else "tier_default",
+    )
+
+
+@router.get(
+    "/{agent_id}/orchestration-limits",
+    response_model=OrchestrationLimitsResponse,
+    dependencies=[Depends(require_scope("read"))],
+)
+async def get_orchestration_limits(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    account: Account = Depends(get_current_account),
+) -> OrchestrationLimitsResponse:
+    """Get effective orchestration limits for an agent (tier defaults + overrides)."""
+    _require_agent_tier(user.effective_tier)
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    from mcpworks_api.tasks.orchestrator import resolve_orchestration_limits
+
+    limits = resolve_orchestration_limits(user.effective_tier, agent)
+    return OrchestrationLimitsResponse(
+        limits=limits,
+        source="custom" if agent.orchestration_limits else "tier_default",
+    )
+
+
+@router.delete(
+    "/{agent_id}/orchestration-limits",
+    status_code=204,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def reset_orchestration_limits(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    account: Account = Depends(get_current_account),
+) -> None:
+    """Reset orchestration limits to tier defaults."""
+    _require_agent_tier(user.effective_tier)
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    agent.orchestration_limits = None
+    await db.commit()
 
 
 @router.post(

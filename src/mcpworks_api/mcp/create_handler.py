@@ -89,6 +89,7 @@ class CreateMCPHandler:
         "configure_agent_ai": "write",
         "remove_agent_ai": "write",
         "configure_mcp_servers": "write",
+        "configure_orchestration_limits": "write",
         "chat_with_agent": "read",
         "add_channel": "write",
         "remove_channel": "write",
@@ -862,6 +863,46 @@ class CreateMCPHandler:
                     },
                 ),
                 MCPTool(
+                    name="configure_orchestration_limits",
+                    description=(
+                        "Set custom orchestration limits for an agent, overriding tier defaults. "
+                        "Useful for agents that need more AI reasoning power (higher iterations/tokens) or tighter constraints. "
+                        "Omit any field to keep the tier default for that limit. "
+                        "Call with no optional fields to reset all limits to tier defaults."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "max_iterations": {
+                                "type": "integer",
+                                "description": "Max AI reasoning loops per orchestration run (1-200). Tier default varies by plan.",
+                                "minimum": 1,
+                                "maximum": 200,
+                            },
+                            "max_ai_tokens": {
+                                "type": "integer",
+                                "description": "Max LLM tokens consumed per orchestration run (1000-10000000). Controls BYOAI cost.",
+                                "minimum": 1000,
+                                "maximum": 10000000,
+                            },
+                            "max_execution_seconds": {
+                                "type": "integer",
+                                "description": "Max wall-clock time for orchestration run (10-3600).",
+                                "minimum": 10,
+                                "maximum": 3600,
+                            },
+                            "max_functions_called": {
+                                "type": "integer",
+                                "description": "Max function calls per orchestration run (1-500).",
+                                "minimum": 1,
+                                "maximum": 500,
+                            },
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
+                MCPTool(
                     name="chat_with_agent",
                     description=(
                         "Send a message to an agent's AI engine and get its response. "
@@ -1156,6 +1197,7 @@ class CreateMCPHandler:
             "configure_agent_ai": self._configure_agent_ai,
             "remove_agent_ai": self._remove_agent_ai,
             "configure_mcp_servers": self._configure_mcp_servers,
+            "configure_orchestration_limits": self._configure_orchestration_limits,
             "chat_with_agent": self._chat_with_agent,
             "add_channel": self._add_channel,
             "remove_channel": self._remove_channel,
@@ -2096,6 +2138,50 @@ class CreateMCPHandler:
                             "mcp_servers": agent.mcp_servers or {},
                             "count": len(agent.mcp_servers or {}),
                             "configured": True,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_orchestration_limits(
+        self,
+        agent_name: str,
+        max_iterations: int | None = None,
+        max_ai_tokens: int | None = None,
+        max_execution_seconds: int | None = None,
+        max_functions_called: int | None = None,
+    ) -> MCPToolResult:
+        """Set custom orchestration limits for an agent."""
+        from mcpworks_api.tasks.orchestrator import resolve_orchestration_limits
+
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+
+        overrides: dict[str, int] = {}
+        if max_iterations is not None:
+            overrides["max_iterations"] = max_iterations
+        if max_ai_tokens is not None:
+            overrides["max_ai_tokens"] = max_ai_tokens
+        if max_execution_seconds is not None:
+            overrides["max_execution_seconds"] = max_execution_seconds
+        if max_functions_called is not None:
+            overrides["max_functions_called"] = max_functions_called
+
+        agent.orchestration_limits = overrides if overrides else None
+
+        tier = self.account.user.effective_tier
+        effective = resolve_orchestration_limits(tier, agent)
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent_name": agent_name,
+                            "overrides": overrides or None,
+                            "effective_limits": effective,
+                            "source": "custom" if overrides else "tier_default",
                         }
                     )
                 )
