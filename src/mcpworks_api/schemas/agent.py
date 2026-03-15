@@ -10,9 +10,22 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 AGENT_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
+TOOL_TIERS = ("execute_only", "standard", "builder", "admin")
+
+
 class CreateAgentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=63)
     display_name: str | None = Field(None, max_length=255)
+    tool_tier: str = Field(
+        "standard", description="Tool access tier: execute_only, standard, builder, admin"
+    )
+
+    @field_validator("tool_tier")
+    @classmethod
+    def validate_tool_tier(cls, v: str) -> str:
+        if v not in TOOL_TIERS:
+            raise ValueError(f"tool_tier must be one of: {', '.join(TOOL_TIERS)}")
+        return v
 
     @field_validator("name")
     @classmethod
@@ -31,6 +44,7 @@ class AgentResponse(BaseModel):
     name: str
     display_name: str | None = None
     status: str
+    tool_tier: str = "standard"
     ai_engine: str | None = None
     ai_model: str | None = None
     system_prompt: str | None = None

@@ -376,6 +376,10 @@ async def _initialize_next_run_times() -> None:
                 )
 
 
+ANOMALY_DETECTION_INTERVAL = 300
+ANOMALY_DETECTION_COUNTER = {"ticks": 0}
+
+
 async def run_scheduler_loop() -> None:
     """Main scheduler loop — runs until cancelled."""
     logger.info("scheduler_starting", poll_interval=POLL_INTERVAL_SECONDS)
@@ -389,5 +393,15 @@ async def run_scheduler_loop() -> None:
                 logger.info("scheduler_poll_complete", executed=count)
         except Exception:
             logger.exception("scheduler_poll_error")
+
+        ANOMALY_DETECTION_COUNTER["ticks"] += POLL_INTERVAL_SECONDS
+        if ANOMALY_DETECTION_COUNTER["ticks"] >= ANOMALY_DETECTION_INTERVAL:
+            ANOMALY_DETECTION_COUNTER["ticks"] = 0
+            try:
+                from mcpworks_api.tasks.anomaly_detector import detect_anomalies
+
+                await detect_anomalies()
+            except Exception:
+                logger.exception("anomaly_detection_error")
 
         await asyncio.sleep(POLL_INTERVAL_SECONDS)

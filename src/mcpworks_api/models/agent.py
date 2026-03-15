@@ -67,6 +67,12 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     memory_limit_mb: Mapped[int] = mapped_column(Integer, nullable=False, default=256)
     cpu_limit: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    tool_tier: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="standard", server_default="standard"
+    )
+    scheduled_tool_tier: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="execute_only", server_default="execute_only"
+    )
     auto_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
     mcp_servers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     cloned_from_id: Mapped[uuid.UUID | None] = mapped_column(

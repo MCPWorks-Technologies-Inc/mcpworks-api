@@ -18,16 +18,103 @@ from mcpworks_api.core.redis import get_redis_context
 logger = structlog.get_logger(__name__)
 
 
+DAILY_COMPUTE_BUDGETS: dict[str, int] = {
+    "free": 900,
+    "builder": 3600,
+    "pro": 14400,
+    "enterprise": 86400,
+}
+
+DAILY_EXEC_LIMITS: dict[str, int] = {
+    "free": 500,
+    "builder": 2000,
+    "pro": 10000,
+    "enterprise": 50000,
+}
+
+
+async def check_daily_budget(account_id: Any, tier: str) -> None:
+    """Pre-execution check: reject if daily compute budget exhausted."""
+    base_tier = tier.replace("-agent", "") if tier.endswith("-agent") else tier
+    budget = DAILY_COMPUTE_BUDGETS.get(base_tier, DAILY_COMPUTE_BUDGETS["free"])
+    daily_limit = DAILY_EXEC_LIMITS.get(base_tier, DAILY_EXEC_LIMITS["free"])
+
+    now = datetime.now(UTC)
+    date_key = now.strftime("%Y-%m-%d")
+
+    async with get_redis_context() as redis:
+        compute_key = f"compute:daily:{account_id}:{date_key}"
+        exec_key = f"execcount:daily:{account_id}:{date_key}"
+
+        current_compute = await redis.get(compute_key)
+        current_execs = await redis.get(exec_key)
+
+        if current_compute and float(current_compute) >= budget:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "DAILY_COMPUTE_BUDGET_EXCEEDED",
+                    "message": f"Daily compute budget ({budget}s CPU) exhausted",
+                    "tier": tier,
+                },
+            )
+        if current_execs and int(current_execs) >= daily_limit:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "DAILY_EXEC_LIMIT_EXCEEDED",
+                    "message": f"Daily execution limit ({daily_limit}) reached",
+                    "tier": tier,
+                },
+            )
+
+
+async def track_compute(account_id: Any, cpu_seconds: float, tier: str) -> None:
+    """Post-execution: track CPU-seconds consumed."""
+    base_tier = tier.replace("-agent", "") if tier.endswith("-agent") else tier
+    budget = DAILY_COMPUTE_BUDGETS.get(base_tier, DAILY_COMPUTE_BUDGETS["free"])
+    date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    async with get_redis_context() as redis:
+        compute_key = f"compute:daily:{account_id}:{date_key}"
+        exec_key = f"execcount:daily:{account_id}:{date_key}"
+
+        current = await redis.incrbyfloat(compute_key, cpu_seconds)
+        await redis.incr(exec_key)
+
+        ttl = await redis.ttl(compute_key)
+        if ttl == -1:
+            await redis.expire(compute_key, 86400 * 2)
+            await redis.expire(exec_key, 86400 * 2)
+
+        if current >= budget:
+            logger.warning(
+                "daily_compute_budget_exceeded",
+                account_id=str(account_id),
+                current=current,
+                budget=budget,
+                tier=tier,
+            )
+        elif current >= budget * 0.8:
+            logger.info(
+                "daily_compute_budget_warning",
+                account_id=str(account_id),
+                current=current,
+                budget=budget,
+                pct=round(current / budget * 100),
+            )
+
+
 class BillingMiddleware(BaseHTTPMiddleware):
     """Track usage and enforce quotas based on account tier.
 
     Tracks:
     - Monthly execution count per account
-    - Credit usage (future)
+    - Daily compute budgets (CPU-seconds and execution count)
 
     Enforces:
     - Monthly execution limits per tier
-    - Credit balance (future)
+    - Daily compute budgets per tier
     """
 
     # Tier limits (executions per month) - per PRICING.md v5.2.0
