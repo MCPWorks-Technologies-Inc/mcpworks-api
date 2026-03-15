@@ -22,13 +22,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for CI workflow to succeed
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          check-name: 'Test'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
-          allowed-conclusions: success
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA="${{ github.sha }}"
+          REPO="${{ github.repository }}"
+          echo "Waiting for CI 'Test' job on $SHA..."
+          for i in $(seq 1 40); do
+            STATUS=$(gh api "repos/$REPO/commits/$SHA/check-runs" \
+              --jq '.check_runs[] | select(.name == "Test") | .conclusion' 2>/dev/null || true)
+            if [ "$STATUS" = "success" ]; then
+              echo "CI passed!"
+              exit 0
+            elif [ "$STATUS" = "failure" ] || [ "$STATUS" = "cancelled" ]; then
+              echo "CI failed with: $STATUS"
+              exit 1
+            fi
+            echo "  Attempt $i/40 — CI still running (status: ${STATUS:-pending})..."
+            sleep 15
+          done
+          echo "Timed out waiting for CI"
+          exit 1
 
   deploy:
     name: Deploy to Production
