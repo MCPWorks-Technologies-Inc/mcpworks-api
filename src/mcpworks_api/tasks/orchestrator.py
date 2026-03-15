@@ -222,6 +222,7 @@ async def run_orchestration(
                     tier,
                     mcp_pool=mcp_pool,
                     agent_state=agent_state,
+                    trigger_type=trigger_type,
                 )
                 _emit(
                     "tool_result",
@@ -291,8 +292,24 @@ async def _dispatch_tool(
     tier: str,
     mcp_pool: McpServerPool | None = None,
     agent_state: dict | None = None,
+    trigger_type: str = "manual",
 ) -> str:
     """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
+    from mcpworks_api.core.tool_permissions import ToolTier, is_tool_allowed
+
+    if trigger_type in ("cron", "webhook"):
+        effective_tier = ToolTier(getattr(agent, "scheduled_tool_tier", "execute_only"))
+    else:
+        effective_tier = ToolTier(getattr(agent, "tool_tier", "standard"))
+
+    if not is_tool_allowed(effective_tier, tool_name):
+        return json.dumps(
+            {
+                "error": f"Agent '{agent.name}' (tier: {effective_tier.value}) "
+                f"is not authorized to call '{tool_name}' in {trigger_type} context"
+            }
+        )
+
     if tool_name in PLATFORM_TOOL_NAMES:
         return await _execute_platform_tool(tool_name, tool_input, agent, account, tier)
 
