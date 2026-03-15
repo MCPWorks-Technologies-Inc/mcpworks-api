@@ -40,10 +40,8 @@ def upgrade() -> None:
     )
     op.execute("UPDATE subscriptions SET tier = 'enterprise-agent' WHERE tier = 'enterprise'")
 
-    op.execute("UPDATE namespace_services SET tier_required = 'trial' WHERE tier_required = 'free'")
-    op.execute(
-        "UPDATE namespace_services SET tier_required = 'pro' WHERE tier_required = 'builder'"
-    )
+    op.execute("UPDATE services SET tier_required = 'trial' WHERE tier_required = 'free'")
+    op.execute("UPDATE services SET tier_required = 'pro' WHERE tier_required = 'builder'")
 
 
 def downgrade() -> None:
