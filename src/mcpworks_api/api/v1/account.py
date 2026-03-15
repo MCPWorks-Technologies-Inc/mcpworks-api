@@ -46,7 +46,7 @@ class UsageResponse(BaseModel):
     tier: str = Field(
         ...,
         description="Current subscription tier",
-        examples=["free", "builder", "pro", "enterprise"],
+        examples=["trial", "pro", "enterprise", "dedicated"],
     )
 
 
@@ -81,14 +81,14 @@ async def get_usage(
     Usage is tracked per calendar month.
 
     Execution limits by tier:
-    - Free: 1,000/month
-    - Builder: 25,000/month
+    - Trial: 125,000/month (14-day)
     - Pro: 250,000/month
     - Enterprise: 1,000,000/month
+    - Dedicated: Unlimited (fair use)
     """
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
-    tier = user.effective_tier if user else "free"
+    tier = user.effective_tier if user else "trial"
 
     # Get limit for tier
     limit = BillingMiddleware.TIER_LIMITS.get(tier, BillingMiddleware.DEFAULT_LIMIT)

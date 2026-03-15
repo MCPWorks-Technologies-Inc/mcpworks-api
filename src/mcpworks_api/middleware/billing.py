@@ -19,25 +19,25 @@ logger = structlog.get_logger(__name__)
 
 
 DAILY_COMPUTE_BUDGETS: dict[str, int] = {
-    "free": 900,
-    "builder": 3600,
+    "trial": 3600,
     "pro": 14400,
     "enterprise": 86400,
+    "dedicated": 345600,
 }
 
 DAILY_EXEC_LIMITS: dict[str, int] = {
-    "free": 500,
-    "builder": 2000,
+    "trial": 5000,
     "pro": 10000,
     "enterprise": 50000,
+    "dedicated": -1,
 }
 
 
 async def check_daily_budget(account_id: Any, tier: str) -> None:
     """Pre-execution check: reject if daily compute budget exhausted."""
     base_tier = tier.replace("-agent", "") if tier.endswith("-agent") else tier
-    budget = DAILY_COMPUTE_BUDGETS.get(base_tier, DAILY_COMPUTE_BUDGETS["free"])
-    daily_limit = DAILY_EXEC_LIMITS.get(base_tier, DAILY_EXEC_LIMITS["free"])
+    budget = DAILY_COMPUTE_BUDGETS.get(base_tier, DAILY_COMPUTE_BUDGETS["trial"])
+    daily_limit = DAILY_EXEC_LIMITS.get(base_tier, DAILY_EXEC_LIMITS["trial"])
 
     now = datetime.now(UTC)
     date_key = now.strftime("%Y-%m-%d")
@@ -58,7 +58,7 @@ async def check_daily_budget(account_id: Any, tier: str) -> None:
                     "tier": tier,
                 },
             )
-        if current_execs and int(current_execs) >= daily_limit:
+        if daily_limit != -1 and current_execs and int(current_execs) >= daily_limit:
             raise HTTPException(
                 status_code=429,
                 detail={
@@ -72,7 +72,7 @@ async def check_daily_budget(account_id: Any, tier: str) -> None:
 async def track_compute(account_id: Any, cpu_seconds: float, tier: str) -> None:
     """Post-execution: track CPU-seconds consumed."""
     base_tier = tier.replace("-agent", "") if tier.endswith("-agent") else tier
-    budget = DAILY_COMPUTE_BUDGETS.get(base_tier, DAILY_COMPUTE_BUDGETS["free"])
+    budget = DAILY_COMPUTE_BUDGETS.get(base_tier, DAILY_COMPUTE_BUDGETS["trial"])
     date_key = datetime.now(UTC).strftime("%Y-%m-%d")
 
     async with get_redis_context() as redis:
@@ -117,19 +117,21 @@ class BillingMiddleware(BaseHTTPMiddleware):
     - Daily compute budgets per tier
     """
 
-    # Tier limits (executions per month) - per PRICING.md v5.2.0
+    # Tier limits (executions per month) - per PRICING.md v7.0.0
+    # -1 means unlimited (fair use)
     TIER_LIMITS: dict[str, int] = {
-        "free": 1_000,
-        "builder": 25_000,
+        "trial": 125_000,
         "pro": 250_000,
         "enterprise": 1_000_000,
-        "builder-agent": 25_000,
+        "dedicated": -1,
+        "trial-agent": 125_000,
         "pro-agent": 250_000,
         "enterprise-agent": 1_000_000,
+        "dedicated-agent": -1,
     }
 
     # Default limit for unknown tiers
-    DEFAULT_LIMIT = 1_000
+    DEFAULT_LIMIT = 125_000
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request and track usage.
@@ -152,7 +154,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
         # Check quota before execution
         try:
             usage, limit = await self._check_quota(account)
-            if usage >= limit:
+            if limit != -1 and usage >= limit:
                 # ORDER-022: Log quota exceeded as security event
                 asyncio.create_task(
                     self._log_security_event(
@@ -162,7 +164,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
                         details={
                             "usage": usage,
                             "limit": limit,
-                            "tier": getattr(account, "tier", "free"),
+                            "tier": getattr(account, "tier", "trial"),
                         },
                     )
                 )
@@ -173,7 +175,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
                         "message": f"Monthly execution limit ({limit}) exceeded",
                         "usage": usage,
                         "limit": limit,
-                        "tier": getattr(account, "tier", "free"),
+                        "tier": getattr(account, "tier", "trial"),
                     },
                 )
         except HTTPException:
@@ -202,7 +204,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
         Returns:
             Tuple of (current_usage, limit).
         """
-        tier = getattr(account, "effective_tier", None) or getattr(account, "tier", "free")
+        tier = getattr(account, "effective_tier", None) or getattr(account, "tier", "trial")
         limit = self.TIER_LIMITS.get(tier, self.DEFAULT_LIMIT)
 
         async with get_redis_context() as redis:

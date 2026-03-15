@@ -61,7 +61,7 @@ class Service(Base, UUIDMixin, TimestampMixin):
     tier_required: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        default="free",
+        default="trial",
     )
 
     # Health status - Index in __table_args__

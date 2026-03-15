@@ -27,17 +27,13 @@ TIER_PRICE_MAP: dict[str, dict[str, str]] = {}
 def get_tier_price_map() -> dict[str, dict[str, str]]:
     """Get tier to price ID mapping from settings.
 
-    Per PRICING.md v5.1.0 (Value Ladder):
-    - builder: $29/mo or $290/yr
-    - pro: $149/mo or $1,490/yr
-    - enterprise: $499/mo or $4,990/yr
+    Per PRICING.md v7.0.0 (Value Ladder):
+    - pro: $179/mo or $1,790/yr
+    - enterprise: $599/mo or $5,990/yr
+    - dedicated: $999/mo or $9,990/yr
     """
     settings = get_settings()
     return {
-        "builder": {
-            "monthly": settings.stripe_price_builder_monthly,
-            "annual": settings.stripe_price_builder_annual,
-        },
         "pro": {
             "monthly": settings.stripe_price_pro_monthly,
             "annual": settings.stripe_price_pro_annual,
@@ -46,23 +42,29 @@ def get_tier_price_map() -> dict[str, dict[str, str]]:
             "monthly": settings.stripe_price_enterprise_monthly,
             "annual": settings.stripe_price_enterprise_annual,
         },
+        "dedicated": {
+            "monthly": settings.stripe_price_dedicated_monthly,
+            "annual": settings.stripe_price_dedicated_annual,
+        },
     }
 
 
 TIER_EXECUTIONS = {
-    "free": 1_000,
-    "builder": 25_000,
+    "trial": 125_000,
     "pro": 250_000,
     "enterprise": 1_000_000,
-    "builder-agent": 25_000,
+    "dedicated": -1,
+    "trial-agent": 125_000,
     "pro-agent": 250_000,
     "enterprise-agent": 1_000_000,
+    "dedicated-agent": -1,
 }
 
 AGENT_TIER_PRICE_IDS: dict[str, str] = {
-    "builder-agent": "price_agent_builder_placeholder",
+    "trial-agent": "price_agent_trial_placeholder",
     "pro-agent": "price_agent_pro_placeholder",
     "enterprise-agent": "price_agent_enterprise_placeholder",
+    "dedicated-agent": "price_agent_dedicated_placeholder",
 }
 
 
@@ -167,8 +169,8 @@ class StripeService:
         Raises:
             ValueError: If tier/interval is invalid or user not found
         """
-        if tier not in ["builder", "pro", "enterprise"]:
-            raise ValueError(f"Invalid tier: {tier}. Must be builder, pro, or enterprise")
+        if tier not in ["pro", "enterprise", "dedicated"]:
+            raise ValueError(f"Invalid tier: {tier}. Must be pro, enterprise, or dedicated")
         if interval not in ["monthly", "annual"]:
             raise ValueError(f"Invalid interval: {interval}. Must be monthly or annual")
 
@@ -354,13 +356,15 @@ class StripeService:
 
         user_id = uuid.UUID(user_id_str)
 
-        tier = metadata.get("tier")
+        base_tier = metadata.get("tier")
         interval = metadata.get("interval", "monthly")
         subscription_id = session.get("subscription")
         customer_id = session.get("customer")
 
         if not subscription_id:
             return
+
+        tier = f"{base_tier}-agent" if base_tier and not base_tier.endswith("-agent") else base_tier
 
         stripe_sub = stripe.Subscription.retrieve(subscription_id)
 
@@ -442,11 +446,14 @@ class StripeService:
             if price_id:
                 tier_info = self._price_id_to_tier(price_id)
                 if tier_info:
-                    tier, interval = tier_info
-                    subscription.tier = tier
+                    base_tier, interval = tier_info
+                    agent_tier = (
+                        f"{base_tier}-agent" if not base_tier.endswith("-agent") else base_tier
+                    )
+                    subscription.tier = agent_tier
                     subscription.interval = interval
                     await self.db.execute(
-                        update(User).where(User.id == subscription.user_id).values(tier=tier)
+                        update(User).where(User.id == subscription.user_id).values(tier=agent_tier)
                     )
 
         await self.db.commit()
@@ -467,9 +474,9 @@ class StripeService:
         # Mark as cancelled
         subscription.status = SubscriptionStatus.CANCELLED.value
 
-        # Downgrade user to free tier
+        # Downgrade user to trial-agent tier
         await self.db.execute(
-            update(User).where(User.id == subscription.user_id).values(tier="free")
+            update(User).where(User.id == subscription.user_id).values(tier="trial-agent")
         )
 
         await self.db.commit()
