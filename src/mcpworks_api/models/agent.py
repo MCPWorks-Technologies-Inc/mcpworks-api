@@ -75,6 +75,7 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     )
     auto_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
     mcp_servers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    orchestration_limits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     cloned_from_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agents.id", ondelete="SET NULL"),
