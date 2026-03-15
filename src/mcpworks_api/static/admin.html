@@ -825,15 +825,16 @@ async function loadUser(userId) {
             <select id="tier-select" style="background:#030712;border:1px solid #374151;color:#fff;padding:6px 10px;border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;">
               <option value="">Change plan…</option>
               <optgroup label="Standard">
-                <option value="free" ${(u.effective_tier || u.tier) === 'free' ? 'disabled' : ''}>Free</option>
-                <option value="builder" ${(u.effective_tier || u.tier) === 'builder' ? 'disabled' : ''}>Builder</option>
+                <option value="trial" ${(u.effective_tier || u.tier) === 'trial' ? 'disabled' : ''}>Trial</option>
                 <option value="pro" ${(u.effective_tier || u.tier) === 'pro' ? 'disabled' : ''}>Pro</option>
                 <option value="enterprise" ${(u.effective_tier || u.tier) === 'enterprise' ? 'disabled' : ''}>Enterprise</option>
+                <option value="dedicated" ${(u.effective_tier || u.tier) === 'dedicated' ? 'disabled' : ''}>Dedicated</option>
               </optgroup>
               <optgroup label="Agent-Enabled">
-                <option value="builder-agent" ${(u.effective_tier || u.tier) === 'builder-agent' ? 'disabled' : ''}>Builder Agent</option>
+                <option value="trial-agent" ${(u.effective_tier || u.tier) === 'trial-agent' ? 'disabled' : ''}>Trial Agent</option>
                 <option value="pro-agent" ${(u.effective_tier || u.tier) === 'pro-agent' ? 'disabled' : ''}>Pro Agent</option>
                 <option value="enterprise-agent" ${(u.effective_tier || u.tier) === 'enterprise-agent' ? 'disabled' : ''}>Enterprise Agent</option>
+                <option value="dedicated-agent" ${(u.effective_tier || u.tier) === 'dedicated-agent' ? 'disabled' : ''}>Dedicated Agent</option>
               </optgroup>
             </select>
             <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="setTierOverride('${esc(u.id)}')">Apply</button>

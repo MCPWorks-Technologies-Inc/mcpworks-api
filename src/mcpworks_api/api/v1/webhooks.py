@@ -75,7 +75,7 @@ async def handle_agent_webhook(path: str, request: Request) -> JSONResponse:
             return JSONResponse(status_code=500, content={"detail": "Account not found"})
 
         orch_mode = webhook.orchestration_mode or "direct"
-        tier = account.user.effective_tier if account.user else "builder-agent"
+        tier = account.user.effective_tier if account.user else "pro-agent"
 
         if orch_mode != "direct" and not agent.ai_engine:
             logger.warning("webhook_ai_fallback_direct", agent_name=namespace, path=path)

@@ -214,7 +214,7 @@ async def _execute_scheduled_function(
         logger.error("schedule_account_not_found", agent_id=str(agent.id))
         return
 
-    tier = account.user.effective_tier if account.user else "builder-agent"
+    tier = account.user.effective_tier if account.user else "pro-agent"
 
     if orch_mode == "run_then_reason":
         output = await _execute_function_direct(schedule, agent)

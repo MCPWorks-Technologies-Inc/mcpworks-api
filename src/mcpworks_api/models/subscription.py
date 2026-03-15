@@ -27,62 +27,66 @@ class SubscriptionStatus(str, Enum):
 class SubscriptionTier(str, Enum):
     """Subscription tier with monthly execution limits.
 
-    Per PRICING.md v5.2.0:
-    - free ($0): 1,000 executions/month
-    - builder ($29/mo): 25,000 executions/month
-    - pro ($149/mo): 250,000 executions/month
-    - enterprise ($499/mo): 1,000,000 executions/month
+    Per PRICING.md v7.0.0 (Value Ladder):
+    - trial ($0, 14-day): 125,000 executions/month
+    - pro ($179/mo): 250,000 executions/month
+    - enterprise ($599/mo): 1,000,000 executions/month
+    - dedicated ($999/mo): unlimited (fair use)
     """
 
-    FREE = "free"
-    BUILDER = "builder"
+    TRIAL = "trial"
     PRO = "pro"
     ENTERPRISE = "enterprise"
-    BUILDER_AGENT = "builder-agent"
+    DEDICATED = "dedicated"
+    TRIAL_AGENT = "trial-agent"
     PRO_AGENT = "pro-agent"
     ENTERPRISE_AGENT = "enterprise-agent"
+    DEDICATED_AGENT = "dedicated-agent"
 
     @property
     def is_agent_tier(self) -> bool:
         return self in (
-            SubscriptionTier.BUILDER_AGENT,
+            SubscriptionTier.TRIAL_AGENT,
             SubscriptionTier.PRO_AGENT,
             SubscriptionTier.ENTERPRISE_AGENT,
+            SubscriptionTier.DEDICATED_AGENT,
         )
 
     @property
     def functions_tier(self) -> "SubscriptionTier":
         mapping = {
-            SubscriptionTier.BUILDER_AGENT: SubscriptionTier.BUILDER,
+            SubscriptionTier.TRIAL_AGENT: SubscriptionTier.PRO,
             SubscriptionTier.PRO_AGENT: SubscriptionTier.PRO,
             SubscriptionTier.ENTERPRISE_AGENT: SubscriptionTier.ENTERPRISE,
+            SubscriptionTier.DEDICATED_AGENT: SubscriptionTier.DEDICATED,
         }
         return mapping.get(self, self)
 
     @property
     def monthly_executions(self) -> int:
-        """Get monthly execution limit for this tier."""
+        """Get monthly execution limit for this tier. -1 means unlimited."""
         limits = {
-            SubscriptionTier.FREE: 1_000,
-            SubscriptionTier.BUILDER: 25_000,
+            SubscriptionTier.TRIAL: 125_000,
             SubscriptionTier.PRO: 250_000,
             SubscriptionTier.ENTERPRISE: 1_000_000,
-            SubscriptionTier.BUILDER_AGENT: 25_000,
+            SubscriptionTier.DEDICATED: -1,
+            SubscriptionTier.TRIAL_AGENT: 125_000,
             SubscriptionTier.PRO_AGENT: 250_000,
             SubscriptionTier.ENTERPRISE_AGENT: 1_000_000,
+            SubscriptionTier.DEDICATED_AGENT: -1,
         }
-        return limits.get(self, 1_000)
+        return limits.get(self, 125_000)
 
 
 AGENT_TIER_CONFIG: dict[str, dict] = {
-    "builder-agent": {
-        "max_agents": 1,
-        "memory_limit_mb": 256,
-        "cpu_limit": 0.25,
-        "min_schedule_seconds": 300,
-        "max_state_bytes": 10 * 1024 * 1024,
-        "run_retention_days": 7,
-        "max_webhook_payload_bytes": 256 * 1024,
+    "trial-agent": {
+        "max_agents": 5,
+        "memory_limit_mb": 512,
+        "cpu_limit": 0.5,
+        "min_schedule_seconds": 30,
+        "max_state_bytes": 100 * 1024 * 1024,
+        "run_retention_days": 14,
+        "max_webhook_payload_bytes": 1 * 1024 * 1024,
     },
     "pro-agent": {
         "max_agents": 5,
@@ -101,6 +105,15 @@ AGENT_TIER_CONFIG: dict[str, dict] = {
         "max_state_bytes": 1024 * 1024 * 1024,
         "run_retention_days": 90,
         "max_webhook_payload_bytes": 5 * 1024 * 1024,
+    },
+    "dedicated-agent": {
+        "max_agents": -1,
+        "memory_limit_mb": 2048,
+        "cpu_limit": 2.0,
+        "min_schedule_seconds": 15,
+        "max_state_bytes": -1,
+        "run_retention_days": 365,
+        "max_webhook_payload_bytes": 10 * 1024 * 1024,
     },
 }
 

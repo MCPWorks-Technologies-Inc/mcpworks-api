@@ -42,23 +42,17 @@ logger = structlog.get_logger(__name__)
 class ExecutionTier(str, Enum):
     """Execution tier for resource limits."""
 
-    FREE = "free"
-    BUILDER = "builder"
+    TRIAL = "trial"
     PRO = "pro"
     ENTERPRISE = "enterprise"
+    DEDICATED = "dedicated"
 
 
 TIER_CONFIG = {
-    ExecutionTier.FREE: {
-        "timeout_sec": 10,
-        "memory_mb": 128,
-        "max_pids": 16,
-        "network": False,
-    },
-    ExecutionTier.BUILDER: {
-        "timeout_sec": 30,
-        "memory_mb": 256,
-        "max_pids": 32,
+    ExecutionTier.TRIAL: {
+        "timeout_sec": 90,
+        "memory_mb": 512,
+        "max_pids": 64,
         "network": True,
     },
     ExecutionTier.PRO: {
@@ -73,14 +67,21 @@ TIER_CONFIG = {
         "max_pids": 128,
         "network": True,
     },
+    ExecutionTier.DEDICATED: {
+        "timeout_sec": 300,
+        "memory_mb": 2048,
+        "max_pids": 128,
+        "network": True,
+    },
 }
 
-DEFAULT_TIER = ExecutionTier.FREE
+DEFAULT_TIER = ExecutionTier.TRIAL
 
 AGENT_TIER_MAP = {
-    "builder-agent": ExecutionTier.BUILDER,
+    "trial-agent": ExecutionTier.PRO,
     "pro-agent": ExecutionTier.PRO,
     "enterprise-agent": ExecutionTier.ENTERPRISE,
+    "dedicated-agent": ExecutionTier.DEDICATED,
 }
 
 

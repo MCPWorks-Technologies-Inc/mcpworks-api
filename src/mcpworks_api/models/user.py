@@ -19,15 +19,16 @@ if TYPE_CHECKING:
 
 
 class UserTier(str, Enum):
-    """User subscription tier per PRICING.md v5.0.0 (Value Ladder)."""
+    """User subscription tier per PRICING.md v7.0.0 (Value Ladder)."""
 
-    FREE = "free"
-    BUILDER = "builder"
+    TRIAL = "trial"
     PRO = "pro"
     ENTERPRISE = "enterprise"
-    BUILDER_AGENT = "builder-agent"
+    DEDICATED = "dedicated"
+    TRIAL_AGENT = "trial-agent"
     PRO_AGENT = "pro-agent"
     ENTERPRISE_AGENT = "enterprise-agent"
+    DEDICATED_AGENT = "dedicated-agent"
 
 
 class UserStatus(str, Enum):
@@ -74,7 +75,7 @@ class User(Base, UUIDMixin, TimestampMixin):
     tier: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        default=UserTier.FREE.value,
+        default=UserTier.TRIAL_AGENT.value,
     )
     # Index in __table_args__
     status: Mapped[str] = mapped_column(
