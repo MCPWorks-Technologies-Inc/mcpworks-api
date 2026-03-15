@@ -11,7 +11,7 @@ share a single scheduler loop in the API process.
 
 import asyncio
 import uuid as uuid_mod
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from croniter import croniter
@@ -309,8 +309,65 @@ async def _record_failure(
     )
 
 
+async def _execute_heartbeat(agent: Agent) -> None:
+    """Execute a heartbeat tick — AI autonomy loop with no specific function."""
+    from mcpworks_api.tasks.orchestrator import run_orchestration
+
+    if not agent.ai_engine:
+        logger.warning("heartbeat_no_ai", agent_name=agent.name)
+        return
+
+    async with get_db_context() as db:
+        account = await _get_schedule_account(agent, db)
+    if not account:
+        logger.error("heartbeat_account_not_found", agent_id=str(agent.id))
+        return
+
+    tier = account.user.effective_tier if account.user else "pro-agent"
+
+    async with get_db_context() as db:
+        agent_service = AgentService(db)
+        agent_state = await agent_service.get_all_state(agent.id)
+
+    soul = agent_state.get("__soul__", "")
+    goals = agent_state.get("__goals__", "")
+
+    trigger_context = "Heartbeat tick. You are waking up on your configured interval.\n"
+    if soul:
+        trigger_context += f"\nYour soul:\n{soul}\n"
+    if goals:
+        trigger_context += f"\nYour current goals:\n{goals}\n"
+    trigger_context += (
+        "\nReview your state and decide if any actions are needed. "
+        "If nothing needs doing, respond briefly that all is well."
+    )
+
+    orch_result = await run_orchestration(
+        agent=agent,
+        trigger_type="heartbeat",
+        trigger_context=trigger_context,
+        trigger_data={"interval": agent.heartbeat_interval},
+        tier=tier,
+        account=account,
+    )
+
+    async with get_db_context() as db:
+        next_at = datetime.now(UTC) + timedelta(seconds=agent.heartbeat_interval or 300)
+        await db.execute(
+            update(Agent).where(Agent.id == agent.id).values(heartbeat_next_at=next_at)
+        )
+
+    logger.info(
+        "heartbeat_complete",
+        agent_name=agent.name,
+        success=orch_result.success,
+        iterations=orch_result.iterations,
+        functions_called=len(orch_result.functions_called),
+    )
+
+
 async def _poll_and_execute() -> int:
-    """Poll for due schedules and execute them. Returns count of executions dispatched."""
+    """Poll for due schedules and heartbeats, execute them. Returns count dispatched."""
     now = datetime.now(UTC)
     executed = 0
 
@@ -327,17 +384,33 @@ async def _poll_and_execute() -> int:
         )
         schedules = list(result.scalars().all())
 
+        heartbeat_result = await db.execute(
+            select(Agent).where(
+                Agent.status == "running",
+                Agent.enabled.is_(True),
+                Agent.heartbeat_enabled.is_(True),
+                Agent.heartbeat_interval.isnot(None),
+                Agent.ai_engine.isnot(None),
+            )
+        )
+        heartbeat_agents = list(heartbeat_result.scalars().all())
+
     due_schedules = []
     for schedule in schedules:
         if schedule.next_run_at is None or schedule.next_run_at <= now:
             due_schedules.append(schedule)
 
-    if not due_schedules:
+    due_heartbeats = []
+    for agent in heartbeat_agents:
+        if agent.heartbeat_next_at is None or agent.heartbeat_next_at <= now:
+            due_heartbeats.append(agent)
+
+    if not due_schedules and not due_heartbeats:
         return 0
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_EXECUTIONS)
 
-    async def _run_with_semaphore(sched: AgentSchedule) -> None:
+    async def _run_schedule(sched: AgentSchedule) -> None:
         async with semaphore:
             try:
                 await _execute_scheduled_function(sched, sched.agent)
@@ -347,9 +420,20 @@ async def _poll_and_execute() -> int:
                     schedule_id=str(sched.id),
                 )
 
-    tasks = [asyncio.create_task(_run_with_semaphore(s)) for s in due_schedules]
+    async def _run_heartbeat(agent: Agent) -> None:
+        async with semaphore:
+            try:
+                await _execute_heartbeat(agent)
+            except Exception:
+                logger.exception(
+                    "heartbeat_execution_error",
+                    agent_name=agent.name,
+                )
+
+    tasks = [asyncio.create_task(_run_schedule(s)) for s in due_schedules]
+    tasks += [asyncio.create_task(_run_heartbeat(a)) for a in due_heartbeats]
     await asyncio.gather(*tasks, return_exceptions=True)
-    executed = len(due_schedules)
+    executed = len(due_schedules) + len(due_heartbeats)
 
     return executed
 

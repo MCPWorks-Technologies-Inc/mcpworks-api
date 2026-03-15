@@ -25,7 +25,7 @@ AGENT_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 AGENT_STATUSES = ("creating", "running", "stopped", "error", "destroying")
 RUN_STATUSES = ("running", "completed", "failed", "timeout")
-TRIGGER_TYPES = ("cron", "webhook", "manual", "ai")
+TRIGGER_TYPES = ("cron", "webhook", "manual", "ai", "heartbeat")
 CHANNEL_TYPES = ("discord", "slack", "whatsapp", "email")
 ORCHESTRATION_MODES = ("direct", "reason_first", "run_then_reason")
 AI_ENGINES = (
@@ -76,6 +76,13 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     auto_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
     mcp_servers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     orchestration_limits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    heartbeat_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    heartbeat_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    heartbeat_next_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     cloned_from_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agents.id", ondelete="SET NULL"),
