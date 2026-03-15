@@ -30,11 +30,11 @@ from mcpworks_api.services.function import FunctionService
 logger = structlog.get_logger(__name__)
 
 ORCHESTRATION_TIER_LIMITS: dict[str, dict] = {
-    "builder-agent": {
-        "max_iterations": 5,
-        "max_total_tokens": 50_000,
-        "max_execution_seconds": 60,
-        "max_functions_called": 3,
+    "trial-agent": {
+        "max_iterations": 10,
+        "max_total_tokens": 200_000,
+        "max_execution_seconds": 120,
+        "max_functions_called": 10,
     },
     "pro-agent": {
         "max_iterations": 10,
@@ -48,13 +48,19 @@ ORCHESTRATION_TIER_LIMITS: dict[str, dict] = {
         "max_execution_seconds": 300,
         "max_functions_called": 25,
     },
+    "dedicated-agent": {
+        "max_iterations": 50,
+        "max_total_tokens": 2_000_000,
+        "max_execution_seconds": 300,
+        "max_functions_called": -1,
+    },
 }
 
 DEFAULT_LIMITS = {
-    "max_iterations": 5,
-    "max_total_tokens": 50_000,
-    "max_execution_seconds": 60,
-    "max_functions_called": 3,
+    "max_iterations": 10,
+    "max_total_tokens": 200_000,
+    "max_execution_seconds": 120,
+    "max_functions_called": 10,
 }
 
 

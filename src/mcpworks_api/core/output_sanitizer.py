@@ -30,10 +30,10 @@ _COMPILED_PATTERNS: list[tuple[re.Pattern, str]] = [
 ]
 
 OUTPUT_SIZE_LIMITS: dict[str, int] = {
-    "free": 256 * 1024,
-    "builder": 512 * 1024,
+    "trial": 1 * 1024 * 1024,
     "pro": 1 * 1024 * 1024,
     "enterprise": 5 * 1024 * 1024,
+    "dedicated": 10 * 1024 * 1024,
 }
 
 
@@ -51,7 +51,7 @@ def scrub_secrets(output: str) -> tuple[str, int]:
 
 
 def enforce_output_size(output: str, tier: str) -> str:
-    max_size = OUTPUT_SIZE_LIMITS.get(tier, OUTPUT_SIZE_LIMITS["free"])
+    max_size = OUTPUT_SIZE_LIMITS.get(tier, OUTPUT_SIZE_LIMITS["trial"])
     encoded = output.encode("utf-8")
     if len(encoded) <= max_size:
         return output

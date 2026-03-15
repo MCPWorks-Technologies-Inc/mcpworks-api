@@ -993,7 +993,7 @@ class TierOverrideRequest(BaseModel):
     tier: str = Field(
         ...,
         description="Tier to grant",
-        pattern="^(free|builder|pro|enterprise|builder-agent|pro-agent|enterprise-agent)$",
+        pattern="^(trial|pro|enterprise|dedicated|trial-agent|pro-agent|enterprise-agent|dedicated-agent)$",
     )
     reason: str = Field(
         ...,
@@ -1864,9 +1864,9 @@ async def get_usage_overview(
             month_key = f"usage:{user.account.id}:{now.year}:{now.month}"
             current = await redis.get(month_key)
             usage_count = int(current) if current else 0
-            tier = user.effective_tier or user.tier or "free"
-            limit = BillingMiddleware.TIER_LIMITS.get(tier, 1000)
-            pct = round(usage_count / limit * 100, 1) if limit > 0 else 0
+            tier = user.effective_tier or user.tier or "trial"
+            limit = BillingMiddleware.TIER_LIMITS.get(tier, 125_000)
+            pct = round(usage_count / limit * 100, 1) if limit > 0 else 0.0
 
             usage_data.append(
                 {
@@ -2354,7 +2354,8 @@ async def admin_delete_namespace(
 
 class AgentTierUpgradeRequest(BaseModel):
     tier: str = Field(
-        ..., description="Target agent tier (builder-agent, pro-agent, enterprise-agent)"
+        ...,
+        description="Target agent tier (trial-agent, pro-agent, enterprise-agent, dedicated-agent)",
     )
 
 
@@ -2373,7 +2374,7 @@ async def upgrade_agent_tier(
     from mcpworks_api.models.agent import Agent
     from mcpworks_api.models.subscription import AGENT_TIER_CONFIG
 
-    valid_agent_tiers = {"builder-agent", "pro-agent", "enterprise-agent"}
+    valid_agent_tiers = {"trial-agent", "pro-agent", "enterprise-agent", "dedicated-agent"}
     if body.tier not in valid_agent_tiers:
         raise HTTPException(status_code=422, detail=f"Invalid agent tier: {body.tier}")
 

@@ -57,15 +57,15 @@ class Settings(BaseSettings):
             return None
         return v.replace("\\n", "\n")
 
-    # Stripe - PRICING.md v5.0.0 Value Ladder
+    # Stripe - PRICING.md v7.0.0 Value Ladder
     stripe_secret_key: str = Field(default="sk_test_placeholder")
     stripe_webhook_secret: str = Field(default="whsec_placeholder")
-    stripe_price_builder_monthly: str = Field(default="price_builder_monthly_placeholder")
-    stripe_price_builder_annual: str = Field(default="price_builder_annual_placeholder")
     stripe_price_pro_monthly: str = Field(default="price_pro_monthly_placeholder")
     stripe_price_pro_annual: str = Field(default="price_pro_annual_placeholder")
     stripe_price_enterprise_monthly: str = Field(default="price_enterprise_monthly_placeholder")
     stripe_price_enterprise_annual: str = Field(default="price_enterprise_annual_placeholder")
+    stripe_price_dedicated_monthly: str = Field(default="price_dedicated_monthly_placeholder")
+    stripe_price_dedicated_annual: str = Field(default="price_dedicated_annual_placeholder")
 
     # Observability
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -107,11 +107,11 @@ class Settings(BaseSettings):
     resend_from_email: str = Field(default="noreply@mcpworks.io")
     email_provider: str = Field(default="resend")
 
-    # Tier Execution Limits (monthly) - per PRICING.md v5.2.0
-    tier_executions_free: int = Field(default=1_000)
-    tier_executions_builder: int = Field(default=25_000)
+    # Tier Execution Limits (monthly) - per PRICING.md v7.0.0
+    tier_executions_trial: int = Field(default=125_000)
     tier_executions_pro: int = Field(default=250_000)
     tier_executions_enterprise: int = Field(default=1_000_000)
+    tier_executions_dedicated: int = Field(default=-1)
 
     # Envelope Encryption (AES-256-GCM KEK for agent secrets)
     encryption_kek_b64: str = Field(

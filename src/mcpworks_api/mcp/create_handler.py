@@ -487,7 +487,7 @@ class CreateMCPHandler:
             ),
         ]
 
-        agent_tiers = ("builder-agent", "pro-agent", "enterprise-agent")
+        agent_tiers = ("trial-agent", "pro-agent", "enterprise-agent", "dedicated-agent")
         if self.account.user.effective_tier in agent_tiers:
             tools += [
                 MCPTool(
