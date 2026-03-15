@@ -32,25 +32,25 @@ logger = structlog.get_logger(__name__)
 ORCHESTRATION_TIER_LIMITS: dict[str, dict] = {
     "trial-agent": {
         "max_iterations": 10,
-        "max_total_tokens": 200_000,
+        "max_ai_tokens": 200_000,
         "max_execution_seconds": 120,
         "max_functions_called": 10,
     },
     "pro-agent": {
         "max_iterations": 10,
-        "max_total_tokens": 200_000,
+        "max_ai_tokens": 200_000,
         "max_execution_seconds": 120,
         "max_functions_called": 10,
     },
     "enterprise-agent": {
         "max_iterations": 25,
-        "max_total_tokens": 1_000_000,
+        "max_ai_tokens": 1_000_000,
         "max_execution_seconds": 300,
         "max_functions_called": 25,
     },
     "dedicated-agent": {
         "max_iterations": 50,
-        "max_total_tokens": 2_000_000,
+        "max_ai_tokens": 2_000_000,
         "max_execution_seconds": 300,
         "max_functions_called": -1,
     },
@@ -58,10 +58,23 @@ ORCHESTRATION_TIER_LIMITS: dict[str, dict] = {
 
 DEFAULT_LIMITS = {
     "max_iterations": 10,
-    "max_total_tokens": 200_000,
+    "max_ai_tokens": 200_000,
     "max_execution_seconds": 120,
     "max_functions_called": 10,
 }
+
+VALID_LIMIT_KEYS = frozenset(DEFAULT_LIMITS.keys())
+
+
+def resolve_orchestration_limits(tier: str, agent: Agent) -> dict:
+    """Merge tier defaults with per-agent overrides."""
+    limits = dict(ORCHESTRATION_TIER_LIMITS.get(tier, DEFAULT_LIMITS))
+    overrides = agent.orchestration_limits
+    if overrides:
+        for key, value in overrides.items():
+            if key in VALID_LIMIT_KEYS and isinstance(value, int):
+                limits[key] = value
+    return limits
 
 
 @dataclass
@@ -85,7 +98,7 @@ async def run_orchestration(
 ) -> OrchestrationResult:
     """Execute the AI orchestration loop for an agent."""
     start_time = time.monotonic()
-    limits = ORCHESTRATION_TIER_LIMITS.get(tier, DEFAULT_LIMITS)
+    limits = resolve_orchestration_limits(tier, agent)
 
     if not agent.ai_engine or not agent.ai_api_key_encrypted:
         return OrchestrationResult(
@@ -135,7 +148,7 @@ async def run_orchestration(
 
     try:
         while iterations < limits["max_iterations"]:
-            if total_tokens >= limits["max_total_tokens"]:
+            if total_tokens >= limits["max_ai_tokens"]:
                 return _limit_result(
                     "Token limit exceeded",
                     functions_called,
