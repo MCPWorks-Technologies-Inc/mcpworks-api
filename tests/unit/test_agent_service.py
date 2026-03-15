@@ -69,27 +69,27 @@ def service(mock_db, mock_docker):
 
 class TestGetTierConfig:
     def test_valid_agent_tier(self, service):
-        config = service._get_tier_config("builder-agent")
-        assert config["max_agents"] == 1
-        assert config["memory_limit_mb"] == 256
+        config = service._get_tier_config("trial-agent")
+        assert config["max_agents"] == 5
+        assert config["memory_limit_mb"] == 512
 
     def test_invalid_tier_raises(self, service):
         with pytest.raises(ForbiddenError, match="not agent-enabled"):
-            service._get_tier_config("free")
+            service._get_tier_config("trial")
 
 
 class TestCreateAgent:
     @pytest.mark.asyncio
     async def test_slot_limit_exceeded(self, service, mock_db):
         result_mock = MagicMock()
-        result_mock.scalar_one.return_value = 1
+        result_mock.scalar_one.return_value = 5
         mock_db.execute.return_value = result_mock
 
         with pytest.raises(ConflictError, match="slot limit"):
             await service.create_agent(
                 account_id=uuid.uuid4(),
                 user_id=uuid.uuid4(),
-                tier="builder-agent",
+                tier="trial-agent",
                 name="agent2",
             )
 
@@ -105,7 +105,7 @@ class TestCreateAgent:
             await service.create_agent(
                 account_id=uuid.uuid4(),
                 user_id=uuid.uuid4(),
-                tier="builder-agent",
+                tier="trial-agent",
                 name="dupe",
             )
 
