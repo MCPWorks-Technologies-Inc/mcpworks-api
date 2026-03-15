@@ -18,6 +18,20 @@ from mcpworks_api.core.redis import get_redis_context
 logger = structlog.get_logger(__name__)
 
 
+EXECUTIONS_PER_MINUTE: dict[str, int] = {
+    "trial": 100,
+    "pro": 100,
+    "enterprise": 300,
+    "dedicated": 500,
+}
+
+MAX_CONCURRENT: dict[str, int] = {
+    "trial": 10,
+    "pro": 15,
+    "enterprise": 50,
+    "dedicated": 100,
+}
+
 DAILY_COMPUTE_BUDGETS: dict[str, int] = {
     "trial": 3600,
     "pro": 14400,
@@ -31,6 +45,62 @@ DAILY_EXEC_LIMITS: dict[str, int] = {
     "enterprise": 50000,
     "dedicated": -1,
 }
+
+
+async def check_execution_rate(account_id: Any, tier: str) -> None:
+    """Pre-execution check: reject if per-minute execution rate exceeded."""
+    base_tier = tier.replace("-agent", "") if tier.endswith("-agent") else tier
+    rate_limit = EXECUTIONS_PER_MINUTE.get(base_tier, EXECUTIONS_PER_MINUTE["trial"])
+    concurrency_limit = MAX_CONCURRENT.get(base_tier, MAX_CONCURRENT["trial"])
+
+    async with get_redis_context() as redis:
+        minute_key = f"execrate:{account_id}:{int(datetime.now(UTC).timestamp()) // 60}"
+        concurrent_key = f"concurrent:{account_id}"
+
+        current_rate = await redis.get(minute_key)
+        if current_rate and int(current_rate) >= rate_limit:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "EXECUTION_RATE_EXCEEDED",
+                    "message": f"Execution rate limit ({rate_limit}/min) exceeded",
+                    "tier": tier,
+                    "retry_after": 60,
+                },
+                headers={"Retry-After": "60"},
+            )
+
+        current_concurrent = await redis.get(concurrent_key)
+        if current_concurrent and int(current_concurrent) >= concurrency_limit:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "CONCURRENCY_LIMIT_EXCEEDED",
+                    "message": f"Concurrency limit ({concurrency_limit}) exceeded",
+                    "tier": tier,
+                    "retry_after": 5,
+                },
+                headers={"Retry-After": "5"},
+            )
+
+        pipe = redis.pipeline()
+        pipe.incr(minute_key)
+        pipe.expire(minute_key, 120)
+        pipe.incr(concurrent_key)
+        pipe.expire(concurrent_key, 600)
+        await pipe.execute()
+
+
+async def release_concurrency(account_id: Any) -> None:
+    """Post-execution: decrement concurrency counter."""
+    try:
+        async with get_redis_context() as redis:
+            concurrent_key = f"concurrent:{account_id}"
+            current = await redis.decr(concurrent_key)
+            if current < 0:
+                await redis.set(concurrent_key, 0, ex=600)
+    except Exception:
+        pass
 
 
 async def check_daily_budget(account_id: Any, tier: str) -> None:
@@ -151,11 +221,12 @@ class BillingMiddleware(BaseHTTPMiddleware):
             # (it will likely fail auth later)
             return await call_next(request)
 
+        tier = getattr(account, "effective_tier", None) or getattr(account, "tier", "trial")
+
         # Check quota before execution
         try:
             usage, limit = await self._check_quota(account)
             if limit != -1 and usage >= limit:
-                # ORDER-022: Log quota exceeded as security event
                 asyncio.create_task(
                     self._log_security_event(
                         "billing.quota_exceeded",
@@ -164,7 +235,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
                         details={
                             "usage": usage,
                             "limit": limit,
-                            "tier": getattr(account, "tier", "trial"),
+                            "tier": tier,
                         },
                     )
                 )
@@ -175,7 +246,7 @@ class BillingMiddleware(BaseHTTPMiddleware):
                         "message": f"Monthly execution limit ({limit}) exceeded",
                         "usage": usage,
                         "limit": limit,
-                        "tier": getattr(account, "tier", "trial"),
+                        "tier": tier,
                     },
                 )
         except HTTPException:
@@ -183,8 +254,19 @@ class BillingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             logger.warning("billing_check_failed", error=str(e))
 
+        # Check per-minute rate and concurrency limits
+        try:
+            await check_execution_rate(account.id, tier)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("rate_check_failed", error=str(e))
+
         # Execute request
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        finally:
+            asyncio.create_task(release_concurrency(account.id))
 
         # Increment usage after successful execution
         if response.status_code < 400:
