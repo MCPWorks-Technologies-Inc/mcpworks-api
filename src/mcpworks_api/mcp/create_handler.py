@@ -12,12 +12,21 @@ Exposes 6 additional tools (agent-enabled tiers only):
 """
 
 import json
+import secrets
 from typing import Any
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends.sandbox import TIER_CONFIG, resolve_execution_tier
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from mcpworks_api.core.input_limits import InputTooLarge, validate_input_size
+from mcpworks_api.core.tool_permissions import (
+    MANAGEMENT_RATE_LIMITS,
+    ToolTier,
+    is_tool_allowed,
+    requires_confirmation,
+)
 from mcpworks_api.mcp.protocol import (
     JSONRPCRequest,
     JSONRPCResponse,
@@ -88,17 +97,21 @@ class CreateMCPHandler:
         "unlock_function": "write",
     }
 
+    _logger = structlog.get_logger(__name__)
+
     def __init__(
         self,
         namespace: str,
         account: Account,
         db: AsyncSession,
         api_key: APIKey,
+        agent=None,
     ):
         self.namespace_name = namespace
         self.account = account
         self.db = db
         self.api_key = api_key
+        self.agent = agent
         self.namespace_service = NamespaceServiceManager(db)
         self.service_service = NamespaceServiceService(db)
         self.function_service = FunctionService(db)
@@ -960,6 +973,123 @@ class CreateMCPHandler:
         if required and not self.api_key.has_scope(required):
             raise ValueError(f"API key missing required scope '{required}' for tool '{tool_name}'")
 
+    async def _authorize_agent_tool(self, tool_name: str) -> None:
+        """Check if the calling agent is allowed to use this tool.
+
+        Direct user calls (agent is None) bypass this check.
+        """
+        if self.agent is None:
+            return
+
+        tier = ToolTier(getattr(self.agent, "tool_tier", "standard"))
+        if not is_tool_allowed(tier, tool_name):
+            self._logger.warning(
+                "tool_access_denied",
+                tool=tool_name,
+                agent=getattr(self.agent, "name", "?"),
+                tier=tier.value,
+            )
+            raise ForbiddenError(
+                f"Agent '{self.agent.name}' (tier: {tier.value}) "
+                f"is not authorized to call '{tool_name}'"
+            )
+
+    async def _check_confirmation_token(
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> MCPToolResult | None:
+        """For destructive ops, require a confirmation token flow.
+
+        Returns an MCPToolResult asking for confirmation if no token provided,
+        or None if the token is valid and the call should proceed.
+        """
+        if not requires_confirmation(tool_name):
+            return None
+
+        token = arguments.pop("confirmation_token", None)
+        if token is not None:
+            from mcpworks_api.core.redis import get_redis_context
+
+            target = arguments.get("name", arguments.get("agent_name", "unknown"))
+            key = f"confirm:{self.account.id}:{tool_name}:{target}"
+            async with get_redis_context() as redis:
+                stored = await redis.get(key)
+                if stored and stored.decode() == token:
+                    await redis.delete(key)
+                    return None
+            raise ForbiddenError("Invalid or expired confirmation token")
+
+        from mcpworks_api.core.redis import get_redis_context
+
+        target = arguments.get("name", arguments.get("agent_name", "unknown"))
+        new_token = secrets.token_urlsafe(32)
+        key = f"confirm:{self.account.id}:{tool_name}:{target}"
+        async with get_redis_context() as redis:
+            await redis.setex(key, 60, new_token)
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "confirmation_required",
+                            "confirmation_token": new_token,
+                            "expires_in": 60,
+                            "message": (
+                                f"{tool_name}('{target}') is irreversible. "
+                                f"Call again with confirmation_token to proceed."
+                            ),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _check_management_rate_limit(self, tool_name: str) -> None:
+        """Enforce per-tool rate limits on management operations."""
+        rate_config = MANAGEMENT_RATE_LIMITS.get(tool_name)
+        if rate_config is None:
+            return
+
+        limit, window = rate_config
+        from mcpworks_api.core.redis import RateLimiter, get_redis_context
+
+        key = f"mgmt:{self.account.id}:{tool_name}"
+        async with get_redis_context() as redis:
+            limiter = RateLimiter(redis)
+            is_limited, current = await limiter.is_rate_limited(key, limit, window)
+            if is_limited:
+                raise ForbiddenError(
+                    f"Rate limit exceeded for {tool_name}: "
+                    f"{limit} calls per {window}s (current: {current})"
+                )
+
+    def _validate_tool_inputs(self, tool_name: str, arguments: dict[str, Any]) -> None:
+        """Validate input sizes for tool arguments."""
+        if tool_name in ("make_function", "update_function"):
+            validate_input_size("code", arguments.get("code"))
+            validate_input_size("description", arguments.get("description"))
+            validate_input_size(
+                "input_schema",
+                json.dumps(arguments["input_schema"])
+                if "input_schema" in arguments and arguments["input_schema"] is not None
+                else None,
+            )
+            validate_input_size(
+                "output_schema",
+                json.dumps(arguments["output_schema"])
+                if "output_schema" in arguments and arguments["output_schema"] is not None
+                else None,
+            )
+        elif tool_name == "set_agent_state":
+            val = arguments.get("value")
+            if val is not None:
+                validate_input_size(
+                    "agent_state_value",
+                    json.dumps(val) if not isinstance(val, str | bytes) else val,
+                )
+        elif tool_name == "configure_agent_ai":
+            validate_input_size("agent_ai_config", arguments.get("system_prompt"))
+
     async def dispatch_tool(
         self,
         name: str,
@@ -981,6 +1111,17 @@ class CreateMCPHandler:
             NotFoundError, ConflictError, ForbiddenError: From tool logic.
         """
         self._check_scope(name)
+        await self._authorize_agent_tool(name)
+        await self._check_management_rate_limit(name)
+
+        try:
+            self._validate_tool_inputs(name, arguments)
+        except InputTooLarge as e:
+            raise ForbiddenError(str(e)) from e
+
+        confirmation = await self._check_confirmation_token(name, arguments)
+        if confirmation is not None:
+            return confirmation
 
         handlers = {
             "make_namespace": self._make_namespace,
@@ -1073,6 +1214,12 @@ class CreateMCPHandler:
         except ForbiddenError as e:
             return make_error_response(
                 MCPErrorCodes.FORBIDDEN,
+                str(e),
+                request_id=request_id,
+            )
+        except InputTooLarge as e:
+            return make_error_response(
+                MCPErrorCodes.INVALID_PARAMS,
                 str(e),
                 request_id=request_id,
             )
