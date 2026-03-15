@@ -90,6 +90,7 @@ class CreateMCPHandler:
         "remove_agent_ai": "write",
         "configure_mcp_servers": "write",
         "configure_orchestration_limits": "write",
+        "configure_heartbeat": "write",
         "chat_with_agent": "read",
         "add_channel": "write",
         "remove_channel": "write",
@@ -903,6 +904,34 @@ class CreateMCPHandler:
                     },
                 ),
                 MCPTool(
+                    name="configure_heartbeat",
+                    description=(
+                        "Enable or disable heartbeat mode for an agent. "
+                        "Heartbeat is a proactive autonomy loop — the agent wakes on a configurable interval, "
+                        "loads its soul and goals from state, and its AI decides whether to act. "
+                        "Unlike cron schedules (which run specific functions), heartbeat runs the AI reasoning loop itself. "
+                        "Requires an AI engine to be configured. Ticks count as executions. "
+                        "Set the agent's soul via set_agent_state with key '__soul__' and goals via '__goals__'."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {"type": "string", "description": "Agent name"},
+                            "enabled": {
+                                "type": "boolean",
+                                "description": "Enable (true) or disable (false) heartbeat mode",
+                            },
+                            "interval_seconds": {
+                                "type": "integer",
+                                "description": "Seconds between heartbeat ticks. Must respect tier minimums (Pro: 30s, Enterprise: 15s).",
+                                "minimum": 15,
+                                "maximum": 86400,
+                            },
+                        },
+                        "required": ["agent_name", "enabled"],
+                    },
+                ),
+                MCPTool(
                     name="chat_with_agent",
                     description=(
                         "Send a message to an agent's AI engine and get its response. "
@@ -1198,6 +1227,7 @@ class CreateMCPHandler:
             "remove_agent_ai": self._remove_agent_ai,
             "configure_mcp_servers": self._configure_mcp_servers,
             "configure_orchestration_limits": self._configure_orchestration_limits,
+            "configure_heartbeat": self._configure_heartbeat,
             "chat_with_agent": self._chat_with_agent,
             "add_channel": self._add_channel,
             "remove_channel": self._remove_channel,
@@ -2182,6 +2212,57 @@ class CreateMCPHandler:
                             "overrides": overrides or None,
                             "effective_limits": effective,
                             "source": "custom" if overrides else "tier_default",
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_heartbeat(
+        self,
+        agent_name: str,
+        enabled: bool,
+        interval_seconds: int | None = None,
+    ) -> MCPToolResult:
+        """Enable or disable heartbeat mode for an agent."""
+        from mcpworks_api.models.subscription import AGENT_TIER_CONFIG
+
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+
+        if enabled and not agent.ai_engine:
+            raise ForbiddenError("Heartbeat requires an AI engine. Use configure_agent_ai first.")
+
+        tier = self.account.user.effective_tier
+        tier_config = AGENT_TIER_CONFIG.get(tier, {})
+        min_interval = tier_config.get("min_schedule_seconds", 30)
+
+        if enabled:
+            interval = interval_seconds or 300
+            if interval < min_interval:
+                raise ForbiddenError(
+                    f"Heartbeat interval {interval}s is below tier minimum ({min_interval}s)"
+                )
+            agent.heartbeat_enabled = True
+            agent.heartbeat_interval = interval
+            from datetime import UTC, datetime, timedelta
+
+            agent.heartbeat_next_at = datetime.now(UTC) + timedelta(seconds=interval)
+        else:
+            agent.heartbeat_enabled = False
+            agent.heartbeat_next_at = None
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent_name": agent_name,
+                            "heartbeat_enabled": agent.heartbeat_enabled,
+                            "heartbeat_interval": agent.heartbeat_interval,
+                            "heartbeat_next_at": agent.heartbeat_next_at.isoformat()
+                            if agent.heartbeat_next_at
+                            else None,
                         }
                     )
                 )
