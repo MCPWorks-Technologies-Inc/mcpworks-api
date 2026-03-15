@@ -16,6 +16,10 @@ concurrency:
   group: production-deploy
   cancel-in-progress: false
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   wait-for-ci:
     name: Wait for CI
@@ -27,18 +31,22 @@ jobs:
         run: |
           SHA="${{ github.sha }}"
           REPO="${{ github.repository }}"
-          echo "Waiting for CI 'Test' job on $SHA..."
+          echo "Waiting for CI workflow on $SHA..."
           for i in $(seq 1 40); do
-            STATUS=$(gh api "repos/$REPO/commits/$SHA/check-runs" \
-              --jq '.check_runs[] | select(.name == "Test") | .conclusion' 2>/dev/null || true)
-            if [ "$STATUS" = "success" ]; then
-              echo "CI passed!"
-              exit 0
-            elif [ "$STATUS" = "failure" ] || [ "$STATUS" = "cancelled" ]; then
-              echo "CI failed with: $STATUS"
-              exit 1
+            RESULT=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=1" \
+              --jq '.workflow_runs[0] | .status + ":" + (.conclusion // "pending")' 2>/dev/null || true)
+            WF_STATUS="${RESULT%%:*}"
+            WF_CONCLUSION="${RESULT##*:}"
+            if [ "$WF_STATUS" = "completed" ]; then
+              if [ "$WF_CONCLUSION" = "success" ]; then
+                echo "CI passed!"
+                exit 0
+              else
+                echo "CI failed with conclusion: $WF_CONCLUSION"
+                exit 1
+              fi
             fi
-            echo "  Attempt $i/40 — CI still running (status: ${STATUS:-pending})..."
+            echo "  Attempt $i/40 — CI status: ${WF_STATUS:-unknown}..."
             sleep 15
           done
           echo "Timed out waiting for CI"
