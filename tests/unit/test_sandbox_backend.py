@@ -19,10 +19,10 @@ class TestExecutionTier:
 
     def test_tier_values(self):
         """Test tier enum values."""
-        assert ExecutionTier.FREE.value == "free"
-        assert ExecutionTier.BUILDER.value == "builder"
+        assert ExecutionTier.TRIAL.value == "trial"
         assert ExecutionTier.PRO.value == "pro"
         assert ExecutionTier.ENTERPRISE.value == "enterprise"
+        assert ExecutionTier.DEDICATED.value == "dedicated"
 
     def test_tier_config_exists_for_all_tiers(self):
         """Test all tiers have configuration."""
@@ -38,18 +38,18 @@ class TestExecutionTier:
 class TestTierConfig:
     """Tests for tier configuration."""
 
-    def test_free_tier_limits(self):
-        """Test free tier has restrictive limits."""
-        config = TIER_CONFIG[ExecutionTier.FREE]
-        assert config["timeout_sec"] == 10
-        assert config["memory_mb"] == 128
-        assert config["network"] is False
+    def test_trial_tier_limits(self):
+        """Test trial tier limits."""
+        config = TIER_CONFIG[ExecutionTier.TRIAL]
+        assert config["timeout_sec"] == 90
+        assert config["memory_mb"] == 512
+        assert config["network"] is True
 
-    def test_builder_tier_limits(self):
-        """Test builder tier has moderate limits."""
-        config = TIER_CONFIG[ExecutionTier.BUILDER]
-        assert config["timeout_sec"] == 30
-        assert config["memory_mb"] == 256
+    def test_pro_tier_limits(self):
+        """Test pro tier limits."""
+        config = TIER_CONFIG[ExecutionTier.PRO]
+        assert config["timeout_sec"] == 90
+        assert config["memory_mb"] == 512
         assert config["network"] is True
 
     def test_enterprise_tier_limits(self):
@@ -59,22 +59,27 @@ class TestTierConfig:
         assert config["memory_mb"] == 2048
         assert config["network"] is True
 
+    def test_dedicated_tier_limits(self):
+        """Test dedicated tier has generous limits."""
+        config = TIER_CONFIG[ExecutionTier.DEDICATED]
+        assert config["timeout_sec"] == 300
+        assert config["memory_mb"] == 2048
+        assert config["network"] is True
+
     def test_tier_progression(self):
         """Test limits increase with tier."""
-        free = TIER_CONFIG[ExecutionTier.FREE]
-        builder = TIER_CONFIG[ExecutionTier.BUILDER]
+        trial = TIER_CONFIG[ExecutionTier.TRIAL]
         pro = TIER_CONFIG[ExecutionTier.PRO]
         enterprise = TIER_CONFIG[ExecutionTier.ENTERPRISE]
+        dedicated = TIER_CONFIG[ExecutionTier.DEDICATED]
 
-        # Timeout increases
-        assert free["timeout_sec"] < builder["timeout_sec"]
-        assert builder["timeout_sec"] < pro["timeout_sec"]
-        assert pro["timeout_sec"] < enterprise["timeout_sec"]
+        assert trial["timeout_sec"] <= pro["timeout_sec"]
+        assert pro["timeout_sec"] <= enterprise["timeout_sec"]
+        assert enterprise["timeout_sec"] <= dedicated["timeout_sec"]
 
-        # Memory increases
-        assert free["memory_mb"] < builder["memory_mb"]
-        assert builder["memory_mb"] < pro["memory_mb"]
-        assert pro["memory_mb"] < enterprise["memory_mb"]
+        assert trial["memory_mb"] <= pro["memory_mb"]
+        assert pro["memory_mb"] <= enterprise["memory_mb"]
+        assert enterprise["memory_mb"] <= dedicated["memory_mb"]
 
 
 class TestDangerousPatterns:
@@ -150,10 +155,10 @@ class TestSandboxBackend:
         backend = SandboxBackend(dev_mode=True)
 
         account = MagicMock()
-        account.user.effective_tier = "builder"
+        account.user.effective_tier = "pro"
 
         config = backend._get_tier_config(account)
-        assert config == TIER_CONFIG[ExecutionTier.BUILDER]
+        assert config == TIER_CONFIG[ExecutionTier.PRO]
 
     def test_get_tier_config_default(self):
         """Test default tier config when account has no user."""

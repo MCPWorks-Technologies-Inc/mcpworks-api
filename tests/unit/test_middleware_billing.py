@@ -17,7 +17,7 @@ from mcpworks_api.middleware.billing import (
 class MockAccount:
     """Mock account for testing."""
 
-    def __init__(self, account_id=None, tier="free"):
+    def __init__(self, account_id=None, tier="trial"):
         self.id = account_id or uuid.uuid4()
         self.tier = tier
 
@@ -49,30 +49,30 @@ class TestBillingMiddlewareTierLimits:
 
     def test_tier_limits_defined(self, billing_middleware):
         """Test that all expected tiers have limits."""
-        assert "free" in billing_middleware.TIER_LIMITS
-        assert "builder" in billing_middleware.TIER_LIMITS
+        assert "trial" in billing_middleware.TIER_LIMITS
         assert "pro" in billing_middleware.TIER_LIMITS
         assert "enterprise" in billing_middleware.TIER_LIMITS
+        assert "dedicated" in billing_middleware.TIER_LIMITS
 
-    def test_free_tier_limit(self, billing_middleware):
-        """Test free tier limit per PRICING.md v5.2.0."""
-        assert billing_middleware.TIER_LIMITS["free"] == 1_000
-
-    def test_builder_tier_limit(self, billing_middleware):
-        """Test builder tier limit per PRICING.md v5.2.0."""
-        assert billing_middleware.TIER_LIMITS["builder"] == 25_000
+    def test_trial_tier_limit(self, billing_middleware):
+        """Test trial tier limit per PRICING.md v7.0.0."""
+        assert billing_middleware.TIER_LIMITS["trial"] == 125_000
 
     def test_pro_tier_limit(self, billing_middleware):
-        """Test pro tier limit per PRICING.md v5.2.0."""
+        """Test pro tier limit per PRICING.md v7.0.0."""
         assert billing_middleware.TIER_LIMITS["pro"] == 250_000
 
     def test_enterprise_tier_limit(self, billing_middleware):
-        """Test enterprise tier limit per PRICING.md v5.2.0."""
+        """Test enterprise tier limit per PRICING.md v7.0.0."""
         assert billing_middleware.TIER_LIMITS["enterprise"] == 1_000_000
 
+    def test_dedicated_tier_limit(self, billing_middleware):
+        """Test dedicated tier limit per PRICING.md v7.0.0 (unlimited)."""
+        assert billing_middleware.TIER_LIMITS["dedicated"] == -1
+
     def test_default_limit(self, billing_middleware):
-        """Test default limit for unknown tiers (matches free tier)."""
-        assert billing_middleware.DEFAULT_LIMIT == 1_000
+        """Test default limit for unknown tiers (matches trial tier)."""
+        assert billing_middleware.DEFAULT_LIMIT == 125_000
 
 
 class TestBillingMiddlewareDispatch:
@@ -114,7 +114,7 @@ class TestBillingMiddlewareDispatch:
     @pytest.mark.asyncio
     async def test_dispatch_checks_quota_for_run_endpoint(self, billing_middleware):
         """Test that run endpoints check quota."""
-        account = MockAccount(tier="free")
+        account = MockAccount(tier="trial")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
@@ -133,7 +133,7 @@ class TestBillingMiddlewareDispatch:
     @pytest.mark.asyncio
     async def test_dispatch_rejects_quota_exceeded(self, billing_middleware):
         """Test that exceeding quota returns 429."""
-        account = MockAccount(tier="free")
+        account = MockAccount(tier="trial")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock()
 
@@ -168,7 +168,7 @@ class TestBillingMiddlewareDispatch:
     @pytest.mark.asyncio
     async def test_dispatch_fails_open_on_redis_error(self, billing_middleware):
         """Test that Redis errors fail open (allow request)."""
-        account = MockAccount(tier="free")
+        account = MockAccount(tier="trial")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
@@ -184,7 +184,7 @@ class TestBillingMiddlewareDispatch:
     @pytest.mark.asyncio
     async def test_dispatch_skips_increment_on_error_response(self, billing_middleware):
         """Test that failed responses don't increment usage."""
-        account = MockAccount(tier="free")
+        account = MockAccount(tier="trial")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(400))  # Error response
 
@@ -203,7 +203,7 @@ class TestBillingMiddlewareDispatch:
     @pytest.mark.asyncio
     async def test_dispatch_handles_increment_error_gracefully(self, billing_middleware):
         """Test that increment errors don't fail the request."""
-        account = MockAccount(tier="free")
+        account = MockAccount(tier="trial")
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
@@ -225,9 +225,9 @@ class TestBillingMiddlewareCheckQuota:
     """Tests for _check_quota method."""
 
     @pytest.mark.asyncio
-    async def test_check_quota_free_tier(self, billing_middleware):
-        """Test quota check for free tier."""
-        account = MockAccount(tier="free")
+    async def test_check_quota_trial_tier(self, billing_middleware):
+        """Test quota check for trial tier."""
+        account = MockAccount(tier="trial")
 
         with patch("mcpworks_api.middleware.billing.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
@@ -237,12 +237,12 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 50
-            assert limit == 1_000  # PRICING.md v5.2.0: 1,000/mo free tier
+            assert limit == 125_000  # PRICING.md v7.0.0: 125,000/mo trial tier
 
     @pytest.mark.asyncio
-    async def test_check_quota_builder_tier(self, billing_middleware):
-        """Test quota check for builder tier."""
-        account = MockAccount(tier="builder")
+    async def test_check_quota_pro_tier(self, billing_middleware):
+        """Test quota check for pro tier."""
+        account = MockAccount(tier="pro")
 
         with patch("mcpworks_api.middleware.billing.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
@@ -252,12 +252,12 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 500
-            assert limit == 25_000  # PRICING.md v5.2.0: 25,000/mo builder tier
+            assert limit == 250_000  # PRICING.md v7.0.0: 250,000/mo pro tier
 
     @pytest.mark.asyncio
     async def test_check_quota_zero_usage(self, billing_middleware):
         """Test quota check with zero usage (None from Redis)."""
-        account = MockAccount(tier="free")
+        account = MockAccount(tier="trial")
 
         with patch("mcpworks_api.middleware.billing.get_redis_context") as mock_ctx:
             mock_redis = AsyncMock()
@@ -267,7 +267,7 @@ class TestBillingMiddlewareCheckQuota:
             usage, limit = await billing_middleware._check_quota(account)
 
             assert usage == 0
-            assert limit == 1_000  # PRICING.md v5.2.0: 1,000/mo free tier
+            assert limit == 125_000  # PRICING.md v7.0.0: 125,000/mo trial tier
 
     @pytest.mark.asyncio
     async def test_check_quota_unknown_tier_uses_default(self, billing_middleware):
