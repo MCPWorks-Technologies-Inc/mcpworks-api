@@ -39,7 +39,7 @@ class TestCreateSubscription:
             email=f"sub_invalid_{user_id}@example.com",
             password_hash="test_hash",
             name="Sub Test User",
-            tier="free",
+            tier="trial-agent",
             status="active",
         )
         db.add(user)
@@ -63,7 +63,7 @@ class TestCreateSubscription:
         response = await client.post(
             "/v1/subscriptions",
             json={
-                "tier": "builder",
+                "tier": "pro",
                 "success_url": "https://example.com/success",
                 "cancel_url": "https://example.com/cancel",
             },
@@ -84,7 +84,7 @@ class TestCreateSubscription:
             email=f"sub_noconfig_{user_id}@example.com",
             password_hash="test_hash",
             name="Sub Test User",
-            tier="free",
+            tier="trial-agent",
             status="active",
         )
         db.add(user)
@@ -94,7 +94,7 @@ class TestCreateSubscription:
             "/v1/subscriptions",
             headers=headers,
             json={
-                "tier": "builder",
+                "tier": "pro",
                 "success_url": "https://example.com/success",
                 "cancel_url": "https://example.com/cancel",
             },
@@ -124,7 +124,7 @@ class TestGetCurrentSubscription:
             email=f"sub_notfound_{user_id}@example.com",
             password_hash="test_hash",
             name="Sub Test User",
-            tier="free",
+            tier="trial-agent",
             status="active",
         )
         db.add(user)
@@ -152,7 +152,7 @@ class TestGetCurrentSubscription:
             email=f"sub_found_{user_id}@example.com",
             password_hash="test_hash",
             name="Sub Test User",
-            tier="builder",
+            tier="pro-agent",
             status="active",
         )
         db.add(user)
@@ -161,7 +161,7 @@ class TestGetCurrentSubscription:
         now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
-            tier="builder",
+            tier="pro-agent",
             status=SubscriptionStatus.ACTIVE.value,
             stripe_subscription_id="sub_test123",
             stripe_customer_id="cus_test123",
@@ -178,10 +178,10 @@ class TestGetCurrentSubscription:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["tier"] == "builder"
+        assert data["tier"] == "pro-agent"
         assert data["status"] == "active"
         assert data["cancel_at_period_end"] is False
-        assert data["monthly_executions"] == 25_000  # builder tier limit per PRICING.md v5.2.0
+        assert data["monthly_executions"] == 250_000  # pro-agent tier limit per PRICING.md v7.0.0
 
     @pytest.mark.asyncio
     async def test_get_subscription_no_auth(self, client: AsyncClient):
@@ -206,7 +206,7 @@ class TestCancelSubscription:
             email=f"cancel_nosub_{user_id}@example.com",
             password_hash="test_hash",
             name="Cancel Test User",
-            tier="free",
+            tier="trial-agent",
             status="active",
         )
         db.add(user)
@@ -232,7 +232,7 @@ class TestCancelSubscription:
             email=f"cancel_done_{user_id}@example.com",
             password_hash="test_hash",
             name="Cancel Test User",
-            tier="builder",
+            tier="pro-agent",
             status="active",
         )
         db.add(user)
@@ -241,7 +241,7 @@ class TestCancelSubscription:
         now = datetime.now(UTC)
         subscription = Subscription(
             user_id=uuid.UUID(user_id),
-            tier="builder",
+            tier="pro-agent",
             status=SubscriptionStatus.CANCELLED.value,
             stripe_subscription_id="sub_cancelled",
             stripe_customer_id="cus_test123",
@@ -323,7 +323,7 @@ class TestStripeWebhook:
             email=f"webhook_test_{user_id}@example.com",
             password_hash="test_hash",
             name="Webhook Test User",
-            tier="free",
+            tier="trial-agent",
             status="active",
         )
         db.add(user)
@@ -342,7 +342,7 @@ class TestStripeWebhook:
                     "object": {
                         "metadata": {
                             "user_id": str(user_id),
-                            "tier": "builder",
+                            "tier": "pro",
                         },
                         "subscription": "sub_new123",
                         "customer": "cus_new123",

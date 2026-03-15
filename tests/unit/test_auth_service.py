@@ -30,7 +30,7 @@ async def test_user(db):
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",
         password_hash=hash_password("testpassword123"),
         name="Test User",
-        tier="free",
+        tier="trial-agent",
         status="active",
     )
     db.add(user)
@@ -66,7 +66,7 @@ class TestAuthServiceRegister:
         )
 
         assert user.email == unique_email
-        assert user.tier == "builder"
+        assert user.tier == "trial-agent"
         assert user.status == "pending_verification"
         assert user.email_verified is False
         assert user.verification_token is not None
@@ -162,7 +162,7 @@ class TestAuthServiceLogin:
             email=f"inactive-{uuid.uuid4().hex[:8]}@example.com",
             password_hash=hash_password("password123"),
             name="Inactive User",
-            tier="free",
+            tier="trial-agent",
             status="suspended",
         )
         db.add(user)
@@ -336,7 +336,7 @@ class TestAuthServiceApiKeyValidate:
         user = User(
             email=f"inactive-{uuid.uuid4().hex[:8]}@example.com",
             password_hash=hash_password("password123"),
-            tier="free",
+            tier="trial-agent",
             status="suspended",
         )
         db.add(user)
@@ -471,7 +471,7 @@ class TestAuthServiceEmailVerification:
             email=f"unverified-{uuid.uuid4().hex[:8]}@example.com",
             password_hash=hash_password("testpassword123"),
             name="Unverified User",
-            tier="free",
+            tier="trial-agent",
             status="pending_verification",
             email_verified=False,
             verification_token=pin_hash,

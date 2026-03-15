@@ -12,21 +12,21 @@ from mcpworks_api.services.stripe import TIER_EXECUTIONS, StripeService
 class TestTierExecutions:
     """Tests for tier execution limit configuration per PRICING.md."""
 
-    def test_free_tier_executions(self):
-        """Test free tier has 1,000 executions/month per PRICING.md v5.2.0."""
-        assert TIER_EXECUTIONS["free"] == 1_000
-
-    def test_builder_tier_executions(self):
-        """Test builder tier has 25,000 executions/month per PRICING.md v5.2.0."""
-        assert TIER_EXECUTIONS["builder"] == 25_000
+    def test_trial_tier_executions(self):
+        """Test trial tier has 125,000 executions/month per PRICING.md v7.0.0."""
+        assert TIER_EXECUTIONS["trial"] == 125_000
 
     def test_pro_tier_executions(self):
-        """Test pro tier has 250,000 executions/month per PRICING.md v5.2.0."""
+        """Test pro tier has 250,000 executions/month per PRICING.md v7.0.0."""
         assert TIER_EXECUTIONS["pro"] == 250_000
 
     def test_enterprise_tier_executions(self):
-        """Test enterprise tier has 1,000,000 executions/month per PRICING.md v5.2.0."""
+        """Test enterprise tier has 1,000,000 executions/month per PRICING.md v7.0.0."""
         assert TIER_EXECUTIONS["enterprise"] == 1_000_000
+
+    def test_dedicated_tier_executions(self):
+        """Test dedicated tier has unlimited executions per PRICING.md v7.0.0."""
+        assert TIER_EXECUTIONS["dedicated"] == -1
 
 
 class TestCreateCheckoutSession:
@@ -66,13 +66,13 @@ class TestCreateCheckoutSession:
 
             with patch("mcpworks_api.services.stripe.get_tier_price_map") as mock_price_map:
                 mock_price_map.return_value = {
-                    "builder": {"monthly": "price_valid123", "annual": "price_valid456"},
+                    "pro": {"monthly": "price_valid123", "annual": "price_valid456"},
                 }
 
                 with pytest.raises(ValueError, match="not found"):
                     await service.create_checkout_session(
                         user_id=uuid.uuid4(),
-                        tier="builder",
+                        tier="pro",
                         interval="monthly",
                         success_url="https://example.com/success",
                         cancel_url="https://example.com/cancel",
@@ -90,7 +90,7 @@ class TestGetSubscription:
 
         mock_subscription = MagicMock(spec=Subscription)
         mock_subscription.user_id = user_id
-        mock_subscription.tier = "builder"
+        mock_subscription.tier = "pro-agent"
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_subscription
@@ -104,7 +104,7 @@ class TestGetSubscription:
             result = await service.get_subscription(user_id)
 
             assert result is not None
-            assert result.tier == "builder"
+            assert result.tier == "pro-agent"
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_subscription(self):
