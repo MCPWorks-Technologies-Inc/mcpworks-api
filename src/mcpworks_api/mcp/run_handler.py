@@ -512,6 +512,14 @@ class RunMCPHandler:
         if not backend:
             raise ValueError("Code sandbox backend not available")
 
+        # Transpile any TypeScript source in _code/ files to JavaScript.
+        # The package generator stores raw TS; Node.js needs transpiled JS.
+        for path in list(extra_files):
+            if path.startswith("functions/_code/") and path.endswith(".js"):
+                js_code, errors = await backend._transpile_typescript(extra_files[path])
+                if not errors:
+                    extra_files[path] = js_code
+
         execution_id = str(uuid.uuid4())
         start_time = datetime.now(UTC)
 
