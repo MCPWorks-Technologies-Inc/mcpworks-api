@@ -22,6 +22,8 @@ NAMESPACE="${5:-sandbox}"
 # ORDER-003: Optional execution token passed via file descriptor (not env var).
 # Token file is read by execute.py via stdin, then deleted.
 EXEC_TOKEN_FILE="${6:-}"
+# Language: python (default) or typescript
+LANGUAGE="${7:-python}"
 
 CONFIG="/etc/mcpworks/sandbox.cfg"
 SECCOMP_POLICY="/etc/mcpworks/seccomp.policy"
@@ -99,15 +101,22 @@ cleanup() {
 trap cleanup EXIT
 
 # Copy input files into tmpfs workspace
-cp "${CODE_PATH}" "${WORKSPACE}/user_code.py"
 cp "${INPUT_PATH}" "${WORKSPACE}/input.json"
 
-# F-36: Copy execute.pyc into writable workspace (deleted by execute.py
-# before user code runs — prevents .pyc decompilation via marshal.loads).
-cp /opt/mcpworks/bin/execute.pyc "${WORKSPACE}/.e"
+if [ "${LANGUAGE}" = "typescript" ]; then
+    # TypeScript: code is already transpiled to JS by the API host
+    cp "${CODE_PATH}" "${WORKSPACE}/user_code.js"
+    cp /opt/mcpworks/bin/execute.js "${WORKSPACE}/.e.js"
+else
+    # Python
+    cp "${CODE_PATH}" "${WORKSPACE}/user_code.py"
+    # F-36: Copy execute.pyc into writable workspace (deleted by execute.py
+    # before user code runs — prevents .pyc decompilation via marshal.loads).
+    cp /opt/mcpworks/bin/execute.pyc "${WORKSPACE}/.e"
+fi
 
-# Copy functions/ package if it exists (code-mode)
-if [ -d "${EXEC_DIR}/functions" ]; then
+# Copy functions/ package if it exists (code-mode, Python only)
+if [ -d "${EXEC_DIR}/functions" ] && [ "${LANGUAGE}" != "typescript" ]; then
     cp -r "${EXEC_DIR}/functions" "${WORKSPACE}/functions"
 fi
 
@@ -252,15 +261,18 @@ NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.fake_version:/proc/version")
 # clone_newnet isolates /proc/net natively (each sandbox sees only its own
 # network namespace). /proc/self (mountinfo, maps, status) is low-risk.
 
-# FINDING-25: Hide _ctypes C extension .so files from sandbox.
-# sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
-# Bind-mounting empty files over the .so makes the C extension un-importable.
+# Python-specific: Hide _ctypes C extension .so files from sandbox.
+# Not needed for TypeScript — Node.js doesn't have Python's ctypes surface.
 touch "${WORKSPACE}/.empty"
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes.cpython-311-x86_64-linux-gnu.so")
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes_test.cpython-311-x86_64-linux-gnu.so")
-# F-32: Hollow _posixsubprocess .so — defense-in-depth (execve blocked by seccomp,
-# but prevents C-level fork_exec even if sys.modules poison is bypassed).
-NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_posixsubprocess.cpython-311-x86_64-linux-gnu.so")
+if [ "${LANGUAGE}" != "typescript" ]; then
+    # FINDING-25: sys.modules poisoning is bypassed via importlib.util.spec_from_file_location.
+    # Bind-mounting empty files over the .so makes the C extension un-importable.
+    NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes.cpython-311-x86_64-linux-gnu.so")
+    NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_ctypes_test.cpython-311-x86_64-linux-gnu.so")
+    # F-32: Hollow _posixsubprocess .so — defense-in-depth (execve blocked by seccomp,
+    # but prevents C-level fork_exec even if sys.modules poison is bypassed).
+    NSJAIL_ARGS+=(--bindmount_ro "${WORKSPACE}/.empty:/usr/local/lib/python3.11/lib-dynload/_posixsubprocess.cpython-311-x86_64-linux-gnu.so")
+fi
 
 # ORDER-002: Run under aggregate cgroup if available
 if [ -d "${CGROUP_PARENT}" ]; then
@@ -280,13 +292,24 @@ fi
 # Execute nsjail with tier-specific overrides.
 # --execute_fd: use execveat(fd) instead of execve(path), required because
 # seccomp blocks execve. This prevents any shell execution (posix.system,
-# subprocess, /bin/sh) at the kernel level after Python starts.
+# subprocess, /bin/sh) at the kernel level after the runtime starts.
 # Paid tiers: run inside pre-configured network namespace via ip netns exec.
-${NSJAIL_PREFIX} "${NSJAIL}" \
-    "${NSJAIL_ARGS[@]}" \
-    --execute_fd \
-    -- \
-    /usr/local/bin/python3 -S /sandbox/.e
+if [ "${LANGUAGE}" = "typescript" ]; then
+    # Node.js: set NODE_PATH for pre-installed packages, limit V8 heap
+    NSJAIL_ARGS+=(--env "NODE_PATH=/usr/local/lib/node_modules")
+    ${NSJAIL_PREFIX} "${NSJAIL}" \
+        "${NSJAIL_ARGS[@]}" \
+        --execute_fd \
+        -- \
+        /usr/local/bin/node --max-old-space-size="${MEMORY}" /sandbox/.e.js
+else
+    # Python
+    ${NSJAIL_PREFIX} "${NSJAIL}" \
+        "${NSJAIL_ARGS[@]}" \
+        --execute_fd \
+        -- \
+        /usr/local/bin/python3 -S /sandbox/.e
+fi
 
 NSJAIL_EXIT=$?
 

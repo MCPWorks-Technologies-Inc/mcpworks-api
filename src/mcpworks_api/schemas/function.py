@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ALLOWED_BACKENDS = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+ALLOWED_LANGUAGES = {"python", "typescript"}
 
 
 class FunctionVersionCreate(BaseModel):
@@ -17,6 +18,11 @@ class FunctionVersionCreate(BaseModel):
         ...,
         description="Function backend",
         examples=["code_sandbox", "activepieces"],
+    )
+
+    language: str = Field(
+        "python",
+        description="Programming language (python or typescript)",
     )
 
     code: str | None = Field(
@@ -63,6 +69,14 @@ class FunctionVersionCreate(BaseModel):
             raise ValueError(f"Backend must be one of {ALLOWED_BACKENDS}")
         return v
 
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, v: str) -> str:
+        """Validate language is supported."""
+        if v not in ALLOWED_LANGUAGES:
+            raise ValueError(f"Language must be one of {ALLOWED_LANGUAGES}")
+        return v
+
 
 class FunctionVersionResponse(BaseModel):
     """Schema for function version responses."""
@@ -73,6 +87,7 @@ class FunctionVersionResponse(BaseModel):
     function_id: UUID
     version: int
     backend: str
+    language: str = "python"
     code: str | None = None
     config: dict[str, Any] | None = None
     input_schema: dict[str, Any] | None = None

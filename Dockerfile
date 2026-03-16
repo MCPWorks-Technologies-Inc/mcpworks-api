@@ -92,6 +92,20 @@ RUN pip install --no-cache-dir --target=/sandbox-packages \
     typing-extensions==4.15.0
 
 # =============================================================================
+# Stage 1b: Node.js sandbox packages — pre-installed npm packages for TypeScript
+#
+# All packages from the Node.js package registry
+# (src/mcpworks_api/sandbox/packages_node.py) are pre-installed here.
+# Keep this list in sync with NODE_PACKAGE_REGISTRY.
+# =============================================================================
+FROM node:22-slim AS node-sandbox-builder
+
+WORKDIR /node-packages
+COPY deploy/nsjail/package.json .
+RUN npm install --production --no-optional \
+    && rm -rf /node-packages/node_modules/.package-lock.json
+
+# =============================================================================
 # Stage 2: nsjail — compile from source (pinned commit)
 #
 # IMPORTANT: Pin to a specific commit.  The bundled kafel determines which
@@ -185,13 +199,25 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy nsjail binary
 COPY --from=nsjail-builder /usr/local/bin/nsjail /usr/local/bin/nsjail
 
-# Copy curated sandbox packages
+# Copy curated sandbox packages (Python)
 COPY --from=sandbox-builder /sandbox-packages /opt/mcpworks/sandbox-root/site-packages
+
+# Copy Node.js binary for TypeScript sandbox execution
+COPY --from=node:22-slim /usr/local/bin/node /opt/mcpworks/sandbox-root/usr/local/bin/node
+
+# Copy curated sandbox packages (Node.js/TypeScript)
+COPY --from=node-sandbox-builder /node-packages/node_modules /opt/mcpworks/sandbox-root/node_modules
+
+# Install esbuild on host for TypeScript transpilation (runs on host, not in sandbox)
+RUN curl -fsSL https://esbuild.github.io/dl/v0.25.0 | sh \
+    && mv esbuild /usr/local/bin/esbuild \
+    || echo "esbuild install failed - TypeScript transpilation will be unavailable"
 
 # Copy sandbox scripts and rootfs
 COPY deploy/nsjail/execute.py /opt/mcpworks/bin/execute.py
 RUN python3 -c "import py_compile; py_compile.compile('/opt/mcpworks/bin/execute.py', '/opt/mcpworks/bin/execute.pyc', doraise=True)" \
     && rm /opt/mcpworks/bin/execute.py
+COPY deploy/nsjail/execute.js /opt/mcpworks/bin/execute.js
 COPY deploy/nsjail/spawn-sandbox.sh /opt/mcpworks/bin/spawn-sandbox.sh
 COPY deploy/nsjail/setup-cgroups.sh /opt/mcpworks/bin/setup-cgroups.sh
 COPY deploy/nsjail/smoketest.py /opt/mcpworks/bin/smoketest.py

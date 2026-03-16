@@ -429,3 +429,23 @@ def get_all_pip_names() -> list[str]:
     Returns deduplicated, sorted list of pip package names.
     """
     return sorted({pkg.pip_name for pkg in PACKAGE_REGISTRY.values()})
+
+
+def validate_requirements_for_language(
+    requirements: list[str],
+    language: str = "python",
+) -> tuple[list[str], list[str]]:
+    """Dispatch requirement validation to the correct language registry.
+
+    Args:
+        requirements: Package names requested by the user.
+        language: Programming language ('python' or 'typescript').
+
+    Returns:
+        Tuple of (validated canonical names, error messages).
+    """
+    if language == "typescript":
+        from mcpworks_api.sandbox.packages_node import validate_node_requirements
+
+        return validate_node_requirements(requirements)
+    return validate_requirements(requirements)
