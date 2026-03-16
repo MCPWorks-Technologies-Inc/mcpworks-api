@@ -141,9 +141,10 @@ _PY_BRIDGE_TEMPLATE = """\
 "use strict";
 /**
  * Cross-language bridge: call Python functions from TypeScript code-mode.
- * Uses fetch to call the function via the run server MCP endpoint.
+ * Uses axios (pure JS, no WASM) to call the function via the run server MCP endpoint.
  * Requires network access (Builder tier or above).
  */
+const axios = require("axios");
 const RUN_URL = "{run_url}";
 const API_KEY = process.env.__MCPWORKS_BRIDGE_KEY__ || "";
 
@@ -156,22 +157,22 @@ async function _callPyFunction(qualifiedName, inputData) {{
     );
   }}
 
-  const response = await fetch(RUN_URL, {{
-    method: "POST",
+  const response = await axios.post(RUN_URL, {{
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: {{ name: qualifiedName, arguments: inputData }},
+  }}, {{
     headers: {{
       Authorization: `Bearer ${{API_KEY}}`,
       "Content-Type": "application/json",
       Accept: "application/json, text/event-stream",
     }},
-    body: JSON.stringify({{
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {{ name: qualifiedName, arguments: inputData }},
-    }}),
+    timeout: 60000,
+    responseType: "text",
   }});
 
-  const text = await response.text();
+  const text = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
   for (const line of text.split("\\n")) {{
     if (line.startsWith("data: ")) {{
       const data = JSON.parse(line.slice(6));
