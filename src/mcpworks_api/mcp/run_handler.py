@@ -416,10 +416,10 @@ class RunMCPHandler:
 
         # Inject API key for cross-language bridge (TS functions callable from Python)
         has_ts = any(getattr(v, "language", "python") == "typescript" for _, v in functions)
-        if has_ts and self.api_key and self.api_key.key:
+        if has_ts and self.api_key and getattr(self.api_key, "_raw_key", None):
             if sandbox_env is None:
                 sandbox_env = {}
-            sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key.key
+            sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key._raw_key
 
         backend = get_backend("code_sandbox")
         if not backend:
@@ -503,10 +503,10 @@ class RunMCPHandler:
 
         # Inject API key for cross-language bridge (Python functions callable from TS)
         has_py = any(getattr(v, "language", "python") == "python" for _, v in functions)
-        if has_py and self.api_key and self.api_key.key:
+        if has_py and self.api_key and getattr(self.api_key, "_raw_key", None):
             if sandbox_env is None:
                 sandbox_env = {}
-            sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key.key
+            sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key._raw_key
 
         backend = get_backend("code_sandbox")
         if not backend:
