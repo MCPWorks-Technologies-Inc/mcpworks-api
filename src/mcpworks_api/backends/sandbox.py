@@ -401,6 +401,8 @@ async function run() {{
     }} else if (mod.result !== undefined) result = mod.result;
     else if (mod.output !== undefined) result = mod.output;
     else if (mod.default !== undefined) result = mod.default;
+
+    if (result instanceof Promise) result = await result;
   }} catch (e) {{
     success = false;
     error = e.message || String(e);
