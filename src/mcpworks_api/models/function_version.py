@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 # Allowed backend types
 ALLOWED_BACKENDS = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
 
+# Allowed programming languages
+ALLOWED_LANGUAGES = {"python", "typescript"}
+
 
 class FunctionVersion(Base, UUIDMixin):
     """FunctionVersion model representing an immutable function deployment.
@@ -61,6 +64,12 @@ class FunctionVersion(Base, UUIDMixin):
     backend: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
+    )
+
+    language: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default="python",
     )
 
     # Backend-Specific Data
@@ -146,6 +155,13 @@ class FunctionVersion(Base, UUIDMixin):
             raise ValueError(f"Backend must be one of {ALLOWED_BACKENDS}")
         return value
 
+    @validates("language")
+    def validate_language(self, key: str, value: str) -> str:
+        """Validate language is supported."""
+        if value not in ALLOWED_LANGUAGES:
+            raise ValueError(f"Language must be one of {ALLOWED_LANGUAGES}")
+        return value
+
     @validates("version")
     def validate_version(self, key: str, value: int) -> int:
         """Validate version is positive."""
@@ -154,4 +170,4 @@ class FunctionVersion(Base, UUIDMixin):
         return value
 
     def __repr__(self) -> str:
-        return f"<FunctionVersion(id={self.id}, function_id={self.function_id}, v={self.version}, backend={self.backend})>"
+        return f"<FunctionVersion(id={self.id}, function_id={self.function_id}, v={self.version}, backend={self.backend}, language={self.language})>"

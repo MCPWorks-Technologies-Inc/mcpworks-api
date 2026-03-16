@@ -96,7 +96,7 @@ def resolve_execution_tier(tier_str: str) -> ExecutionTier:
 
 
 # Dangerous patterns to check (defense-in-depth; seccomp is the real protection)
-DANGEROUS_PATTERNS = [
+DANGEROUS_PATTERNS_PYTHON = [
     "os.system",
     "subprocess",
     "ctypes",
@@ -105,6 +105,17 @@ DANGEROUS_PATTERNS = [
     "exec(",
     "compile(",
     "builtins",
+]
+
+DANGEROUS_PATTERNS_TYPESCRIPT = [
+    "child_process",
+    "eval(",
+    "new Function(",
+    "vm.runInNewContext",
+    "vm.runInThisContext",
+    "require('fs')",
+    'require("fs")',
+    "import fs ",
 ]
 
 
@@ -150,12 +161,12 @@ class SandboxBackend(Backend):
         """Human-readable description."""
         if self._dev_mode:
             return "Code sandbox (development mode - NOT SECURE)"
-        return "Secure Python code execution sandbox"
+        return "Secure Python/TypeScript code execution sandbox"
 
     @property
     def supported_languages(self) -> list[str]:
         """Supported programming languages."""
-        return ["python"]
+        return ["python", "typescript"]
 
     def _get_tier_config(self, account: Account) -> dict[str, Any]:
         """Get tier configuration for account.
@@ -183,11 +194,12 @@ class SandboxBackend(Backend):
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
+        language: str = "python",
     ) -> ExecutionResult:
-        """Execute Python code in sandbox.
+        """Execute Python or TypeScript code in sandbox.
 
         Args:
-            code: Python source code to execute.
+            code: Source code to execute.
             config: Backend configuration (not used for code_sandbox).
             input_data: Input arguments passed to the code.
             account: The account executing the function.
@@ -196,6 +208,7 @@ class SandboxBackend(Backend):
             extra_files: Optional mapping of relative paths to file contents
                 to write into the execution directory before running code.
                 Used by code-mode to inject the ``functions/`` package.
+            language: Programming language ('python' or 'typescript').
 
         Returns:
             ExecutionResult with output or error details.
@@ -207,6 +220,18 @@ class SandboxBackend(Backend):
                 error="No code provided",
                 error_type="ValidationError",
             )
+
+        # Transpile TypeScript → JavaScript on host before sandbox entry
+        if language == "typescript":
+            js_code, transpile_errors = await self._transpile_typescript(code)
+            if transpile_errors:
+                return ExecutionResult(
+                    success=False,
+                    output=None,
+                    error="; ".join(transpile_errors),
+                    error_type="TranspileError",
+                )
+            code = js_code
 
         tier_config = self._get_tier_config(account)
         timeout_sec = min(timeout_ms / 1000, tier_config["timeout_sec"])
@@ -227,6 +252,7 @@ class SandboxBackend(Backend):
                 extra_files=extra_files,
                 sandbox_env=sandbox_env,
                 context=context,
+                language=language,
             )
         else:
             result = await self._execute_nsjail(
@@ -241,6 +267,7 @@ class SandboxBackend(Backend):
                 extra_files=extra_files,
                 sandbox_env=sandbox_env,
                 context=context,
+                language=language,
             )
 
         return self._sanitize_output(result, tier)
@@ -269,6 +296,143 @@ class SandboxBackend(Backend):
 
         return result
 
+    async def _transpile_typescript(self, code: str) -> tuple[str, list[str]]:
+        """Transpile TypeScript to JavaScript using esbuild.
+
+        Runs on the host (Worker Manager), NOT inside the sandbox.
+
+        Args:
+            code: TypeScript source code.
+
+        Returns:
+            Tuple of (transpiled JS code, list of error messages).
+            If errors is non-empty, transpilation failed.
+        """
+        esbuild_bin = shutil.which("esbuild")
+        if not esbuild_bin:
+            logger.warning("esbuild_not_found")
+            return code, []
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                esbuild_bin,
+                "--platform=node",
+                "--format=cjs",
+                "--target=node22",
+                "--sourcefile=function.ts",
+                "--loader=ts",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(code.encode()),
+                timeout=10,
+            )
+        except TimeoutError:
+            return "", ["TypeScript transpilation timed out"]
+        except FileNotFoundError:
+            logger.warning("esbuild_not_found")
+            return code, []
+
+        if proc.returncode != 0:
+            err_msg = stderr.decode().strip()
+            err_lines = [
+                line for line in err_msg.split("\n") if line.strip() and not line.startswith("✘")
+            ]
+            return "", err_lines[:5] if err_lines else [err_msg[:500]]
+
+        return stdout.decode(), []
+
+    def _wrap_ts_code(self, code: str) -> str:
+        """Wrap transpiled JS code with execution harness for dev mode.
+
+        Creates a wrapper that:
+        - Reads input from input.json (argv[1])
+        - Reads context from context.json if present
+        - Loads environment variables from .sandbox_env.json
+        - Runs the user code via require()
+        - Captures result and writes to output.json (argv[2])
+        """
+        return f"""#!/usr/bin/env node
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+
+const inputPath = process.argv[2];
+const outputPath = process.argv[3];
+
+let inputData = {{}};
+try {{ inputData = JSON.parse(fs.readFileSync(inputPath, "utf-8")); }} catch {{}}
+
+const execDir = path.dirname(inputPath);
+let contextData = {{}};
+try {{ contextData = JSON.parse(fs.readFileSync(path.join(execDir, "context.json"), "utf-8")); }} catch {{}}
+
+try {{
+  const envData = JSON.parse(fs.readFileSync(path.join(execDir, ".sandbox_env.json"), "utf-8"));
+  Object.assign(process.env, envData);
+}} catch {{}}
+
+let capturedStdout = "";
+let capturedStderr = "";
+const origOut = process.stdout.write.bind(process.stdout);
+const origErr = process.stderr.write.bind(process.stderr);
+process.stdout.write = (c) => {{ capturedStdout += String(c); return true; }};
+process.stderr.write = (c) => {{ capturedStderr += String(c); return true; }};
+
+const codePath = path.join(execDir, "user_code.js");
+fs.writeFileSync(codePath, {json.dumps(code)});
+
+async function run() {{
+  let result = null, error = null, errorType = null, success = true;
+  try {{
+    const mod = require(codePath);
+    let fn = null;
+    if (mod.__esModule && typeof mod.default === "function") fn = mod.default;
+    else if (typeof mod.default === "function") fn = mod.default;
+    else if (typeof mod.main === "function") fn = mod.main;
+    else if (typeof mod.handler === "function") fn = mod.handler;
+
+    if (fn) {{
+      const r = fn(inputData, contextData);
+      result = r instanceof Promise ? await r : r;
+    }} else if (mod.result !== undefined) result = mod.result;
+    else if (mod.output !== undefined) result = mod.output;
+    else if (mod.default !== undefined) result = mod.default;
+  }} catch (e) {{
+    success = false;
+    error = e.message || String(e);
+    errorType = e.constructor ? e.constructor.name : "Error";
+    capturedStderr += (e.stack || String(e)) + "\\n";
+  }} finally {{
+    process.stdout.write = origOut;
+    process.stderr.write = origErr;
+  }}
+
+  const output = {{
+    success, result,
+    stdout: capturedStdout.slice(0, 65536),
+    stderr: capturedStderr.slice(0, 65536),
+    error, error_type: errorType,
+  }};
+  fs.writeFileSync(outputPath, JSON.stringify(output, (_, v) =>
+    typeof v === "bigint" ? v.toString() : v
+  ));
+}}
+
+run().catch((e) => {{
+  process.stdout.write = origOut;
+  process.stderr.write = origErr;
+  fs.writeFileSync(outputPath, JSON.stringify({{
+    success: false, result: null, stdout: "", stderr: e.stack || String(e),
+    error: e.message, error_type: "FatalError",
+  }}));
+  process.exit(1);
+}});
+"""
+
     async def _execute_dev_mode(
         self,
         code: str,
@@ -280,6 +444,7 @@ class SandboxBackend(Backend):
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
+        language: str = "python",
     ) -> ExecutionResult:
         """Execute code in development mode (subprocess, no isolation).
 
@@ -305,7 +470,6 @@ class SandboxBackend(Backend):
 
             # Write input and code files
             input_file = exec_dir / "input.json"
-            code_file = exec_dir / "user_code.py"
             output_file = exec_dir / "output.json"
 
             input_file.write_text(json.dumps(input_data, default=str))
@@ -313,19 +477,24 @@ class SandboxBackend(Backend):
             if context:
                 (exec_dir / "context.json").write_text(json.dumps(context, default=str))
 
-            # Wrap code with execution harness
-            wrapped_code = self._wrap_code(code)
-            code_file.write_text(wrapped_code)
+            # Wrap code with execution harness (language-specific)
+            if language == "typescript":
+                code_file = exec_dir / "wrapper.js"
+                wrapped_code = self._wrap_ts_code(code)
+                code_file.write_text(wrapped_code)
+                cmd = ["node", str(code_file), str(input_file), str(output_file)]
+            else:
+                code_file = exec_dir / "user_code.py"
+                wrapped_code = self._wrap_code(code)
+                code_file.write_text(wrapped_code)
+                cmd = ["python3", str(code_file), str(input_file), str(output_file)]
 
             result: ExecutionResult
 
             async with track_execution(tier=tier, namespace=namespace):
                 # Execute with subprocess
                 process = await asyncio.create_subprocess_exec(
-                    "python3",
-                    str(code_file),
-                    str(input_file),
-                    str(output_file),
+                    *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=str(exec_dir),
@@ -423,6 +592,7 @@ class SandboxBackend(Backend):
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
+        language: str = "python",
     ) -> ExecutionResult:
         """Execute code in nsjail sandbox.
 
@@ -450,7 +620,11 @@ class SandboxBackend(Backend):
             (exec_dir / "input.json").write_text(json.dumps(input_data, default=str))
             if context:
                 (exec_dir / "context.json").write_text(json.dumps(context, default=str))
-            (exec_dir / "user_code.py").write_text(code)
+
+            # Write code file with language-appropriate extension
+            code_filename = "user_code.js" if language == "typescript" else "user_code.py"
+            code_file = exec_dir / code_filename
+            code_file.write_text(code)
 
             # ORDER-003: Generate execution token via file (never env var or /proc)
             exec_token = secrets.token_urlsafe(32)
@@ -465,10 +639,11 @@ class SandboxBackend(Backend):
                     str(self.spawn_script),
                     execution_id,
                     tier,
-                    str(exec_dir / "user_code.py"),
+                    str(code_file),
                     str(exec_dir / "input.json"),
                     namespace,
                     str(token_file),
+                    language,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -715,16 +890,17 @@ if __name__ == "__main__":
         self,
         code: str | None,
         config: dict[str, Any] | None,
+        language: str = "python",
     ) -> ValidationResult:
-        """Validate Python code before saving.
+        """Validate code before saving.
 
         Checks:
-        - Syntax validity
+        - Syntax validity (ast.parse for Python, esbuild for TypeScript)
         - Code size limits
         - Dangerous patterns (defense-in-depth)
         """
-        errors = []
-        warnings = []
+        errors: list[str] = []
+        warnings: list[str] = []
 
         if not code:
             errors.append("Code is required for code_sandbox backend")
@@ -734,19 +910,32 @@ if __name__ == "__main__":
         if len(code) > 1024 * 1024:
             errors.append("Code exceeds maximum size (1MB)")
 
-        # Check syntax
-        try:
-            ast.parse(code)
-        except SyntaxError as e:
-            errors.append(f"Syntax error: {e.msg} at line {e.lineno}")
+        if language == "typescript":
+            # TypeScript syntax check via esbuild (fast, ~5ms)
+            _, transpile_errors = await self._transpile_typescript(code)
+            errors.extend(transpile_errors)
 
-        # Check for dangerous patterns (defense-in-depth)
-        for pattern in DANGEROUS_PATTERNS:
-            if pattern in code:
-                warnings.append(
-                    f"Potentially dangerous pattern detected: {pattern}. "
-                    "This will be blocked by sandbox seccomp policy."
-                )
+            # Dangerous patterns for TypeScript
+            for pattern in DANGEROUS_PATTERNS_TYPESCRIPT:
+                if pattern in code:
+                    warnings.append(
+                        f"Potentially dangerous pattern detected: {pattern}. "
+                        "This will be blocked by sandbox seccomp policy."
+                    )
+        else:
+            # Python syntax check
+            try:
+                ast.parse(code)
+            except SyntaxError as e:
+                errors.append(f"Syntax error: {e.msg} at line {e.lineno}")
+
+            # Dangerous patterns for Python
+            for pattern in DANGEROUS_PATTERNS_PYTHON:
+                if pattern in code:
+                    warnings.append(
+                        f"Potentially dangerous pattern detected: {pattern}. "
+                        "This will be blocked by sandbox seccomp policy."
+                    )
 
         return ValidationResult(
             valid=len(errors) == 0,

@@ -4,7 +4,7 @@ Provides a registry for function execution backends and factory
 functions to retrieve them by name.
 
 Available Backends:
-- code_sandbox: Secure sandboxed Python/TypeScript execution (Phase 6)
+- code_sandbox: Secure sandboxed Python/TypeScript execution
 - activepieces: Visual workflow automation (A1 milestone)
 - nanobot: Definition TBD (A2 milestone)
 - github_repo: GitHub repository-based functions (A3 milestone)

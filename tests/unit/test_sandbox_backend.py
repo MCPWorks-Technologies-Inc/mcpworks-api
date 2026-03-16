@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcpworks_api.backends.sandbox import (
-    DANGEROUS_PATTERNS,
+    DANGEROUS_PATTERNS_PYTHON,
     DEFAULT_TIER,
     TIER_CONFIG,
     ExecutionTier,
@@ -87,17 +87,17 @@ class TestDangerousPatterns:
 
     def test_dangerous_patterns_defined(self):
         """Test dangerous patterns are defined."""
-        assert len(DANGEROUS_PATTERNS) > 0
-        assert "os.system" in DANGEROUS_PATTERNS
-        assert "subprocess" in DANGEROUS_PATTERNS
-        assert "eval(" in DANGEROUS_PATTERNS
-        assert "exec(" in DANGEROUS_PATTERNS
+        assert len(DANGEROUS_PATTERNS_PYTHON) > 0
+        assert "os.system" in DANGEROUS_PATTERNS_PYTHON
+        assert "subprocess" in DANGEROUS_PATTERNS_PYTHON
+        assert "eval(" in DANGEROUS_PATTERNS_PYTHON
+        assert "exec(" in DANGEROUS_PATTERNS_PYTHON
 
     def test_dangerous_patterns_include_security_risks(self):
         """Test patterns include common security risks."""
-        assert "__import__" in DANGEROUS_PATTERNS
-        assert "ctypes" in DANGEROUS_PATTERNS
-        assert "builtins" in DANGEROUS_PATTERNS
+        assert "__import__" in DANGEROUS_PATTERNS_PYTHON
+        assert "ctypes" in DANGEROUS_PATTERNS_PYTHON
+        assert "builtins" in DANGEROUS_PATTERNS_PYTHON
 
 
 class TestSandboxBackend:
