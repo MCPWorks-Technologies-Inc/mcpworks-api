@@ -56,12 +56,12 @@ function {safe_name}(input) {{
 module.exports.{safe_name} = {safe_name};
 """
     else:
-        return f"""/** {desc} (Python function — not callable from TypeScript code-mode) */
-function {safe_name}() {{
-  throw new Error(
-    "{qualified} is a Python function and cannot be called from TypeScript code-mode. " +
-    "Use the Python execute tool instead, or rewrite the function in TypeScript."
-  );
+        return f"""/** {desc} (Python function — called via cross-language bridge) */
+async function {safe_name}(input) {{
+  const _trackCall = require("./_registry")._trackCall;
+  _trackCall("{qualified}");
+  const _bridge = require("./_py_bridge");
+  return await _bridge._callPyFunction("{qualified}", input || {{}});
 }}
 module.exports.{safe_name} = {safe_name};
 """
@@ -137,15 +137,76 @@ module.exports._getCallLog = _getCallLog;
 """
 
 
+_PY_BRIDGE_TEMPLATE = """\
+"use strict";
+/**
+ * Cross-language bridge: call Python functions from TypeScript code-mode.
+ * Uses fetch to call the function via the run server MCP endpoint.
+ * Requires network access (Builder tier or above).
+ */
+const RUN_URL = "{run_url}";
+const API_KEY = process.env.__MCPWORKS_BRIDGE_KEY__ || "";
+
+async function _callPyFunction(qualifiedName, inputData) {{
+  if (!API_KEY) {{
+    throw new Error(
+      `Cannot call Python function ${{qualifiedName}}: ` +
+      "cross-language bridge key not configured. " +
+      "Use the execute_python tool directly instead."
+    );
+  }}
+
+  const response = await fetch(RUN_URL, {{
+    method: "POST",
+    headers: {{
+      Authorization: `Bearer ${{API_KEY}}`,
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    }},
+    body: JSON.stringify({{
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {{ name: qualifiedName, arguments: inputData }},
+    }}),
+  }});
+
+  const text = await response.text();
+  for (const line of text.split("\\n")) {{
+    if (line.startsWith("data: ")) {{
+      const data = JSON.parse(line.slice(6));
+      const result = data.result || {{}};
+      const content = result.content || [];
+      const isError = result.isError || false;
+      if (content.length > 0) {{
+        const parsed = JSON.parse(content[0].text || "{{}}");
+        if (isError) {{
+          throw new Error(
+            `Python function ${{qualifiedName}} failed: ${{parsed.error || JSON.stringify(parsed)}}`
+          );
+        }}
+        return parsed;
+      }}
+    }}
+  }}
+  throw new Error(`No response from Python function ${{qualifiedName}}`);
+}}
+
+module.exports._callPyFunction = _callPyFunction;
+"""
+
+
 def generate_ts_functions_package(
     functions: list[tuple[Function, FunctionVersion]],
     namespace: str,
+    run_url: str | None = None,
 ) -> dict[str, str]:
     """Generate a ``functions/`` Node.js package from database records.
 
     Args:
         functions: ``(Function, FunctionVersion)`` tuples from DB.
         namespace: Namespace name (for the docstring).
+        run_url: MCP run server URL for cross-language bridge.
 
     Returns:
         Mapping of relative file paths to file content strings.
@@ -153,11 +214,18 @@ def generate_ts_functions_package(
     files: dict[str, str] = {}
 
     services: dict[str, list[tuple[Function, FunctionVersion]]] = {}
+    has_py = False
     for func, version in functions:
         svc_name = func.service.name
         services.setdefault(svc_name, []).append((func, version))
+        if getattr(version, "language", "python") == "python":
+            has_py = True
 
     files["functions/_registry.js"] = _REGISTRY_SOURCE_JS
+
+    if has_py:
+        bridge_url = run_url or f"https://{namespace}.run.mcpworks.io/mcp"
+        files["functions/_py_bridge.js"] = _PY_BRIDGE_TEMPLATE.format(run_url=bridge_url)
 
     for svc_name, funcs in services.items():
         safe_svc = _sanitize(svc_name)

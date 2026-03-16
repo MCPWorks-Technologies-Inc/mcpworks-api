@@ -411,7 +411,15 @@ class RunMCPHandler:
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
-        extra_files = generate_functions_package(functions, self.namespace_name)
+        run_url = f"https://{self.namespace_name}.run.mcpworks.io/mcp"
+        extra_files = generate_functions_package(functions, self.namespace_name, run_url=run_url)
+
+        # Inject API key for cross-language bridge (TS functions callable from Python)
+        has_ts = any(getattr(v, "language", "python") == "typescript" for _, v in functions)
+        if has_ts and self.api_key and self.api_key.key:
+            if sandbox_env is None:
+                sandbox_env = {}
+            sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key.key
 
         backend = get_backend("code_sandbox")
         if not backend:
@@ -490,7 +498,15 @@ class RunMCPHandler:
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
-        extra_files = generate_ts_functions_package(functions, self.namespace_name)
+        run_url = f"https://{self.namespace_name}.run.mcpworks.io/mcp"
+        extra_files = generate_ts_functions_package(functions, self.namespace_name, run_url=run_url)
+
+        # Inject API key for cross-language bridge (Python functions callable from TS)
+        has_py = any(getattr(v, "language", "python") == "python" for _, v in functions)
+        if has_py and self.api_key and self.api_key.key:
+            if sandbox_env is None:
+                sandbox_env = {}
+            sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key.key
 
         backend = get_backend("code_sandbox")
         if not backend:
