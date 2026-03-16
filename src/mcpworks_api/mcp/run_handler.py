@@ -311,6 +311,7 @@ class RunMCPHandler:
             account=self.account,
             execution_id=execution_id,
             sandbox_env=filtered_env,
+            language=getattr(version, "language", "python"),
         )
 
         execution_time_ms = result.execution_time_ms or int(

@@ -48,6 +48,7 @@ class StubBackend(Backend):
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
+        language: str = "python",
     ) -> ExecutionResult:
         """Mock execution returning predictable results.
 
@@ -86,6 +87,7 @@ class StubBackend(Backend):
         self,
         code: str | None,
         config: dict[str, Any] | None,
+        language: str = "python",
     ) -> ValidationResult:
         """Basic validation of code/config.
 

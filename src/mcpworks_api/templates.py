@@ -20,6 +20,7 @@ class FunctionTemplate:
         tags: list[str],
         requirements: list[str] | None = None,
         requires_network: bool = False,
+        language: str = "python",
     ):
         self.name = name
         self.description = description
@@ -29,12 +30,14 @@ class FunctionTemplate:
         self.tags = tags
         self.requirements = requirements or []
         self.requires_network = requires_network
+        self.language = language
 
     def to_dict(self) -> dict[str, Any]:
         """Return template as a dict for MCP response."""
         d: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
+            "language": self.language,
             "tags": self.tags,
             "requirements": self.requirements,
         }
@@ -47,6 +50,7 @@ class FunctionTemplate:
         d: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
+            "language": self.language,
             "code": self.code,
             "input_schema": self.input_schema,
             "output_schema": self.output_schema,
@@ -310,12 +314,161 @@ def main(input_data):
         },
         tags=["reporting", "formatting"],
     ),
+    # ── TypeScript Templates ─────────────────────────────────────────────
+    "hello-world-ts": FunctionTemplate(
+        name="hello-world-ts",
+        description="Simple TypeScript input/output function — proves the system works",
+        code="""\
+export default function main(input: Record<string, any>) {
+    const name = input.name || "World";
+    return { greeting: `Hello, ${name}!`, message: "Your TypeScript sandbox is working." };
+}
+""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name to greet"},
+            },
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "greeting": {"type": "string"},
+                "message": {"type": "string"},
+            },
+        },
+        tags=["starter", "example", "typescript"],
+        language="typescript",
+    ),
+    "api-connector-ts": FunctionTemplate(
+        name="api-connector-ts",
+        description="Call an external API using fetch. REQUIRES NETWORK ACCESS (Builder tier or above).",
+        code="""\
+export default async function main(input: Record<string, any>) {
+    const { url, method = "GET", headers = {}, body } = input;
+    if (!url) return { error: "url is required" };
+
+    const response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const text = await response.text();
+    return {
+        status_code: response.status,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: text.slice(0, 10000),
+        ok: response.ok,
+    };
+}
+""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "URL to call"},
+                "method": {
+                    "type": "string",
+                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                    "description": "HTTP method (default: GET)",
+                },
+                "headers": {"type": "object", "description": "Request headers"},
+                "body": {"description": "Request body (sent as JSON)"},
+            },
+            "required": ["url"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "status_code": {"type": "integer"},
+                "headers": {"type": "object"},
+                "body": {"type": "string"},
+                "ok": {"type": "boolean"},
+            },
+        },
+        tags=["http", "integration", "typescript"],
+        requires_network=True,
+        language="typescript",
+    ),
+    "json-transformer-ts": FunctionTemplate(
+        name="json-transformer-ts",
+        description="Transform JSON data with pick, rename, and filter operations",
+        code="""\
+export default function main(input: Record<string, any>) {
+    const { data, operations = [] } = input;
+    if (!data) return { error: "data is required" };
+
+    let result: any = structuredClone(data);
+    for (const op of operations) {
+        if (op.type === "pick" && op.keys) {
+            result = Object.fromEntries(
+                op.keys.filter((k: string) => k in result).map((k: string) => [k, result[k]])
+            );
+        } else if (op.type === "rename" && op.mapping) {
+            result = Object.fromEntries(
+                Object.entries(result).map(([k, v]) => [op.mapping[k] || k, v])
+            );
+        } else if (op.type === "filter" && Array.isArray(result)) {
+            result = result.filter((item: any) => item[op.key] === op.value);
+        }
+    }
+    return { transformed: result };
+}
+""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "data": {"description": "JSON data to transform (object or array)"},
+                "operations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["pick", "rename", "filter"],
+                            },
+                            "keys": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Keys to pick (for 'pick' operation)",
+                            },
+                            "mapping": {
+                                "type": "object",
+                                "description": "Old name → new name mapping (for 'rename')",
+                            },
+                            "key": {"type": "string", "description": "Field to filter on"},
+                            "value": {"description": "Value to match"},
+                        },
+                    },
+                    "description": "List of transformation operations to apply in order",
+                },
+            },
+            "required": ["data"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "transformed": {"description": "The transformed data"},
+            },
+        },
+        tags=["data", "transform", "typescript"],
+        language="typescript",
+    ),
 }
 
 
-def list_templates() -> list[dict[str, Any]]:
-    """Return summary of all available templates."""
-    return [t.to_dict() for t in TEMPLATES.values()]
+def list_templates(language: str | None = None) -> list[dict[str, Any]]:
+    """Return summary of all available templates.
+
+    Args:
+        language: Optional filter by language ('python' or 'typescript').
+            If None, returns all templates.
+    """
+    templates = TEMPLATES.values()
+    if language:
+        templates = [t for t in templates if t.language == language]
+    return [t.to_dict() for t in templates]
 
 
 def get_template(name: str) -> FunctionTemplate | None:

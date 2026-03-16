@@ -88,6 +88,7 @@ class Backend(ABC):
         extra_files: dict[str, str] | None = None,
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
+        language: str = "python",
     ) -> ExecutionResult:
         """Execute function code/config with input data.
 
@@ -116,6 +117,7 @@ class Backend(ABC):
         self,
         code: str | None,
         config: dict[str, Any] | None,
+        language: str = "python",
     ) -> ValidationResult:
         """Validate code/config before saving.
 

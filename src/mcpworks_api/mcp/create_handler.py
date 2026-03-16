@@ -266,23 +266,33 @@ class CreateMCPHandler:
                         "backend": {
                             "type": "string",
                             "enum": ["code_sandbox", "activepieces", "nanobot", "github_repo"],
-                            "description": "Execution backend. Use 'code_sandbox' for Python functions (most common).",
+                            "description": "Execution backend. Use 'code_sandbox' for Python and TypeScript functions.",
+                        },
+                        "language": {
+                            "type": "string",
+                            "enum": ["python", "typescript"],
+                            "description": (
+                                "Programming language for the function. Default: 'python'. "
+                                "Use 'typescript' for TypeScript/JavaScript functions. "
+                                "Language cannot be changed after creation."
+                            ),
                         },
                         "code": {
                             "type": "string",
                             "description": (
-                                "Python source code for code_sandbox backend. "
+                                "Source code for code_sandbox backend. "
                                 "NEVER hardcode API keys, tokens, secrets, or credentials in code — "
                                 "use required_env for caller-provided secrets or agent state (via context['state']) for stored secrets. "
-                                "Entry point patterns (in priority order): "
+                                "\n\nPython entry points (in priority order): "
                                 "1) 'result = ...' — assign to result variable. "
                                 "2) 'output = ...' — alias for result. "
                                 "3) 'def main(input):' — function receiving input dict, return value is the result. "
                                 "4) 'def handler(input, context):' — function receiving input dict and context dict. "
-                                "The input dict contains the caller's arguments. "
-                                "The context dict contains 'state' (dict of agent state key/value pairs) when called via agent orchestration. "
-                                "Example: "
-                                "def main(input):\\n    name = input.get('name', 'World')\\n    return {'greeting': f'Hello, {name}!'}"
+                                "\n\nTypeScript entry points: "
+                                "1) 'export default function main(input) { ... }' — default export (preferred). "
+                                "2) 'export default function handler(input, context) { ... }' — with context. "
+                                "3) 'module.exports.main = function(input) { ... }' — CommonJS. "
+                                "4) 'const result = ...' — simple assignment."
                             ),
                         },
                         "config": {
@@ -310,7 +320,7 @@ class CreateMCPHandler:
                         "requirements": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Python packages needed (must be from the allowed list). Use list_packages to see what's available. Example: ['httpx', 'beautifulsoup4']",
+                            "description": "Packages needed (must be from the allowed list). Use list_packages to see what's available. Python: ['httpx', 'pandas'] | TypeScript: ['axios', 'zod']",
                         },
                         "required_env": {
                             "type": "array",
@@ -457,12 +467,19 @@ class CreateMCPHandler:
             MCPTool(
                 name="list_packages",
                 description=(
-                    "List all Python packages available for use in sandbox functions, grouped by category. "
-                    "Only packages from this list can be used in the 'requirements' field of make_function/update_function."
+                    "List packages available for use in sandbox functions, grouped by category. "
+                    "Only packages from this list can be used in the 'requirements' field of make_function/update_function. "
+                    "Use the 'language' parameter to filter by Python or TypeScript."
                 ),
                 inputSchema={
                     "type": "object",
-                    "properties": {},
+                    "properties": {
+                        "language": {
+                            "type": "string",
+                            "enum": ["python", "typescript"],
+                            "description": "Filter packages by language. Default: python.",
+                        },
+                    },
                 },
             ),
             MCPTool(
@@ -1448,8 +1465,19 @@ class CreateMCPHandler:
         optional_env: list[str] | None = None,
         created_by: str | None = None,
         template: str | None = None,
+        language: str = "python",
     ) -> MCPToolResult:
         """Create a new function."""
+        if language not in ("python", "typescript"):
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps({"error": "language must be 'python' or 'typescript'"})
+                    )
+                ],
+                isError=True,
+            )
+
         # ORDER-011: Apply template defaults if specified
         if template:
             from mcpworks_api.templates import get_template
@@ -1475,13 +1503,16 @@ class CreateMCPHandler:
                 tags = tmpl.tags
             if requirements is None and tmpl.requirements:
                 requirements = tmpl.requirements
+            # Inherit language from template if caller didn't specify
+            if hasattr(tmpl, "language") and tmpl.language:
+                language = tmpl.language
 
-        # Validate requirements against allow-list
+        # Validate requirements against language-specific allow-list
         validated_reqs = None
         if requirements:
-            from mcpworks_api.sandbox.packages import validate_requirements
+            from mcpworks_api.sandbox.packages import validate_requirements_for_language
 
-            validated_reqs, errors = validate_requirements(requirements)
+            validated_reqs, errors = validate_requirements_for_language(requirements, language)
             if errors:
                 return MCPToolResult(
                     content=[MCPContent(text=json.dumps({"errors": errors}))],
@@ -1529,11 +1560,13 @@ class CreateMCPHandler:
             required_env=validated_required_env,
             optional_env=validated_optional_env,
             created_by=created_by,
+            language=language,
         )
         result: dict[str, Any] = {
             "name": f"{service}.{name}",
             "version": 1,
             "backend": backend,
+            "language": language,
             "created_at": function.created_at.isoformat(),
         }
         if validated_reqs:
@@ -1580,12 +1613,19 @@ class CreateMCPHandler:
         restore_version: int | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
-        # Validate requirements against allow-list
+        # Look up function to determine its language for requirements validation
+        namespace = await self._get_current_namespace()
+        svc = await self.service_service.get_by_name(namespace.id, service)
+        function = await self.function_service.get_by_name(svc.id, name)
+        active_ver = function.get_active_version_obj()
+        fn_language = active_ver.language if active_ver else "python"
+
+        # Validate requirements against language-specific allow-list
         validated_reqs = None
         if requirements is not None:
-            from mcpworks_api.sandbox.packages import validate_requirements
+            from mcpworks_api.sandbox.packages import validate_requirements_for_language
 
-            validated_reqs, errors = validate_requirements(requirements)
+            validated_reqs, errors = validate_requirements_for_language(requirements, fn_language)
             if errors:
                 return MCPToolResult(
                     content=[MCPContent(text=json.dumps({"errors": errors}))],
@@ -1613,10 +1653,6 @@ class CreateMCPHandler:
             from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
 
             credential_warnings = scan_code_for_credentials(code)
-
-        namespace = await self._get_current_namespace()
-        svc = await self.service_service.get_by_name(namespace.id, service)
-        function = await self.function_service.get_by_name(svc.id, name)
 
         # Update metadata if provided
         if description is not None or tags is not None:
@@ -1739,8 +1775,29 @@ class CreateMCPHandler:
         details = await self.function_service.describe(function.id)
         return MCPToolResult(content=[MCPContent(text=json.dumps(details))])
 
-    async def _list_packages(self) -> MCPToolResult:
-        """List available Python packages for sandbox functions."""
+    async def _list_packages(self, language: str = "python") -> MCPToolResult:
+        """List available packages for sandbox functions."""
+        if language == "typescript":
+            from mcpworks_api.sandbox.packages_node import (
+                NODE_PACKAGE_REGISTRY,
+                get_node_registry_by_category,
+            )
+
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps(
+                            {
+                                "language": "typescript",
+                                "packages": get_node_registry_by_category(),
+                                "total": len(NODE_PACKAGE_REGISTRY),
+                                "note": "Node.js built-ins (crypto, url, path, buffer, util, fs, http) are always available without listing.",
+                            }
+                        )
+                    )
+                ]
+            )
+
         from mcpworks_api.sandbox.packages import (
             PACKAGE_REGISTRY,
             get_registry_by_category,
@@ -1751,6 +1808,7 @@ class CreateMCPHandler:
                 MCPContent(
                     text=json.dumps(
                         {
+                            "language": "python",
                             "packages": get_registry_by_category(),
                             "total": len(PACKAGE_REGISTRY),
                         }

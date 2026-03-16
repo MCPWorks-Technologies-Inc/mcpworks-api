@@ -43,6 +43,7 @@ class FunctionService:
         required_env: list[str] | None = None,
         optional_env: list[str] | None = None,
         created_by: str | None = None,
+        language: str = "python",
     ) -> Function:
         """Create a new function with initial version.
 
@@ -91,6 +92,7 @@ class FunctionService:
             function_id=function.id,
             version=1,
             backend=backend,
+            language=language,
             code=code,
             config=config,
             input_schema=input_schema,
@@ -253,6 +255,7 @@ class FunctionService:
         created_by: str | None = None,
         activate: bool = True,
         is_admin: bool = False,
+        language: str | None = None,
     ) -> FunctionVersion:
         """Create a new version of a function.
 
@@ -265,19 +268,36 @@ class FunctionService:
             config: Optional backend-specific configuration.
             input_schema: Optional JSON Schema for input validation.
             output_schema: Optional JSON Schema for output validation.
-            requirements: Optional list of allowed Python packages.
+            requirements: Optional list of allowed packages.
             activate: Whether to set this as the active version.
+            language: Programming language. If None, inherits from the
+                latest existing version. Cannot differ from existing
+                versions (language is immutable per function).
 
         Returns:
             The created version.
 
         Raises:
             NotFoundError: If function not found.
+            ValueError: If language differs from existing versions.
         """
         function = await self.get_by_id(function_id)
 
         if function.locked and not is_admin:
             raise ForbiddenError(f"Function '{function.name}' is locked and cannot be modified")
+
+        # Language immutability: inherit from existing versions or validate match
+        if function.versions:
+            existing_language = function.versions[0].language
+            if language is None:
+                language = existing_language
+            elif language != existing_language:
+                raise ValueError(
+                    f"Cannot change function language from '{existing_language}' to '{language}'. "
+                    "Create a new function for a different language."
+                )
+        elif language is None:
+            language = "python"
 
         # Determine next version number
         next_version = 1
@@ -289,6 +309,7 @@ class FunctionService:
             function_id=function_id,
             version=next_version,
             backend=backend,
+            language=language,
             code=code,
             config=config,
             input_schema=input_schema,
@@ -567,6 +588,7 @@ class FunctionService:
                 "id": str(active_version.id) if active_version else None,
                 "version": active_version.version if active_version else None,
                 "backend": active_version.backend if active_version else None,
+                "language": active_version.language if active_version else None,
                 "code": active_version.code if active_version else None,
                 "config": active_version.config if active_version else None,
                 "input_schema": active_version.input_schema if active_version else None,
@@ -583,6 +605,7 @@ class FunctionService:
                 {
                     "version": v.version,
                     "backend": v.backend,
+                    "language": v.language,
                     "created_by": v.created_by,
                     "created_at": v.created_at.isoformat(),
                 }
@@ -617,6 +640,7 @@ class FunctionService:
             "id": str(version.id),
             "version": version.version,
             "backend": version.backend,
+            "language": version.language,
             "code": version.code,
             "config": version.config,
             "input_schema": version.input_schema,
