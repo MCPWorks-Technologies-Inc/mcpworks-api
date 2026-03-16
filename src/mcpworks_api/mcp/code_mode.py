@@ -57,14 +57,32 @@ def _generate_wrapper(
     qualified = f"{service_name}.{func.name}"
     desc = func.description or f"Execute {qualified}"
 
-    # TypeScript functions can't be exec'd as Python — generate a stub
+    # TypeScript functions: call via HTTP to the run server (cross-language bridge)
     if getattr(version, "language", "python") == "typescript":
-        return f'''def {safe_name}(**kwargs):
-    """{desc} [TypeScript — use execute_typescript tool instead]"""
-    raise RuntimeError(
-        "{qualified} is a TypeScript function and cannot be called from Python code-mode. "
-        "Use the execute_typescript tool instead."
-    )
+        params = _params_from_schema(version.input_schema)
+        sig_parts_ts: list[str] = []
+        for pname, default, _desc in params:
+            if default is _NO_DEFAULT:
+                sig_parts_ts.append(pname)
+            else:
+                sig_parts_ts.append(f"{pname}={default!r}")
+        if not sig_parts_ts:
+            sig_parts_ts.append("**kwargs")
+        sig_ts = ", ".join(sig_parts_ts)
+
+        if params:
+            dict_entries_ts = ", ".join(f'"{p[0]}": {p[0]}' for p in params)
+            input_line_ts = f"    _input = {{{dict_entries_ts}}}"
+        else:
+            input_line_ts = "    _input = dict(kwargs)"
+
+        return f'''def {safe_name}({sig_ts}):
+    """{desc} [TypeScript — called via cross-language bridge]"""
+    from functions._registry import _track_call
+    _track_call("{qualified}")
+{input_line_ts}
+    from functions._ts_bridge import _call_ts_function
+    return _call_ts_function("{qualified}", _input)
 '''
 
     code_file = f"_code/{_sanitize(service_name)}__{safe_name}.py"
@@ -176,15 +194,78 @@ def _get_call_log() -> list[str]:
 '''
 
 
+_TS_BRIDGE_TEMPLATE = '''\
+"""Cross-language bridge: call TypeScript functions from Python code-mode.
+
+Uses httpx to call the function via the run server MCP endpoint.
+Requires network access (Builder tier or above).
+"""
+import json
+import os
+
+_RUN_URL = "{run_url}"
+_API_KEY = os.environ.get("__MCPWORKS_BRIDGE_KEY__", "")
+
+
+def _call_ts_function(qualified_name: str, input_data: dict) -> object:
+    """Call a TypeScript function via the run server."""
+    if not _API_KEY:
+        raise RuntimeError(
+            f"Cannot call TypeScript function {{qualified_name}}: "
+            "cross-language bridge key not configured. "
+            "Use the execute_typescript tool directly instead."
+        )
+    import httpx
+
+    response = httpx.post(
+        _RUN_URL,
+        headers={{
+            "Authorization": f"Bearer {{_API_KEY}}",
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }},
+        json={{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {{
+                "name": qualified_name,
+                "arguments": input_data,
+            }},
+        }},
+        timeout=60,
+    )
+    # Parse SSE response
+    for line in response.text.split("\\n"):
+        if line.startswith("data: "):
+            data = json.loads(line[6:])
+            result = data.get("result", {{}})
+            content = result.get("content", [])
+            is_error = result.get("isError", False)
+            if content:
+                text = content[0].get("text", "{{}}")
+                parsed = json.loads(text)
+                if is_error:
+                    raise RuntimeError(
+                        f"TypeScript function {{qualified_name}} failed: "
+                        f"{{parsed.get('error', text)}}"
+                    )
+                return parsed
+    raise RuntimeError(f"No response from TypeScript function {{qualified_name}}")
+'''
+
+
 def generate_functions_package(
     functions: list[tuple[Function, FunctionVersion]],
     namespace: str,
+    run_url: str | None = None,
 ) -> dict[str, str]:
     """Generate a ``functions/`` Python package from database records.
 
     Args:
         functions: ``(Function, FunctionVersion)`` tuples from DB.
         namespace: Namespace name (for the docstring).
+        run_url: MCP run server URL for cross-language bridge.
 
     Returns:
         Mapping of relative file paths → file content strings.
@@ -194,12 +275,20 @@ def generate_functions_package(
 
     # Group by service
     services: dict[str, list[tuple[Function, FunctionVersion]]] = {}
+    has_ts = False
     for func, version in functions:
         svc_name = func.service.name
         services.setdefault(svc_name, []).append((func, version))
+        if getattr(version, "language", "python") == "typescript":
+            has_ts = True
 
     # _registry.py
     files["functions/_registry.py"] = _REGISTRY_SOURCE
+
+    # _ts_bridge.py (only if namespace has TypeScript functions)
+    if has_ts:
+        bridge_url = run_url or f"https://{namespace}.run.mcpworks.io/mcp"
+        files["functions/_ts_bridge.py"] = _TS_BRIDGE_TEMPLATE.format(run_url=bridge_url)
 
     # Per-service modules + raw code files
     for svc_name, funcs in services.items():
