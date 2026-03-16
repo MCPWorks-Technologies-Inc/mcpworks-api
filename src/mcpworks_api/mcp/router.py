@@ -95,6 +95,9 @@ async def get_account_from_api_key(
             detail="API key not associated with an account",
         )
 
+    # Stash raw key for cross-language bridge (not persisted, request-scoped only)
+    valid_key._raw_key = raw_key  # type: ignore[attr-defined]
+
     return valid_key.user.account, valid_key
 
 
