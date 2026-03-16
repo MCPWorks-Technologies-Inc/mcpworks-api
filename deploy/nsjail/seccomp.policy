@@ -276,6 +276,18 @@ ALLOW {
   fadvise64,
 
   /* ══════════════════════════════════════════════════════════════════════
+   * io_uring — async I/O (Node.js 22 libuv uses io_uring for file I/O)
+   * ══════════════════════════════════════════════════════════════════════ */
+  io_uring_setup,      /* Create io_uring instance (Node.js libuv) */
+  io_uring_enter,      /* Submit and wait for io_uring completions */
+  io_uring_register,   /* Register buffers/files with io_uring */
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * Capabilities query (Node.js startup)
+   * ══════════════════════════════════════════════════════════════════════ */
+  capget,              /* Query process capabilities (Node.js startup check) */
+
+  /* ══════════════════════════════════════════════════════════════════════
    * x86_64 specific
    * ══════════════════════════════════════════════════════════════════════ */
   vfork,               /* CPython _posixsubprocess uses vfork; execve block
