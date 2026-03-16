@@ -295,13 +295,18 @@ fi
 # subprocess, /bin/sh) at the kernel level after the runtime starts.
 # Paid tiers: run inside pre-configured network namespace via ip netns exec.
 if [ "${LANGUAGE}" = "typescript" ]; then
-    # Node.js: set NODE_PATH for pre-installed packages, limit V8 heap
-    NSJAIL_ARGS+=(--env "NODE_PATH=/usr/local/lib/node_modules")
+    # Node.js: bind mount node binary and packages into sandbox.
+    # Use --bindmount_ro to mount into paths within /sandbox (which is writable
+    # tmpfs), avoiding the mount target creation permission issue with nsjail chroot.
+    NSJAIL_ARGS+=(--env "NODE_PATH=/sandbox/.node_modules")
+    NSJAIL_ARGS+=(--bindmount_ro "/opt/mcpworks/sandbox-root/usr/local/bin/node:/sandbox/.node_bin")
+    NSJAIL_ARGS+=(--bindmount_ro "/opt/mcpworks/sandbox-root/node_modules:/sandbox/.node_modules")
     ${NSJAIL_PREFIX} "${NSJAIL}" \
         "${NSJAIL_ARGS[@]}" \
+        --exec_file /opt/mcpworks/sandbox-root/usr/local/bin/node \
         --execute_fd \
         -- \
-        /usr/local/bin/node --max-old-space-size="${MEMORY}" /sandbox/.e.js
+        /sandbox/.node_bin --max-old-space-size="${MEMORY}" /sandbox/.e.js
 else
     # Python
     ${NSJAIL_PREFIX} "${NSJAIL}" \
