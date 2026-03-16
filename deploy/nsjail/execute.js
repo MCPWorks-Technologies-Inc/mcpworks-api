@@ -159,6 +159,11 @@ async function main() {
     ) {
       result = userModule.default;
     }
+
+    // Await if result is a Promise (e.g. module.exports.result = asyncFn())
+    if (result instanceof Promise) {
+      result = await result;
+    }
   } catch (e) {
     success = false;
     error = e.message || String(e);
