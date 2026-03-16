@@ -177,11 +177,11 @@ class RunMCPHandler:
         return tools
 
     def _get_code_mode_tools(self) -> list[MCPTool]:
-        """Return single execute tool for code-mode."""
+        """Return execute tools for code-mode (Python + TypeScript)."""
         tier_notice = self._tier_notice()
         return [
             MCPTool(
-                name="execute",
+                name="execute_python",
                 description=(
                     "Execute Python code in a secure sandbox with access to all namespace functions.\n"
                     "\n"
@@ -212,7 +212,41 @@ class RunMCPHandler:
                     },
                     "required": ["code"],
                 },
-            )
+            ),
+            MCPTool(
+                name="execute_typescript",
+                description=(
+                    "Execute TypeScript/JavaScript code in a secure Node.js sandbox with access to all namespace functions.\n"
+                    "\n"
+                    "RETURNING DATA: Set `module.exports.result = ...` or `export default ...` to return data.\n"
+                    "\n"
+                    "CALLING FUNCTIONS: Require from the `functions` package:\n"
+                    '  const { hello } = require("./functions");\n'
+                    "  module.exports.result = hello({ name: 'World' });\n"
+                    "\n"
+                    "ASYNC: Async functions are supported — return a Promise and it will be awaited.\n"
+                    "\n"
+                    "NOTE: Only TypeScript-language functions can be called from this tool. "
+                    "Python functions will throw an error explaining they must be called from the Python execute tool.\n"
+                    + tier_notice
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": (
+                                "TypeScript or JavaScript code to execute in Node.js. "
+                                "Set `module.exports.result = ...` to return data. "
+                                'Require functions via `const { fn } = require("./functions")`. '
+                                "Example: const { fibonacci } = require('./functions'); "
+                                "module.exports.result = fibonacci({ n: 10 });"
+                            ),
+                        }
+                    },
+                    "required": ["code"],
+                },
+            ),
         ]
 
     def _check_scope(self, tool_name: str) -> None:
@@ -248,8 +282,13 @@ class RunMCPHandler:
         """
         self._check_scope(name)
 
-        if name == "execute" and self.mode == "code":
+        if name in ("execute_python", "execute") and self.mode == "code":
             return await self._execute_code_mode(arguments.get("code", ""), sandbox_env=sandbox_env)
+
+        if name == "execute_typescript" and self.mode == "code":
+            return await self._execute_code_mode_ts(
+                arguments.get("code", ""), sandbox_env=sandbox_env
+            )
 
         if name == "_env_status":
             return await self._handle_env_status(sandbox_env)
@@ -427,6 +466,80 @@ class RunMCPHandler:
             isError=not result.success,
             metadata={
                 "mode": "code",
+                "execution_time_ms": execution_time_ms,
+                "execution_id": execution_id,
+                "called_functions": called_functions,
+            },
+        )
+
+    async def _execute_code_mode_ts(
+        self,
+        code: str,
+        sandbox_env: dict[str, str] | None = None,
+    ) -> MCPToolResult:
+        """Execute TypeScript code in a Node.js sandbox with function wrappers.
+
+        Generates a ``functions/`` Node.js package from the namespace's DB functions,
+        writes it into the sandbox directory, and runs the agent's TypeScript code.
+        """
+        from mcpworks_api.mcp.code_mode_ts import generate_ts_functions_package
+
+        if not code:
+            raise ValueError("No code provided")
+
+        namespace = await self._get_namespace()
+        functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
+
+        extra_files = generate_ts_functions_package(functions, self.namespace_name)
+
+        backend = get_backend("code_sandbox")
+        if not backend:
+            raise ValueError("Code sandbox backend not available")
+
+        execution_id = str(uuid.uuid4())
+        start_time = datetime.now(UTC)
+
+        result = await backend.execute(
+            code=code,
+            config=None,
+            input_data={},
+            account=self.account,
+            execution_id=execution_id,
+            extra_files=extra_files,
+            sandbox_env=sandbox_env,
+            language="typescript",
+        )
+
+        execution_time_ms = result.execution_time_ms or int(
+            (datetime.now(UTC) - start_time).total_seconds() * 1000
+        )
+
+        called_functions = result.call_log or []
+
+        logger.info(
+            "ts_code_executed",
+            execution_time_ms=execution_time_ms,
+            execution_id=execution_id,
+            success=result.success,
+            called_functions=called_functions,
+        )
+
+        if result.success:
+            content_text = json.dumps(result.output)
+        else:
+            content_text = json.dumps(
+                {
+                    "error": result.error,
+                    "error_type": result.error_type,
+                    "stderr": result.stderr,
+                }
+            )
+
+        return MCPToolResult(
+            content=[MCPContent(text=content_text)],
+            isError=not result.success,
+            metadata={
+                "mode": "code_typescript",
                 "execution_time_ms": execution_time_ms,
                 "execution_id": execution_id,
                 "called_functions": called_functions,

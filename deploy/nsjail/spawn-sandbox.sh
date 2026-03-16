@@ -115,8 +115,8 @@ else
     cp /opt/mcpworks/bin/execute.pyc "${WORKSPACE}/.e"
 fi
 
-# Copy functions/ package if it exists (code-mode, Python only)
-if [ -d "${EXEC_DIR}/functions" ] && [ "${LANGUAGE}" != "typescript" ]; then
+# Copy functions/ package if it exists (code-mode, both Python and TypeScript)
+if [ -d "${EXEC_DIR}/functions" ]; then
     cp -r "${EXEC_DIR}/functions" "${WORKSPACE}/functions"
 fi
 
