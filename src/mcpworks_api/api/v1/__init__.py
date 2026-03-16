@@ -8,6 +8,7 @@ from mcpworks_api.api.v1.agents import lock_router as agent_lock_router
 from mcpworks_api.api.v1.agents import router as agents_router
 from mcpworks_api.api.v1.audit import router as audit_router
 from mcpworks_api.api.v1.auth import router as auth_router
+from mcpworks_api.api.v1.demo import router as demo_router
 from mcpworks_api.api.v1.health import router as health_router
 from mcpworks_api.api.v1.legal import router as legal_router
 from mcpworks_api.api.v1.llm import router as llm_router
@@ -40,6 +41,7 @@ router.include_router(agent_lock_router)  # A0: Function locking (admin)
 router.include_router(shares_router)  # Namespace sharing
 router.include_router(audit_router)  # ORDER-022: Security audit logs
 router.include_router(admin_router)  # Admin dashboard
+router.include_router(demo_router)  # Demo booking form
 router.include_router(mcp_router)  # A0: MCP JSON-RPC endpoints
 
 __all__ = ["router"]
