@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Demo Request</h1>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;border-radius:6px;padding:16px;margin-bottom:24px;">
+<tr>
+<td>
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:14px;"><strong>Name:</strong> {{ name }}</p>
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:14px;"><strong>Email:</strong> {{ email }}</p>
+{% if company %}
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:14px;"><strong>Company:</strong> {{ company }}</p>
+{% endif %}
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:14px;"><strong>Preferred Date:</strong> {{ preferred_date }}</p>
+<p style="margin:0 0 8px 0;color:#3f3f46;font-size:14px;"><strong>Time Window:</strong> {{ time_window }}</p>
+{% if message %}
+<p style="margin:0 0 4px 0;color:#3f3f46;font-size:14px;"><strong>Message:</strong></p>
+<p style="margin:0;color:#3f3f46;font-size:14px;">{{ message }}</p>
+{% endif %}
+</td>
+</tr>
+</table>
+<p style="margin:0;color:#71717a;font-size:13px;">Reply directly to {{ email }} to confirm the demo.</p>
+{% endblock %}
