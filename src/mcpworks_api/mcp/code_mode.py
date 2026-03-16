@@ -55,6 +55,18 @@ def _generate_wrapper(
     """Generate Python source for a single function wrapper."""
     safe_name = _sanitize(func.name)
     qualified = f"{service_name}.{func.name}"
+    desc = func.description or f"Execute {qualified}"
+
+    # TypeScript functions can't be exec'd as Python — generate a stub
+    if getattr(version, "language", "python") == "typescript":
+        return f'''def {safe_name}(**kwargs):
+    """{desc} [TypeScript — use execute_typescript tool instead]"""
+    raise RuntimeError(
+        "{qualified} is a TypeScript function and cannot be called from Python code-mode. "
+        "Use the execute_typescript tool instead."
+    )
+'''
+
     code_file = f"_code/{_sanitize(service_name)}__{safe_name}.py"
 
     params = _params_from_schema(version.input_schema)
@@ -69,7 +81,6 @@ def _generate_wrapper(
         sig_parts.append("**kwargs")
 
     sig = ", ".join(sig_parts)
-    desc = func.description or f"Execute {qualified}"
 
     # Build input_data dict from args
     if params:
@@ -196,6 +207,8 @@ def generate_functions_package(
         files[f"functions/{safe_svc}.py"] = _generate_service_module(svc_name, funcs)
 
         for func, version in funcs:
+            if getattr(version, "language", "python") == "typescript":
+                continue
             safe_name = _sanitize(func.name)
             code = version.code or ""
             files[f"functions/_code/{safe_svc}__{safe_name}.py"] = code
