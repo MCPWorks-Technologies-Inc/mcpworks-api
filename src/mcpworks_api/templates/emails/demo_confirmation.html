@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;color:#18181b;font-size:24px;font-weight:600;">Demo Request Received</h1>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Hi {{ name }},
+</p>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+Thanks for your interest in MCPWorks. We received your demo request and will be in touch within one business day to confirm your time slot.
+</p>
+<p style="margin:0 0 16px 0;color:#3f3f46;font-size:15px;line-height:1.6;">
+In the meantime, you can start a 14-day Pro trial (no credit card required) to explore the platform:
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0">
+<tr>
+<td style="background-color:#2563eb;border-radius:6px;padding:12px 24px;">
+<a href="https://api.mcpworks.io/register" style="color:#ffffff;font-size:15px;font-weight:500;text-decoration:none;">Start Free Trial</a>
+</td>
+</tr>
+</table>
+<p style="margin:24px 0 0 0;color:#71717a;font-size:13px;">
+If you have questions before the demo, reply to this email or reach us at hello@mcpworks.io.
+</p>
+{% endblock %}
