@@ -244,7 +244,7 @@ NSJAIL_ARGS=(
     --seccomp_policy "${SECCOMP_POLICY}"
     --bindmount "${WORKSPACE}:/sandbox"
     --time_limit "${TIMEOUT}"
-    --rlimit_as "$((MEMORY * 4))"
+    --rlimit_as "$( [ "${LANGUAGE}" = "typescript" ] && echo $((MEMORY * 8)) || echo $((MEMORY * 4)) )"
     --rlimit_nproc "${PIDS}"
     --hostname "${NAMESPACE}"
 )
