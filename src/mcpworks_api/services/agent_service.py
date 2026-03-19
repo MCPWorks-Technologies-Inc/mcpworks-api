@@ -839,6 +839,30 @@ class AgentService:
                 except Exception:
                     logger.exception("chat_mcp_pool_cleanup_failed")
 
+    async def generate_chat_token(self, account_id: uuid.UUID, agent_name: str) -> dict:
+        import base64
+        import secrets as secrets_mod
+
+        agent = await self.get_agent(account_id, agent_name)
+        token = base64.urlsafe_b64encode(secrets_mod.token_bytes(32)).rstrip(b"=").decode()
+        agent.chat_token = token
+        await self.db.flush()
+        chat_url = f"https://{agent.name}.agent.mcpworks.io/chat/{token}"
+        logger.info("agent_chat_token_generated", agent_name=agent.name)
+        return {"chat_url": chat_url, "chat_token": token}
+
+    async def revoke_chat_token(self, account_id: uuid.UUID, agent_name: str) -> None:
+        agent = await self.get_agent(account_id, agent_name)
+        agent.chat_token = None
+        await self.db.flush()
+        logger.info("agent_chat_token_revoked", agent_name=agent.name)
+
+    async def resolve_agent_by_chat_token(self, token: str) -> Agent | None:
+        from sqlalchemy import select
+
+        result = await self.db.execute(select(Agent).where(Agent.chat_token == token))
+        return result.scalar_one_or_none()
+
     @staticmethod
     def _resolve_chat_limits(agent: Agent) -> dict:
         """Resolve chat iteration limits from agent orchestration overrides or tier defaults."""
