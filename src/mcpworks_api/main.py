@@ -39,6 +39,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     - Startup: Initialize database, Redis, and MCP session manager
     - Shutdown: Close all connections gracefully
     """
+    from mcpworks_api.tasks.discord_gateway import run_discord_gateway
     from mcpworks_api.tasks.scheduler import run_scheduler_loop
 
     # Startup
@@ -46,14 +47,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     await init_redis()
 
     scheduler_task = asyncio.create_task(run_scheduler_loop())
+    discord_task = asyncio.create_task(run_discord_gateway())
 
     async with session_manager.run():
         yield
 
     # Shutdown
     scheduler_task.cancel()
+    discord_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await scheduler_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await discord_task
 
     await close_db()
     await close_redis()
