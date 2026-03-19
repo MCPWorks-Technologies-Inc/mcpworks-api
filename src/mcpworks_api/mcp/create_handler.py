@@ -171,7 +171,33 @@ class CreateMCPHandler:
         return " ".join(parts)
 
     def get_tools(self) -> list[MCPTool]:
-        """Return static list of management tools with tier-aware descriptions."""
+        """Return management tools from centralized registry with tier-aware descriptions."""
+        from mcpworks_api.mcp.tool_registry import AGENT_TOOLS, BASE_TOOLS
+
+        tier_notice = self._tier_notice()
+        format_kwargs = {"tier_notice": tier_notice}
+
+        tools = [
+            MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
+            for tool_def in BASE_TOOLS.values()
+        ]
+
+        is_agent = self.account.user.effective_tier in (
+            "pro-agent",
+            "enterprise-agent",
+            "dedicated-agent",
+            "trial-agent",
+        )
+        if is_agent:
+            tools.extend(
+                MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
+                for tool_def in AGENT_TOOLS.values()
+            )
+
+        return tools
+
+    def _get_tools_OLD(self) -> list[MCPTool]:
+        """DEPRECATED — kept temporarily for reference during registry migration."""
         tier_notice = self._tier_notice()
         tools = [
             MCPTool(
