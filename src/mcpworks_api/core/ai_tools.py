@@ -90,3 +90,11 @@ def parse_tool_name(tool_name: str) -> tuple[str, str] | None:
         return None
     service_name, function_name = tool_name.split("__", 1)
     return service_name, function_name
+
+
+def format_available_tools(tools: list[dict]) -> str:
+    """Format available tool names for error messages to help the AI self-correct."""
+    names = [t["name"] for t in tools]
+    if len(names) <= 15:
+        return ", ".join(names)
+    return ", ".join(names[:15]) + f" (and {len(names) - 15} more)"
