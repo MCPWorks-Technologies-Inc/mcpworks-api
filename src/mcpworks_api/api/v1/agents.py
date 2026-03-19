@@ -853,6 +853,40 @@ async def remove_mcp_servers(
     await db.commit()
 
 
+@router.get(
+    "/{agent_id}/channels",
+    dependencies=[Depends(require_scope("read"))],
+)
+async def list_channels(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),  # noqa: ARG001
+    account: Account = Depends(get_current_account),
+) -> dict:
+    """List communication channels for an agent."""
+    from mcpworks_api.models.agent import AgentChannel
+
+    svc = AgentService(db)
+    try:
+        agent = await svc.get_agent_by_id(account.id, agent_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
+
+    result = await db.execute(select(AgentChannel).where(AgentChannel.agent_id == agent.id))
+    channels = result.scalars().all()
+    return {
+        "channels": [
+            {
+                "id": str(ch.id),
+                "channel_type": ch.channel_type,
+                "enabled": ch.enabled,
+                "created_at": ch.created_at.isoformat(),
+            }
+            for ch in channels
+        ]
+    }
+
+
 @router.post(
     "/{agent_id}/channels",
     response_model=ChannelResponse,
