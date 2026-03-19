@@ -765,11 +765,23 @@ class AgentService:
                 logger.exception("chat_mcp_pool_failed", agent_name=agent.name)
                 mcp_pool = None
 
+        import uuid as uuid_mod
+
+        from mcpworks_api.core.telemetry import make_event, telemetry_bus
+
         effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
         messages: list[dict] = [{"role": "user", "content": message}]
         chat_limits = self._resolve_chat_limits(agent)
         max_iterations = chat_limits["max_iterations"]
         consecutive_failures = 0
+
+        agent_id_str = str(agent.id)
+        run_id = str(uuid_mod.uuid4())
+
+        def _emit(etype: str, **kw: object) -> None:
+            telemetry_bus.emit(agent_id_str, make_event(etype, agent_id_str, run_id, **kw))
+
+        _emit("orchestration_start", trigger_type="chat", tools_count=len(tools))
         max_consecutive_failures = 3
 
         logger.info(
@@ -793,6 +805,7 @@ class AgentService:
                         system_prompt=effective_system_prompt,
                     )
                 except AIClientError as exc:
+                    _emit("error", message=str(exc)[:300], phase="ai_call")
                     logger.error(
                         "agent_chat_failed",
                         agent_id=str(agent.id),
@@ -803,11 +816,18 @@ class AgentService:
 
                 content_blocks = response.get("content", [])
                 stop_reason = response.get("stop_reason", "end_turn")
+                usage = response.get("usage", {})
 
                 tool_call_names = [b["name"] for b in content_blocks if b.get("type") == "tool_use"]
                 text_preview = " ".join(
                     b.get("text", "")[:100] for b in content_blocks if b.get("type") == "text"
                 )[:300]
+
+                _emit("ai_thinking", iteration=iteration, usage=usage)
+                for block in content_blocks:
+                    if block.get("type") == "text" and block.get("text"):
+                        _emit("ai_text", text=block["text"][:500])
+
                 logger.info(
                     "chat_iteration",
                     agent_name=agent.name,
@@ -823,6 +843,7 @@ class AgentService:
                         for b in content_blocks
                         if b.get("type") == "text" and b.get("text")
                     ]
+                    _emit("completion", success=True, iterations=iteration + 1)
                     return "\n".join(texts) if texts else "(No response)"
 
                 messages.append({"role": "assistant", "content": content_blocks})
@@ -836,6 +857,7 @@ class AgentService:
                     tool_input = block.get("input", {})
                     tool_id = block["id"]
 
+                    _emit("tool_call", name=tool_name, args=tool_input)
                     result_str = await self._dispatch_chat_tool(
                         tool_name,
                         tool_input,
@@ -845,6 +867,7 @@ class AgentService:
                         mcp_pool,
                         available_tools=tools,
                     )
+                    _emit("tool_result", name=tool_name, result_preview=result_str[:200])
                     logger.info(
                         "chat_tool_dispatch",
                         agent_name=agent.name,
