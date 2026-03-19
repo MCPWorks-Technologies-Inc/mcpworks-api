@@ -44,6 +44,7 @@ class FunctionService:
         optional_env: list[str] | None = None,
         created_by: str | None = None,
         language: str = "python",
+        public_safe: bool = False,
     ) -> Function:
         """Create a new function with initial version.
 
@@ -115,6 +116,7 @@ class FunctionService:
             description=description,
             tags=tags,
             active_version=1,
+            public_safe=public_safe,
         )
         self.db.add(function)
         await self.db.flush()
@@ -245,6 +247,7 @@ class FunctionService:
         function_id: uuid.UUID,
         description: str | None = None,
         tags: builtins.list[str] | None = None,
+        public_safe: bool | None = None,
     ) -> Function:
         """Update function metadata (not code/version).
 
@@ -254,6 +257,7 @@ class FunctionService:
             function_id: The function UUID.
             description: New description (if provided).
             tags: New tags (if provided).
+            public_safe: Whether function is callable from public chat (if provided).
 
         Returns:
             The updated function.
@@ -268,6 +272,9 @@ class FunctionService:
 
         if tags is not None:
             function.tags = tags
+
+        if public_safe is not None:
+            function.public_safe = public_safe
 
         await self.db.flush()
         await self.db.refresh(function)
@@ -620,6 +627,7 @@ class FunctionService:
             "name": function.name,
             "description": function.description,
             "tags": function.tags or [],
+            "public_safe": function.public_safe,
             "call_count": function.call_count,
             "active_version": function.active_version,
             "active_version_details": {
