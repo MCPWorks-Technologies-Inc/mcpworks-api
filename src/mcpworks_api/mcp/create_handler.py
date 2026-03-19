@@ -1985,6 +1985,8 @@ class CreateMCPHandler:
                 f"https://{agent.name}.agent.mcpworks.io/view/{agent.scratchpad_token}/"
             )
             result["scratchpad_size_bytes"] = agent.scratchpad_size_bytes
+            if agent.scratchpad_expires_at:
+                result["scratchpad_expires_at"] = agent.scratchpad_expires_at.isoformat()
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _start_agent(self, name: str) -> MCPToolResult:
