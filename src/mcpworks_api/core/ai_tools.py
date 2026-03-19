@@ -78,7 +78,10 @@ async def build_tool_definitions(
 def parse_tool_name(tool_name: str) -> tuple[str, str] | None:
     """Parse a namespace function tool name into (service_name, function_name).
 
-    Returns None if the tool_name is a platform tool, MCP tool, or doesn't contain '__'.
+    Accepts both canonical format (service__function) and dot notation
+    (service.function) which AI models may use from system prompt references.
+
+    Returns None if the tool_name is a platform tool, MCP tool, or unrecognized.
     """
     if tool_name in PLATFORM_TOOL_NAMES:
         return None
@@ -86,10 +89,13 @@ def parse_tool_name(tool_name: str) -> tuple[str, str] | None:
 
     if is_mcp_tool(tool_name):
         return None
-    if "__" not in tool_name:
-        return None
-    service_name, function_name = tool_name.split("__", 1)
-    return service_name, function_name
+    if "__" in tool_name:
+        service_name, function_name = tool_name.split("__", 1)
+        return service_name, function_name
+    if "." in tool_name:
+        service_name, function_name = tool_name.split(".", 1)
+        return service_name, function_name
+    return None
 
 
 def format_available_tools(tools: list[dict]) -> str:
@@ -98,3 +104,34 @@ def format_available_tools(tools: list[dict]) -> str:
     if len(names) <= 15:
         return ", ".join(names)
     return ", ".join(names[:15]) + f" (and {len(names) - 15} more)"
+
+
+def augment_system_prompt(system_prompt: str | None, tools: list[dict]) -> str:
+    """Append available tool names to the system prompt.
+
+    AI models may not connect natural function references in the system prompt
+    (e.g. 'leads.harvest-leads') to the actual tool names in the tool
+    definitions (e.g. 'leads__harvest-leads'). This bridges the gap by
+    listing exact callable tool names at the end of the system prompt.
+    """
+    ns_tools = [t for t in tools if t["name"] not in PLATFORM_TOOL_NAMES]
+    platform = [t for t in tools if t["name"] in PLATFORM_TOOL_NAMES]
+
+    lines = []
+    if ns_tools:
+        lines.append("## Your callable tools")
+        lines.append("Use these EXACT names when making tool calls:")
+        for t in ns_tools:
+            desc = t.get("description", "")
+            lines.append(f"- `{t['name']}` — {desc}")
+    if platform:
+        lines.append("")
+        lines.append("## Platform tools")
+        for t in platform:
+            lines.append(f"- `{t['name']}` — {t.get('description', '')}")
+
+    suffix = "\n".join(lines)
+    base = system_prompt or ""
+    if base:
+        return f"{base}\n\n{suffix}"
+    return suffix

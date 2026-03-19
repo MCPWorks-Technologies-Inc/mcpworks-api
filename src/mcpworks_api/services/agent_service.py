@@ -698,9 +698,7 @@ class AgentService:
         account: Any = None,
     ) -> str:
         from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
-        from mcpworks_api.core.ai_tools import (
-            build_tool_definitions,
-        )
+        from mcpworks_api.core.ai_tools import augment_system_prompt, build_tool_definitions
         from mcpworks_api.core.mcp_client import McpServerPool
 
         agent = await self.get_agent(account_id, agent_name)
@@ -722,6 +720,7 @@ class AgentService:
                 logger.exception("chat_mcp_pool_failed", agent_name=agent.name)
                 mcp_pool = None
 
+        effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
         messages: list[dict] = [{"role": "user", "content": message}]
         max_iterations = 10
         consecutive_failures = 0
@@ -736,7 +735,7 @@ class AgentService:
                         api_key=api_key,
                         messages=messages,
                         tools=tools,
-                        system_prompt=agent.system_prompt,
+                        system_prompt=effective_system_prompt,
                     )
                 except AIClientError as exc:
                     logger.error(
