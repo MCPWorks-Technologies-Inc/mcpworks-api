@@ -486,6 +486,14 @@ async def _execute_namespace_function(
         )
 
         if result.success:
+            try:
+                await _increment_orchestration_call_count(
+                    agent.namespace_id, service_name, function_name
+                )
+            except Exception:
+                logger.warning(
+                    "orchestration_call_count_failed", service=service_name, function=function_name
+                )
             output = result.output
             if isinstance(output, str):
                 return output[:4000]
@@ -494,6 +502,45 @@ async def _execute_namespace_function(
             return json.dumps({"error": result.error or "Function execution failed"})
     except Exception as e:
         return json.dumps({"error": str(e)[:500]})
+
+
+async def _increment_orchestration_call_count(
+    namespace_id: uuid_mod.UUID,
+    service_name: str,
+    function_name: str,
+) -> None:
+    """Increment call_count on namespace, service, and function after orchestration execution."""
+    from mcpworks_api.models.function import Function
+    from mcpworks_api.models.namespace import Namespace
+    from mcpworks_api.models.namespace_service import NamespaceService
+
+    async with get_db_context() as db:
+        await db.execute(select(Namespace).where(Namespace.id == namespace_id))
+        from sqlalchemy import update as sa_update
+
+        await db.execute(
+            sa_update(Namespace)
+            .where(Namespace.id == namespace_id)
+            .values(call_count=Namespace.call_count + 1)
+        )
+        await db.execute(
+            sa_update(NamespaceService)
+            .where(
+                NamespaceService.namespace_id == namespace_id,
+                NamespaceService.name == service_name,
+            )
+            .values(call_count=NamespaceService.call_count + 1)
+        )
+        await db.execute(
+            sa_update(Function)
+            .where(
+                Function.service_id == NamespaceService.id,
+                NamespaceService.namespace_id == namespace_id,
+                NamespaceService.name == service_name,
+                Function.name == function_name,
+            )
+            .values(call_count=Function.call_count + 1)
+        )
 
 
 async def _send_to_channel(
