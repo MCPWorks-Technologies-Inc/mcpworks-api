@@ -6,7 +6,27 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
-No open issues.
+### ~~PROBLEM-017: `delete_function` MCP Tool Missing `confirmation_token` Parameter~~
+
+**Filed:** 2026-03-18
+**Status:** RESOLVED (2026-03-19)
+**Severity:** P3 — Cosmetic / usability
+**Reported by:** Internal (agent-leadgenerator workspace)
+
+Replaced hard-delete + confirmation flow with soft-delete. `delete_function` now sets `deleted_at` timestamp instead of removing the row. Version history is preserved — if a function is re-created with the same name, it resurrects the existing record and continues the version sequence (e.g., v1 → deleted → re-created as v2). Removed `delete_function` from `CONFIRMATION_REQUIRED`. Also added PROBLEM-018 fix for scratchpad view `str(EndpointType)` bug.
+
+---
+
+### ~~PROBLEM-018: Scratchpad View Returns 404 — `str(EndpointType)` Enum Comparison Bug~~
+
+**Filed:** 2026-03-19
+**Status:** RESOLVED (2026-03-19)
+**Severity:** P1 — All agent scratchpad views broken
+**Reported by:** Internal (leadgenerator agent workspace)
+
+`scratchpad_view.py` line 70 compared `str(endpoint_type) != "agent"` but `EndpointType` is `str, Enum` — in Python 3.11+ `str()` returns `"EndpointType.AGENT"` not `"agent"`. This made the guard always true, returning 404 for every agent view request. Fixed by comparing against `endpoint_type.value` instead.
+
+Note: this is the same class of bug as PROBLEM-005 (`str(EndpointType.CREATE)` comparison).
 
 ---
 

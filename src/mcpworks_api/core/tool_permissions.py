@@ -90,7 +90,6 @@ CONFIRMATION_REQUIRED: frozenset[str] = frozenset(
     {
         "destroy_agent",
         "delete_service",
-        "delete_function",
     }
 )
 
