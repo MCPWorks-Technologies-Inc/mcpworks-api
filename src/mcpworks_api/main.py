@@ -196,8 +196,8 @@ def create_app() -> FastAPI:
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-MCPWorks-Env"],
     )
@@ -208,11 +208,13 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(v1_router)
 
+    from mcpworks_api.api.v1.public_chat import router as public_chat_router
     from mcpworks_api.api.v1.scratchpad_view import router as scratchpad_view_router
     from mcpworks_api.api.v1.webhooks import router as webhook_router
 
     app.include_router(scratchpad_view_router)
     app.include_router(webhook_router)
+    app.include_router(public_chat_router)
 
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:
