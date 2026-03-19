@@ -47,20 +47,29 @@ PLATFORM_TOOLS: list[dict] = [
 
 PLATFORM_TOOL_NAMES = frozenset(t["name"] for t in PLATFORM_TOOLS)
 
+PUBLIC_SAFE_PLATFORM_TOOLS = frozenset(["get_state", "send_to_channel"])
+
 
 async def build_tool_definitions(
     namespace_id: uuid.UUID,
     db: AsyncSession,
+    *,
+    public_only: bool = False,
 ) -> list[dict]:
     """Build tool definitions from all functions in a namespace + platform tools.
 
     Tool name format: "{service_name}__{function_name}" (double underscore).
+
+    If public_only=True, only include functions marked public_safe=True
+    and a restricted set of platform tools (no set_state).
     """
     function_service = FunctionService(db)
     pairs = await function_service.list_all_for_namespace(namespace_id)
 
     tools: list[dict] = []
     for fn, version in pairs:
+        if public_only and not fn.public_safe:
+            continue
         service_name = fn.service.name if fn.service else "unknown"
         tool_name = f"{service_name}__{fn.name}"
         tools.append(
@@ -71,7 +80,10 @@ async def build_tool_definitions(
             }
         )
 
-    tools.extend(PLATFORM_TOOLS)
+    if public_only:
+        tools.extend(t for t in PLATFORM_TOOLS if t["name"] in PUBLIC_SAFE_PLATFORM_TOOLS)
+    else:
+        tools.extend(PLATFORM_TOOLS)
     return tools
 
 
