@@ -695,8 +695,13 @@ class AgentService:
         account_id: uuid.UUID,
         agent_name: str,
         message: str,
+        account: Any = None,
     ) -> str:
-        from mcpworks_api.core.ai_client import AIClientError, chat
+        from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
+        from mcpworks_api.core.ai_tools import (
+            build_tool_definitions,
+        )
+        from mcpworks_api.core.mcp_client import McpServerPool
 
         agent = await self.get_agent(account_id, agent_name)
         if not agent.ai_engine or not agent.ai_api_key_encrypted:
@@ -704,23 +709,147 @@ class AgentService:
 
         api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
 
+        tools = await build_tool_definitions(agent.namespace_id, self.db)
+        agent_state = await self.get_all_state(agent.id)
+
+        mcp_pool: McpServerPool | None = None
+        if agent.mcp_servers:
+            try:
+                mcp_pool = McpServerPool(agent.mcp_servers)
+                await mcp_pool.__aenter__()
+                tools.extend(mcp_pool.get_tool_definitions())
+            except Exception:
+                logger.exception("chat_mcp_pool_failed", agent_name=agent.name)
+                mcp_pool = None
+
+        messages: list[dict] = [{"role": "user", "content": message}]
+        max_iterations = 10
+
         try:
-            response = await chat(
-                engine=agent.ai_engine,
-                model=agent.ai_model or "",
-                api_key=api_key,
-                message=message,
-                system_prompt=agent.system_prompt,
+            for _ in range(max_iterations):
+                try:
+                    response = await chat_with_tools(
+                        engine=agent.ai_engine,
+                        model=agent.ai_model or "",
+                        api_key=api_key,
+                        messages=messages,
+                        tools=tools,
+                        system_prompt=agent.system_prompt,
+                    )
+                except AIClientError as exc:
+                    logger.error(
+                        "agent_chat_failed",
+                        agent_id=str(agent.id),
+                        engine=agent.ai_engine,
+                        error=str(exc),
+                    )
+                    raise
+
+                content_blocks = response.get("content", [])
+                stop_reason = response.get("stop_reason", "end_turn")
+
+                if stop_reason != "tool_use":
+                    texts = [
+                        b["text"]
+                        for b in content_blocks
+                        if b.get("type") == "text" and b.get("text")
+                    ]
+                    return "\n".join(texts) if texts else "(No response)"
+
+                messages.append({"role": "assistant", "content": content_blocks})
+
+                tool_results = []
+                for block in content_blocks:
+                    if block.get("type") != "tool_use":
+                        continue
+                    tool_name = block["name"]
+                    tool_input = block.get("input", {})
+                    tool_id = block["id"]
+
+                    result_str = await self._dispatch_chat_tool(
+                        tool_name,
+                        tool_input,
+                        agent,
+                        account,
+                        agent_state,
+                        mcp_pool,
+                    )
+                    tool_results.append(
+                        {
+                            "role": "tool_result",
+                            "tool_use_id": tool_id,
+                            "tool_name": tool_name,
+                            "content": result_str,
+                        }
+                    )
+                messages.extend(tool_results)
+
+            return "(Max chat iterations reached)"
+        finally:
+            if mcp_pool is not None:
+                try:
+                    await mcp_pool.__aexit__(None, None, None)
+                except Exception:
+                    logger.exception("chat_mcp_pool_cleanup_failed")
+
+    async def _dispatch_chat_tool(
+        self,
+        tool_name: str,
+        tool_input: dict,
+        agent: Agent,
+        account: Any,
+        agent_state: dict | None,
+        mcp_pool: Any,
+    ) -> str:
+        from mcpworks_api.core.ai_tools import parse_tool_name
+        from mcpworks_api.core.mcp_client import is_mcp_tool
+
+        if tool_name == "get_state":
+            value, _ = await self.get_state(
+                agent.account_id,
+                agent.name,
+                tool_input.get("key", ""),
             )
-        except AIClientError as exc:
-            logger.error(
-                "agent_chat_failed",
-                agent_id=str(agent.id),
-                engine=agent.ai_engine,
-                error=str(exc),
+            return json.dumps({"key": tool_input.get("key"), "value": value})
+        elif tool_name == "set_state":
+            tier = (
+                account.user.effective_tier if account and hasattr(account, "user") else "pro-agent"
             )
-            raise
-        return response
+            await self.set_state(
+                agent.account_id,
+                agent.name,
+                tool_input.get("key", ""),
+                tool_input.get("value"),
+                tier,
+            )
+            return json.dumps({"key": tool_input.get("key"), "stored": True})
+        elif tool_name == "send_to_channel":
+            from mcpworks_api.tasks.orchestrator import _send_to_channel
+
+            return await _send_to_channel(
+                agent,
+                tool_input.get("channel_type", ""),
+                tool_input.get("message", ""),
+            )
+        elif is_mcp_tool(tool_name):
+            if mcp_pool is None:
+                return json.dumps({"error": "MCP server pool not available"})
+            return await mcp_pool.call_tool(tool_name, tool_input)
+        else:
+            parsed = parse_tool_name(tool_name)
+            if not parsed:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+            service_name, function_name = parsed
+            from mcpworks_api.tasks.orchestrator import _execute_namespace_function
+
+            return await _execute_namespace_function(
+                service_name,
+                function_name,
+                tool_input,
+                agent,
+                account or agent,
+                agent_state=agent_state,
+            )
 
     async def add_channel(
         self,
