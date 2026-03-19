@@ -66,17 +66,49 @@ class FunctionService:
             ConflictError: If function name already exists in service.
             ValidationError: If backend is not supported.
         """
-        # Check if function already exists in this service
-        existing = await self.db.execute(
-            select(Function).where(
+        existing_result = await self.db.execute(
+            select(Function)
+            .where(
                 Function.service_id == service_id,
                 Function.name == name.lower(),
             )
+            .options(selectinload(Function.versions))
         )
-        if existing.scalar_one_or_none():
+        existing = existing_result.scalar_one_or_none()
+
+        if existing and existing.deleted_at is None:
             raise ConflictError(f"Function '{name}' already exists in this service")
 
-        # Create function
+        if existing and existing.deleted_at is not None:
+            function = existing
+            function.description = description
+            function.tags = tags
+            function.deleted_at = None
+            function.locked = False
+            function.locked_by = None
+            function.locked_at = None
+
+            next_version = max((v.version for v in function.versions), default=0) + 1
+            version = FunctionVersion(
+                function_id=function.id,
+                version=next_version,
+                backend=backend,
+                language=language,
+                code=code,
+                config=config,
+                input_schema=input_schema,
+                output_schema=output_schema,
+                requirements=requirements,
+                required_env=required_env,
+                optional_env=optional_env,
+                created_by=created_by,
+            )
+            self.db.add(version)
+            function.active_version = next_version
+            await self.db.flush()
+            await self.db.refresh(function, ["versions"])
+            return function
+
         function = Function(
             service_id=service_id,
             name=name.lower(),
@@ -87,7 +119,6 @@ class FunctionService:
         self.db.add(function)
         await self.db.flush()
 
-        # Create initial version (v1)
         version = FunctionVersion(
             function_id=function.id,
             version=1,
@@ -105,7 +136,6 @@ class FunctionService:
         self.db.add(version)
         await self.db.flush()
 
-        # Refresh to get relationships
         await self.db.refresh(function, ["versions"])
 
         return function
@@ -159,6 +189,7 @@ class FunctionService:
             .where(
                 Function.service_id == service_id,
                 Function.name == name.lower(),
+                Function.deleted_at.is_(None),
             )
             .options(selectinload(Function.versions))
         )
@@ -187,8 +218,10 @@ class FunctionService:
         Returns:
             Tuple of (functions list, total count).
         """
-        # Build base query
-        query = select(Function).where(Function.service_id == service_id)
+        query = select(Function).where(
+            Function.service_id == service_id,
+            Function.deleted_at.is_(None),
+        )
 
         if tags:
             # Filter by tags using array overlap
@@ -410,7 +443,8 @@ class FunctionService:
         function_id: uuid.UUID,
         is_admin: bool = False,
     ) -> None:
-        """Delete a function and all its versions.
+        """Soft-delete a function. Versions are preserved so re-creation
+        with the same name continues the version history.
 
         Args:
             function_id: The function UUID.
@@ -423,7 +457,7 @@ class FunctionService:
         function = await self.get_by_id(function_id)
         if function.locked and not is_admin:
             raise ForbiddenError(f"Function '{function.name}' is locked and cannot be deleted")
-        await self.db.delete(function)
+        function.deleted_at = datetime.now(tz=UTC)
         await self.db.flush()
 
     async def lock_function(
@@ -494,7 +528,10 @@ class FunctionService:
         result = await self.db.execute(
             select(Function)
             .join(NamespaceService, Function.service_id == NamespaceService.id)
-            .where(NamespaceService.namespace_id == namespace_id)
+            .where(
+                NamespaceService.namespace_id == namespace_id,
+                Function.deleted_at.is_(None),
+            )
             .options(
                 selectinload(Function.versions),
                 selectinload(Function.service),
@@ -540,6 +577,7 @@ class FunctionService:
                 NamespaceService.namespace_id == namespace_id,
                 NamespaceService.name == service_name.lower(),
                 Function.name == function_name.lower(),
+                Function.deleted_at.is_(None),
             )
             .options(
                 selectinload(Function.versions),
