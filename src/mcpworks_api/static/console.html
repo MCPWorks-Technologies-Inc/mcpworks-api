@@ -1570,12 +1570,21 @@ function esc(s) {
 
 function maskedUrl(url, label) {
   const id = 'mu_' + Math.random().toString(36).slice(2, 8);
-  const masked = url.replace(/\/\/(.{8})[^/]*/, '//$1••••••••');
   return `<span class="masked-url">
-    <code id="${id}" class="masked-value" title="Click to reveal">${esc(label || masked)}</code>
+    <code id="${id}" class="masked-value" title="Click to reveal">${esc(label || _maskUrl(url))}</code>
     <button class="btn-reveal" onclick="toggleMasked('${id}','${esc(url).replace(/'/g,"\\'")}')">reveal</button>
     <button class="btn btn-copy btn-sm" style="font-size:10px;padding:1px 6px" onclick="copyText('${esc(url).replace(/'/g,"\\'")}',this)">copy</button>
   </span>`;
+}
+
+function _maskUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.split('.')[0];
+    return u.protocol + '//' + host.slice(0,4) + '••••.' + u.hostname.split('.').slice(1).join('.') + '/••••••';
+  } catch(e) {
+    return url.slice(0,10) + '••••••••••••';
+  }
 }
 
 function toggleMasked(id, url) {
@@ -1583,7 +1592,7 @@ function toggleMasked(id, url) {
   const btn = el.nextElementSibling;
   if (el.classList.contains('revealed')) {
     el.classList.remove('revealed');
-    el.textContent = url.replace(/\/\/(.{8})[^/]*/, '//$1••••••••');
+    el.textContent = _maskUrl(url);
     btn.textContent = 'reveal';
   } else {
     el.classList.add('revealed');
