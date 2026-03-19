@@ -90,6 +90,7 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     scratchpad_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    chat_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scratchpad_size_bytes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
@@ -136,6 +137,12 @@ class Agent(Base, UUIDMixin, TimestampMixin):
             "scratchpad_token",
             unique=True,
             postgresql_where=text("scratchpad_token IS NOT NULL"),
+        ),
+        Index(
+            "ix_agents_chat_token",
+            "chat_token",
+            unique=True,
+            postgresql_where=text("chat_token IS NOT NULL"),
         ),
     )
 

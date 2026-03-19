@@ -100,6 +100,7 @@ class CreateMCPHandler:
         "publish_view": "write",
         "get_view_url": "read",
         "clear_view": "write",
+        "configure_chat_token": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -1109,6 +1110,30 @@ class CreateMCPHandler:
                         "required": ["agent_name"],
                     },
                 ),
+                MCPTool(
+                    name="configure_chat_token",
+                    description=(
+                        "Generate or revoke a public chat URL for an agent. "
+                        "The URL allows web frontends to POST messages to the agent's AI "
+                        "without API key authentication — the token in the URL IS the auth. "
+                        "Pattern: POST https://{agent}.agent.mcpworks.io/chat/{token}"
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                            "action": {
+                                "type": "string",
+                                "enum": ["generate", "revoke"],
+                                "description": "generate: create/rotate token. revoke: disable public chat.",
+                            },
+                        },
+                        "required": ["agent_name", "action"],
+                    },
+                ),
             ]
 
         return tools
@@ -1316,6 +1341,7 @@ class CreateMCPHandler:
             "publish_view": self._publish_view,
             "get_view_url": self._get_view_url,
             "clear_view": self._clear_view,
+            "configure_chat_token": self._configure_chat_token,
         }
 
         handler = handlers.get(name)
@@ -1988,6 +2014,8 @@ class CreateMCPHandler:
             result["scratchpad_size_bytes"] = agent.scratchpad_size_bytes
             if agent.scratchpad_expires_at:
                 result["scratchpad_expires_at"] = agent.scratchpad_expires_at.isoformat()
+        if agent.chat_token:
+            result["chat_url"] = f"https://{agent.name}.agent.mcpworks.io/chat/{agent.chat_token}"
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _start_agent(self, name: str) -> MCPToolResult:
@@ -2610,3 +2638,21 @@ class CreateMCPHandler:
         scratchpad = ScratchpadService(self.db)
         await scratchpad.clear(agent)
         return MCPToolResult(content=[MCPContent(text=json.dumps({"status": "cleared"}))])
+
+    async def _configure_chat_token(self, agent_name: str, action: str) -> MCPToolResult:
+        """Generate or revoke a public chat token for an agent."""
+        service = AgentService(self.db)
+        if action == "generate":
+            result = await service.generate_chat_token(self.account.id, agent_name)
+            return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+        elif action == "revoke":
+            await service.revoke_chat_token(self.account.id, agent_name)
+            return MCPToolResult(
+                content=[MCPContent(text=json.dumps({"status": "revoked", "chat_url": None}))]
+            )
+        else:
+            return MCPToolResult(
+                content=[
+                    MCPContent(text=json.dumps({"error": "action must be 'generate' or 'revoke'"}))
+                ]
+            )
