@@ -67,7 +67,7 @@ async def serve_scratchpad(
 ) -> Response:
     """Serve scratchpad content. Public endpoint — token IS the auth."""
     endpoint_type = getattr(request.state, "endpoint_type", None)
-    if endpoint_type is not None and str(endpoint_type) != "agent":
+    if endpoint_type is not None and getattr(endpoint_type, "value", str(endpoint_type)) != "agent":
         return NOT_FOUND
 
     if not token or len(token) < 20:
