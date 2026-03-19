@@ -107,7 +107,7 @@ class AgentBot(discord.Client):
         url = f"http://localhost:8000/chat/{chat_token}"
         message = f"[Discord message from {discord_context['author']}]: {user_message}"
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             resp = await client.post(
                 url,
                 json={"message": message},
