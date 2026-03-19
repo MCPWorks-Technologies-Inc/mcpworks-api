@@ -96,6 +96,11 @@ header { display: flex; align-items: center; justify-content: space-between; mar
 .btn-copy { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border-1); }
 .btn-copy:hover { color: var(--text-1); border-color: var(--border-2); }
 .btn-copy.copied { color: var(--accent); border-color: var(--accent); }
+.masked-url { display: inline-flex; align-items: center; gap: 6px; }
+.masked-url .masked-value { font-family: var(--mono); font-size: 11px; color: var(--text-3); letter-spacing: 1px; cursor: pointer; user-select: none; }
+.masked-url .masked-value.revealed { color: var(--text-2); letter-spacing: 0; word-break: break-all; }
+.masked-url .btn-reveal { font-size: 11px; padding: 1px 6px; cursor: pointer; background: var(--bg-3); color: var(--text-3); border: 1px solid var(--border-1); border-radius: 4px; }
+.masked-url .btn-reveal:hover { color: var(--text-1); border-color: var(--border-2); }
 .btn-block { width: 100%; justify-content: center; }
 
 input { display: block; width: 100%; background: var(--bg-0); border: 1px solid var(--border-1); color: var(--text-1); padding: 10px 14px; border-radius: 8px; font-family: var(--body); font-size: 13px; outline: none; transition: border-color 0.15s ease; }
@@ -1191,7 +1196,7 @@ async function tutCreateKey() {
     document.getElementById('tut-key-reveal').classList.remove('hidden');
     document.getElementById('tut-key-reveal').innerHTML = `<div class="key-reveal">
       <div class="key-reveal-label">Copy this key now &mdash; it won't be shown again</div>
-      <div class="key-reveal-row"><code>${esc(_tutorialKey)}</code><button class="btn btn-copy btn-sm" onclick="copyText('${esc(_tutorialKey)}',this)">copy</button></div>
+      <div class="key-reveal-row">${maskedUrl(_tutorialKey, 'API Key ••••' + _tutorialKey.slice(-6))}</div>
     </div>`;
     document.getElementById('tut-step-2').classList.remove('tut-active');
     document.getElementById('tut-step-2').classList.add('tut-done');
@@ -1238,13 +1243,16 @@ function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix, agentName) {
   clients.forEach((t, i) => {
     h += `<div id="${idPrefix}-${t.id}" class="config-tab-panel${i === 0 ? ' active' : ''}">`;
     h += `<div class="config-tab-hint">Add to <code style="background:var(--bg-1);padding:1px 5px;border-radius:4px;font-size:12px">${esc(t.hint)}</code></div>`;
-    h += `<div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
+    h += `<div id="${idPrefix}-${t.id}-cfg" style="display:none"><div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
     h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
     if (t.cli) {
       h += `<div style="margin-top:10px;font-size:12px;color:var(--text-3)">Or via CLI:</div>`;
       h += `<div style="position:relative;margin-top:4px"><pre class="schema-block" style="margin:0"><code class="language-bash">${esc(t.cli)}</code></pre>`;
       h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
     }
+    h += '</div>';
+    h += `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px" onclick="var el=document.getElementById('${idPrefix}-${t.id}-cfg');if(el.style.display==='none'){el.style.display='block';this.textContent='Hide config (contains API key)'}else{el.style.display='none';this.textContent='Reveal config (contains API key)'}">Reveal config (contains API key)</button>`;
+    h += ` <button class="btn btn-copy btn-sm" style="font-size:10px" onclick="copyText(${JSON.stringify(t.json).replace(/'/g,"\\'")},this)">copy without revealing</button></div>`;
     h += '</div>';
   });
   h += '</div>';
@@ -1466,7 +1474,7 @@ async function loadApiKeys() {
     const keys = (await apiFetch('/v1/users/me/api-keys')).items || [];
     const banner = pendingKeyBanner ? `<div class="key-reveal">
       <div class="key-reveal-label">API key created &mdash; copy it now, it won't be shown again</div>
-      <div class="key-reveal-row"><code>${esc(pendingKeyBanner)}</code><button class="btn btn-copy btn-sm" onclick="copyText('${esc(pendingKeyBanner)}',this)">copy</button></div>
+      <div class="key-reveal-row">${maskedUrl(pendingKeyBanner, 'API Key ••••' + pendingKeyBanner.slice(-6))}</div>
     </div>` : '';
     pendingKeyBanner = null;
     c.innerHTML = `<div class="detail-section">
@@ -1558,6 +1566,30 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = String(s);
   return d.innerHTML;
+}
+
+function maskedUrl(url, label) {
+  const id = 'mu_' + Math.random().toString(36).slice(2, 8);
+  const masked = url.replace(/\/\/(.{8})[^/]*/, '//$1••••••••');
+  return `<span class="masked-url">
+    <code id="${id}" class="masked-value" title="Click to reveal">${esc(label || masked)}</code>
+    <button class="btn-reveal" onclick="toggleMasked('${id}','${esc(url).replace(/'/g,"\\'")}')">reveal</button>
+    <button class="btn btn-copy btn-sm" style="font-size:10px;padding:1px 6px" onclick="copyText('${esc(url).replace(/'/g,"\\'")}',this)">copy</button>
+  </span>`;
+}
+
+function toggleMasked(id, url) {
+  const el = document.getElementById(id);
+  const btn = el.nextElementSibling;
+  if (el.classList.contains('revealed')) {
+    el.classList.remove('revealed');
+    el.textContent = url.replace(/\/\/(.{8})[^/]*/, '//$1••••••••');
+    btn.textContent = 'reveal';
+  } else {
+    el.classList.add('revealed');
+    el.textContent = url;
+    btn.textContent = 'hide';
+  }
 }
 
 function fmtDate(iso) {
@@ -2024,7 +2056,7 @@ function renderScratchpadInfo(agent) {
       ? `<span style="color:${remaining > 0 ? 'var(--text-2)' : 'var(--danger)'}">${fmtCountdown(remaining)}</span>`
       : '';
     el.innerHTML = `<div style="font-size:13px">
-      <div style="margin-bottom:6px"><a href="${esc(viewUrl)}" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all">${esc(viewUrl)}</a></div>
+      <div style="margin-bottom:6px">${maskedUrl(viewUrl, 'Scratchpad URL')}</div>
       <div style="color:var(--text-3)">Size: <span style="color:var(--text-2)">${sizeKb} KB</span>
         ${expiresAt ? ` &middot; Expires: <span style="color:var(--text-2)">${expiresAt.toLocaleDateString()}</span> (${countdownHtml})` : ''}
         ${agent.scratchpad_updated_at ? ` &middot; Updated: <span style="color:var(--text-2)">${fmtDate(agent.scratchpad_updated_at)}</span>` : ''}
@@ -2191,9 +2223,8 @@ async function loadAgentWebhooks(agentId) {
     el.innerHTML = hooks.map(h => `<div class="item-row">
       <div class="item-row-main">
         <div class="item-row-label"><code style="font-size:12px">/${esc(h.path)}</code> &rarr; ${esc(h.handler_function_name)}</div>
-        <div class="item-row-meta">URL: <code style="font-size:11px">https://${esc(agentId)}.agent.mcpworks.io/webhook/${esc(h.path)}</code> &middot; ${h.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'}</div>
+        <div class="item-row-meta">${maskedUrl('https://' + esc(agentId) + '.agent.mcpworks.io/webhook/' + esc(h.path), 'Webhook URL')} &middot; ${h.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'}</div>
       </div>
-      <button class="btn btn-copy btn-sm" onclick="copyText('https://${esc(agentId)}.agent.mcpworks.io/webhook/${esc(h.path)}',this)">copy url</button>
       <button class="btn btn-danger btn-sm" onclick="deleteAgentWebhook('${esc(agentId)}','${esc(h.id)}')">delete</button>
     </div>`).join('');
   } catch (e) { el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`; }
