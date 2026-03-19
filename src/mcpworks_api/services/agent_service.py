@@ -696,6 +696,8 @@ class AgentService:
         agent_name: str,
         message: str,
         account: Any = None,
+        *,
+        public_only: bool = False,
     ) -> str:
         from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
         from mcpworks_api.core.ai_tools import augment_system_prompt, build_tool_definitions
@@ -707,7 +709,7 @@ class AgentService:
 
         api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
 
-        tools = await build_tool_definitions(agent.namespace_id, self.db)
+        tools = await build_tool_definitions(agent.namespace_id, self.db, public_only=public_only)
         agent_state = await self.get_all_state(agent.id)
 
         mcp_pool: McpServerPool | None = None
@@ -891,12 +893,15 @@ class AgentService:
         from mcpworks_api.core.mcp_client import is_mcp_tool
 
         if tool_name == "get_state":
-            value, _ = await self.get_state(
-                agent.account_id,
-                agent.name,
-                tool_input.get("key", ""),
-            )
-            return json.dumps({"key": tool_input.get("key"), "value": value})
+            try:
+                value, _ = await self.get_state(
+                    agent.account_id,
+                    agent.name,
+                    tool_input.get("key", ""),
+                )
+                return json.dumps({"key": tool_input.get("key"), "value": value})
+            except Exception:
+                return json.dumps({"error": f"State key '{tool_input.get('key', '')}' not found"})
         elif tool_name == "set_state":
             tier = (
                 account.user.effective_tier if account and hasattr(account, "user") else "pro-agent"

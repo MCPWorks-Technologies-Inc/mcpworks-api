@@ -344,6 +344,10 @@ class CreateMCPHandler:
                             "type": "string",
                             "description": "Start from a template instead of writing code. Overrides code/schemas/requirements. Use list_templates to see available templates.",
                         },
+                        "public_safe": {
+                            "type": "boolean",
+                            "description": "If true, this function can be called from public chat endpoints (scratchpad chat). Default: false — functions are internal-only unless explicitly marked safe.",
+                        },
                     },
                     "required": ["service", "name", "backend"],
                 },
@@ -402,6 +406,10 @@ class CreateMCPHandler:
                         "restore_version": {
                             "type": "integer",
                             "description": "Restore code and config from a previous version number. Use describe_function to see version history.",
+                        },
+                        "public_safe": {
+                            "type": "boolean",
+                            "description": "If true, this function can be called from public chat endpoints (scratchpad chat). Default: false.",
                         },
                     },
                     "required": ["service", "name"],
@@ -1557,6 +1565,7 @@ class CreateMCPHandler:
         created_by: str | None = None,
         template: str | None = None,
         language: str = "python",
+        public_safe: bool = False,
     ) -> MCPToolResult:
         """Create a new function."""
         if language not in ("python", "typescript"):
@@ -1652,6 +1661,7 @@ class CreateMCPHandler:
             optional_env=validated_optional_env,
             created_by=created_by,
             language=language,
+            public_safe=public_safe,
         )
         result: dict[str, Any] = {
             "name": f"{service}.{name}",
@@ -1702,6 +1712,7 @@ class CreateMCPHandler:
         optional_env: list[str] | None = None,
         created_by: str | None = None,
         restore_version: int | None = None,
+        public_safe: bool | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
         # Look up function to determine its language for requirements validation
@@ -1746,11 +1757,12 @@ class CreateMCPHandler:
             credential_warnings = scan_code_for_credentials(code)
 
         # Update metadata if provided
-        if description is not None or tags is not None:
+        if description is not None or tags is not None or public_safe is not None:
             await self.function_service.update(
                 function_id=function.id,
                 description=description,
                 tags=tags,
+                public_safe=public_safe,
             )
 
         # Create new version if code/config/requirements/env changes or restoring

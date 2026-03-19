@@ -94,6 +94,12 @@ class Function(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True),
         nullable=True,
     )
+    public_safe: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
 
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
