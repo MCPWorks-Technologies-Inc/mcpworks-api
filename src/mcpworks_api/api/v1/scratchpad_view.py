@@ -167,26 +167,34 @@ async def scratchpad_chat(token: str, request: Request) -> Response:
         if not agent.ai_engine or not agent.ai_api_key_encrypted:
             return JSONResponse(status_code=503, content={"error": "Agent has no AI configured"})
 
-        account_result = await db.execute(select(Account).where(Account.id == agent.account_id))
-        account = account_result.scalar_one_or_none()
+        account_id = agent.account_id
+        agent_name = agent.name
 
-        logger.info(
-            "scratchpad_chat_request",
-            agent_name=agent.name,
-            message_length=len(message),
+    logger.info(
+        "scratchpad_chat_request",
+        agent_name=agent_name,
+        message_length=len(message),
+    )
+
+    async with get_db_context() as db:
+        from sqlalchemy.orm import selectinload
+
+        account_result = await db.execute(
+            select(Account).where(Account.id == account_id).options(selectinload(Account.user))
         )
+        account = account_result.scalar_one_or_none()
 
         agent_service = AgentService(db)
         try:
             response = await agent_service.chat_with_agent(
-                account_id=agent.account_id,
-                agent_name=agent.name,
+                account_id=account_id,
+                agent_name=agent_name,
                 message=message,
                 account=account,
                 public_only=True,
             )
         except Exception:
-            logger.exception("scratchpad_chat_error", agent_name=agent.name)
+            logger.exception("scratchpad_chat_error", agent_name=agent_name)
             return JSONResponse(status_code=500, content={"error": "Chat failed"})
 
     return JSONResponse(content={"response": response})
