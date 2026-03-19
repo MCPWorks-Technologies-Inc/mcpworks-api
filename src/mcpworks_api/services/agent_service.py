@@ -726,8 +726,17 @@ class AgentService:
         consecutive_failures = 0
         max_consecutive_failures = 3
 
+        logger.info(
+            "chat_with_agent_tools",
+            agent_name=agent.name,
+            tool_count=len(tools),
+            tool_names=[t["name"] for t in tools],
+            engine=agent.ai_engine,
+            model=agent.ai_model,
+        )
+
         try:
-            for _ in range(max_iterations):
+            for iteration in range(max_iterations):
                 try:
                     response = await chat_with_tools(
                         engine=agent.ai_engine,
@@ -748,6 +757,19 @@ class AgentService:
 
                 content_blocks = response.get("content", [])
                 stop_reason = response.get("stop_reason", "end_turn")
+
+                tool_call_names = [b["name"] for b in content_blocks if b.get("type") == "tool_use"]
+                text_preview = " ".join(
+                    b.get("text", "")[:100] for b in content_blocks if b.get("type") == "text"
+                )[:300]
+                logger.info(
+                    "chat_iteration",
+                    agent_name=agent.name,
+                    iteration=iteration,
+                    stop_reason=stop_reason,
+                    tool_calls=tool_call_names,
+                    text_preview=text_preview or None,
+                )
 
                 if stop_reason != "tool_use":
                     texts = [
@@ -776,6 +798,14 @@ class AgentService:
                         agent_state,
                         mcp_pool,
                         available_tools=tools,
+                    )
+                    logger.info(
+                        "chat_tool_dispatch",
+                        agent_name=agent.name,
+                        tool_name=tool_name,
+                        tool_input_keys=list(tool_input.keys()) if tool_input else [],
+                        result_preview=result_str[:300],
+                        is_error='"error"' in result_str[:50],
                     )
                     if '"error"' not in result_str[:50]:
                         iteration_had_success = True
