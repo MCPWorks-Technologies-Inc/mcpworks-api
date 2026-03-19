@@ -31,6 +31,8 @@ from mcpworks_api.services.namespace import NamespaceServiceManager
 
 logger = structlog.get_logger(__name__)
 
+_UNSET = type("_UNSET", (), {"__repr__": lambda _self: "_UNSET"})()
+
 AGENT_NETWORK_NAME = "mcpworks-agents"
 AGENT_CONTAINER_PREFIX = "agent-"
 AGENT_IMAGE = "mcpworks/agent-runtime:latest"
@@ -657,22 +659,63 @@ class AgentService:
         engine: str,
         model: str,
         api_key: str | None = None,
-        system_prompt: str | None = None,
-        auto_channel: str | None = None,
+        system_prompt=_UNSET,
+        auto_channel=_UNSET,
     ) -> Agent:
         agent = await self.get_agent(account_id, agent_name)
-        agent.ai_engine = engine
-        agent.ai_model = model
+
         if api_key:
+            await self._validate_api_key(engine, model, api_key)
             ciphertext, encrypted_dek = encrypt_value(api_key)
             agent.ai_api_key_encrypted = ciphertext
             agent.ai_api_key_dek_encrypted = encrypted_dek
-        agent.system_prompt = system_prompt
-        agent.auto_channel = auto_channel
+
+        agent.ai_engine = engine
+        agent.ai_model = model
+        if system_prompt is not _UNSET:
+            agent.system_prompt = system_prompt
+        if auto_channel is not _UNSET:
+            agent.auto_channel = auto_channel
+
         await self.db.flush()
         await self.db.refresh(agent)
         logger.info("agent_ai_configured", agent_id=str(agent.id), engine=engine, model=model)
         return agent
+
+    @staticmethod
+    async def _validate_api_key(engine: str, model: str, api_key: str) -> None:  # noqa: ARG004
+        """Validate an API key by making a lightweight test call before saving."""
+        import httpx
+
+        engine_urls = {
+            "openrouter": "https://openrouter.ai/api/v1/models",
+            "openai": "https://api.openai.com/v1/models",
+            "anthropic": "https://api.anthropic.com/v1/models",
+            "google": None,
+        }
+        test_url = engine_urls.get(engine)
+        if not test_url:
+            return
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        if engine == "anthropic":
+            headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(test_url, headers=headers)
+            if resp.status_code == 401:
+                raise ValueError(
+                    f"API key validation failed: {engine} returned 401 Unauthorized. "
+                    "The key is invalid or expired. The previous key has NOT been overwritten."
+                )
+            if resp.status_code == 403:
+                raise ValueError(
+                    f"API key validation failed: {engine} returned 403 Forbidden. "
+                    "The key may lack required permissions."
+                )
+        except httpx.RequestError as e:
+            logger.warning("api_key_validation_network_error", engine=engine, error=str(e)[:200])
 
     async def remove_ai(
         self,

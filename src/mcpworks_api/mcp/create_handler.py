@@ -2275,16 +2275,24 @@ class CreateMCPHandler:
         auto_channel: str | None = None,
     ) -> MCPToolResult:
         """Configure an AI engine for an agent."""
+        from mcpworks_api.services.agent_service import _UNSET
+
         service = AgentService(self.db)
-        agent = await service.configure_ai(
-            account_id=self.account.id,
-            agent_name=agent_name,
-            engine=engine,
-            model=model,
-            api_key=api_key,
-            system_prompt=system_prompt,
-            auto_channel=auto_channel,
-        )
+        try:
+            agent = await service.configure_ai(
+                account_id=self.account.id,
+                agent_name=agent_name,
+                engine=engine,
+                model=model,
+                api_key=api_key,
+                system_prompt=system_prompt if system_prompt is not None else _UNSET,
+                auto_channel=auto_channel if auto_channel is not None else _UNSET,
+            )
+        except ValueError as e:
+            return MCPToolResult(
+                content=[MCPContent(text=json.dumps({"error": str(e)}))],
+                isError=True,
+            )
         return MCPToolResult(
             content=[
                 MCPContent(
