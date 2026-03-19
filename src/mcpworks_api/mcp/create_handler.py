@@ -638,7 +638,30 @@ class CreateMCPHandler:
                             },
                             "failure_policy": {
                                 "type": "object",
-                                "description": 'What to do when the function fails. Required. Options: {"strategy": "continue"} (keep running), {"strategy": "auto_disable", "max_failures": 5} (disable after N failures), {"strategy": "backoff", "backoff_factor": 2.0} (exponential backoff)',
+                                "description": (
+                                    "What to do when the scheduled function fails. "
+                                    "Must include a 'strategy' field. Three options:\n"
+                                    '1. Keep running despite failures: {"strategy": "continue"}\n'
+                                    '2. Auto-disable after N failures: {"strategy": "auto_disable", "max_failures": 5}\n'
+                                    '3. Exponential backoff on failure: {"strategy": "backoff", "backoff_factor": 2.0}\n'
+                                    'Most common choice: {"strategy": "continue"}'
+                                ),
+                                "properties": {
+                                    "strategy": {
+                                        "type": "string",
+                                        "enum": ["continue", "auto_disable", "backoff"],
+                                        "description": "Failure handling strategy",
+                                    },
+                                    "max_failures": {
+                                        "type": "integer",
+                                        "description": "Only for auto_disable: disable schedule after this many consecutive failures. Default: 5",
+                                    },
+                                    "backoff_factor": {
+                                        "type": "number",
+                                        "description": "Only for backoff: multiply delay by this factor on each failure. Default: 2.0",
+                                    },
+                                },
+                                "required": ["strategy"],
                             },
                             "orchestration_mode": {
                                 "type": "string",
