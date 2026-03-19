@@ -122,6 +122,13 @@ class Settings(BaseSettings):
     # Discord Alerts
     discord_alert_webhook_url: str = Field(default="")
 
+    # Scratchpad
+    scratchpad_base_path: str = Field(
+        default="/opt/mcpworks/scratchpad",
+        description="Base directory for agent scratchpad file storage",
+    )
+    scratchpad_max_files: int = Field(default=100, ge=1, le=1000)
+
     # Sandbox
     sandbox_dev_mode: bool = Field(
         default=True,
