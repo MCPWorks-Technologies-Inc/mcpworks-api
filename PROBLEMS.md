@@ -6,6 +6,183 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
+### PROBLEM-022: DeepSeek V3.2 via OpenRouter Cannot Make Structured Tool Calls — Agent Orchestration Non-Functional (PARTIAL FIX)
+
+**Filed:** 2026-03-19
+**Status:** OPEN
+**Severity:** P1 — Agent orchestration completely non-functional for DeepSeek V3.2 via OpenRouter
+**Reported by:** Internal (agent-leadgenerator workspace)
+**Namespace affected:** `leadgenerator` (pro-agent, OpenRouter engine, DeepSeek V3.2)
+
+#### Symptoms
+
+After PROBLEM-019/020/021 fixes were applied, two distinct failures remain:
+
+**Failure 1 — `chat_with_agent` burns iterations without calling functions:**
+
+The orchestration loop runs (confirmed by hitting `max_iterations`), but no functions are actually called. Evidence:
+
+| Function | Call Count Before | Call Count After 2 Full Pipeline Attempts |
+|----------|-------------------|------------------------------------------|
+| `harvest-leads` | 7 | 7 (unchanged) |
+| `investigate-lead` | 0 | 0 (unchanged) |
+| `store-lead` | 0 | 0 (unchanged) |
+| `notify-discord` | 0 | 0 (unchanged) |
+
+With `max_iterations=100`, the loop exhausted all iterations and returned `"(Max chat iterations reached)"`. Despite the system prompt explicitly naming the functions and providing a step-by-step pipeline, DeepSeek V3.2 consumed 100 iterations without producing a single structured `tool_calls` response that the orchestrator could execute.
+
+On the first attempt (before old functions were deleted), the AI called the old monolithic `run-pipeline` function and `score-leads` instead of the new individual functions — suggesting it may have been making some tool calls that worked, but fell back to the old pipeline. After those functions were deleted, zero functions were called across 100 iterations.
+
+**Failure 2 — Webhook orchestration still returns 500:**
+
+```
+POST https://leadgenerator.agent.mcpworks.io/webhook/run-pipeline
+→ 500 {"error":"INTERNAL_ERROR","message":"An unexpected error occurred","details":{}}
+```
+
+Tested after PROBLEM-021 was marked resolved. Same opaque 500. Either:
+- The fix hasn't been deployed to production
+- The fix addressed one failure mode but there's another (e.g., the OpenRouter API itself returns an error when DeepSeek V3.2 receives tools)
+
+#### Root Cause Analysis
+
+**Hypothesis A — DeepSeek V3.2 does not emit structured `tool_calls` via OpenRouter:**
+
+DeepSeek V3.2's "agentic task synthesis pipeline" may work differently from OpenAI's structured tool-calling protocol. When tools are passed via the OpenAI-compatible API, DeepSeek may:
+1. Acknowledge the tools in its reasoning but emit function calls as **text** (e.g., markdown code blocks or JSON in the content field) rather than structured `tool_calls` objects
+2. Return `finish_reason: "stop"` with no `tool_calls` array — the PROBLEM-021 fix handles this for the case where `tool_calls` IS present but `finish_reason` is wrong, but not for the case where `tool_calls` is completely absent
+3. Use a proprietary format that OpenRouter doesn't translate to the OpenAI-compatible schema
+
+Evidence: The first run's AI response included text like:
+```
+"I'll call leads.harvest-leads now.\n\n```json\n{\"name\": \"leads.harvest_leads\"}\n```"
+```
+This is the AI **writing** a function call as text content, not producing a structured `tool_calls` response. The orchestrator only processes `message.tool_calls` — text-embedded calls are ignored.
+
+**Hypothesis B — OpenRouter returns an error when passing tools to DeepSeek V3.2:**
+
+The OpenRouter API may not support tool-calling for all models. If `POST /chat/completions` with `"tools": [...]` returns a 400/422 error for DeepSeek V3.2, the `_tools_openai()` function would raise `AIClientError`, which propagates as a 500 from the webhook handler.
+
+**Hypothesis C — Iteration burn from extended reasoning:**
+
+DeepSeek V3.2 may produce very long chain-of-thought responses that each count as an iteration. If each response is text-only (no `tool_calls`), the orchestrator would:
+1. Check `stop_reason` → `"end_turn"` (no tool calls detected)
+2. Count as one iteration
+3. But with no tool calls to execute, there's nothing to feed back
+4. The loop may re-prompt the AI, which generates another reasoning response
+
+This would explain why 100 iterations are consumed with zero function calls — the AI is "thinking out loud" in a loop.
+
+#### Verification Steps
+
+These require access to production logs or a debuggable environment:
+
+```python
+# 1. Check what OpenRouter actually returns for DeepSeek + tools
+import httpx, json
+
+resp = httpx.post("https://openrouter.ai/api/v1/chat/completions",
+    headers={"Authorization": "Bearer sk-or-v1-..."},
+    json={
+        "model": "deepseek/deepseek-v3.2",
+        "messages": [{"role": "user", "content": "Call the get_weather function for Toronto"}],
+        "tools": [{
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get weather for a city",
+                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}
+            }
+        }]
+    })
+print(resp.status_code, resp.text)
+# Key questions:
+# - Does it return tool_calls or text?
+# - What is finish_reason?
+# - Is there an error about unsupported features?
+
+# 2. Test same payload with a known-working model
+# Replace model with "anthropic/claude-sonnet-4.6" or "openai/gpt-4o"
+# If those work, the issue is DeepSeek-specific
+
+# 3. Add logging to orchestrator.py loop
+# Log each iteration: response content type, stop_reason, tool_calls present/absent
+```
+
+#### Impact
+
+- The `leadgenerator` agent cannot run autonomously — no scheduled runs, no webhook triggers, no chat-based orchestration
+- All functions are proven working via direct `execute_python` calls, but the AI-driven orchestration layer cannot connect them
+- This likely affects any agent using DeepSeek V3.2 (or potentially other non-OpenAI models) via OpenRouter with tool-calling
+- The PROBLEM-020 "pseudo-function text extraction fallback" (deferred to A1) would solve Hypothesis A — the AI IS trying to call functions, just in text format that the orchestrator ignores
+
+#### Proposed Fixes (in priority order)
+
+**Fix 1 — Verify and deploy PROBLEM-021 fixes to production:**
+The webhook 500 may simply be an undeployed fix. Verify the production codebase matches the resolved changes.
+
+**Fix 2 — Add raw response logging to `_tools_openai()`:**
+Before any parsing, log `resp.status_code` and `resp.text[:1000]` to understand what OpenRouter/DeepSeek actually returns. This is the single most important diagnostic.
+
+**Fix 3 — Text-based tool call extraction (PROBLEM-020 item 2):**
+If DeepSeek emits tool calls as text, add a fallback parser that extracts function calls from the response content. Pattern:
+```python
+# After checking message.tool_calls, also check message.content for text-embedded calls
+if not tool_calls and message.get("content"):
+    tool_calls = extract_tool_calls_from_text(message["content"])
+```
+
+**Fix 4 — Model-specific tool-call verification:**
+Before using a model for orchestration, make a test tool-call request during `configure_agent_ai` to verify the model supports structured tool calling via its provider. Warn the user if it doesn't.
+
+**Fix 5 — Orchestrator loop guard:**
+If N consecutive iterations produce no tool calls and no new text (or identical text), break the loop early with a diagnostic message instead of burning through all iterations.
+
+#### Workaround
+
+Until fixed, the pipeline can be run manually via `execute_python`:
+```python
+from functions import harvest_leads, investigate_lead, store_lead, notify_discord
+# Call each function sequentially — proven working
+```
+
+Or switch the agent to a model known to support structured tool calling (e.g., `anthropic/claude-sonnet-4.6` via OpenRouter, or native Anthropic engine).
+
+#### Partial Resolution (2026-03-18)
+
+Code analysis revealed the actual failure cascade was different from the hypotheses:
+
+**Actual root cause:** DeepSeek V3.2 IS returning structured `tool_calls` (otherwise the loop would exit on iteration 1 — the orchestrator returns immediately when `stop_reason != "tool_use"`). However, DeepSeek calls functions by **wrong names** (e.g., `run-pipeline` instead of `leads__harvest-leads`). Three compounding bugs turned this into a 100-iteration burn:
+
+1. **Failed dispatches counted as successful calls** (`orchestrator.py:252`): `functions_called.append()` ran regardless of whether the dispatch succeeded or returned an error. After 10 failed dispatches, `max_functions_called` triggered, giving the AI the misleading error "Function call limit exceeded" — even though zero functions actually executed.
+
+2. **"Unknown tool" error didn't list available tools** (`orchestrator.py:342`, `agent_service.py:841`): When `parse_tool_name()` returned `None` (no `__` separator), the error was just `"Unknown tool: run-pipeline"` with no guidance on the correct format or available tool names. The AI had no way to self-correct.
+
+3. **No consecutive failure guard**: Both the orchestrator loop and `chat_with_agent` loop would happily burn through all iterations even when every single tool call in every iteration was failing.
+
+**Fixes applied:**
+
+- **`ai_tools.py`**: Added `format_available_tools()` helper that formats tool names for error messages
+- **`orchestrator.py`**:
+  - `functions_called.append()` now only runs on successful dispatches (no `"error"` in result)
+  - `_dispatch_tool()` accepts `available_tools` parameter; "Unknown tool" errors now include the correct name format and list of available tools
+  - Added `consecutive_failures` counter — after 3 consecutive iterations where ALL tool calls fail, the loop breaks early with a diagnostic message
+  - "Function call limit exceeded" error now includes the limit number and instructs the AI to summarize and finish
+- **`agent_service.py`**: Same three fixes applied to `chat_with_agent` loop and `_dispatch_chat_tool()`
+
+**Remaining (not fixed):**
+- DeepSeek V3.2 may still call wrong tool names — but now it gets a helpful error with correct names and the loop stops after 3 failed attempts instead of burning 100 iterations
+- Text-embedded tool call extraction (PROBLEM-020 item 2) still deferred to A1
+- Webhook 500 still needs production deployment verification (PROBLEM-021 fix)
+
+#### Related
+
+- PROBLEM-019 (RESOLVED): `chat_with_agent` now uses orchestration loop — but loop is non-functional for DeepSeek
+- PROBLEM-020 (PARTIAL): Tool-calling format adaptation — text extraction fallback was deferred, now shown to be necessary
+- PROBLEM-021 (RESOLVED): Webhook 500 hardening — fix may not be deployed, or DeepSeek triggers a different failure path
+
+---
+
 ### ~~PROBLEM-021: Webhook Orchestration Returns 500 — `reason_first` Mode Fails for OpenRouter/DeepSeek~~
 
 **Filed:** 2026-03-19
