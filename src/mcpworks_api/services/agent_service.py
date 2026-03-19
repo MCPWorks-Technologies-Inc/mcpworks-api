@@ -722,7 +722,8 @@ class AgentService:
 
         effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
         messages: list[dict] = [{"role": "user", "content": message}]
-        max_iterations = 10
+        chat_limits = self._resolve_chat_limits(agent)
+        max_iterations = chat_limits["max_iterations"]
         consecutive_failures = 0
         max_consecutive_failures = 3
 
@@ -837,6 +838,20 @@ class AgentService:
                     await mcp_pool.__aexit__(None, None, None)
                 except Exception:
                     logger.exception("chat_mcp_pool_cleanup_failed")
+
+    @staticmethod
+    def _resolve_chat_limits(agent: Agent) -> dict:
+        """Resolve chat iteration limits from agent orchestration overrides or tier defaults."""
+        from mcpworks_api.tasks.orchestrator import DEFAULT_LIMITS, ORCHESTRATION_TIER_LIMITS
+
+        tier = getattr(agent, "tier", None) or "pro-agent"
+        limits = dict(ORCHESTRATION_TIER_LIMITS.get(tier, DEFAULT_LIMITS))
+        overrides = agent.orchestration_limits
+        if overrides:
+            for key in ("max_iterations", "max_functions_called"):
+                if key in overrides and isinstance(overrides[key], int):
+                    limits[key] = overrides[key]
+        return limits
 
     async def _dispatch_chat_tool(
         self,
