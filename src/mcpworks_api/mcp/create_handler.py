@@ -97,6 +97,9 @@ class CreateMCPHandler:
         "clone_agent": "write",
         "lock_function": "write",
         "unlock_function": "write",
+        "publish_view": "write",
+        "get_view_url": "read",
+        "clear_view": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -1047,6 +1050,64 @@ class CreateMCPHandler:
                         "required": ["namespace", "service", "function"],
                     },
                 ),
+                MCPTool(
+                    name="publish_view",
+                    description=(
+                        "Publish HTML/JS/CSS to the agent's visual scratchpad. "
+                        "Creates a web-accessible page at a secret URL. "
+                        "Use replace mode for full rewrites, append to add files incrementally. "
+                        "Binary files use 'base64:...' prefix."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                            "files": {
+                                "type": "object",
+                                "description": "Map of filename to content. Example: {'index.html': '<html>...', 'app.js': '...'}",
+                                "additionalProperties": {"type": "string"},
+                            },
+                            "mode": {
+                                "type": "string",
+                                "enum": ["replace", "append"],
+                                "default": "replace",
+                                "description": "replace: clear existing files first. append: add/overwrite specified files.",
+                            },
+                        },
+                        "required": ["agent_name", "files"],
+                    },
+                ),
+                MCPTool(
+                    name="get_view_url",
+                    description="Get the agent's scratchpad view URL and file listing.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
+                MCPTool(
+                    name="clear_view",
+                    description="Delete all files from the agent's visual scratchpad.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "agent_name": {
+                                "type": "string",
+                                "description": "Agent name",
+                            },
+                        },
+                        "required": ["agent_name"],
+                    },
+                ),
             ]
 
         return tools
@@ -1251,6 +1312,9 @@ class CreateMCPHandler:
             "clone_agent": self._clone_agent,
             "lock_function": self._lock_function,
             "unlock_function": self._unlock_function,
+            "publish_view": self._publish_view,
+            "get_view_url": self._get_view_url,
+            "clear_view": self._clear_view,
         }
 
         handler = handlers.get(name)
@@ -1902,28 +1966,26 @@ class CreateMCPHandler:
         """Get full details for an agent."""
         service = AgentService(self.db)
         agent = await service.get_agent(self.account.id, name)
-        return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "id": str(agent.id),
-                            "name": agent.name,
-                            "display_name": agent.display_name,
-                            "status": agent.status,
-                            "ai_engine": agent.ai_engine,
-                            "ai_model": agent.ai_model,
-                            "system_prompt": agent.system_prompt,
-                            "auto_channel": agent.auto_channel,
-                            "memory_limit_mb": agent.memory_limit_mb,
-                            "cpu_limit": agent.cpu_limit,
-                            "enabled": agent.enabled,
-                            "created_at": agent.created_at.isoformat(),
-                        }
-                    )
-                )
-            ]
-        )
+        result = {
+            "id": str(agent.id),
+            "name": agent.name,
+            "display_name": agent.display_name,
+            "status": agent.status,
+            "ai_engine": agent.ai_engine,
+            "ai_model": agent.ai_model,
+            "system_prompt": agent.system_prompt,
+            "auto_channel": agent.auto_channel,
+            "memory_limit_mb": agent.memory_limit_mb,
+            "cpu_limit": agent.cpu_limit,
+            "enabled": agent.enabled,
+            "created_at": agent.created_at.isoformat(),
+        }
+        if agent.scratchpad_token and agent.scratchpad_size_bytes > 0:
+            result["view_url"] = (
+                f"https://{agent.name}.agent.mcpworks.io/view/{agent.scratchpad_token}/"
+            )
+            result["scratchpad_size_bytes"] = agent.scratchpad_size_bytes
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _start_agent(self, name: str) -> MCPToolResult:
         """Start a stopped agent."""
@@ -2471,3 +2533,76 @@ class CreateMCPHandler:
                 )
             ]
         )
+
+    async def _publish_view(
+        self, agent_name: str, files: dict[str, str], mode: str = "replace"
+    ) -> MCPToolResult:
+        """Publish HTML/JS/CSS to agent's visual scratchpad."""
+        from mcpworks_api.services.scratchpad import (
+            ScratchpadNotAvailable,
+            ScratchpadQuotaExceeded,
+            ScratchpadService,
+            ScratchpadValidationError,
+        )
+
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+        scratchpad = ScratchpadService(self.db)
+        tier = self.account.user.effective_tier
+
+        try:
+            result = await scratchpad.publish(agent, files, mode, tier)
+        except ScratchpadNotAvailable as e:
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps({"error": "SCRATCHPAD_NOT_AVAILABLE", "message": str(e)})
+                    )
+                ],
+                isError=True,
+            )
+        except ScratchpadQuotaExceeded as e:
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps(
+                            {
+                                "error": "SCRATCHPAD_QUOTA_EXCEEDED",
+                                "current_bytes": e.current_bytes,
+                                "limit_bytes": e.limit_bytes,
+                                "requested_bytes": e.requested_bytes,
+                            }
+                        )
+                    )
+                ],
+                isError=True,
+            )
+        except ScratchpadValidationError as e:
+            return MCPToolResult(
+                content=[
+                    MCPContent(text=json.dumps({"error": "VALIDATION_ERROR", "message": str(e)}))
+                ],
+                isError=True,
+            )
+
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _get_view_url(self, agent_name: str) -> MCPToolResult:
+        """Get the agent's scratchpad view URL."""
+        from mcpworks_api.services.scratchpad import ScratchpadService
+
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+        scratchpad = ScratchpadService(self.db)
+        result = await scratchpad.get_url(agent)
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _clear_view(self, agent_name: str) -> MCPToolResult:
+        """Clear all files from agent's scratchpad."""
+        from mcpworks_api.services.scratchpad import ScratchpadService
+
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+        scratchpad = ScratchpadService(self.db)
+        await scratchpad.clear(agent)
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"status": "cleared"}))])

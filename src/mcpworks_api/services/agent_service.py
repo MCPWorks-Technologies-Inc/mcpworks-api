@@ -234,6 +234,14 @@ class AgentService:
         )
         namespace = ns_result.scalar_one_or_none()
 
+        from mcpworks_api.scratchpad import get_scratchpad_backend
+
+        try:
+            scratchpad_backend = get_scratchpad_backend()
+            await scratchpad_backend.delete_all(agent.id)
+        except Exception as e:
+            logger.warning("scratchpad_cleanup_failed", agent=agent_name, error=str(e))
+
         logger.info("agent_destroyed", agent_id=str(agent.id), agent_name=agent_name)
 
         await self.db.delete(agent)
