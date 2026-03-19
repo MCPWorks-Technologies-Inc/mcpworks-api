@@ -724,6 +724,8 @@ class AgentService:
 
         messages: list[dict] = [{"role": "user", "content": message}]
         max_iterations = 10
+        consecutive_failures = 0
+        max_consecutive_failures = 3
 
         try:
             for _ in range(max_iterations):
@@ -759,6 +761,7 @@ class AgentService:
                 messages.append({"role": "assistant", "content": content_blocks})
 
                 tool_results = []
+                iteration_had_success = False
                 for block in content_blocks:
                     if block.get("type") != "tool_use":
                         continue
@@ -773,7 +776,10 @@ class AgentService:
                         account,
                         agent_state,
                         mcp_pool,
+                        available_tools=tools,
                     )
+                    if '"error"' not in result_str[:50]:
+                        iteration_had_success = True
                     tool_results.append(
                         {
                             "role": "tool_result",
@@ -783,6 +789,17 @@ class AgentService:
                         }
                     )
                 messages.extend(tool_results)
+
+                if iteration_had_success:
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= max_consecutive_failures:
+                        return (
+                            f"(Stopped: {consecutive_failures} consecutive iterations "
+                            "where all tool calls failed. The AI model may not be "
+                            "using the correct tool name format.)"
+                        )
 
             return "(Max chat iterations reached)"
         finally:
@@ -800,8 +817,9 @@ class AgentService:
         account: Any,
         agent_state: dict | None,
         mcp_pool: Any,
+        available_tools: list[dict] | None = None,
     ) -> str:
-        from mcpworks_api.core.ai_tools import parse_tool_name
+        from mcpworks_api.core.ai_tools import format_available_tools, parse_tool_name
         from mcpworks_api.core.mcp_client import is_mcp_tool
 
         if tool_name == "get_state":
@@ -838,7 +856,14 @@ class AgentService:
         else:
             parsed = parse_tool_name(tool_name)
             if not parsed:
-                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+                available = format_available_tools(available_tools) if available_tools else "none"
+                return json.dumps(
+                    {
+                        "error": f"Unknown tool: '{tool_name}'. Tool names use the format "
+                        "'service_name__function_name' (double underscore). "
+                        f"Available tools: {available}",
+                    }
+                )
             service_name, function_name = parsed
             from mcpworks_api.tasks.orchestrator import _execute_namespace_function
 

@@ -17,7 +17,12 @@ from sqlalchemy import select
 
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
-from mcpworks_api.core.ai_tools import PLATFORM_TOOL_NAMES, build_tool_definitions, parse_tool_name
+from mcpworks_api.core.ai_tools import (
+    PLATFORM_TOOL_NAMES,
+    build_tool_definitions,
+    format_available_tools,
+    parse_tool_name,
+)
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
 from mcpworks_api.core.mcp_client import McpServerPool, is_mcp_tool
@@ -133,6 +138,8 @@ async def run_orchestration(
     functions_called: list[str] = []
     total_tokens = 0
     iterations = 0
+    consecutive_failures = 0
+    max_consecutive_failures = 3
     agent_id_str = str(agent.id)
     run_id = str(uuid_mod.uuid4())
 
@@ -208,6 +215,7 @@ async def run_orchestration(
             messages.append({"role": "assistant", "content": content_blocks})
 
             tool_results = []
+            iteration_had_success = False
             for block in content_blocks:
                 if block.get("type") != "tool_use":
                     continue
@@ -216,12 +224,20 @@ async def run_orchestration(
                 tool_input = block.get("input", {})
                 tool_id = block["id"]
 
-                if len(functions_called) >= limits["max_functions_called"]:
+                if (
+                    limits["max_functions_called"] >= 0
+                    and len(functions_called) >= limits["max_functions_called"]
+                ):
                     tool_results.append(
                         _tool_result(
                             tool_id,
                             tool_name,
-                            "Function call limit exceeded",
+                            json.dumps(
+                                {
+                                    "error": f"Function call limit reached ({limits['max_functions_called']}). "
+                                    "You have already called enough functions. Summarize your results and finish.",
+                                }
+                            ),
                         )
                     )
                     continue
@@ -242,6 +258,7 @@ async def run_orchestration(
                     mcp_pool=mcp_pool,
                     agent_state=agent_state,
                     trigger_type=trigger_type,
+                    available_tools=tools,
                 )
                 _emit(
                     "tool_result",
@@ -249,10 +266,30 @@ async def run_orchestration(
                     result_preview=result_str[:200],
                     duration_ms=_elapsed_ms(tc_start),
                 )
-                functions_called.append(tool_name)
+
+                is_error = '"error"' in result_str[:50]
+                if not is_error:
+                    functions_called.append(tool_name)
+                    iteration_had_success = True
+
                 tool_results.append(_tool_result(tool_id, tool_name, result_str))
 
             messages.extend(tool_results)
+
+            if iteration_had_success:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+                if consecutive_failures >= max_consecutive_failures:
+                    return _limit_result(
+                        f"Stopped after {consecutive_failures} consecutive iterations "
+                        "where all tool calls failed. The AI model may not be "
+                        "using the correct tool name format.",
+                        functions_called,
+                        iterations,
+                        total_tokens,
+                        start_time,
+                    )
 
         return _limit_result(
             "Max iterations exceeded",
@@ -312,6 +349,7 @@ async def _dispatch_tool(
     mcp_pool: McpServerPool | None = None,
     agent_state: dict | None = None,
     trigger_type: str = "manual",
+    available_tools: list[dict] | None = None,
 ) -> str:
     """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
     from mcpworks_api.core.tool_permissions import ToolTier, is_tool_allowed
@@ -339,7 +377,14 @@ async def _dispatch_tool(
 
     parsed = parse_tool_name(tool_name)
     if not parsed:
-        return json.dumps({"error": f"Unknown tool: {tool_name}"})
+        available = format_available_tools(available_tools) if available_tools else "none"
+        return json.dumps(
+            {
+                "error": f"Unknown tool: '{tool_name}'. Tool names use the format "
+                "'service_name__function_name' (double underscore). "
+                f"Available tools: {available}",
+            }
+        )
 
     service_name, function_name = parsed
     return await _execute_namespace_function(
