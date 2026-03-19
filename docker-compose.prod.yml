@@ -49,6 +49,7 @@ services:
       - ENCRYPTION_KEK_B64=${ENCRYPTION_KEK_B64:-}
     volumes:
       - sandbox-tmp:/tmp/sandbox
+      - scratchpad-data:/opt/mcpworks/scratchpad
       - ./keys/jwt_private.pem:/app/keys/private.pem:ro
       - ./keys/jwt_public.pem:/app/keys/public.pem:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -71,6 +72,7 @@ services:
 
 volumes:
   sandbox-tmp:
+  scratchpad-data:
   caddy-data:
   caddy-config:
 

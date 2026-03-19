@@ -39,6 +39,7 @@ _STANDARD_TOOLS: frozenset[str] = _EXECUTE_ONLY_TOOLS | frozenset(
         "list_templates",
         "describe_template",
         "chat_with_agent",
+        "get_view_url",
     }
 )
 
@@ -59,6 +60,8 @@ _BUILDER_TOOLS: frozenset[str] = _STANDARD_TOOLS | frozenset(
         "lock_function",
         "unlock_function",
         "clone_agent",
+        "publish_view",
+        "clear_view",
     }
 )
 

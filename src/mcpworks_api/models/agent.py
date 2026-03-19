@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
@@ -88,6 +89,13 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         ForeignKey("agents.id", ondelete="SET NULL"),
         nullable=True,
     )
+    scratchpad_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scratchpad_size_bytes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    scratchpad_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     runs: Mapped[list["AgentRun"]] = relationship(
         "AgentRun",
@@ -120,6 +128,12 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         UniqueConstraint("account_id", "name", name="uq_agent_account_name"),
         Index("ix_agents_account_id", "account_id"),
         Index("ix_agents_namespace_id", "namespace_id"),
+        Index(
+            "ix_agents_scratchpad_token",
+            "scratchpad_token",
+            unique=True,
+            postgresql_where=text("scratchpad_token IS NOT NULL"),
+        ),
     )
 
     @validates("name")
