@@ -96,6 +96,9 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     scratchpad_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    scratchpad_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     runs: Mapped[list["AgentRun"]] = relationship(
         "AgentRun",

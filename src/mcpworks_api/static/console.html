@@ -1926,6 +1926,11 @@ function renderAgentDetail(agent) {
       </div>
     </div>
 
+    <div class="subsection" id="agent-scratchpad-section">
+      <div class="subsection-header"><span class="subsection-title">Scratchpad</span></div>
+      <div id="agent-scratchpad-info"><div class="loading"><span class="loader"></span></div></div>
+    </div>
+
     <div class="subsection" id="agent-mcp-section">
       <div class="subsection-header">
         <span class="subsection-title">MCP Servers</span>
@@ -1979,11 +1984,56 @@ function renderAgentDetail(agent) {
   loadAgentChannels(id);
   loadMcpServers(id);
   loadAgentRuns(id);
+  renderScratchpadInfo(agent);
 }
 
 function toggleAgentAddForm(formId) {
   const el = document.getElementById(formId);
   if (el) el.classList.toggle('hidden');
+}
+
+let _scratchpadCountdownInterval = null;
+
+function renderScratchpadInfo(agent) {
+  const el = document.getElementById('agent-scratchpad-info');
+  if (!el) return;
+  if (_scratchpadCountdownInterval) { clearInterval(_scratchpadCountdownInterval); _scratchpadCountdownInterval = null; }
+
+  if (!agent.scratchpad_size_bytes || agent.scratchpad_size_bytes === 0) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--text-3)">No scratchpad content published.</div>';
+    return;
+  }
+
+  const viewUrl = `https://${agent.name}.agent.mcpworks.io/view/${agent.scratchpad_token || '...'}/`;
+  const sizeKb = (agent.scratchpad_size_bytes / 1024).toFixed(1);
+  const expiresAt = agent.scratchpad_expires_at ? new Date(agent.scratchpad_expires_at) : null;
+
+  function fmtCountdown(ms) {
+    if (ms <= 0) return '<span style="color:var(--danger)">Expired</span>';
+    const d = Math.floor(ms / 86400000);
+    const h = Math.floor((ms % 86400000) / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+
+  function render() {
+    const remaining = expiresAt ? expiresAt.getTime() - Date.now() : null;
+    const countdownHtml = expiresAt
+      ? `<span style="color:${remaining > 0 ? 'var(--text-2)' : 'var(--danger)'}">${fmtCountdown(remaining)}</span>`
+      : '';
+    el.innerHTML = `<div style="font-size:13px">
+      <div style="margin-bottom:6px"><a href="${esc(viewUrl)}" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all">${esc(viewUrl)}</a></div>
+      <div style="color:var(--text-3)">Size: <span style="color:var(--text-2)">${sizeKb} KB</span>
+        ${expiresAt ? ` &middot; Expires: <span style="color:var(--text-2)">${expiresAt.toLocaleDateString()}</span> (${countdownHtml})` : ''}
+        ${agent.scratchpad_updated_at ? ` &middot; Updated: <span style="color:var(--text-2)">${fmtDate(agent.scratchpad_updated_at)}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  render();
+  if (expiresAt) _scratchpadCountdownInterval = setInterval(render, 60000);
 }
 
 async function startAgent(agentId) {
