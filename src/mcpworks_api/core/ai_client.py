@@ -348,28 +348,56 @@ async def _tools_openai(
         raise AIClientError(f"API error {resp.status_code}: {resp.text[:500]}")
 
     data = resp.json()
-    choice = data["choices"][0]
-    message = choice["message"]
+
+    choices = data.get("choices")
+    if not choices:
+        logger.error(
+            "openai_compat_no_choices",
+            base_url=base_url,
+            model=model,
+            response_keys=list(data.keys()),
+            error=data.get("error"),
+        )
+        error_msg = data.get("error", {})
+        if isinstance(error_msg, dict):
+            error_msg = error_msg.get("message", "Unknown error")
+        raise AIClientError(f"Provider returned no choices: {error_msg}")
+
+    choice = choices[0]
+    message = choice.get("message", {})
 
     content: list[dict] = []
+    has_tool_use = False
     if message.get("content"):
         content.append({"type": "text", "text": message["content"]})
-    for tc in message.get("tool_calls") or []:
-        try:
-            args = json_mod.loads(tc["function"]["arguments"])
-        except (json_mod.JSONDecodeError, KeyError):
+    for i, tc in enumerate(message.get("tool_calls") or []):
+        has_tool_use = True
+        func_data = tc.get("function", {})
+        raw_args = func_data.get("arguments", "{}")
+        if isinstance(raw_args, dict):
+            args = raw_args
+        elif isinstance(raw_args, str):
+            try:
+                args = json_mod.loads(raw_args)
+            except (json_mod.JSONDecodeError, ValueError):
+                logger.warning(
+                    "openai_compat_bad_tool_args",
+                    tool_name=func_data.get("name"),
+                    raw_args=str(raw_args)[:200],
+                )
+                args = {}
+        else:
             args = {}
         content.append(
             {
                 "type": "tool_use",
-                "id": tc["id"],
-                "name": tc["function"]["name"],
+                "id": tc.get("id") or f"call_{i}",
+                "name": func_data.get("name", f"unknown_{i}"),
                 "input": args,
             }
         )
 
-    finish = choice.get("finish_reason", "stop")
-    stop_reason = "tool_use" if finish == "tool_calls" else "end_turn"
+    stop_reason = "tool_use" if has_tool_use else "end_turn"
 
     usage = data.get("usage", {})
     return {

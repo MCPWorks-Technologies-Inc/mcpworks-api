@@ -955,8 +955,9 @@ class CreateMCPHandler:
                     name="chat_with_agent",
                     description=(
                         "Send a message to an agent's AI engine and get its response. "
+                        "The agent can call namespace functions, platform tools (get_state, set_state, send_to_channel), and MCP tools during the conversation. "
                         "The agent must have an AI engine configured (use configure_agent_ai first). "
-                        "Use this to talk to the agent, test its behavior, or ask it to suggest changes to its own configuration."
+                        "Use this to talk to the agent, test its orchestration behavior, or ask it to run its pipeline."
                     ),
                     inputSchema={
                         "type": "object",
@@ -2401,6 +2402,7 @@ class CreateMCPHandler:
                 account_id=self.account.id,
                 agent_name=agent_name,
                 message=message,
+                account=self.account,
             )
         except AIClientError as exc:
             return MCPToolResult(content=[MCPContent(text=json.dumps({"error": str(exc)}))])

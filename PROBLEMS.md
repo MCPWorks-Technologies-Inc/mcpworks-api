@@ -6,6 +6,219 @@ This file tracks significant issues discovered during API testing that need reso
 
 ## Open Issues
 
+### ~~PROBLEM-021: Webhook Orchestration Returns 500 — `reason_first` Mode Fails for OpenRouter/DeepSeek~~
+
+**Filed:** 2026-03-19
+**Status:** RESOLVED (2026-03-19)
+**Severity:** P1 — All webhook-triggered AI orchestration broken for OpenRouter engine
+**Reported by:** Internal (agent-leadgenerator workspace)
+**Namespace affected:** `leadgenerator` (pro-agent, OpenRouter engine, DeepSeek V3.2)
+
+#### Symptoms
+
+POST to `https://leadgenerator.agent.mcpworks.io/webhook/run-pipeline` with `orchestration_mode=reason_first` returns:
+```json
+{"error": "INTERNAL_ERROR", "message": "An unexpected error occurred", "details": {}}
+```
+
+HTTP 500 with no actionable error details. Tried with both `{}` and `{"trigger": "manual_test"}` payloads — same result.
+
+#### Architecture Context
+
+Webhook handler at `webhooks.py:84-118` correctly routes `reason_first` mode to `run_orchestration()` in `orchestrator.py:91-303`, which calls `chat_with_tools()` → `_tools_openai()` in `ai_client.py:322-382`.
+
+The `_tools_openai()` function:
+1. Converts tools via `_convert_tools_to_openai()` (lines 267-278)
+2. POSTs to `https://openrouter.ai/api/v1/chat/completions`
+3. Parses response expecting `choice["message"]["tool_calls"]` (lines 357-369)
+
+#### Probable Root Cause
+
+Multiple fragile points in `_tools_openai()` that could produce unhandled exceptions:
+
+1. **No validation of `choices` array:** Line 351 does `data["choices"][0]` without checking if `choices` exists or is empty. OpenRouter may return `{"error": {...}}` or `{"choices": []}` on failure.
+
+2. **`finish_reason` mapping:** Line 371 maps `"tool_calls"` → `"tool_use"`, but DeepSeek V3.2 via OpenRouter may return `"function_call"` or `"stop"` even when tool calls are present. This would cause the orchestrator to exit the loop prematurely (it checks `stop_reason == "tool_use"` to continue iterating).
+
+3. **Silent argument parsing:** Lines 357-361 catch `JSONDecodeError`/`KeyError` when parsing tool call arguments but silently substitute `{}`. If DeepSeek returns arguments in a different structure (e.g., already-parsed dict instead of JSON string), this masks the real issue.
+
+4. **Generic error handler:** The 500 response has `"details": {}` — the webhook handler or orchestrator is catching the exception but stripping all context. Need to log the actual exception with traceback.
+
+#### Verification Steps
+
+```python
+# 1. Add logging to _tools_openai() before response parsing
+logger.info(f"OpenRouter response: {resp.status_code} {resp.text[:1000]}")
+
+# 2. Check if OpenRouter returns an error for the model+tools combination
+# DeepSeek V3.2 may not support all tool-calling features via OpenRouter
+
+# 3. Test with a known-working model (e.g., anthropic/claude-sonnet-4.6 via OpenRouter)
+# to isolate whether the issue is DeepSeek-specific or general OpenRouter
+```
+
+#### Resolution
+
+Fixed `_tools_openai()` in `ai_client.py` with four hardening changes:
+1. **Validate `choices` array** — `.get("choices")` with error logging and meaningful `AIClientError` if empty/missing (handles OpenRouter 200-with-error responses)
+2. **Detect tool calls by presence** — `has_tool_use` flag (matching Google provider pattern) instead of relying on `finish_reason`. DeepSeek V3.2 returns `"stop"` even when tool calls are present; now `stop_reason` is `"tool_use"` whenever `message.tool_calls` exists
+3. **Handle argument format variance** — `isinstance(raw_args, dict)` check before `json.loads()`, catches `TypeError` that was silently dropping arguments
+4. **Fallback for missing fields** — `tc.get("id") or f"call_{i}"` and `func_data.get("name", f"unknown_{i}")` prevent `KeyError` on non-standard responses
+
+Also enabled actual exception logging in `error_handler.py` (was commented out — all 500s were silently swallowed).
+
+#### Related
+
+- PROBLEM-019 (below) — `chat_with_agent` doesn't use orchestration at all
+- PROBLEM-020 (below) — architectural gap in tool-calling format support
+
+---
+
+### ~~PROBLEM-019: `chat_with_agent` Does Not Use Orchestration Loop — No Tool Calling~~
+
+**Filed:** 2026-03-19
+**Status:** RESOLVED (2026-03-19)
+**Severity:** P2 — Agent chat is text-only, cannot call functions
+**Reported by:** Internal (agent-leadgenerator workspace)
+
+#### Symptoms
+
+`chat_with_agent` MCP tool sends a message to the agent's AI, but the AI cannot call any namespace functions. It responds with text describing what it *would* call (e.g., `"I'll call leads.harvest-leads now"` followed by a markdown code block) instead of actually executing function calls.
+
+#### Root Cause
+
+`agent_service.py:693-723` — `chat_with_agent()` calls the simple `chat()` function (`ai_client.py:43-65`), NOT `chat_with_tools()`. No tool definitions are built or passed to the AI.
+
+```python
+# agent_service.py line 708
+response = await chat(        # <-- simple chat, no tools
+    engine=agent.ai_engine,
+    model=agent.ai_model or "",
+    api_key=api_key,
+    message=message,
+    system_prompt=agent.system_prompt,
+)
+```
+
+Compare with the orchestrator (`orchestrator.py:168`) which correctly uses:
+```python
+response = await chat_with_tools(  # <-- full orchestration with tools
+    engine=agent.ai_engine,
+    model=agent.ai_model or "",
+    api_key=api_key,
+    messages=messages,
+    tools=tools,
+    system_prompt=agent.system_prompt,
+)
+```
+
+#### Expected Behavior
+
+`chat_with_agent` should run the orchestration loop (or at minimum pass tool definitions via `chat_with_tools`), allowing the AI to call namespace functions, platform tools, and MCP server tools during a conversation.
+
+#### Fix
+
+Replace `chat()` with a mini orchestration loop in `chat_with_agent()`:
+1. Build tool definitions via `build_tool_definitions()` from `ai_tools.py`
+2. Call `chat_with_tools()` instead of `chat()`
+3. Execute any tool calls the AI makes
+4. Return the final text response
+
+Alternatively, refactor to call `run_orchestration()` directly with `trigger_type="chat"`.
+
+#### Impact
+
+- Users cannot test agent orchestration via `chat_with_agent` — the only way to trigger tool-calling is via schedules or webhooks
+- This makes agent development and debugging significantly harder
+- The system prompt tells the AI about its tools, but it can never use them in chat mode
+
+#### Resolution
+
+Replaced `chat()` with a mini orchestration loop in `agent_service.py:chat_with_agent()`:
+1. Builds tool definitions via `build_tool_definitions()` (namespace functions + platform tools)
+2. Loads MCP server tools if configured
+3. Calls `chat_with_tools()` in a loop (max 10 iterations)
+4. Dispatches tool calls via `_dispatch_chat_tool()` — handles platform tools (get_state, set_state, send_to_channel), MCP tools, and namespace functions
+5. Returns final text response after AI completes
+
+Updated MCP tool description to reflect new capabilities. MCP handler now passes `account` object for tier-aware state operations.
+
+---
+
+### ~~PROBLEM-020: Agent AI Tool-Calling Format Assumes Provider Uniformity — Needs Dynamic Adaptation~~
+
+**Filed:** 2026-03-19
+**Status:** PARTIALLY RESOLVED (2026-03-19) — OpenAI-compatible path hardened; full adapter layer deferred
+**Severity:** P2 — Architectural gap affecting multi-provider BYOAI
+**Reported by:** Internal (agent-leadgenerator workspace)
+
+#### Context
+
+MCPWorks agents support BYOAI (Bring Your Own AI) — users configure any LLM via Anthropic, OpenAI, Google, or OpenRouter engines. The platform presents namespace functions as callable tools to the AI during orchestration. This works when the AI model reliably follows the tool-calling protocol of its provider, but breaks when models have idiosyncratic behavior.
+
+#### Current Architecture
+
+`ai_client.py` supports three tool-calling code paths:
+
+| Engine | Function | Tool Format | Response Parsing |
+|--------|----------|-------------|-----------------|
+| `anthropic` | `_tools_anthropic()` | Native `tool_use` blocks | `content[].type == "tool_use"` |
+| `openai` | `_tools_openai()` | OpenAI function format | `message.tool_calls[].function` |
+| `google` | `_tools_google()` | `functionCall` format | `parts[].functionCall` |
+| `openrouter` | `_tools_openai()` | OpenAI function format | Same as openai |
+
+OpenRouter routes to `_tools_openai()` because it exposes an OpenAI-compatible API (`OPENAI_COMPATIBLE_BASE_URLS` mapping at `ai_client.py`).
+
+#### Problem
+
+This works for models that faithfully implement OpenAI's tool-calling spec, but many models accessed via OpenRouter have quirks:
+
+1. **DeepSeek V3.2:** Uses OpenAI-compatible format but may return `finish_reason: "stop"` instead of `"tool_calls"` when making tool calls. The orchestrator checks `stop_reason == "tool_use"` to continue iterating — if DeepSeek returns `"stop"`, the loop exits and tool calls are never executed.
+
+2. **Some models return tool calls as text:** Instead of structured `tool_calls` objects, they emit JSON or function-call syntax in the `content` field. The current parser only looks at `message.tool_calls` and ignores text-embedded calls.
+
+3. **Argument format variance:** Some models return `arguments` as a parsed dict instead of a JSON string. The current code does `json.loads(tc["function"]["arguments"])` which would throw `TypeError` on a dict (caught by the generic except, but silently loses the arguments).
+
+4. **Missing `id` field:** Some models don't return a `tool_call.id` — the code assumes it exists at `tc["id"]` (line 365).
+
+#### Proposed Solution: Tool-Calling Adapter Layer
+
+Instead of assuming all OpenRouter models behave identically, introduce a **tool-calling adapter** that can be overridden per-model or per-agent:
+
+1. **Model-specific response parsers:** A registry of `(provider, model_prefix) → parser_function` that handles known quirks. For example, a DeepSeek parser that checks both `tool_calls` and text content for function calls.
+
+2. **Agent-level override:** Allow `configure_agent_ai` to accept an optional `tool_call_format` parameter (e.g., `"openai_strict"`, `"openai_flexible"`, `"text_extraction"`) that tells the orchestrator how to parse responses from that agent's model.
+
+3. **Pseudo-function fallback:** If structured tool calling fails, the orchestrator could fall back to a "pseudo-function" approach — instruct the model to output function calls in a known text format (e.g., `<tool_call>{"name": "...", "arguments": {...}}</tool_call>`) and parse those from the response text. This would work with any model regardless of its native tool-calling support.
+
+4. **Better error surfacing:** When tool-call parsing fails, log the raw response and return a meaningful error instead of silently dropping to `{}` args or returning a generic 500.
+
+#### Impact
+
+- Agents using non-OpenAI models via OpenRouter may silently fail to call tools
+- The BYOAI value proposition is weakened if only Anthropic/OpenAI models work reliably
+- As MCPWorks onboards users with diverse model preferences, this will become a growing support burden
+
+#### Partial Resolution
+
+The immediate issues (items 1, 3, 4 from Proposed Solution) are addressed by PROBLEM-021 fixes:
+- `has_tool_use` presence detection works for DeepSeek and other models that return `finish_reason: "stop"` with tool calls
+- `isinstance(raw_args, dict)` handles already-parsed argument dicts
+- Missing `id`/`name` fields handled with fallbacks
+- Error logging enabled for all parsing failures
+
+Remaining (deferred to A1):
+- Item 2 (pseudo-function text extraction fallback for models with zero structured tool-call support)
+- Per-model response parser registry
+- Agent-level `tool_call_format` override
+
+#### Related
+
+- PROBLEM-019: `chat_with_agent` doesn't use orchestration
+- PROBLEM-021: Webhook orchestration 500 (likely a manifestation of this format issue)
+
+---
+
 ### ~~PROBLEM-017: `delete_function` MCP Tool Missing `confirmation_token` Parameter~~
 
 **Filed:** 2026-03-18

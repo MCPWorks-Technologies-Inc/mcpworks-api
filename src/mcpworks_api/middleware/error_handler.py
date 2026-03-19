@@ -1,10 +1,13 @@
 """Global exception handlers for FastAPI application."""
 
+import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from mcpworks_api.core.exceptions import MCPWorksException
+
+logger = structlog.get_logger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -76,18 +79,21 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(
-        _request: Request,
-        _exc: Exception,
+        request: Request,
+        exc: Exception,
     ) -> JSONResponse:
         """Handle unexpected exceptions.
 
         Logs the error and returns a generic 500 response.
         Does not expose internal details for security.
         """
-        # In production, log the full exception
-        # import structlog
-        # logger = structlog.get_logger()
-        # logger.error("Unhandled exception", exc_info=exc)
+        logger.exception(
+            "unhandled_exception",
+            exc_type=type(exc).__name__,
+            exc_message=str(exc)[:500],
+            path=request.url.path,
+            method=request.method,
+        )
 
         return JSONResponse(
             status_code=500,
