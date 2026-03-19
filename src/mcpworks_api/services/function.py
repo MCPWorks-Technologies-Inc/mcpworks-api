@@ -157,7 +157,7 @@ class FunctionService:
         """
         result = await self.db.execute(
             select(Function)
-            .where(Function.id == function_id)
+            .where(Function.id == function_id, Function.deleted_at.is_(None))
             .options(selectinload(Function.versions))
         )
         function = result.scalar_one_or_none()
