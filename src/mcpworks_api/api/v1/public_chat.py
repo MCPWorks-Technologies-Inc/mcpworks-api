@@ -111,29 +111,37 @@ async def public_chat(token: str, request: Request) -> JSONResponse:
                 headers=_cors(request),
             )
 
+        account_id = agent.account_id
+        agent_name = agent.name
+
+    logger.info(
+        "public_chat_request",
+        agent_name=agent_name,
+        message_length=len(message),
+        origin=request.headers.get("origin"),
+    )
+
+    async with get_db_context() as db:
         from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
 
         from mcpworks_api.models.account import Account
 
-        account_result = await db.execute(select(Account).where(Account.id == agent.account_id))
+        account_result = await db.execute(
+            select(Account).where(Account.id == account_id).options(selectinload(Account.user))
+        )
         account = account_result.scalar_one_or_none()
 
-        logger.info(
-            "public_chat_request",
-            agent_name=agent.name,
-            message_length=len(message),
-            origin=request.headers.get("origin"),
-        )
-
+        service = AgentService(db)
         try:
             response = await service.chat_with_agent(
-                account_id=agent.account_id,
-                agent_name=agent.name,
+                account_id=account_id,
+                agent_name=agent_name,
                 message=message,
                 account=account,
             )
         except Exception:
-            logger.exception("public_chat_error", agent_name=agent.name)
+            logger.exception("public_chat_error", agent_name=agent_name)
             return JSONResponse(
                 status_code=500,
                 content={"error": "Chat failed"},
