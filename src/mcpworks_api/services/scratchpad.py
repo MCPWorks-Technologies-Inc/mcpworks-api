@@ -3,7 +3,7 @@
 import base64
 import re
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
@@ -27,6 +27,15 @@ SCRATCHPAD_QUOTA_BYTES: dict[str, int] = {
 }
 
 DEFAULT_QUOTA_BYTES = 100 * 1024 * 1024
+
+SCRATCHPAD_TTL_DAYS: dict[str, int] = {
+    "trial-agent": 0,
+    "pro-agent": 7,
+    "enterprise-agent": 30,
+    "dedicated-agent": 30,
+}
+
+DEFAULT_TTL_DAYS = 7
 
 
 def generate_scratchpad_token() -> str:
@@ -96,6 +105,8 @@ class ScratchpadService:
 
         agent.scratchpad_size_bytes = total_bytes
         agent.scratchpad_updated_at = datetime.now(UTC)
+        ttl_days = self._get_ttl_days(tier)
+        agent.scratchpad_expires_at = datetime.now(UTC) + timedelta(days=ttl_days)
         await self.db.flush()
 
         url = self._build_url(agent.name, token)
@@ -113,12 +124,14 @@ class ScratchpadService:
             "files_written": len(decoded),
             "total_bytes": total_bytes,
             "quota_remaining_bytes": max(0, quota - total_bytes),
+            "expires_at": agent.scratchpad_expires_at.isoformat(),
         }
 
     async def get_url(self, agent: Agent) -> dict:
         if not agent.scratchpad_token or not agent.scratchpad_size_bytes:
-            return {"url": None, "files": [], "total_bytes": 0}
+            return {"url": None, "files": [], "total_bytes": 0, "expires_at": None}
 
+        expired = self.is_expired(agent)
         file_list = await self.backend.list_files(agent.id)
         url = self._build_url(agent.name, agent.scratchpad_token)
 
@@ -126,6 +139,10 @@ class ScratchpadService:
             "url": url,
             "files": file_list[:50],
             "total_bytes": agent.scratchpad_size_bytes,
+            "expires_at": agent.scratchpad_expires_at.isoformat()
+            if agent.scratchpad_expires_at
+            else None,
+            "expired": expired,
         }
 
     async def clear(self, agent: Agent) -> None:
@@ -133,6 +150,7 @@ class ScratchpadService:
         old_size = agent.scratchpad_size_bytes
         agent.scratchpad_size_bytes = 0
         agent.scratchpad_updated_at = None
+        agent.scratchpad_expires_at = None
         await self.db.flush()
 
         logger.info(
@@ -190,5 +208,15 @@ class ScratchpadService:
         return content.encode("utf-8")
 
     @staticmethod
+    def is_expired(agent: Agent) -> bool:
+        if not agent.scratchpad_expires_at:
+            return False
+        return datetime.now(UTC) >= agent.scratchpad_expires_at
+
+    @staticmethod
     def _get_quota_bytes(tier: str) -> int:
         return SCRATCHPAD_QUOTA_BYTES.get(tier, DEFAULT_QUOTA_BYTES)
+
+    @staticmethod
+    def _get_ttl_days(tier: str) -> int:
+        return SCRATCHPAD_TTL_DAYS.get(tier, DEFAULT_TTL_DAYS)

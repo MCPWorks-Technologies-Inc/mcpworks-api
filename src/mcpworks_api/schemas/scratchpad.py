@@ -1,5 +1,7 @@
 """Pydantic schemas for agent scratchpad."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -20,12 +22,15 @@ class PublishScratchpadResponse(BaseModel):
     files_written: int
     total_bytes: int
     quota_remaining_bytes: int
+    expires_at: datetime
 
 
 class ScratchpadInfoResponse(BaseModel):
     url: str | None
     files: list[str]
     total_bytes: int
+    expires_at: datetime | None = None
+    expired: bool = False
 
 
 class ClearScratchpadResponse(BaseModel):

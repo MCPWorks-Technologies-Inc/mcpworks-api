@@ -52,6 +52,10 @@ class AgentResponse(BaseModel):
     cpu_limit: float
     enabled: bool
     cloned_from_id: uuid.UUID | None = None
+    scratchpad_token: str | None = None
+    scratchpad_size_bytes: int = 0
+    scratchpad_updated_at: datetime | None = None
+    scratchpad_expires_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -51,6 +51,7 @@ SCRATCHPAD_HEADERS = {
 }
 
 NOT_FOUND = Response(status_code=404, content="Not Found")
+GONE = Response(status_code=410, content="Expired")
 
 
 def _get_mime_type(path: str) -> str:
@@ -79,6 +80,9 @@ async def serve_scratchpad(
 
         if not agent:
             return NOT_FOUND
+
+        if service.is_expired(agent):
+            return GONE
 
         host = request.headers.get("host", "").lower()
         is_local = getattr(request.state, "is_local", False)
