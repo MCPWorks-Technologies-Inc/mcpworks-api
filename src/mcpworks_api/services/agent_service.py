@@ -947,6 +947,7 @@ class AgentService:
                 agent,
                 account or agent,
                 agent_state=agent_state,
+                db=self.db,
             )
 
     async def add_channel(

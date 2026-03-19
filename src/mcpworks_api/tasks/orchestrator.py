@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
@@ -448,32 +449,41 @@ async def _execute_namespace_function(
     agent: Agent,
     account: Account,
     agent_state: dict | None = None,
+    db: AsyncSession | None = None,
 ) -> str:
     """Execute a namespace function via the sandbox backend."""
     try:
-        async with get_db_context() as db:
+        if db is not None:
             function_service = FunctionService(db)
             _, version = await function_service.get_for_execution(
                 namespace_id=agent.namespace_id,
                 service_name=service_name,
                 function_name=function_name,
             )
+        else:
+            async with get_db_context() as new_db:
+                function_service = FunctionService(new_db)
+                _, version = await function_service.get_for_execution(
+                    namespace_id=agent.namespace_id,
+                    service_name=service_name,
+                    function_name=function_name,
+                )
 
-            backend = get_backend(version.backend)
-            if not backend:
-                return json.dumps({"error": f"Backend not available: {version.backend}"})
+        backend = get_backend(version.backend)
+        if not backend:
+            return json.dumps({"error": f"Backend not available: {version.backend}"})
 
-            context = {"state": agent_state or {}}
+        context = {"state": agent_state or {}}
 
-            execution_id = str(uuid_mod.uuid4())
-            result = await backend.execute(
-                code=version.code,
-                config=version.config,
-                input_data=input_data,
-                account=account,
-                execution_id=execution_id,
-                context=context,
-            )
+        execution_id = str(uuid_mod.uuid4())
+        result = await backend.execute(
+            code=version.code,
+            config=version.config,
+            input_data=input_data,
+            account=account,
+            execution_id=execution_id,
+            context=context,
+        )
 
         if result.success:
             output = result.output

@@ -19,7 +19,6 @@ from sqlalchemy.orm import selectinload
 
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
-from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import AgentChannel
 
 logger = structlog.get_logger(__name__)
@@ -54,6 +53,7 @@ class AgentBot(discord.Client):
         if channel_id not in self.channel_map:
             return
 
+        self._current_channel_id = channel_id
         agent_info = self.channel_map[channel_id]
         agent_name = agent_info["agent_name"]
         account_id = agent_info["account_id"]
@@ -91,29 +91,40 @@ class AgentBot(discord.Client):
 
     async def _route_to_agent(
         self,
-        account_id: str,
+        account_id: str,  # noqa: ARG002
         agent_name: str,
         user_message: str,
         discord_context: dict,
     ) -> str:
-        import uuid
+        import httpx
 
-        from mcpworks_api.services.agent_service import AgentService
-
-        async with get_db_context() as db:
-            account_result = await db.execute(
-                select(Account).where(Account.id == uuid.UUID(account_id))
+        chat_token = self.channel_map[self._current_channel_id]["chat_token"]
+        if not chat_token:
+            return (
+                "Chat is not configured for this agent. Ask the admin to run configure_chat_token."
             )
-            account = account_result.scalar_one_or_none()
 
-            service = AgentService(db)
-            response = await service.chat_with_agent(
-                account_id=uuid.UUID(account_id),
+        url = f"http://localhost:8000/chat/{chat_token}"
+        message = f"[Discord message from {discord_context['author']}]: {user_message}"
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                url,
+                json={"message": message},
+                headers={"Host": f"{agent_name}.agent.mcpworks.io"},
+            )
+
+        if resp.status_code != 200:
+            logger.error(
+                "discord_chat_http_error",
                 agent_name=agent_name,
-                message=f"[Discord message from {discord_context['author']}]: {user_message}",
-                account=account,
+                status=resp.status_code,
+                body=resp.text[:500],
             )
-            return response
+            return f"Error: chat returned status {resp.status_code}"
+
+        data = resp.json()
+        return data.get("response", data.get("error", "No response"))
 
 
 def _split_message(text: str, limit: int = 2000) -> list[str]:
@@ -186,6 +197,7 @@ async def _load_discord_channels() -> dict[str, list[dict]]:
                     "account_id": str(agent.account_id),
                     "channel_id": channel_id_int,
                     "webhook_url": config.get("webhook_url"),
+                    "chat_token": agent.chat_token,
                 }
             )
 
