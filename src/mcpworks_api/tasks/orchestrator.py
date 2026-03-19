@@ -19,6 +19,7 @@ from mcpworks_api.backends import get_backend
 from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
 from mcpworks_api.core.ai_tools import (
     PLATFORM_TOOL_NAMES,
+    augment_system_prompt,
     build_tool_definitions,
     format_available_tools,
     parse_tool_name,
@@ -134,6 +135,8 @@ async def run_orchestration(
             logger.exception("orchestration_mcp_pool_failed", agent_name=agent.name)
             mcp_pool = None
 
+    effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
+
     messages: list[dict] = [{"role": "user", "content": trigger_context}]
     functions_called: list[str] = []
     total_tokens = 0
@@ -178,7 +181,7 @@ async def run_orchestration(
                 api_key=api_key,
                 messages=messages,
                 tools=tools,
-                system_prompt=agent.system_prompt,
+                system_prompt=effective_system_prompt,
             )
             iterations += 1
             usage = response.get("usage", {})
