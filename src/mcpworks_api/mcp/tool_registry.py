@@ -842,7 +842,7 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                 },
                 "api_key": {
                     "type": "string",
-                    "description": "API key for the chosen engine. Stored encrypted, never exposed to sandbox functions.",
+                    "description": "API key for the chosen engine. Optional if the agent already has a key configured — omit to keep the existing key. Only provide when setting up AI for the first time or rotating the key.",
                 },
                 "system_prompt": {
                     "type": "string",
@@ -854,7 +854,7 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                     "description": "Automatically post the AI's final response to this channel type after orchestration runs. The channel must be configured via add_channel.",
                 },
             },
-            "required": ["agent_name", "engine", "model", "api_key"],
+            "required": ["agent_name", "engine", "model"],
         },
     ),
     "remove_agent_ai": ToolDef(
