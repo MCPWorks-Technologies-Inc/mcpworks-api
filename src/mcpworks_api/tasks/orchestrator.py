@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
+from mcpworks_api.core.context_budget import estimate_context_budget
 from mcpworks_api.core.ai_tools import (
     PLATFORM_TOOL_NAMES,
     augment_system_prompt,
@@ -93,6 +94,7 @@ class OrchestrationResult:
     total_tokens: int = 0
     duration_ms: int = 0
     error: str | None = None
+    context_tokens: int = 0
 
 
 async def run_orchestration(
@@ -136,7 +138,14 @@ async def run_orchestration(
             logger.exception("orchestration_mcp_pool_failed", agent_name=agent.name)
             mcp_pool = None
 
+    from mcpworks_api.core.conversation_memory import load_history
+
     effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
+
+    # Inject conversation summary into orchestration context (lightweight)
+    summary, _ = load_history(agent_state)
+    if summary:
+        effective_system_prompt += f"\n\n## Recent conversation context\n{summary}"
 
     messages: list[dict] = [{"role": "user", "content": trigger_context}]
     functions_called: list[str] = []
@@ -157,6 +166,17 @@ async def run_orchestration(
         mcp_servers_count=len(agent.mcp_servers or {}),
     )
 
+    budget = estimate_context_budget(effective_system_prompt, messages, tools)
+    context_tokens = budget["total_estimated_tokens"]
+    _emit("context_budget", **budget)
+    if budget["level"] in ("orange", "red"):
+        logger.warning(
+            "orchestration_context_budget_high",
+            agent_name=agent.name,
+            level=budget["level"],
+            total_tokens=context_tokens,
+        )
+
     try:
         while iterations < limits["max_iterations"]:
             if total_tokens >= limits["max_ai_tokens"]:
@@ -166,6 +186,7 @@ async def run_orchestration(
                     iterations,
                     total_tokens,
                     start_time,
+                    context_tokens,
                 )
             if _elapsed_seconds(start_time) >= limits["max_execution_seconds"]:
                 return _limit_result(
@@ -174,6 +195,7 @@ async def run_orchestration(
                     iterations,
                     total_tokens,
                     start_time,
+                    context_tokens,
                 )
 
             response = await chat_with_tools(
@@ -205,6 +227,7 @@ async def run_orchestration(
                     iterations=iterations,
                     total_tokens=total_tokens,
                     duration_ms=_elapsed_ms(start_time),
+                    context_tokens=context_tokens,
                 )
                 _emit(
                     "completion",
@@ -293,6 +316,7 @@ async def run_orchestration(
                         iterations,
                         total_tokens,
                         start_time,
+                        context_tokens,
                     )
 
         return _limit_result(
@@ -301,6 +325,7 @@ async def run_orchestration(
             iterations,
             total_tokens,
             start_time,
+            context_tokens,
         )
 
     except AIClientError as e:
@@ -372,7 +397,9 @@ async def _dispatch_tool(
         )
 
     if tool_name in PLATFORM_TOOL_NAMES:
-        return await _execute_platform_tool(tool_name, tool_input, agent, account, tier)
+        return await _execute_platform_tool(
+            tool_name, tool_input, agent, account, tier, agent_state=agent_state
+        )
 
     if is_mcp_tool(tool_name):
         if mcp_pool is None:
@@ -407,6 +434,7 @@ async def _execute_platform_tool(
     agent: Agent,
     account: Account,
     tier: str,
+    agent_state: dict | None = None,
 ) -> str:
     """Execute a built-in platform tool."""
     try:
@@ -436,6 +464,34 @@ async def _execute_platform_tool(
                     tier,
                 )
                 return json.dumps({"key": tool_input.get("key"), "stored": True})
+        elif tool_name == "list_state_keys":
+            async with get_db_context() as db:
+                service = AgentService(db)
+                keys_info = await service.list_state_keys(account.id, agent.name, tier)
+                return json.dumps(
+                    {
+                        "keys": keys_info["keys"],
+                        "count": len(keys_info["keys"]),
+                        "total_size_bytes": keys_info["total_size_bytes"],
+                    }
+                )
+        elif tool_name == "search_state":
+            query = tool_input.get("query", "").lower()
+            if not query:
+                return json.dumps({"error": "query is required"})
+            matches = []
+            for key, value in (agent_state or {}).items():
+                value_str = json.dumps(value, default=str) if not isinstance(value, str) else value
+                if query in key.lower() or query in value_str.lower():
+                    preview = value_str[:100] + ("..." if len(value_str) > 100 else "")
+                    matches.append({"key": key, "preview": preview})
+            return json.dumps(
+                {
+                    "matches": matches[:20],
+                    "query": query,
+                    "total_searched": len(agent_state or {}),
+                }
+            )
         else:
             return json.dumps({"error": f"Unknown platform tool: {tool_name}"})
     except Exception as e:
@@ -650,6 +706,7 @@ def _limit_result(
     iterations: int,
     total_tokens: int,
     start_time: float,
+    context_tokens: int = 0,
 ) -> OrchestrationResult:
     return OrchestrationResult(
         success=False,
@@ -659,4 +716,5 @@ def _limit_result(
         total_tokens=total_tokens,
         duration_ms=_elapsed_ms(start_time),
         error=error,
+        context_tokens=context_tokens,
     )

@@ -43,11 +43,33 @@ PLATFORM_TOOLS: list[dict] = [
             "required": ["key", "value"],
         },
     },
+    {
+        "name": "list_state_keys",
+        "description": "List all keys in persistent agent state with their sizes",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "search_state",
+        "description": "Search persistent agent state by keyword. Matches against key names and string values.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search keyword (case-insensitive substring match)",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 PLATFORM_TOOL_NAMES = frozenset(t["name"] for t in PLATFORM_TOOLS)
 
-PUBLIC_SAFE_PLATFORM_TOOLS = frozenset(["get_state", "send_to_channel"])
+PUBLIC_SAFE_PLATFORM_TOOLS = frozenset(["get_state", "send_to_channel", "list_state_keys", "search_state"])
 
 
 async def build_tool_definitions(
