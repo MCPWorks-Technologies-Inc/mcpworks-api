@@ -2022,7 +2022,7 @@ function renderAgentDetail(agent) {
         <span class="subsection-title">Live Telemetry</span>
         <div style="display:flex;gap:6px">
           <button id="telemetry-toggle" class="btn btn-ghost btn-sm" onclick="toggleTelemetry('${esc(id)}')">Connect</button>
-          <button class="btn btn-ghost btn-sm" onclick="openTelemetryWindow('${esc(id)}')" title="Open in new window (Ctrl+click for new tab)">Pop Out</button>
+          <button class="btn btn-ghost btn-sm" onclick="openTelemetryWindow('${esc(id)}','${esc(agent.name)}')" title="Open in new window (Ctrl+click for new tab)">Pop Out</button>
         </div>
       </div>
       <div id="agent-telemetry-log" style="max-height:400px;overflow-y:auto;font-size:12px;font-family:var(--font-mono);background:var(--bg-2);border-radius:6px;padding:8px;display:none"></div>
@@ -2466,16 +2466,17 @@ async function removeMcpServer(agentId, serverName) {
 // --- Live Telemetry ---
 let _telemetrySource = null;
 
-function openTelemetryWindow(agentId) {
+function openTelemetryWindow(agentId, agentName) {
+  var displayName = agentName || agentId;
   var telUrl = '/v1/agents/' + encodeURIComponent(agentId) + '/telemetry?token=' + encodeURIComponent(TOKEN);
   var w = window.open('', 'telemetry_' + agentId, 'width=800,height=600,scrollbars=yes,resizable=yes');
-  var html = '<!DOCTYPE html><html><head><title>Telemetry: ' + esc(agentId) + '</title>' +
+  var html = '<!DOCTYPE html><html><head><title>' + esc(displayName) + ' — Live Telemetry</title>' +
     '<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#e6edf3;font:13px/1.6 "SF Mono",Monaco,Consolas,monospace;padding:12px}' +
     '.ev{padding:4px 8px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline}' +
     '.badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;flex-shrink:0}' +
     '.ts{color:#6b7280;font-size:11px;flex-shrink:0}.detail{color:#8b949e;word-break:break-all}' +
     '.connected{color:#3fb950;text-align:center;padding:12px}</style></head>' +
-    '<body><div class="connected">Connecting to ' + esc(agentId) + '...</div><div id="log"></div>' +
+    '<body><div class="connected">Connecting to ' + esc(displayName) + '...</div><div id="log"></div>' +
     '<sc' + 'ript>' +
     'var log=document.getElementById("log");' +
     'var colors={orchestration_start:"#6b7280",completion:"#6b7280",ai_thinking:"#3b82f6",ai_text:"#3b82f6",tool_call:"#eab308",tool_result:"#22c55e",error:"#ef4444"};' +
