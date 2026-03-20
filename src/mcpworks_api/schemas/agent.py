@@ -43,6 +43,8 @@ class AgentResponse(BaseModel):
     id: uuid.UUID
     name: str
     display_name: str | None = None
+    namespace_id: uuid.UUID | None = None
+    namespace_name: str | None = None
     status: str
     tool_tier: str = "standard"
     ai_engine: str | None = None
