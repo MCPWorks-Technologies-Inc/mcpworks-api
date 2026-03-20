@@ -769,8 +769,18 @@ class AgentService:
 
         from mcpworks_api.core.telemetry import make_event, telemetry_bus
 
+        from mcpworks_api.core.conversation_memory import (
+            build_history_messages,
+            load_history,
+        )
+
         effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
-        messages: list[dict] = [{"role": "user", "content": message}]
+
+        # Load conversation history and prepend to messages
+        summary, history_turns = load_history(agent_state)
+        history_messages = build_history_messages(summary, history_turns)
+        messages: list[dict] = history_messages + [{"role": "user", "content": message}]
+
         chat_limits = self._resolve_chat_limits(agent)
         max_iterations = chat_limits["max_iterations"]
         consecutive_failures = 0
@@ -844,7 +854,11 @@ class AgentService:
                         if b.get("type") == "text" and b.get("text")
                     ]
                     _emit("completion", success=True, iterations=iteration + 1)
-                    return "\n".join(texts) if texts else "(No response)"
+                    response_text = "\n".join(texts) if texts else "(No response)"
+                    await self._save_chat_turns(
+                        agent, account, message, response_text, agent_state, api_key
+                    )
+                    return response_text
 
                 messages.append({"role": "assistant", "content": content_blocks})
 
@@ -906,6 +920,55 @@ class AgentService:
                     await mcp_pool.__aexit__(None, None, None)
                 except Exception:
                     logger.exception("chat_mcp_pool_cleanup_failed")
+
+    async def _save_chat_turns(
+        self,
+        agent: Any,
+        account: Any,
+        user_message: str,
+        assistant_response: str,
+        agent_state: dict,
+        api_key: str,
+    ) -> None:
+        """Persist user/assistant turns and trigger compaction if needed."""
+        from mcpworks_api.core.conversation_memory import (
+            append_turn,
+            compact_history,
+            needs_compaction,
+        )
+
+        tier = (
+            account.user.effective_tier
+            if account and hasattr(account, "user") and account.user
+            else "pro-agent"
+        )
+        try:
+            await append_turn(
+                agent.id, agent.account_id, agent.name, "user", user_message, tier, "chat"
+            )
+            await append_turn(
+                agent.id, agent.account_id, agent.name, "assistant", assistant_response, tier, "chat"
+            )
+        except Exception:
+            logger.warning("chat_turn_save_failed", agent_name=agent.name)
+            return
+
+        if needs_compaction(agent_state):
+            try:
+                # Re-read state to include the turns we just appended
+                fresh_state = await self.get_all_state(agent.id)
+                await compact_history(
+                    agent.id,
+                    agent.account_id,
+                    agent.name,
+                    agent.ai_engine,
+                    agent.ai_model or "",
+                    api_key,
+                    fresh_state,
+                    tier,
+                )
+            except Exception:
+                logger.warning("chat_compaction_failed", agent_name=agent.name)
 
     async def generate_chat_token(self, account_id: uuid.UUID, agent_name: str) -> dict:
         import base64
@@ -987,6 +1050,35 @@ class AgentService:
                 agent,
                 tool_input.get("channel_type", ""),
                 tool_input.get("message", ""),
+            )
+        elif tool_name == "list_state_keys":
+            tier = (
+                account.user.effective_tier if account and hasattr(account, "user") else "pro-agent"
+            )
+            keys_info = await self.list_state_keys(agent.account_id, agent.name, tier)
+            return json.dumps(
+                {
+                    "keys": keys_info["keys"],
+                    "count": len(keys_info["keys"]),
+                    "total_size_bytes": keys_info["total_size_bytes"],
+                }
+            )
+        elif tool_name == "search_state":
+            query = tool_input.get("query", "").lower()
+            if not query:
+                return json.dumps({"error": "query is required"})
+            matches = []
+            for key, value in (agent_state or {}).items():
+                value_str = json.dumps(value, default=str) if not isinstance(value, str) else value
+                if query in key.lower() or query in value_str.lower():
+                    preview = value_str[:100] + ("..." if len(value_str) > 100 else "")
+                    matches.append({"key": key, "preview": preview})
+            return json.dumps(
+                {
+                    "matches": matches[:20],
+                    "query": query,
+                    "total_searched": len(agent_state or {}),
+                }
             )
         elif is_mcp_tool(tool_name):
             if mcp_pool is None:
