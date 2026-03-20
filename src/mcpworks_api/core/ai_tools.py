@@ -9,43 +9,84 @@ from mcpworks_api.services.function import FunctionService
 PLATFORM_TOOLS: list[dict] = [
     {
         "name": "send_to_channel",
-        "description": "Send a message to a configured communication channel (discord, slack, email)",
+        "description": (
+            "Send a message to a configured communication channel. "
+            "Use this to notify users or post updates. "
+            "Example: send_to_channel(channel_type='discord', message='Deploy complete!') "
+            'Returns {"sent": true, "channel": "discord"} on success.'
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "channel_type": {
                     "type": "string",
                     "enum": ["discord", "slack", "email"],
+                    "description": "Which channel to send to: 'discord', 'slack', or 'email'",
                 },
-                "message": {"type": "string"},
+                "message": {
+                    "type": "string",
+                    "description": "The message text to send",
+                },
             },
             "required": ["channel_type", "message"],
         },
     },
     {
         "name": "get_state",
-        "description": "Read a value from persistent agent state by key",
+        "description": (
+            "Read a single value from your persistent memory by exact key name. "
+            "Use this when you know the exact key. If you don't know the key name, "
+            "use list_state_keys or search_state first. "
+            "Example: get_state(key='user_prefs') "
+            'Returns {"key": "user_prefs", "value": ...} or an error if key not found.'
+        ),
         "input_schema": {
             "type": "object",
-            "properties": {"key": {"type": "string"}},
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Exact key name to retrieve (e.g. '__goals__', 'config', 'last_run')",
+                },
+            },
             "required": ["key"],
         },
     },
     {
         "name": "set_state",
-        "description": "Write a value to persistent agent state",
+        "description": (
+            "Save a value to your persistent memory. Values survive restarts and "
+            "are available in future conversations. The value can be any JSON type: "
+            "string, number, boolean, object, or array. "
+            "Example: set_state(key='last_run', value='2026-03-20T10:00:00Z') "
+            'Returns {"key": "last_run", "stored": true} on success. '
+            "Special keys: '__soul__' (your identity), '__goals__' (your objectives), "
+            "'__heartbeat_instructions__' (what to do on next heartbeat wake)."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "key": {"type": "string"},
-                "value": {},
+                "key": {
+                    "type": "string",
+                    "description": "Key name to store under (e.g. 'config', 'last_run', '__goals__')",
+                },
+                "value": {
+                    "description": (
+                        "Value to store. Any JSON type: string, number, boolean, "
+                        "object {}, or array []"
+                    ),
+                },
             },
             "required": ["key", "value"],
         },
     },
     {
         "name": "list_state_keys",
-        "description": "List all keys in persistent agent state with their sizes",
+        "description": (
+            "List all keys stored in your persistent memory. Use this to discover "
+            "what you have saved. Takes no arguments. "
+            'Returns {"keys": ["key1", "key2", ...], "count": 5, '
+            '"total_size_bytes": 2048}.'
+        ),
         "input_schema": {
             "type": "object",
             "properties": {},
@@ -53,13 +94,23 @@ PLATFORM_TOOLS: list[dict] = [
     },
     {
         "name": "search_state",
-        "description": "Search persistent agent state by keyword. Matches against key names and string values.",
+        "description": (
+            "Search your persistent memory by keyword. Finds keys and values "
+            "containing the search term (case-insensitive). Use this when you need "
+            "to find something but don't remember the exact key name. "
+            "Example: search_state(query='project') "
+            'Returns {"matches": [{"key": "my_project", "preview": "...first 100 chars..."}], '
+            '"query": "project", "total_searched": 10}.'
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search keyword (case-insensitive substring match)",
+                    "description": (
+                        "Search keyword — matches against key names and values "
+                        "(case-insensitive substring match)"
+                    ),
                 },
             },
             "required": ["query"],
