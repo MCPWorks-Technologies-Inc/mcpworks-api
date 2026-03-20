@@ -339,7 +339,10 @@ def create_app() -> FastAPI:
     @app.get("/console", response_class=HTMLResponse, include_in_schema=False)
     async def console_page() -> HTMLResponse:
         """Serve the client console page."""
-        return HTMLResponse(content=_console_html_path.read_text())
+        return HTMLResponse(
+            content=_console_html_path.read_text(),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+        )
 
     # ORDER-016: Usage dashboard
     _dashboard_html_path = Path(__file__).parent / "static" / "dashboard.html"
