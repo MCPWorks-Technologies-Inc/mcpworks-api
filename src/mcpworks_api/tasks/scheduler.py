@@ -286,6 +286,13 @@ async def _record_failure(
     }
 
     policy = schedule.failure_policy or {"strategy": "continue"}
+    if isinstance(policy, str):
+        import json as json_mod
+
+        try:
+            policy = json_mod.loads(policy)
+        except (json_mod.JSONDecodeError, TypeError):
+            policy = {"strategy": "continue"}
     strategy = policy.get("strategy", "continue")
 
     if strategy == "auto_disable":
