@@ -1213,6 +1213,8 @@ async function tutCreateKey() {
 
 function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix, agentName) {
   idPrefix = idPrefix || 'cfg';
+  const hasKey = apiKey && apiKey !== 'null';  // pragma: allowlist secret
+  const keyPlaceholder = hasKey ? apiKey : 'YOUR_API_KEY';
   const createKey = `mcpworks-${nsName}`;
   const runKey = `mcpworks-${nsName}-run`;
   const createUrl = `https://${nsName}.create.mcpworks.io/mcp`;
@@ -1221,10 +1223,10 @@ function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix, agentName) {
   const agentUrl = agentName ? `https://${agentName}.agent.mcpworks.io/mcp` : null;
   const buildCfg = (urlField) => {
     const c = { mcpServers: {} };
-    c.mcpServers[createKey] = { type: 'http', [urlField]: createUrl, headers: { Authorization: `Bearer ${apiKey}` } };
-    c.mcpServers[runKey] = { type: 'http', [urlField]: runUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    c.mcpServers[createKey] = { type: 'http', [urlField]: createUrl, headers: { Authorization: `Bearer ${keyPlaceholder}` } };
+    c.mcpServers[runKey] = { type: 'http', [urlField]: runUrl, headers: { Authorization: `Bearer ${keyPlaceholder}` } };
     if (envKeys && envKeys.length) c.mcpServers[runKey].headers['X-MCPWorks-Env'] = envKeys.reduce((o, k) => { o[k] = `\${${k}}`; return o; }, {});
-    if (agentKey) c.mcpServers[agentKey] = { type: 'http', [urlField]: agentUrl, headers: { Authorization: `Bearer ${apiKey}` } };
+    if (agentKey) c.mcpServers[agentKey] = { type: 'http', [urlField]: agentUrl, headers: { Authorization: `Bearer ${keyPlaceholder}` } };
     return JSON.stringify(c, null, 2);
   };
   const claudeJson = buildCfg('url');
@@ -1243,16 +1245,27 @@ function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix, agentName) {
   clients.forEach((t, i) => {
     h += `<div id="${idPrefix}-${t.id}" class="config-tab-panel${i === 0 ? ' active' : ''}">`;
     h += `<div class="config-tab-hint">Add to <code style="background:var(--bg-1);padding:1px 5px;border-radius:4px;font-size:12px">${esc(t.hint)}</code></div>`;
-    h += `<div id="${idPrefix}-${t.id}-cfg" style="display:none"><div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
-    h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
-    if (t.cli) {
-      h += `<div style="margin-top:10px;font-size:12px;color:var(--text-3)">Or via CLI:</div>`;
-      h += `<div style="position:relative;margin-top:4px"><pre class="schema-block" style="margin:0"><code class="language-bash">${esc(t.cli)}</code></pre>`;
+    if (hasKey) {
+      h += `<div id="${idPrefix}-${t.id}-cfg" style="display:none"><div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
       h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
+      if (t.cli) {
+        h += `<div style="margin-top:10px;font-size:12px;color:var(--text-3)">Or via CLI:</div>`;
+        h += `<div style="position:relative;margin-top:4px"><pre class="schema-block" style="margin:0"><code class="language-bash">${esc(t.cli)}</code></pre>`;
+        h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
+      }
+      h += '</div>';
+      h += `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px" onclick="var el=document.getElementById('${idPrefix}-${t.id}-cfg');if(el.style.display==='none'){el.style.display='block';this.textContent='Hide config (contains API key)'}else{el.style.display='none';this.textContent='Reveal config (contains API key)'}">Reveal config (contains API key)</button>`;
+      h += ` <button class="btn btn-copy btn-sm" style="font-size:10px" onclick="copyText(${JSON.stringify(t.json).replace(/'/g,"\\'")},this)">copy without revealing</button></div>`;
+    } else {
+      h += `<div style="position:relative"><pre class="schema-block" style="margin:0"><code class="language-json">${esc(t.json)}</code></pre>`;
+      h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
+      if (t.cli) {
+        h += `<div style="margin-top:10px;font-size:12px;color:var(--text-3)">Or via CLI:</div>`;
+        h += `<div style="position:relative;margin-top:4px"><pre class="schema-block" style="margin:0"><code class="language-bash">${esc(t.cli)}</code></pre>`;
+        h += `<button class="btn btn-copy btn-sm" style="position:absolute;top:8px;right:8px" onclick="copyText(this.parentElement.querySelector('code').textContent,this)">copy</button></div>`;
+      }
+      h += `<div style="margin-top:6px;font-size:11px;color:var(--text-3)">Replace YOUR_API_KEY with your actual key from <a href="#" onclick="loadApiKeys();return false" style="color:var(--accent)">API Keys</a>.</div>`;
     }
-    h += '</div>';
-    h += `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px" onclick="var el=document.getElementById('${idPrefix}-${t.id}-cfg');if(el.style.display==='none'){el.style.display='block';this.textContent='Hide config (contains API key)'}else{el.style.display='none';this.textContent='Reveal config (contains API key)'}">Reveal config (contains API key)</button>`;
-    h += ` <button class="btn btn-copy btn-sm" style="font-size:10px" onclick="copyText(${JSON.stringify(t.json).replace(/'/g,"\\'")},this)">copy without revealing</button></div>`;
     h += '</div>';
   });
   h += '</div>';
@@ -1334,8 +1347,8 @@ async function loadNamespace(nsName) {
       <div class="detail-meta">Calls: <span>${ns.call_count ?? 0}</span></div>
       ${ns.network_allowlist?.length ? `<div class="detail-meta">Allowlist: <span>${ns.network_allowlist.map(ip => esc(ip)).join(', ')}</span></div>` : ''}
       <div class="section-label" style="margin-top:18px">MCP Configuration</div>
-      ${nsAgent ? `<div style="margin-bottom:8px"><span class="tag" style="background:rgba(139,92,246,0.15);color:#a78bfa">Agent: ${esc(nsAgent.display_name || nsAgent.name)}</span> <span class="cell-dim" style="font-size:12px">Webhook endpoint included</span></div>` : ''}
-      ${renderMcpConfigTabs(nsName, 'YOUR_API_KEY', allEnvKeys, 'ns', nsAgent ? nsAgent.name : null)}
+      ${nsAgent ? `<div style="margin-bottom:8px"><a href="#" onclick="loadAgent('${esc(nsAgent.id)}');return false" class="tag" style="background:rgba(139,92,246,0.15);color:#a78bfa;text-decoration:none;cursor:pointer">Agent: ${esc(nsAgent.display_name || nsAgent.name)}</a> <span class="cell-dim" style="font-size:12px">Webhook endpoint included</span></div>` : ''}
+      ${renderMcpConfigTabs(nsName, null, allEnvKeys, 'ns', nsAgent ? nsAgent.name : null)}
       ${envHtml}
       <div class="section-label" style="margin-top:18px">Services</div></div>${svcHtml}
       <div class="danger-zone">
