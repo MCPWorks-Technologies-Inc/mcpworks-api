@@ -2467,37 +2467,37 @@ async function removeMcpServer(agentId, serverName) {
 let _telemetrySource = null;
 
 function openTelemetryWindow(agentId) {
-  const url = `/v1/agents/${encodeURIComponent(agentId)}/telemetry?token=${encodeURIComponent(TOKEN)}`;
-  const w = window.open('', `telemetry_${agentId}`, 'width=800,height=600,scrollbars=yes,resizable=yes');
-  w.document.write(`<!DOCTYPE html><html><head><title>Telemetry: ${agentId}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#e6edf3;font:13px/1.6 'SF Mono',Monaco,Consolas,monospace;padding:12px}
-.ev{padding:4px 8px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline}
-.badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;flex-shrink:0}
-.ts{color:#6b7280;font-size:11px;flex-shrink:0}.detail{color:#8b949e;word-break:break-all}
-.text{color:#c9d1d9}.connected{color:#3fb950;text-align:center;padding:12px}</style></head>
-<body><div class="connected">Connecting to ${agentId}...</div><div id="log"></div>
-<script>
-var log=document.getElementById('log');
-var colors={orchestration_start:'#6b7280',completion:'#6b7280',ai_thinking:'#3b82f6',ai_text:'#3b82f6',tool_call:'#eab308',tool_result:'#22c55e',error:'#ef4444'};
-var es=new EventSource('${url}');
-es.onopen=function(){document.querySelector('.connected').textContent='Connected — waiting for activity...'};
-es.onmessage=function(e){
-  try{var d=JSON.parse(e.data);var t=d.event_type||'event';var ts=d.timestamp?new Date(d.timestamp*1000).toLocaleTimeString():'';
-  var info=d.data||{};var detail='';
-  if(t==='tool_call')detail=info.name||'';
-  else if(t==='tool_result')detail=(info.name||'')+': '+(info.result_preview||'').slice(0,120);
-  else if(t==='ai_text')detail='"'+(info.text||'').slice(0,200)+'"';
-  else if(t==='ai_thinking')detail='iteration '+(info.iteration||0);
-  else if(t==='error')detail=info.message||'';
-  else if(t==='orchestration_start')detail='trigger='+(info.trigger_type||'')+' tools='+(info.tools_count||0);
-  else if(t==='completion')detail='success='+(info.success||false)+' iterations='+(info.iterations||0);
-  var color=colors[t]||'#6b7280';
-  var div=document.createElement('div');div.className='ev';
-  div.innerHTML='<span class="ts">'+ts+'</span><span class="badge" style="background:'+color+'20;color:'+color+'">'+t+'</span><span class="detail">'+detail+'</span>';
-  log.appendChild(div);log.scrollTop=log.scrollHeight;
-  document.querySelector('.connected').style.display='none'}catch(x){}};
-es.onerror=function(){var d=document.createElement('div');d.className='ev';d.innerHTML='<span class="badge" style="background:#ef444420;color:#ef4444">disconnected</span><span class="detail">Reconnecting...</span>';log.appendChild(d)};
-</script></body></html>`);
+  var telUrl = '/v1/agents/' + encodeURIComponent(agentId) + '/telemetry?token=' + encodeURIComponent(TOKEN);
+  var w = window.open('', 'telemetry_' + agentId, 'width=800,height=600,scrollbars=yes,resizable=yes');
+  var html = '<!DOCTYPE html><html><head><title>Telemetry: ' + esc(agentId) + '</title>' +
+    '<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#e6edf3;font:13px/1.6 "SF Mono",Monaco,Consolas,monospace;padding:12px}' +
+    '.ev{padding:4px 8px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline}' +
+    '.badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;flex-shrink:0}' +
+    '.ts{color:#6b7280;font-size:11px;flex-shrink:0}.detail{color:#8b949e;word-break:break-all}' +
+    '.connected{color:#3fb950;text-align:center;padding:12px}</style></head>' +
+    '<body><div class="connected">Connecting to ' + esc(agentId) + '...</div><div id="log"></div>' +
+    '<sc' + 'ript>' +
+    'var log=document.getElementById("log");' +
+    'var colors={orchestration_start:"#6b7280",completion:"#6b7280",ai_thinking:"#3b82f6",ai_text:"#3b82f6",tool_call:"#eab308",tool_result:"#22c55e",error:"#ef4444"};' +
+    'var es=new EventSource("' + telUrl + '");' +
+    'es.onopen=function(){document.querySelector(".connected").textContent="Connected — waiting for activity..."};' +
+    'es.onmessage=function(e){try{var d=JSON.parse(e.data);var t=d.event_type||"event";var ts=d.timestamp?new Date(d.timestamp*1000).toLocaleTimeString():"";' +
+    'var info=d.data||{};var detail="";' +
+    'if(t==="tool_call")detail=info.name||"";' +
+    'else if(t==="tool_result")detail=(info.name||"")+": "+(info.result_preview||"").slice(0,120);' +
+    'else if(t==="ai_text")detail=(info.text||"").slice(0,200);' +
+    'else if(t==="ai_thinking")detail="iteration "+(info.iteration||0);' +
+    'else if(t==="error")detail=info.message||"";' +
+    'else if(t==="orchestration_start")detail="trigger="+(info.trigger_type||"")+" tools="+(info.tools_count||0);' +
+    'else if(t==="completion")detail="success="+(info.success||false)+" iterations="+(info.iterations||0);' +
+    'var color=colors[t]||"#6b7280";' +
+    'var div=document.createElement("div");div.className="ev";' +
+    'div.innerHTML="<span class=ts>"+ts+"</span><span class=badge style=\\"background:"+color+"20;color:"+color+"\\">"+t+"</span><span class=detail>"+detail+"</span>";' +
+    'log.appendChild(div);log.scrollTop=log.scrollHeight;' +
+    'document.querySelector(".connected").style.display="none"}catch(x){}};' +
+    'es.onerror=function(){var d=document.createElement("div");d.className="ev";d.innerHTML="<span class=badge style=\\"background:#ef444420;color:#ef4444\\">disconnected</span><span class=detail>Reconnecting...</span>";log.appendChild(d)};' +
+    '</sc' + 'ript></body></html>';
+  w.document.write(html);
   w.document.close();
 }
 
