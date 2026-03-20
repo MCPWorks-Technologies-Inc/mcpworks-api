@@ -50,24 +50,29 @@ from mcpworks_api.services.namespace import (
 
 VALID_SCOPES = frozenset({"read", "write", "execute"})
 
-DICT_ARGUMENT_KEYS = frozenset(
+JSON_ARGUMENT_KEYS = frozenset(
     {
         "input_schema",
         "output_schema",
         "config",
         "failure_policy",
         "servers",
+        "requirements",
+        "tags",
+        "required_env",
+        "optional_env",
     }
 )
 
 
 def _coerce_json_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Defensively parse arguments that should be dicts but may arrive as JSON strings.
+    """Defensively parse arguments that should be dicts/lists but may arrive as JSON strings.
 
-    Some MCP clients serialize nested objects as strings instead of native JSON
-    objects. This silently parses them so handler methods always receive dicts.
+    Some MCP clients serialize nested objects and arrays as strings instead of
+    native JSON. This silently parses them so handler methods always receive
+    the correct types.
     """
-    for key in DICT_ARGUMENT_KEYS:
+    for key in JSON_ARGUMENT_KEYS:
         val = arguments.get(key)
         if isinstance(val, str):
             with contextlib.suppress(json.JSONDecodeError, ValueError):
