@@ -336,16 +336,26 @@ async def _execute_heartbeat(agent: Agent) -> None:
         agent_service = AgentService(db)
         agent_state = await agent_service.get_all_state(agent.id)
 
+    from mcpworks_api.core.conversation_memory import load_history
+
     soul = agent_state.get("__soul__", "")
     goals = agent_state.get("__goals__", "")
+    instructions = agent_state.get("__heartbeat_instructions__", "")
+    summary, _ = load_history(agent_state)
 
     trigger_context = "Heartbeat tick. You are waking up on your configured interval.\n"
     if soul:
-        trigger_context += f"\nYour soul:\n{soul}\n"
+        trigger_context += f"\nYour identity:\n{soul}\n"
     if goals:
         trigger_context += f"\nYour current goals:\n{goals}\n"
+    if instructions:
+        trigger_context += f"\nYour instructions for this heartbeat:\n{instructions}\n"
+    if summary:
+        trigger_context += f"\nRecent conversation context:\n{summary}\n"
     trigger_context += (
-        "\nReview your state and decide if any actions are needed. "
+        "\nReview your state and instructions, then decide what actions to take. "
+        "You can update __heartbeat_instructions__ via set_state to change "
+        "what you do on your next heartbeat. "
         "If nothing needs doing, respond briefly that all is well."
     )
 
