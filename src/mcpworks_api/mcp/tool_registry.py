@@ -35,7 +35,8 @@ class ToolDef:
         else:
             desc = self.description
         if format_kwargs:
-            desc = desc.format_map(format_kwargs)
+            for key, val in format_kwargs.items():
+                desc = desc.replace("{" + key + "}", str(val))
         return {
             "name": self.name,
             "description": desc,
