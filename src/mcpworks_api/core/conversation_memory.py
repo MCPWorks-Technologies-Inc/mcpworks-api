@@ -6,7 +6,6 @@ context. When turn count exceeds a threshold, older turns are summarized
 by the LLM and replaced with a compact summary.
 """
 
-import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -137,7 +136,6 @@ def needs_compaction(agent_state: dict[str, Any]) -> bool:
 
 
 async def compact_history(
-    agent_id: UUID,
     account_id: UUID,
     agent_name: str,
     ai_engine: str,

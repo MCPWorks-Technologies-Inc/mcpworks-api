@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
-from mcpworks_api.core.context_budget import estimate_context_budget
 from mcpworks_api.core.ai_tools import (
     PLATFORM_TOOL_NAMES,
     augment_system_prompt,
@@ -26,6 +25,7 @@ from mcpworks_api.core.ai_tools import (
     format_available_tools,
     parse_tool_name,
 )
+from mcpworks_api.core.context_budget import estimate_context_budget
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
 from mcpworks_api.core.mcp_client import McpServerPool, is_mcp_tool
