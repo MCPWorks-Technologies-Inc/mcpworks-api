@@ -1351,12 +1351,29 @@ class CreateMCPHandler:
         agent_name: str,
         engine: str,
         model: str,
-        api_key: str,
+        api_key: str | None = None,
         system_prompt: str | None = None,
         auto_channel: str | None = None,
     ) -> MCPToolResult:
         """Configure an AI engine for an agent."""
         from mcpworks_api.services.agent_service import _UNSET
+
+        if not api_key:
+            svc = AgentService(self.db)
+            agent_check = await svc.get_agent(self.account.id, agent_name)
+            if not agent_check.ai_api_key_encrypted:
+                return MCPToolResult(
+                    content=[
+                        MCPContent(
+                            text=json.dumps(
+                                {
+                                    "error": "api_key is required when configuring AI for the first time (no existing key found)"
+                                }
+                            )
+                        )
+                    ],
+                    isError=True,
+                )
 
         service = AgentService(self.db)
         try:
