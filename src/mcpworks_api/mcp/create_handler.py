@@ -11,6 +11,7 @@ Exposes 6 additional tools (agent-enabled tiers only):
 - make_agent, list_agents, describe_agent, start_agent, stop_agent, destroy_agent
 """
 
+import contextlib
 import json
 import secrets
 from typing import Any
@@ -48,6 +49,30 @@ from mcpworks_api.services.namespace import (
 )
 
 VALID_SCOPES = frozenset({"read", "write", "execute"})
+
+DICT_ARGUMENT_KEYS = frozenset(
+    {
+        "input_schema",
+        "output_schema",
+        "config",
+        "failure_policy",
+        "servers",
+    }
+)
+
+
+def _coerce_json_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Defensively parse arguments that should be dicts but may arrive as JSON strings.
+
+    Some MCP clients serialize nested objects as strings instead of native JSON
+    objects. This silently parses them so handler methods always receive dicts.
+    """
+    for key in DICT_ARGUMENT_KEYS:
+        val = arguments.get(key)
+        if isinstance(val, str):
+            with contextlib.suppress(json.JSONDecodeError, ValueError):
+                arguments[key] = json.loads(val)
+    return arguments
 
 
 class CreateMCPHandler:
@@ -406,6 +431,7 @@ class CreateMCPHandler:
         if not handler:
             raise ValueError(f"Unknown tool: {name}")
 
+        arguments = _coerce_json_arguments(arguments)
         return await handler(**arguments)
 
     async def _handle_tools_list(self, request_id) -> JSONRPCResponse:
