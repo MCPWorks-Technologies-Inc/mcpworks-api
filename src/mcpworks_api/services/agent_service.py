@@ -946,7 +946,13 @@ class AgentService:
                 agent.id, agent.account_id, agent.name, "user", user_message, tier, "chat"
             )
             await append_turn(
-                agent.id, agent.account_id, agent.name, "assistant", assistant_response, tier, "chat"
+                agent.id,
+                agent.account_id,
+                agent.name,
+                "assistant",
+                assistant_response,
+                tier,
+                "chat",
             )
         except Exception:
             logger.warning("chat_turn_save_failed", agent_name=agent.name)

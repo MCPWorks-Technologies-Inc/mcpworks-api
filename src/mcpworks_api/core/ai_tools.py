@@ -69,7 +69,9 @@ PLATFORM_TOOLS: list[dict] = [
 
 PLATFORM_TOOL_NAMES = frozenset(t["name"] for t in PLATFORM_TOOLS)
 
-PUBLIC_SAFE_PLATFORM_TOOLS = frozenset(["get_state", "send_to_channel", "list_state_keys", "search_state"])
+PUBLIC_SAFE_PLATFORM_TOOLS = frozenset(
+    ["get_state", "send_to_channel", "list_state_keys", "search_state"]
+)
 
 
 async def build_tool_definitions(
