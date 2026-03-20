@@ -200,7 +200,14 @@ async def get_agent(
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail={"error": "NOT_FOUND", "message": str(e)})
 
-    return AgentResponse.model_validate(agent)
+    from mcpworks_api.models.namespace import Namespace
+
+    ns_result = await db.execute(select(Namespace).where(Namespace.id == agent.namespace_id))
+    ns = ns_result.scalar_one_or_none()
+
+    resp = AgentResponse.model_validate(agent)
+    resp.namespace_name = ns.name if ns else None
+    return resp
 
 
 @router.post(
