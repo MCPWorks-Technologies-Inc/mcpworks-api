@@ -767,12 +767,11 @@ class AgentService:
 
         import uuid as uuid_mod
 
-        from mcpworks_api.core.telemetry import make_event, telemetry_bus
-
         from mcpworks_api.core.conversation_memory import (
             build_history_messages,
             load_history,
         )
+        from mcpworks_api.core.telemetry import make_event, telemetry_bus
 
         effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
 
@@ -958,7 +957,6 @@ class AgentService:
                 # Re-read state to include the turns we just appended
                 fresh_state = await self.get_all_state(agent.id)
                 await compact_history(
-                    agent.id,
                     agent.account_id,
                     agent.name,
                     agent.ai_engine,
