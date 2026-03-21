@@ -2469,8 +2469,8 @@ let _telemetrySource = null;
 
 function openTelemetryWindow(agentId, agentName) {
   var displayName = agentName || agentId;
-  var telBase = '/v1/agents/' + encodeURIComponent(agentId) + '/telemetry';
-  var w = window.open('', 'telemetry_' + agentId, 'width=800,height=600,scrollbars=yes,resizable=yes');
+  var telBase = API + '/v1/agents/' + encodeURIComponent(agentId) + '/telemetry';
+  var w = window.open('', 'telemetry_' + agentId + '_' + Date.now(), 'width=800,height=600,scrollbars=yes,resizable=yes');
   var html = '<!DOCTYPE html><html><head><title>' + esc(displayName) + ' — Live Telemetry</title>' +
     '<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#e6edf3;font:13px/1.6 "SF Mono",Monaco,Consolas,monospace;padding:12px}' +
     '.ev{padding:4px 8px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline}' +
@@ -2481,11 +2481,14 @@ function openTelemetryWindow(agentId, agentName) {
     '<sc' + 'ript>' +
     'var log=document.getElementById("log");' +
     'var colors={orchestration_start:"#6b7280",completion:"#6b7280",ai_thinking:"#3b82f6",ai_text:"#3b82f6",tool_call:"#eab308",tool_result:"#22c55e",error:"#ef4444"};' +
-    'function getToken(){try{return window.opener&&window.opener.TOKEN?window.opener.TOKEN:""}catch(e){return""}}' +
+    'var _parentOrigin="' + API + '";' +
+    'var _telBase="' + telBase + '";' +
+    'function getToken(){try{if(window.opener&&window.opener.TOKEN)return window.opener.TOKEN}catch(e){}return"' + (TOKEN || '') + '"}' +
     'function connect(){var tk=getToken();if(!tk){document.querySelector(".connected").textContent="Token expired — refresh the console and reopen";return}' +
-    'var es=new EventSource("' + telBase + '?token="+encodeURIComponent(tk));' +
+    'var es=new EventSource(_telBase+"?token="+encodeURIComponent(tk));' +
     'es.onopen=function(){document.querySelector(".connected").textContent="Connected — waiting for activity..."};' +
-    'es.onmessage=function(e){try{var d=JSON.parse(e.data);var t=d.event_type||"event";var ts=d.timestamp?new Date(d.timestamp*1000).toLocaleTimeString():"";' +
+    'var evTypes=["orchestration_start","ai_thinking","ai_text","tool_call","tool_result","error","completion"];' +
+    'function handleEv(e){try{var d=JSON.parse(e.data);var t=d.event_type||e.type||"event";var ts=d.timestamp?new Date(d.timestamp*1000).toLocaleTimeString():"";' +
     'var info=d.data||{};var detail="";' +
     'if(t==="tool_call")detail=info.name||"";' +
     'else if(t==="tool_result")detail=(info.name||"")+": "+(info.result_preview||"").slice(0,120);' +
@@ -2498,7 +2501,9 @@ function openTelemetryWindow(agentId, agentName) {
     'var div=document.createElement("div");div.className="ev";' +
     'div.innerHTML="<span class=ts>"+ts+"</span><span class=badge style=\\"background:"+color+"20;color:"+color+"\\">"+t+"</span><span class=detail>"+detail+"</span>";' +
     'log.appendChild(div);log.scrollTop=log.scrollHeight;' +
-    'document.querySelector(".connected").style.display="none"}catch(x){}};' +
+    'document.querySelector(".connected").style.display="none"}catch(x){}}' +
+    'evTypes.forEach(function(et){es.addEventListener(et,handleEv)});' +
+    'es.onmessage=handleEv;' +
     'es.onerror=function(){es.close();var d=document.createElement("div");d.className="ev";d.innerHTML="<span class=badge style=\\"background:#ef444420;color:#ef4444\\">disconnected</span><span class=detail>Reconnecting with fresh token...</span>";log.appendChild(d);setTimeout(connect,3000)};' +
     '}connect();' +
     '</sc' + 'ript></body></html>';
