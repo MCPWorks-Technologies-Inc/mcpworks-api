@@ -432,6 +432,10 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
   <div id="dashboard" class="hidden">
 
     <div class="stats-grid">
+      <div class="stat-card" onclick="loadAgents()">
+        <div class="stat-num" id="stat-agents">&mdash;</div>
+        <div class="stat-label">Agents</div>
+      </div>
       <div class="stat-card" onclick="loadNamespaces()">
         <div class="stat-num" id="stat-namespaces">&mdash;</div>
         <div class="stat-label">Namespaces</div>
@@ -447,10 +451,6 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
       <div class="stat-card" onclick="loadApiKeys()">
         <div class="stat-num" id="stat-keys">&mdash;</div>
         <div class="stat-label">API Keys</div>
-      </div>
-      <div class="stat-card" onclick="loadAgents()">
-        <div class="stat-num" id="stat-agents">&mdash;</div>
-        <div class="stat-label">Agents</div>
       </div>
     </div>
 
