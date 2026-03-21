@@ -479,6 +479,7 @@ pre.code-block code.hljs { background: var(--bg-0); padding: 16px; border-radius
 
 <script>
 let TOKEN = localStorage.getItem('mcpworks_token');
+window.TOKEN = TOKEN;
 let USER_EMAIL = localStorage.getItem('mcpworks_email');
 const API = window.location.origin;
 
@@ -508,7 +509,7 @@ function setInsights(html) {
     const hp = new URLSearchParams(window.location.hash.substring(1));
     const ht = hp.get('access_token');
     if (ht) {
-      TOKEN = ht;
+      TOKEN = ht; window.TOKEN = TOKEN;
       localStorage.setItem('mcpworks_token', ht);
       history.replaceState(null, '', window.location.pathname);
     }
@@ -578,7 +579,7 @@ async function doLogin() {
       throw new Error(Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('. ') : data.message || data.detail?.message || data.detail || 'Login failed');
     }
     const data = await res.json();
-    TOKEN = data.access_token;
+    TOKEN = data.access_token; window.TOKEN = TOKEN;
     USER_EMAIL = email;
     localStorage.setItem('mcpworks_token', TOKEN);
     localStorage.setItem('mcpworks_email', email);
@@ -628,7 +629,7 @@ async function doVerifyPin() {
       throw new Error(data.detail?.message || data.detail || data.message || 'Verification failed');
     }
     if (data.access_token) {
-      TOKEN = data.access_token;
+      TOKEN = data.access_token; window.TOKEN = TOKEN;
       localStorage.setItem('mcpworks_token', TOKEN);
     }
     initSession();
@@ -677,7 +678,7 @@ async function doRegister() {
       throw new Error(msg);
     }
     if (data.access_token) {
-      TOKEN = data.access_token;
+      TOKEN = data.access_token; window.TOKEN = TOKEN;
       USER_EMAIL = email;
       localStorage.setItem('mcpworks_token', TOKEN);
       localStorage.setItem('mcpworks_email', email);
@@ -700,7 +701,7 @@ async function doRegister() {
 }
 
 function doLogout() {
-  TOKEN = null;
+  TOKEN = null; window.TOKEN = null;
   USER_EMAIL = null;
   localStorage.removeItem('mcpworks_token');
   localStorage.removeItem('mcpworks_email');
