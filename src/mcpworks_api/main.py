@@ -284,7 +284,8 @@ def create_app() -> FastAPI:
         """Serve the admin dashboard — domain-restricted and auth-gated."""
         host = request.headers.get("host", "").lower().split(":")[0]
         is_local = host in ("localhost", "127.0.0.1", "0.0.0.0")
-        if not is_local and host not in _admin_domains:
+        is_wireguard = host.startswith("10.0.0.")
+        if not is_local and not is_wireguard and host not in _admin_domains:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
 
         from mcpworks_api.dependencies import get_current_user_id, require_admin
