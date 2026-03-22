@@ -2597,17 +2597,21 @@ async def list_all_agents(
         from datetime import UTC, datetime
 
         cutoff = datetime.now(UTC) - timedelta(days=1)
+        from sqlalchemy import case
+
         er_q = await db.execute(
             select(
                 AgentRun.agent_id,
                 func.count(AgentRun.id).label("total"),
-                func.count(AgentRun.id).filter(AgentRun.status == "failed").label("failed"),
+                func.sum(case((AgentRun.status == "failed", 1), else_=0)).label("failed"),
             )
             .where(AgentRun.agent_id.in_(agent_ids), AgentRun.created_at >= cutoff)
             .group_by(AgentRun.agent_id)
         )
         for agent_id, run_total, failed in er_q.all():
-            error_rates[agent_id] = round(failed / run_total * 100, 1) if run_total > 0 else 0
+            error_rates[agent_id] = (
+                round((failed or 0) / run_total * 100, 1) if run_total > 0 else 0
+            )
 
     return {
         "agents": [
@@ -2704,13 +2708,13 @@ async def admin_agent_detail(
     )
     owner_email = owner_result.scalar_one_or_none() or "unknown"
 
-    account_result = await db.execute(select(Account).where(Account.id == agent.account_id))
-    account = account_result.scalar_one_or_none()
-    tier = (
-        account.user.effective_tier
-        if account and hasattr(account, "user") and account.user
-        else "unknown"
+    tier_result = await db.execute(
+        select(User.tier, User.tier_override)
+        .join(Account, Account.user_id == User.id)
+        .where(Account.id == agent.account_id)
     )
+    tier_row = tier_result.one_or_none()
+    tier = (tier_row[1] or tier_row[0]) if tier_row else "unknown"
 
     runs_result = await db.execute(
         select(AgentRun)
