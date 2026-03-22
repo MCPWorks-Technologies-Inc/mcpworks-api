@@ -123,6 +123,7 @@ tailwind.config = {
   .agent-dot.stopped { background: #6b7280; }
   .agent-dot.error { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
   .agent-dot.creating { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.4); }
+  .hover-row:hover td { background: #1f293780; }
   /* Resource utilization bars */
   .agent-res-bar-track { height: 6px; background: #374151; border-radius: 3px; overflow: hidden; }
   .agent-res-bar { height: 6px; border-radius: 3px; transition: width 0.4s ease; }
@@ -1949,10 +1950,31 @@ async function loadSystemHealth() {
     const inProgress = Object.values(sandbox.in_progress || {}).reduce((s, n) => s + n, 0);
     const violations = Object.values(sandbox.violations_by_tier || {}).reduce((s, n) => s + n, 0);
 
+    // Fetch infrastructure data in parallel
+    const [resources, dbStats, redisStats] = await Promise.all([
+      apiFetch('/v1/admin/system/resources').catch(() => null),
+      apiFetch('/v1/admin/system/database').catch(() => null),
+      apiFetch('/v1/admin/system/redis').catch(() => null),
+    ]);
+
+    const rsc = resources || {};
+    const mem = rsc.memory || {};
+    const disk = rsc.disk || {};
+    const load = rsc.load_averages || {};
+    const memPct = mem.total_mb ? ((mem.used_mb || 0) / mem.total_mb * 100).toFixed(1) : 0;
+    const diskPct = disk.total_gb ? ((disk.used_gb || 0) / disk.total_gb * 100).toFixed(1) : 0;
+
+    const dbs = dbStats || {};
+    const pool = dbs.pool || {};
+    const tables = (dbs.tables || []).slice(0, 8);
+
+    const rds = redisStats || {};
+    const rdsMem = rds.memory || {};
+    const rdsStats2 = rds.stats || {};
+
     el.innerHTML = `
       <div class="fade-in">
-        <div class="grid grid-cols-3 gap-6">
-
+        <div class="grid grid-cols-3 gap-6 mb-6">
           <div>
             <div class="section-heading">Components</div>
             <div class="card p-4">
@@ -1964,7 +1986,6 @@ async function loadSystemHealth() {
               </div>
             </div>
           </div>
-
           <div>
             <div class="section-heading">Security Events</div>
             <div class="card p-4">
@@ -1972,9 +1993,8 @@ async function loadSystemHealth() {
               <button class="btn-ghost mt-3 w-full" style="font-size:12px;padding:6px;" onclick="showTab('security')">View all security events</button>
             </div>
           </div>
-
           <div>
-            <div class="section-heading">Sandbox (compact)</div>
+            <div class="section-heading">Sandbox</div>
             <div class="card p-4">
               <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
                 <span class="text-gray-500 text-sm">Total executions</span>
@@ -1988,10 +2008,83 @@ async function loadSystemHealth() {
                 <span class="text-gray-500 text-sm">Violations</span>
                 <span style="color:${violations > 0 ? '#f87171' : '#4ade80'};font-weight:600;">${violations}</span>
               </div>
-              <button class="btn-ghost mt-3 w-full" style="font-size:12px;padding:6px;" onclick="showTab('sandbox')">View sandbox details</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6 mb-6">
+          <div>
+            <div class="section-heading">Host Resources</div>
+            <div class="card p-4">
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Load (1/5/15)</span>
+                <span class="text-gray-300 text-sm">${load.load_1m ?? '-'} / ${load.load_5m ?? '-'} / ${load.load_15m ?? '-'}</span>
+              </div>
+              <div class="py-2" style="border-bottom:1px solid #374151;">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-gray-500 text-sm">Memory</span>
+                  <span class="text-gray-300 text-xs">${mem.used_mb ?? 0} / ${mem.total_mb ?? 0} MB (${memPct}%)</span>
+                </div>
+                <div class="agent-res-bar-track"><div class="agent-res-bar" style="background:${memPct > 80 ? '#f87171' : '#2563eb'};width:${memPct}%"></div></div>
+              </div>
+              <div class="py-2" style="border-bottom:1px solid #374151;">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-gray-500 text-sm">Disk</span>
+                  <span class="text-gray-300 text-xs">${disk.used_gb ?? 0} / ${disk.total_gb ?? 0} GB (${diskPct}%)</span>
+                </div>
+                <div class="agent-res-bar-track"><div class="agent-res-bar" style="background:${diskPct > 85 ? '#f87171' : '#7c3aed'};width:${diskPct}%"></div></div>
+              </div>
+              <div class="flex items-center justify-between py-2">
+                <span class="text-gray-500 text-sm">Uptime</span>
+                <span class="text-gray-300 text-sm">${rsc.uptime ? formatUptime(rsc.uptime) : '-'}</span>
+              </div>
             </div>
           </div>
 
+          <div>
+            <div class="section-heading">Database</div>
+            <div class="card p-4">
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Pool (in/out/overflow)</span>
+                <span class="text-gray-300 text-sm">${pool.checked_in ?? '-'} / ${pool.checked_out ?? '-'} / ${pool.overflow ?? '-'}</span>
+              </div>
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">DB Size</span>
+                <span class="text-gray-300 text-sm">${dbs.db_size ?? '-'}</span>
+              </div>
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Active Connections</span>
+                <span class="text-gray-300 text-sm">${dbs.active_connections ?? '-'}</span>
+              </div>
+              ${tables.length ? '<div class="text-gray-500 text-xs mt-2 mb-1">Top Tables</div>' + tables.map(t => '<div class="flex items-center justify-between py-1"><span class="text-gray-400 text-xs">' + esc(t.table) + '</span><span class="text-gray-500 text-xs">' + (t.rows ?? '-') + ' rows · ' + esc(t.size || '-') + '</span></div>').join('') : ''}
+            </div>
+          </div>
+
+          <div>
+            <div class="section-heading">Redis</div>
+            <div class="card p-4">
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Memory Used</span>
+                <span class="text-gray-300 text-sm">${rdsMem.used_human ?? rdsMem.used_mb ?? '-'}</span>
+              </div>
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Peak Memory</span>
+                <span class="text-gray-300 text-sm">${rdsMem.peak_human ?? '-'}</span>
+              </div>
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Total Keys</span>
+                <span class="text-gray-300 text-sm">${rds.total_keys ?? '-'}</span>
+              </div>
+              <div class="flex items-center justify-between py-2" style="border-bottom:1px solid #374151;">
+                <span class="text-gray-500 text-sm">Commands/sec</span>
+                <span class="text-gray-300 text-sm">${rdsStats2.instantaneous_ops_per_sec ?? '-'}</span>
+              </div>
+              <div class="flex items-center justify-between py-2">
+                <span class="text-gray-500 text-sm">Hit Rate</span>
+                <span class="text-gray-300 text-sm">${rdsStats2.hit_rate != null ? rdsStats2.hit_rate + '%' : '-'}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -2115,16 +2208,80 @@ async function loadAgentFleet() {
       return;
     }
 
-    contentEl.innerHTML = `
-      <div class="section-heading mb-3">Agent Lookup</div>
-      <div class="card p-4 text-gray-500 text-sm">
-        Use the search above to look up an agent by ID or owner email, then view its details and take actions.
-      </div>
-    `;
+    const agents = await apiFetch('/v1/admin/agents?page=1&page_size=50');
+    const agentList = agents.agents || [];
+    if (!agentList.length) {
+      contentEl.innerHTML = '<div class="card p-4 text-gray-500 text-sm">No agents found.</div>';
+    } else {
+      contentEl.innerHTML = `
+        <div class="section-heading mb-3">All Agents (${agents.total})</div>
+        <table style="width:100%">
+          <thead><tr><th></th><th>Name</th><th>Owner</th><th>AI Model</th><th>Schedules</th><th>Error Rate</th><th>Last Run</th><th>Created</th><th></th></tr></thead>
+          <tbody>${agentList.map(a => `<tr onclick="searchAgentByIdDirect('${esc(a.id)}')" style="cursor:pointer;" class="hover-row">
+            <td>${agentDot(a.status)}</td>
+            <td class="text-white font-semibold text-sm">${esc(a.display_name || a.name)}<div class="text-gray-500 text-xs">${esc(a.name)}</div></td>
+            <td class="text-gray-400 text-xs">${esc(a.owner_email)}</td>
+            <td class="text-gray-400 text-xs">${esc(a.ai_model || '-')}</td>
+            <td class="text-gray-300 text-sm">${a.schedule_count || 0}</td>
+            <td class="text-sm" style="color:${a.error_rate_24h > 20 ? '#f87171' : a.error_rate_24h > 0 ? '#fbbf24' : '#4ade80'}">${a.error_rate_24h || 0}%</td>
+            <td class="text-gray-400 text-xs">${a.last_run_at ? fmtDateTime(a.last_run_at) : 'never'}</td>
+            <td class="text-gray-500 text-xs">${fmtDate(a.created_at)}</td>
+            <td><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="event.stopPropagation();openAdminTelemetry('${esc(a.id)}','${esc(a.name)}')">Telemetry</button></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      `;
+    }
   } catch (e) {
     overviewEl.innerHTML = `<div class="metric-card text-red-400 text-sm">Failed to load fleet: ${esc(e.message)}</div>`;
     document.getElementById('agents-content').innerHTML = '';
   }
+}
+
+function searchAgentByIdDirect(id) {
+  document.getElementById('agent-search-input').value = id;
+  searchAgentById();
+}
+
+function openAdminTelemetry(agentId, agentName) {
+  var telBase = API + '/v1/agents/' + encodeURIComponent(agentId) + '/telemetry';
+  var w = window.open('', 'admin_tel_' + agentId + '_' + Date.now(), 'width=800,height=600,scrollbars=yes,resizable=yes');
+  var html = '<!DOCTYPE html><html><head><title>' + esc(agentName) + ' — Telemetry</title>' +
+    '<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#e6edf3;font:13px/1.6 monospace;padding:12px}' +
+    '.ev{padding:4px 8px;border-bottom:1px solid #21262d;display:flex;gap:8px;align-items:baseline}' +
+    '.badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;flex-shrink:0}' +
+    '.ts{color:#6b7280;font-size:11px;flex-shrink:0}.detail{color:#8b949e;word-break:break-all}' +
+    '.connected{color:#3fb950;text-align:center;padding:12px}</style></head>' +
+    '<body><div class="connected">Connecting to ' + esc(agentName) + '...</div><div id="log"></div>' +
+    '<sc' + 'ript>' +
+    'var log=document.getElementById("log");' +
+    'var colors={orchestration_start:"#6b7280",completion:"#6b7280",ai_thinking:"#3b82f6",ai_text:"#3b82f6",tool_call:"#eab308",tool_result:"#22c55e",error:"#ef4444"};' +
+    'var _telBase="' + telBase + '";' +
+    'function connect(){var tk="' + (TOKEN || '') + '";' +
+    'if(!tk){document.querySelector(".connected").textContent="No token";return}' +
+    'var es=new EventSource(_telBase+"?token="+encodeURIComponent(tk));' +
+    'es.onopen=function(){document.querySelector(".connected").textContent="Connected — waiting for activity..."};' +
+    'var evTypes=["orchestration_start","ai_thinking","ai_text","tool_call","tool_result","error","completion"];' +
+    'function handleEv(e){try{var d=JSON.parse(e.data);var t=d.event_type||e.type||"event";var ts=d.timestamp?new Date(d.timestamp*1000).toLocaleTimeString():"";' +
+    'var info=d.data||{};var detail="";' +
+    'if(t==="tool_call")detail=info.name||"";' +
+    'else if(t==="tool_result")detail=(info.name||"")+": "+(info.result_preview||"").slice(0,120);' +
+    'else if(t==="ai_text")detail=(info.text||"").slice(0,200);' +
+    'else if(t==="ai_thinking")detail="iteration "+(info.iteration||0);' +
+    'else if(t==="error")detail=info.message||"";' +
+    'else if(t==="orchestration_start")detail="trigger="+(info.trigger_type||"")+" tools="+(info.tools_count||0);' +
+    'else if(t==="completion")detail="success="+(info.success||false)+" iterations="+(info.iterations||0);' +
+    'var color=colors[t]||"#6b7280";' +
+    'var div=document.createElement("div");div.className="ev";' +
+    'div.innerHTML="<span class=ts>"+ts+"</span><span class=badge style=\\"background:"+color+"20;color:"+color+"\\">"+t+"</span><span class=detail>"+detail+"</span>";' +
+    'log.appendChild(div);log.scrollTop=log.scrollHeight;' +
+    'document.querySelector(".connected").style.display="none"}catch(x){}}' +
+    'evTypes.forEach(function(et){es.addEventListener(et,handleEv)});' +
+    'es.onmessage=handleEv;' +
+    'es.onerror=function(){es.close();var d=document.createElement("div");d.className="ev";d.innerHTML="<span class=badge style=\\"background:#ef444420;color:#ef4444\\">disconnected</span><span class=detail>Reconnecting...</span>";log.appendChild(d);setTimeout(connect,3000)};' +
+    '}connect();' +
+    '</sc' + 'ript></body></html>';
+  w.document.write(html);
+  w.document.close();
 }
 
 async function searchAgentById() {
