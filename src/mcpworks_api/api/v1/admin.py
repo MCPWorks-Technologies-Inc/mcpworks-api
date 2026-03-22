@@ -2436,6 +2436,116 @@ async def upgrade_agent_tier(
     }
 
 
+@router.get("/agent-runs")
+async def list_agent_runs(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    status_filter: str | None = Query(None, alias="status"),
+    agent_id: uuid_module.UUID | None = Query(None),
+) -> dict[str, Any]:
+    """Unified run history across all agents."""
+    from mcpworks_api.models.agent import Agent, AgentRun
+
+    offset = (page - 1) * page_size
+
+    query = select(AgentRun, Agent.name).join(Agent, AgentRun.agent_id == Agent.id)
+    count_query = select(func.count(AgentRun.id))
+
+    if status_filter:
+        query = query.where(AgentRun.status == status_filter)
+        count_query = count_query.where(AgentRun.status == status_filter)
+    if agent_id:
+        query = query.where(AgentRun.agent_id == agent_id)
+        count_query = count_query.where(AgentRun.agent_id == agent_id)
+
+    total = (await db.execute(count_query)).scalar_one()
+    rows = (
+        await db.execute(query.order_by(AgentRun.created_at.desc()).offset(offset).limit(page_size))
+    ).all()
+
+    return {
+        "runs": [
+            {
+                "id": str(r.id),
+                "agent_id": str(r.agent_id),
+                "agent_name": agent_name,
+                "trigger_type": r.trigger_type,
+                "trigger_detail": r.trigger_detail,
+                "function_name": r.function_name,
+                "status": r.status,
+                "duration_ms": r.duration_ms,
+                "result_summary": (r.result_summary or "")[:200],
+                "error": (r.error or "")[:200] if r.error else None,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r, agent_name in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/agents/schedule-health")
+async def agents_schedule_health(
+    _admin: AdminUserId,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Schedule health overview — find troubled schedules."""
+    from datetime import UTC, datetime
+
+    from mcpworks_api.models.agent import Agent, AgentSchedule
+
+    result = await db.execute(
+        select(AgentSchedule, Agent.name)
+        .join(Agent, AgentSchedule.agent_id == Agent.id)
+        .order_by(AgentSchedule.consecutive_failures.desc())
+    )
+    rows = result.all()
+
+    now = datetime.now(UTC)
+    total = len(rows)
+    enabled = sum(1 for s, _ in rows if s.enabled)
+    healthy = sum(1 for s, _ in rows if s.enabled and s.consecutive_failures == 0)
+    warning = sum(1 for s, _ in rows if s.enabled and 0 < s.consecutive_failures < 3)
+    critical = sum(
+        1
+        for s, _ in rows
+        if s.consecutive_failures >= 3 or (not s.enabled and s.consecutive_failures > 0)
+    )
+    overdue = sum(1 for s, _ in rows if s.enabled and s.next_run_at and s.next_run_at < now)
+
+    return {
+        "summary": {
+            "total": total,
+            "enabled": enabled,
+            "healthy": healthy,
+            "warning": warning,
+            "critical": critical,
+            "overdue": overdue,
+        },
+        "schedules": [
+            {
+                "id": str(s.id),
+                "agent_name": agent_name,
+                "function_name": s.function_name,
+                "cron": s.cron_expression,
+                "timezone": s.timezone,
+                "mode": s.orchestration_mode,
+                "enabled": s.enabled,
+                "consecutive_failures": s.consecutive_failures,
+                "next_run_at": s.next_run_at.isoformat() if s.next_run_at else None,
+                "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+            }
+            for s, agent_name in rows
+        ],
+    }
+
+
 @router.get("/agents")
 async def list_all_agents(
     _admin: AdminUserId,
@@ -2443,8 +2553,10 @@ async def list_all_agents(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
-    """List all agents across all accounts (paginated)."""
-    from mcpworks_api.models.agent import Agent
+    """List all agents with schedule counts, last run, and error rates."""
+    from datetime import timedelta
+
+    from mcpworks_api.models.agent import Agent, AgentRun, AgentSchedule
 
     offset = (page - 1) * page_size
     total_q = await db.execute(select(func.count(Agent.id)))
@@ -2460,6 +2572,43 @@ async def list_all_agents(
     )
     rows = agents_q.all()
 
+    agent_ids = [a.id for a, _ in rows]
+
+    schedule_counts = {}
+    if agent_ids:
+        sc_q = await db.execute(
+            select(AgentSchedule.agent_id, func.count(AgentSchedule.id))
+            .where(AgentSchedule.agent_id.in_(agent_ids))
+            .group_by(AgentSchedule.agent_id)
+        )
+        schedule_counts = dict(sc_q.all())
+
+    last_runs = {}
+    if agent_ids:
+        lr_q = await db.execute(
+            select(AgentRun.agent_id, func.max(AgentRun.created_at))
+            .where(AgentRun.agent_id.in_(agent_ids))
+            .group_by(AgentRun.agent_id)
+        )
+        last_runs = dict(lr_q.all())
+
+    error_rates = {}
+    if agent_ids:
+        from datetime import UTC, datetime
+
+        cutoff = datetime.now(UTC) - timedelta(days=1)
+        er_q = await db.execute(
+            select(
+                AgentRun.agent_id,
+                func.count(AgentRun.id).label("total"),
+                func.count(AgentRun.id).filter(AgentRun.status == "failed").label("failed"),
+            )
+            .where(AgentRun.agent_id.in_(agent_ids), AgentRun.created_at >= cutoff)
+            .group_by(AgentRun.agent_id)
+        )
+        for agent_id, run_total, failed in er_q.all():
+            error_rates[agent_id] = round(failed / run_total * 100, 1) if run_total > 0 else 0
+
     return {
         "agents": [
             {
@@ -2474,7 +2623,11 @@ async def list_all_agents(
                 "memory_limit_mb": a.memory_limit_mb,
                 "cpu_limit": a.cpu_limit,
                 "enabled": a.enabled,
-                "container_id": a.container_id[:12] if a.container_id else None,
+                "schedule_count": schedule_counts.get(a.id, 0),
+                "last_run_at": last_runs[a.id].isoformat()
+                if a.id in last_runs and last_runs[a.id]
+                else None,
+                "error_rate_24h": error_rates.get(a.id, 0),
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             }
             for a, email in rows
@@ -2525,14 +2678,50 @@ async def admin_agent_detail(
     _admin: AdminUserId,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Get detailed agent info including container stats."""
-    from mcpworks_api.models.agent import Agent
+    """Get detailed agent info including schedules, webhooks, runs, state, and container stats."""
+    from sqlalchemy.orm import selectinload
+
+    from mcpworks_api.models.agent import Agent, AgentRun, AgentState
     from mcpworks_api.services.agent_service import AgentService
 
-    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    result = await db.execute(
+        select(Agent)
+        .where(Agent.id == agent_id)
+        .options(
+            selectinload(Agent.schedules),
+            selectinload(Agent.webhooks),
+            selectinload(Agent.channels),
+        )
+    )
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    owner_result = await db.execute(
+        select(User.email)
+        .join(Account, Account.user_id == User.id)
+        .where(Account.id == agent.account_id)
+    )
+    owner_email = owner_result.scalar_one_or_none() or "unknown"
+
+    account_result = await db.execute(select(Account).where(Account.id == agent.account_id))
+    account = account_result.scalar_one_or_none()
+    tier = (
+        account.user.effective_tier
+        if account and hasattr(account, "user") and account.user
+        else "unknown"
+    )
+
+    runs_result = await db.execute(
+        select(AgentRun)
+        .where(AgentRun.agent_id == agent_id)
+        .order_by(AgentRun.created_at.desc())
+        .limit(15)
+    )
+    recent_runs = runs_result.scalars().all()
+
+    state_result = await db.execute(select(AgentState).where(AgentState.agent_id == agent_id))
+    state_entries = state_result.scalars().all()
 
     svc = AgentService(db)
     stats = await svc.get_container_stats(agent)
@@ -2540,16 +2729,60 @@ async def admin_agent_detail(
     return {
         "id": str(agent.id),
         "name": agent.name,
+        "display_name": agent.display_name,
         "account_id": str(agent.account_id),
+        "owner_email": owner_email,
+        "tier": tier,
         "status": agent.status,
         "container_id": agent.container_id,
         "memory_limit_mb": agent.memory_limit_mb,
         "cpu_limit": agent.cpu_limit,
         "ai_engine": agent.ai_engine,
         "ai_model": agent.ai_model,
+        "system_prompt": (agent.system_prompt or "")[:500],
         "enabled": agent.enabled,
         "created_at": agent.created_at.isoformat() if agent.created_at else None,
         "container_stats": stats,
+        "schedules": [
+            {
+                "id": str(s.id),
+                "function_name": s.function_name,
+                "cron": s.cron_expression,
+                "timezone": s.timezone,
+                "mode": s.orchestration_mode,
+                "enabled": s.enabled,
+                "consecutive_failures": s.consecutive_failures,
+                "next_run_at": s.next_run_at.isoformat() if s.next_run_at else None,
+                "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+            }
+            for s in agent.schedules
+        ],
+        "webhooks": [
+            {
+                "id": str(w.id),
+                "path": w.path,
+                "handler": w.handler_function_name,
+                "enabled": w.enabled,
+            }
+            for w in agent.webhooks
+        ],
+        "channels": [
+            {"id": str(c.id), "type": c.channel_type, "enabled": c.enabled} for c in agent.channels
+        ],
+        "recent_runs": [
+            {
+                "id": str(r.id),
+                "trigger_type": r.trigger_type,
+                "function_name": r.function_name,
+                "status": r.status,
+                "duration_ms": r.duration_ms,
+                "error": (r.error or "")[:200] if r.error else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in recent_runs
+        ],
+        "state_key_count": len(state_entries),
+        "state_total_bytes": sum(len(s.value_encrypted or b"") for s in state_entries),
     }
 
 
