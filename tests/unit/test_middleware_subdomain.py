@@ -6,8 +6,6 @@ import pytest
 from starlette.datastructures import URL, Headers, QueryParams
 
 from mcpworks_api.middleware.subdomain import (
-    DEFAULT_DOMAIN,
-    SUBDOMAIN_PATTERN,
     EndpointType,
     SubdomainMiddleware,
     get_endpoint_type,
@@ -15,6 +13,11 @@ from mcpworks_api.middleware.subdomain import (
     is_create_endpoint,
     is_run_endpoint,
 )
+
+DEFAULT_DOMAIN = "mcpworks.io"
+_dummy_app = AsyncMock()
+_mw = SubdomainMiddleware(_dummy_app, domain=DEFAULT_DOMAIN)
+SUBDOMAIN_PATTERN = _mw.subdomain_pattern
 
 
 class MockRequest:
