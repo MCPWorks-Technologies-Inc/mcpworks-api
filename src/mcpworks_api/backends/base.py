@@ -89,6 +89,7 @@ class Backend(ABC):
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
         language: str = "python",
+        namespace: str = "unknown",
     ) -> ExecutionResult:
         """Execute function code/config with input data.
 
