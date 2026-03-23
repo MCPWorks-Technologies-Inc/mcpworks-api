@@ -331,7 +331,7 @@ class AgentService:
 ### DNS
 
 Cloudflare already has wildcard `*.mcpworks.io`. Add:
-- `*.agent.mcpworks.io` → A record → 159.203.30.199 (same droplet initially)
+- `*.agent.mcpworks.io` → A record → `<prod-server-ip>` (same droplet initially)
 
 ### Caddy Routing
 

@@ -22,9 +22,9 @@ We have written this policy in plain language. If something is unclear, contact 
 
 MCPWorks has designated a Privacy Officer responsible for our compliance with this policy and applicable privacy laws:
 
-**Simon Carr**
-Privacy Officer, MCPWORKS TECHNOLOGIES INC.
-Email: simon.carr@mcpworks.io
+**Privacy Officer**
+MCPWORKS TECHNOLOGIES INC.
+Email: privacy@mcpworks.io
 Mailing Address: MCPWORKS TECHNOLOGIES INC., Vancouver, British Columbia, Canada V5K 0A1
 
 You may contact the Privacy Officer with any questions, concerns, or requests related to your personal information.
@@ -385,7 +385,7 @@ We encourage you to contact us first at privacy@mcpworks.io so we can attempt to
 For any questions about this Privacy Policy or our data practices:
 
 **Email:** privacy@mcpworks.io
-**Privacy Officer:** Simon Carr, simon.carr@mcpworks.io
+**Privacy Officer:** privacy@mcpworks.io
 **Company:** MCPWORKS TECHNOLOGIES INC.
 **Jurisdiction:** British Columbia, Canada
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MGMT_IP="${1:?Usage: migrate-secrets.sh <mgmt-vpc-ip>}"
-PROD_IP="${2:-159.203.30.199}"
+PROD_IP="${2:?Usage: migrate-secrets.sh <mgmt-vpc-ip> <prod-ip>}"
 INFISICAL_URL="http://${MGMT_IP}:9080"
 
 echo "=== Migrate secrets from .env to Infisical ==="
