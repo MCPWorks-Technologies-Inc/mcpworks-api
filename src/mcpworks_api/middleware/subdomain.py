@@ -15,21 +15,9 @@ from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
-# Configurable domain for testing
-# In production: mcpworks.io
-# In testing: localhost, 127.0.0.1, or custom domain
-DEFAULT_DOMAIN = "mcpworks.io"
+from mcpworks_api.config import get_settings
 
-# Pattern for production subdomain matching
-# Format: {namespace}.{endpoint}.mcpworks.io
-# Where:
-#   - namespace: 1-63 chars, lowercase alphanumeric with hyphens, starts/ends with alphanum
-#   - endpoint: "create" or "run"
-SUBDOMAIN_PATTERN = re.compile(
-    r"^(?P<namespace>[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)"
-    r"\.(?P<endpoint>create|run|agent)"
-    r"\.(?P<domain>mcpworks\.io|localhost|127\.0\.0\.1(?::\d+)?)$"
-)
+DEFAULT_DOMAIN = get_settings().base_domain
 
 
 class EndpointType(str, Enum):
@@ -68,6 +56,12 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         self.domain = domain
+        escaped = re.escape(self.domain)
+        self.subdomain_pattern = re.compile(
+            r"^(?P<namespace>[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)"
+            r"\.(?P<endpoint>create|run|agent)"
+            r"\.(?P<domain>" + escaped + r"|localhost|127\.0\.0\.1(?::\d+)?)$"
+        )
         self.exempt_paths = exempt_paths or {
             "/",
             "/admin",
@@ -123,7 +117,7 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Parse production subdomain
-        match = SUBDOMAIN_PATTERN.match(host)
+        match = self.subdomain_pattern.match(host)
         if not match:
             raise HTTPException(
                 status_code=400,

@@ -9,6 +9,8 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from mcpworks_api import url_builder
+
 router = APIRouter(prefix="/docs", tags=["docs"])
 
 _QUICKSTART_HTML = """\
@@ -56,12 +58,12 @@ _QUICKSTART_HTML = """\
   "mcpServers": {
     "myns-create": {
       "type": "http",
-      "url": "https://myns.create.mcpworks.io/mcp",
+      "url": "{{CREATE_MCP_URL}}",
       "headers": { "Authorization": "Bearer YOUR_API_KEY" }
     },
     "myns-run": {
       "type": "http",
-      "url": "https://myns.run.mcpworks.io/mcp",
+      "url": "{{RUN_MCP_URL}}",
       "headers": { "Authorization": "Bearer YOUR_API_KEY" }
     }
   }
@@ -115,7 +117,7 @@ It requires OPENAI_API_KEY."</code></pre>
   "mcpServers": {
     "myns-run": {
       "type": "http",
-      "url": "https://myns.run.mcpworks.io/mcp",
+      "url": "{{RUN_MCP_URL}}",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY",
         "X-MCPWorks-Env": "base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCJ9"
@@ -137,8 +139,8 @@ It requires OPENAI_API_KEY."</code></pre>
 
 <h2>What's Happening Behind the Scenes</h2>
 <ul>
-<li><strong>create endpoint</strong> (<code>*.create.mcpworks.io</code>) — manages your namespaces, services, and functions</li>
-<li><strong>run endpoint</strong> (<code>*.run.mcpworks.io</code>) — executes functions in a secure nsjail sandbox</li>
+<li><strong>create endpoint</strong> (<code>*.create.{{BASE_DOMAIN}}</code>) — manages your namespaces, services, and functions</li>
+<li><strong>run endpoint</strong> (<code>*.run.{{BASE_DOMAIN}}</code>) — executes functions in a secure nsjail sandbox</li>
 <li>Each function runs in an isolated container with no network access to your database or secrets</li>
 <li>60+ Python packages pre-installed (numpy, pandas, httpx, etc.) — use <code>list_packages</code> to see all</li>
 <li>Environment variables are passed per-request via header — never stored server-side</li>
@@ -168,7 +170,15 @@ MCPWorks — Code Sandbox for AI Assistants &middot;
 @router.get("/quickstart", response_class=HTMLResponse, include_in_schema=False)
 async def quickstart() -> HTMLResponse:
     """Serve the getting-started guide."""
-    return HTMLResponse(content=_QUICKSTART_HTML)
+    from mcpworks_api.config import get_settings
+
+    s = get_settings()
+    html = (
+        _QUICKSTART_HTML.replace("{{CREATE_MCP_URL}}", url_builder.mcp_url("myns", "create"))
+        .replace("{{RUN_MCP_URL}}", url_builder.mcp_url("myns", "run"))
+        .replace("{{BASE_DOMAIN}}", s.base_domain)
+    )
+    return HTMLResponse(content=html)
 
 
 # ---------------------------------------------------------------------------
