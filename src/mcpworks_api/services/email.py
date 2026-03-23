@@ -75,11 +75,29 @@ def _get_provider() -> EmailProvider:
     settings = get_settings()
     if settings.resend_api_key:
         return ResendProvider(settings.resend_api_key, settings.resend_from_email)
+    if settings.smtp_host:
+        from mcpworks_api.services.smtp_provider import SmtpProvider
+
+        return SmtpProvider(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_username,
+            password=settings.smtp_password,
+            from_email=settings.smtp_from_email or settings.resend_from_email,
+            use_tls=settings.smtp_use_tls,
+        )
     return ConsoleProvider()
 
 
 def _render_template(template_name: str, **kwargs: Any) -> str:
+    from mcpworks_api import url_builder
+
     template = _jinja_env.get_template(template_name)
+    from mcpworks_api.config import get_settings as _gs
+
+    kwargs.setdefault("base_url", url_builder.api_url())
+    kwargs.setdefault("console_url", url_builder.api_url("/console"))
+    kwargs.setdefault("base_domain", _gs().base_domain)
     return template.render(**kwargs)
 
 

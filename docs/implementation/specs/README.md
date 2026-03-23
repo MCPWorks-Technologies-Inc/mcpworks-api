@@ -25,7 +25,7 @@ Implementation (CODE)
 
 **Core Principle:** No code is written until specifications are complete and reviewed.
 
-**Why:** mcpworks targets $10M-$15M acquisition in 15 months. Detailed specs prevent costly rework and demonstrate acquisition-ready engineering discipline.
+**Why:** Detailed specs prevent costly rework and demonstrate production-ready engineering discipline. Open-source contributors and enterprise customers expect clear specifications.
 
 ---
 
@@ -397,7 +397,7 @@ Token efficiency is core architecture, not optimization.
 - [MCP Protocol Specification](https://spec.modelcontextprotocol.io/) - Official MCP docs
 - [SPEC.md](../../../SPEC.md) - Main API specification (workflow platform)
 - [technical-architecture.md](../plans/technical-architecture.md) - System architecture
-- [acquisition-strategy-2025-10.md](../../../../mcpworks-internals/docs/business/acquisition-strategy-2025-10.md) - Why we do spec-driven development (in planning repo)
+- [mcpworks-internals](../../../../mcpworks-internals/docs/) - Business strategy and governance documentation (in planning repo)
 
 ### Token Estimation
 

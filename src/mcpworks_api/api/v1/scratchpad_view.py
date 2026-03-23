@@ -1,4 +1,4 @@
-"""Public scratchpad view serving for *.agent.mcpworks.io/view/{token}/."""
+"""Public scratchpad view serving for *.agent.{BASE_DOMAIN}/view/{token}/."""
 
 from pathlib import PurePosixPath
 
@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
+from mcpworks_api import url_builder
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.services.scratchpad import ScratchpadService
 
@@ -87,7 +88,7 @@ async def serve_scratchpad(
         host = request.headers.get("host", "").lower()
         is_local = getattr(request.state, "is_local", False)
         if not is_local:
-            expected_host = f"{agent.name}.agent.mcpworks.io"
+            expected_host = url_builder.agent_url(agent.name).split("://", 1)[1]
             if not host.startswith(expected_host):
                 return NOT_FOUND
 

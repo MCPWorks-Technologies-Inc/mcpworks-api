@@ -118,17 +118,23 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = (50, 100)  # 50 used, 100 limit
+        mock_settings = MagicMock()
+        mock_settings.billing_enabled = True
 
+        with patch("mcpworks_api.config.get_settings", return_value=mock_settings):  # noqa: SIM117
             with patch.object(
-                billing_middleware, "_increment_usage", new_callable=AsyncMock
-            ) as mock_increment:
-                response = await billing_middleware.dispatch(request, call_next)
+                billing_middleware, "_check_quota", new_callable=AsyncMock
+            ) as mock_check:
+                mock_check.return_value = (50, 100)  # 50 used, 100 limit
 
-                mock_check.assert_called_once_with(account)
-                mock_increment.assert_called_once_with(account)
-                assert response.status_code == 200
+                with patch.object(
+                    billing_middleware, "_increment_usage", new_callable=AsyncMock
+                ) as mock_increment:
+                    response = await billing_middleware.dispatch(request, call_next)
+
+                    mock_check.assert_called_once_with(account)
+                    mock_increment.assert_called_once_with(account)
+                    assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_dispatch_rejects_quota_exceeded(self, billing_middleware):
@@ -137,17 +143,23 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock()
 
-        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = (500, 500)  # At limit
+        mock_settings = MagicMock()
+        mock_settings.billing_enabled = True
 
-            with pytest.raises(HTTPException) as exc_info:
-                await billing_middleware.dispatch(request, call_next)
+        with patch("mcpworks_api.config.get_settings", return_value=mock_settings):  # noqa: SIM117
+            with patch.object(
+                billing_middleware, "_check_quota", new_callable=AsyncMock
+            ) as mock_check:
+                mock_check.return_value = (500, 500)  # At limit
 
-            assert exc_info.value.status_code == 429
-            assert exc_info.value.detail["code"] == "QUOTA_EXCEEDED"
-            assert exc_info.value.detail["usage"] == 500
-            assert exc_info.value.detail["limit"] == 500
-            call_next.assert_not_called()
+                with pytest.raises(HTTPException) as exc_info:
+                    await billing_middleware.dispatch(request, call_next)
+
+                assert exc_info.value.status_code == 429
+                assert exc_info.value.detail["code"] == "QUOTA_EXCEEDED"
+                assert exc_info.value.detail["usage"] == 500
+                assert exc_info.value.detail["limit"] == 500
+                call_next.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_dispatch_allows_enterprise_under_cap(self, billing_middleware):
@@ -156,14 +168,20 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = (50_000, 100_000)  # Under cap
+        mock_settings = MagicMock()
+        mock_settings.billing_enabled = True
 
-            with patch.object(billing_middleware, "_increment_usage", new_callable=AsyncMock):
-                response = await billing_middleware.dispatch(request, call_next)
+        with patch("mcpworks_api.config.get_settings", return_value=mock_settings):  # noqa: SIM117
+            with patch.object(
+                billing_middleware, "_check_quota", new_callable=AsyncMock
+            ) as mock_check:
+                mock_check.return_value = (50_000, 100_000)  # Under cap
 
-                assert response.status_code == 200
-                call_next.assert_called_once()
+                with patch.object(billing_middleware, "_increment_usage", new_callable=AsyncMock):
+                    response = await billing_middleware.dispatch(request, call_next)
+
+                    assert response.status_code == 200
+                    call_next.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_dispatch_fails_open_on_redis_error(self, billing_middleware):
@@ -172,14 +190,20 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.side_effect = Exception("Redis error")
+        mock_settings = MagicMock()
+        mock_settings.billing_enabled = True
 
-            response = await billing_middleware.dispatch(request, call_next)
+        with patch("mcpworks_api.config.get_settings", return_value=mock_settings):  # noqa: SIM117
+            with patch.object(
+                billing_middleware, "_check_quota", new_callable=AsyncMock
+            ) as mock_check:
+                mock_check.side_effect = Exception("Redis error")
 
-            # Request should proceed despite Redis error
-            call_next.assert_called_once()
-            assert response.status_code == 200
+                response = await billing_middleware.dispatch(request, call_next)
+
+                # Request should proceed despite Redis error
+                call_next.assert_called_once()
+                assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_dispatch_skips_increment_on_error_response(self, billing_middleware):
@@ -188,17 +212,23 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(400))  # Error response
 
-        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = (50, 100)
+        mock_settings = MagicMock()
+        mock_settings.billing_enabled = True
 
+        with patch("mcpworks_api.config.get_settings", return_value=mock_settings):  # noqa: SIM117
             with patch.object(
-                billing_middleware, "_increment_usage", new_callable=AsyncMock
-            ) as mock_increment:
-                response = await billing_middleware.dispatch(request, call_next)
+                billing_middleware, "_check_quota", new_callable=AsyncMock
+            ) as mock_check:
+                mock_check.return_value = (50, 100)
 
-                mock_check.assert_called_once()
-                mock_increment.assert_not_called()  # Not called for error
-                assert response.status_code == 400
+                with patch.object(
+                    billing_middleware, "_increment_usage", new_callable=AsyncMock
+                ) as mock_increment:
+                    response = await billing_middleware.dispatch(request, call_next)
+
+                    mock_check.assert_called_once()
+                    mock_increment.assert_not_called()  # Not called for error
+                    assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_dispatch_handles_increment_error_gracefully(self, billing_middleware):
@@ -207,18 +237,24 @@ class TestBillingMiddlewareDispatch:
         request = MockRequest(endpoint_type="run", account=account)
         call_next = AsyncMock(return_value=MockResponse(200))
 
-        with patch.object(billing_middleware, "_check_quota", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = (50, 100)
+        mock_settings = MagicMock()
+        mock_settings.billing_enabled = True
 
+        with patch("mcpworks_api.config.get_settings", return_value=mock_settings):  # noqa: SIM117
             with patch.object(
-                billing_middleware, "_increment_usage", new_callable=AsyncMock
-            ) as mock_increment:
-                mock_increment.side_effect = Exception("Redis write error")
+                billing_middleware, "_check_quota", new_callable=AsyncMock
+            ) as mock_check:
+                mock_check.return_value = (50, 100)
 
-                response = await billing_middleware.dispatch(request, call_next)
+                with patch.object(
+                    billing_middleware, "_increment_usage", new_callable=AsyncMock
+                ) as mock_increment:
+                    mock_increment.side_effect = Exception("Redis write error")
 
-                # Response should succeed despite increment error
-                assert response.status_code == 200
+                    response = await billing_middleware.dispatch(request, call_next)
+
+                    # Response should succeed despite increment error
+                    assert response.status_code == 200
 
 
 class TestBillingMiddlewareCheckQuota:

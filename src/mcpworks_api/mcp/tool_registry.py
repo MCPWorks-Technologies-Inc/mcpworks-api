@@ -82,7 +82,7 @@ BASE_TOOLS: dict[str, ToolDef] = {
             "Create a new service within the current namespace. "
             "A service is a group of related functions. You must create a service before creating functions. "
             "The service is automatically created in the namespace this MCP server is connected to — do NOT pass a namespace parameter. "
-            "Example workflow: make_service(name='utils') → make_function(service='utils', name='hello', ...)"
+            "Example: make_service(name='utils') → make_function(service='utils', name='hello', ...)"
         ),
         input_schema={
             "type": "object",
@@ -659,7 +659,7 @@ AGENT_TOOLS: dict[str, ToolDef] = {
         description=(
             "Add a webhook endpoint to an agent. "
             "When the webhook URL receives an HTTP POST, it triggers the specified handler function. "
-            "The webhook URL will be: https://{agent_name}.agent.mcpworks.io/webhook/{path}"
+            "The webhook URL will be: https://{agent_name}.agent.<domain>/webhook/{path}"
         ),
         input_schema={
             "type": "object",
@@ -670,7 +670,7 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                 },
                 "path": {
                     "type": "string",
-                    "description": "Webhook path segment. Example: 'github/push' creates URL https://{agent}.agent.mcpworks.io/webhook/github/push",
+                    "description": "Webhook path segment. Example: 'github/push' creates URL https://{agent}.agent.<domain>/webhook/github/push",
                 },
                 "handler_function_name": {
                     "type": "string",
@@ -1244,7 +1244,7 @@ AGENT_TOOLS: dict[str, ToolDef] = {
             "Generate or revoke a public chat URL for an agent. "
             "The URL allows web frontends to POST messages to the agent's AI "
             "without API key authentication — the token in the URL IS the auth. "
-            "Pattern: POST https://{agent}.agent.mcpworks.io/chat/{token}"
+            "Pattern: POST https://{agent}.agent.<domain>/chat/{token}"
         ),
         input_schema={
             "type": "object",

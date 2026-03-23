@@ -58,6 +58,17 @@ async def register(
     Creates a new user with pending_approval status.
     Admin must approve before user can log in.
     """
+    from mcpworks_api.config import get_settings
+
+    if not get_settings().allow_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "registration_disabled",
+                "message": "Public registration is disabled on this instance. Contact the administrator.",
+                "error_code": "AUTH_REGISTRATION_DISABLED",
+            },
+        )
     ip_address = _get_client_ip(request)
     user_agent = request.headers.get("User-Agent")
 

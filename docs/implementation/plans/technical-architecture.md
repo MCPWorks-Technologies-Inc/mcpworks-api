@@ -4,7 +4,7 @@
 **Created:** 2025-10-19
 **Last Updated:** 2025-10-30
 **Status:** Planning Phase - Production-Grade Spec
-**Purpose:** Acquisition-ready technical documentation
+**Purpose:** Production-grade technical documentation
 
 **Changelog v2.0:**
 - Updated from 8 tools to 19 tools (added deployment, Zendesk)
@@ -18,7 +18,7 @@
 
 ## Overview
 
-mcpworks Infrastructure MCP is a production-grade AI-native infrastructure platform accessible via the Model Context Protocol (MCP). This document outlines the technical architecture designed for enterprise-level scalability, transaction safety, security, and acquisition readiness.
+mcpworks Infrastructure MCP is a production-grade AI-native infrastructure platform accessible via the Model Context Protocol (MCP). This document outlines the technical architecture designed for enterprise-level scalability, transaction safety, and security.
 
 **Key Design Principles:**
 - **AI-First:** MCP protocol integration with 19 tools for complete application lifecycle
@@ -143,7 +143,7 @@ class HostingProvider(ABC):
     # ...other methods
 ```
 
-**Benefit for Acquirers:** Backend can be swapped to acquirer's infrastructure (e.g., Cloudflare → migrate to Cloudflare Workers, DigitalOcean → migrate to DO's own infra).
+**Benefit:** Backend can be swapped to any infrastructure provider. Self-hosters choose their cloud; enterprise customers choose their provider. No vendor lock-in.
 
 ### 4. Security Architecture
 
@@ -242,13 +242,13 @@ class HostingProvider(ABC):
 - **Caching:** Redis cluster (3-node)
 - **Monitoring:** Prometheus + Grafana
 
-### Scale to 100K+ Customers (Acquisition Scenario)
+### Scale to 100K+ Customers (Enterprise/Cloud Growth)
 - **Database:** Sharding by customer ID, separate write/read clusters
 - **Application:** Kubernetes deployment (50-100 pods)
 - **Multi-Region:** US East, US West, EU, Canada
 - **CDN:** Cloudflare for static assets, API acceleration
 
-**Acquirer Benefit:** Architecture designed for 100x scale without major rewrite.
+**Design Goal:** Architecture supports 100x scale without major rewrite.
 
 ---
 
@@ -332,11 +332,10 @@ class HostingProvider(ABC):
 | **Logging** | Structured logs → S3 | Cost-effective, long-term retention, searchable |
 | **Deployment** | Docker, Terraform | Reproducible, infrastructure-as-code, multi-cloud portable |
 
-**Acquirer Compatibility:**
-- **Anthropic:** Python stack familiar, easy to integrate with Claude infrastructure
-- **Cloudflare:** Can migrate to Workers (JS) or keep Python backend
-- **DigitalOcean:** Trivial integration into DO's own infrastructure
-- **Microsoft/GitHub:** Azure-compatible stack, Copilot integration straightforward
+**Deployment Flexibility:**
+- **Self-hosted:** `docker compose up` on any Linux server
+- **MCPWorks Cloud:** Managed service on DigitalOcean (Phase 1), multi-cloud (Phase 2+)
+- **Enterprise:** Dedicated infrastructure on customer's preferred cloud provider
 
 ---
 
@@ -368,62 +367,37 @@ class HostingProvider(ABC):
 
 ---
 
-## Acquisition Due Diligence Readiness
+## Production Readiness Checklist
 
-### Technical DD Checklist
-
-**Architecture Documentation:**
+### Architecture Documentation
 - ✅ System architecture diagram (this document)
 - ✅ Technology stack justified (this document)
 - ✅ Scalability design (10x, 100x customer growth)
 - ✅ Security architecture (authentication, encryption, monitoring)
 - ✅ Disaster recovery plan (backup, RTO, RPO)
 
-**Code Quality (To Be Demonstrated):**
-- ✅ Infrastructure-as-code (Terraform)
+### Code Quality
+- ✅ Infrastructure-as-code (Docker Compose, future Terraform)
 - ✅ Automated testing (>80% coverage target)
-- ✅ CI/CD pipeline (GitHub Actions or equivalent)
+- ✅ CI/CD pipeline (GitHub Actions)
 - ✅ Code review process (all PRs reviewed)
 - ✅ Security scanning (automated vulnerability detection)
 
-**Scalability Evidence:**
+### Scalability Evidence
 - ✅ Load testing results (target: 100 req/sec sustained)
 - ✅ Database performance benchmarks
 - ✅ Cost per customer analysis (infrastructure + operating costs)
 
-**Security Audit:**
+### Security Audit
 - 🔄 Penetration testing (quarterly, starting Month 6)
-- 🔄 Security audit report (third-party, before acquisition DD)
+- 🔄 Third-party security audit report
 - ✅ Incident response procedures documented
 
-**IP Protection:**
-- ✅ All code owned by company (founder agreement assigns IP)
-- ✅ No GPL or restrictive licenses (permissive licenses only: MIT, Apache)
+### Open-Source Readiness
+- ✅ BSL 1.1 license applied
+- ✅ Self-host path documented (`docker compose up`)
 - ✅ Third-party dependency audit (license compliance)
-
-### Acquirer-Specific Technical Fit
-
-**Anthropic:**
-- ✅ MCP protocol compliance (first-class integration)
-- ✅ Python stack (familiar to Anthropic engineering)
-- ✅ Usage tracking (subscription tiers for AI optimization)
-- **Integration effort:** Low (2-4 weeks to migrate to Anthropic infrastructure)
-
-**Cloudflare:**
-- ✅ Cloudflare DNS already integrated
-- ✅ Containerized architecture (portable to Cloudflare Workers)
-- ✅ API-first design (aligns with Cloudflare developer platform)
-- **Integration effort:** Medium (4-8 weeks to migrate to Workers/R2/D1)
-
-**DigitalOcean:**
-- ✅ DigitalOcean API-native (trivial integration)
-- ✅ Managed Database, Spaces already used
-- **Integration effort:** Minimal (1-2 weeks, mostly organizational)
-
-**Microsoft/GitHub:**
-- ✅ Azure-compatible stack (Python on Linux, PostgreSQL)
-- ✅ GitHub Copilot MCP integration potential
-- **Integration effort:** Medium (6-12 weeks to migrate to Azure)
+- ✅ All code owned by company (founder agreement assigns IP)
 
 ---
 
@@ -441,11 +415,11 @@ class HostingProvider(ABC):
 - Scalability improvements (read replicas, caching)
 - Additional integrations (more third-party APIs)
 
-### Phase 3: Scale & Acquisition Prep (Month 13-18)
+### Phase 3: Scale & Enterprise (Month 13-18)
 - Multi-region deployment
 - 99.9% uptime infrastructure
 - SOC 2 Type I compliance (started)
-- Full technical DD documentation
+- Enterprise support and dedicated infrastructure offerings
 
 ---
 
@@ -453,8 +427,7 @@ class HostingProvider(ABC):
 
 **v1.0 (2025-10-19):**
 - Initial architecture documentation
-- Acquisition-ready technical design
+- Production-grade technical design
 - Scalability roadmap (1K → 10K → 100K customers)
 - Security architecture and guardrails
 - Disaster recovery plan
-- Acquirer technical fit analysis

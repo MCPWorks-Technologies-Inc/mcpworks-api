@@ -306,7 +306,7 @@ This document defines mcpworks Infrastructure MCP's provider selection strategy 
 
 ## Hosting Infrastructure
 
-### Phase 1 (A0-A3 Timeline, 15-Month Acquisition): Digital Ocean (Primary)
+### Phase 1 (A0-A3 Timeline): Digital Ocean (Primary)
 
 **Digital Ocean Droplets:**
 
@@ -357,9 +357,9 @@ This document defines mcpworks Infrastructure MCP's provider selection strategy 
 - Additional geographic redundancy
 - Can use both for multi-provider redundancy
 
-### Phase 2 (Post-Acquisition, Optional): Cost Optimization with OVH/Hetzner
+### Phase 2 (Growth): Cost Optimization with OVH/Hetzner
 
-**Note:** Phase 2 providers are documented for acquirer reference. Pre-acquisition focus is DigitalOcean Partner Pod integration (A1-A3 timeline).
+**Note:** Phase 2 providers are documented for long-term scaling. Phase 1 focus is DigitalOcean for MCPWorks Cloud.
 
 **OVH/SoYouStart Dedicated Servers:**
 
@@ -421,9 +421,9 @@ This document defines mcpworks Infrastructure MCP's provider selection strategy 
 
 **Recommendation:** ADD alongside OVH for European customer base in Phase 2.
 
-### Phase 3 (Post-Acquisition, Long-Term): Vancouver Colocation
+### Phase 3 (Long-Term): Vancouver Colocation
 
-**Note:** Colocation unlikely before acquisition. Documented for long-term acquirer scaling strategy.
+**Note:** Colocation is a long-term scaling option for margin improvement (~79%). Documented for future planning.
 
 **Vancouver Colocation Providers:**
 
@@ -1117,7 +1117,7 @@ def provision_hosting(customer_location, resource_spec):
 
 ## Implementation Roadmap
 
-**Note:** This roadmap is aligned with the 15-month A0-A3 acquisition timeline. Post-acquisition scaling (Phase 2/3 providers) is documented for acquirer reference but not required for $10M-$15M exit.
+**Note:** This roadmap follows the A0-A3 milestone timeline. Phase 2/3 providers are documented for future scaling as the platform grows.
 
 ### Immediate Actions (A0 - Foundation, Weeks 1-8)
 
@@ -1212,16 +1212,16 @@ def provision_hosting(customer_location, resource_spec):
 - [ ] Document troubleshooting procedures
 - [ ] Create customer-facing documentation
 
-### A2-A3 Scale to Acquisition ($150K MRR, Months 7-15)
+### A2-A3 Scale to Growth ($150K MRR, Months 7-15)
 
-**Note:** Focus on DigitalOcean Partner Pod integration and consumption growth ($40K-60K/month) for strategic channel value to acquirer.
+**Note:** Focus on DigitalOcean Partner Pod integration and consumption growth ($40K-60K/month) for strategic partnership value.
 
 **1. DigitalOcean Partner Pod Optimization:**
 - [ ] Achieve Business Partner tier (25% discount)
-- [ ] Track consumption metrics for acquisition metrics
+- [ ] Track consumption metrics for growth analytics
 - [ ] Document infrastructure provisioning patterns
 
-**2. Secondary Providers (Post-Acquisition Optional):**
+**2. Secondary Providers (Phase 2 Growth):**
 - [ ] Namecheap reseller account setup
   - Test domain registration API
   - Implement alongside OpenSRS in abstraction layer
@@ -1254,9 +1254,9 @@ def provision_hosting(customer_location, resource_spec):
 - [ ] Multi-provider failover testing
 - [ ] Incident response procedures refined
 
-### Post-Acquisition Scaling (Acquirer Decision)
+### Long-Term Scaling (Phase 3+)
 
-**Note:** This section documents long-term scaling options for acquirer reference. Not required for $10M-$15M acquisition.
+**Note:** This section documents long-term scaling options for enterprise growth and margin optimization.
 
 **1. Vancouver Colocation (Long-Term Option):**
 - [ ] Site selection (Cologix, eStruxture, Q9 Networks)
@@ -1437,7 +1437,7 @@ def provision_hosting(customer_location, resource_spec):
 
 **Final Recommendations:**
 
-**A0-A3 Acquisition Timeline (15 Months to $10M-$15M Exit):**
+**A0-A3 Growth Timeline:**
 
 **Core Stack (A0-A3):**
 1. **OpenSRS** for domains (familiarity + reliability)
@@ -1452,9 +1452,9 @@ def provision_hosting(customer_location, resource_spec):
 - Apply for Business Partner tier at A1 ($50K MRR)
 - Target $40K-60K/month DO consumption by A2
 - 25% partner discount improves margins
-- Strategic channel value drives 6-8x ARR acquisition multiple
+- Strategic channel value drives partnership benefits
 
-**Post-Acquisition Scaling (Acquirer Optional):**
+**Phase 2+ Scaling (Growth):**
 1. Namecheap (budget domain alternative)
 2. OVH/Hetzner (cost-optimized dedicated servers)
 3. SendGrid (high-volume email alternative)
@@ -1463,27 +1463,27 @@ def provision_hosting(customer_location, resource_spec):
 6. Vancouver colocation (long-term, data sovereignty)
 
 **Key Success Factors:**
-- ✅ Prioritize API quality for MCP integration
-- ✅ Maintain provider abstraction for flexibility
-- ✅ Start simple, add complexity based on demand
-- ✅ Monitor margins continuously
-- ✅ Keep alternatives for critical services
-- ✅ Leverage Canadian infrastructure as differentiator
+- Prioritize API quality for MCP integration
+- Maintain provider abstraction for flexibility
+- Start simple, add complexity based on demand
+- Monitor margins continuously
+- Keep alternatives for critical services
+- Leverage Canadian infrastructure as differentiator
 
 **This provider stack supports:**
-- **$2M ARR at 15 months** (A3 acquisition target)
+- **$2M ARR target** with MCPWorks Cloud + consulting revenue
 - **79% gross margins** with DigitalOcean Partner Pod discounts
-- **$40K-60K/month DO consumption** driving strategic channel value
+- **$40K-60K/month DO consumption** driving strategic partnership value
 - Full-stack provisioning value proposition
 - AI-native MCP interface with transparent pricing
-- Provider abstraction maximizes acquisition optionality
-- Acquisition-ready infrastructure for multiple potential acquirers
+- Provider abstraction maximizes infrastructure flexibility
+- Community Edition (self-hosted) + Cloud (managed) revenue model
 
 **Next Steps:**
 1. **A0 (Weeks 1-8):** Provider account setup, DNS migration to Cloudflare
 2. **A1 (Months 3-6):** DigitalOcean Partner Pod application, MCP server core integrations
 3. **A2 (Months 7-12):** Scale to $125K MRR, $40K/month DO consumption
-4. **A3 (Months 13-15):** Due diligence readiness, $10M-$15M acquisition close
+4. **A3 (Months 13-15):** Enterprise support contracts, dedicated infrastructure offerings
 
 ---
 
