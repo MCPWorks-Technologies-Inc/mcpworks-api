@@ -98,7 +98,7 @@ RUN pip install --no-cache-dir --target=/sandbox-packages \
 # (src/mcpworks_api/sandbox/packages_node.py) are pre-installed here.
 # Keep this list in sync with NODE_PACKAGE_REGISTRY.
 # =============================================================================
-FROM node:22-slim AS node-sandbox-builder
+FROM node:25-slim AS node-sandbox-builder
 
 WORKDIR /node-packages
 COPY deploy/nsjail/package.json .
