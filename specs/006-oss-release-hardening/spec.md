@@ -5,6 +5,12 @@
 **Status**: Draft
 **Input**: User description: "Prepare mcpworks-api for public GitHub release — remove internal docs, scrub secrets/IPs, add community files, harden for public scrutiny."
 
+## Clarifications
+
+### Session 2026-03-23
+
+- Q: What to do with CLAUDE.md for public release? → A: Move to `.claude/CLAUDE.md` unchanged and add to `.gitignore`. Create a public `AGENTS.md` at root with LLM-agnostic coding practices and standards extracted from CLAUDE.md.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - No Secrets or Internal Data Exposed (Priority: P1)
@@ -79,7 +85,7 @@ Before the repository goes public, all production credentials that were ever pre
 
 - What happens if git history contains a file that was later gitignored? The file content persists in history. Verify with `git log --all --diff-filter=A -- <file>` for each sensitive file.
 - What happens if a developer's fork preserves internal docs that were removed? Forks are independent — we can only control the upstream repo. Document this risk.
-- What happens if CLAUDE.md is removed but Claude Code needs it to work? CLAUDE.md can be moved to `.claude/` (hidden directory convention) or regenerated per-developer. It should not contain infrastructure details.
+- What happens if CLAUDE.md is removed but Claude Code needs it to work? CLAUDE.md is moved to `.claude/CLAUDE.md` (gitignored) — Claude Code reads from this path natively. Public contributors using any LLM get `AGENTS.md` instead.
 - What happens if references to mcpworks-internals are removed but specs still need that context? Remove the file path references but keep the conceptual content inline where needed.
 
 ## Requirements *(mandatory)*
@@ -89,7 +95,7 @@ Before the repository goes public, all production credentials that were ever pre
 **Internal Document Removal (CRITICAL):**
 - **FR-001**: The following files MUST be added to `.gitignore` and removed from git tracking: `ORDERS.md`, `BILLING-PLAN.md`, `PROBLEMS.md`, `SUPPORT-REPORT-*.md`, `SECURITY_AUDIT.md`, `MCP_SECURITY_AUDIT.md`.
 - **FR-002**: `PRODUCT-SPEC.md` MUST be either removed from tracking or stripped of funding references, personal emails, and internal strategy details.
-- **FR-003**: `CLAUDE.md` MUST be stripped of production IP addresses, SSH commands, deployment procedures, and moved to a location that doesn't expose infrastructure details to public viewers.
+- **FR-003**: `CLAUDE.md` MUST be moved unchanged to `.claude/CLAUDE.md` and added to `.gitignore`. A new public `AGENTS.md` MUST be created at the repository root containing LLM-agnostic coding practices, standards, and development guidance extracted from CLAUDE.md (no infrastructure details, no IPs, no deployment commands).
 - **FR-004**: Git history MUST be verified clean — no sensitive files were ever committed. If any were, the repository history must be rewritten before public release.
 
 **Infrastructure Scrubbing (CRITICAL):**
@@ -134,7 +140,7 @@ Before the repository goes public, all production credentials that were ever pre
 ## Assumptions
 
 - Internal documents (ORDERS.md, etc.) will be preserved locally or moved to the private `mcpworks-internals` repo — they are not being deleted, just removed from the public repo.
-- CLAUDE.md contains useful development guidance that should be preserved in some form, but infrastructure details must be stripped. The `.claude/` hidden directory convention is acceptable.
+- CLAUDE.md is moved unchanged to `.claude/CLAUDE.md` (gitignored, private to developers using Claude Code). A public LLM-agnostic `AGENTS.md` replaces it at root with coding standards only.
 - Git history is believed to be clean (verified in the audit), but a final verification pass is required before going public.
 - Credential rotation is a one-time operational task that will be executed as part of this feature, not an ongoing automated process.
 - The Contributor Covenant v2.1 is the standard code of conduct for open-source projects and does not require customization.
