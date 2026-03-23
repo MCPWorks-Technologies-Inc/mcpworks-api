@@ -146,7 +146,7 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md) for responsible disclosure
 
 MCPWorks API is licensed under the [Business Source License 1.1](LICENSE).
 
-- **Use**: Free for any purpose (including commercial) with up to 5 production instances
+- **Use**: Free for non-production use. Production use for internal business purposes is permitted
 - **Change Date**: 2030-03-22
 - **Change License**: Apache License 2.0
 

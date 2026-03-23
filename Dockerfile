@@ -172,6 +172,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # =============================================================================
 FROM python:3.11-slim
 
+# SECURITY NOTE: This container runs as root intentionally.
+# nsjail requires CAP_SYS_ADMIN to create Linux namespaces for sandbox isolation.
+# User-submitted code runs inside nsjail with dropped privileges (UID 65534/nobody).
+# The API process itself needs root only for nsjail namespace creation.
+
 WORKDIR /app
 
 # Install runtime dependencies (postgres client + nsjail runtime libs + Infisical CLI)

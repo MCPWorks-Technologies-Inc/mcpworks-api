@@ -43,7 +43,12 @@ services:
     volumes:
       - sandbox-tmp:/tmp/sandbox
       - scratchpad-data:/opt/mcpworks/scratchpad
+      # Docker socket: required for agent runtime (container lifecycle management).
+      # Remove this mount if you do not use the agent runtime feature.
       - /var/run/docker.sock:/var/run/docker.sock
+    # Privileged mode + capabilities: required for nsjail sandbox isolation.
+    # nsjail creates Linux namespaces (user, pid, net, mount) which require
+    # CAP_SYS_ADMIN. User code runs inside nsjail with dropped privileges.
     privileged: true
     security_opt:
       - seccomp:unconfined

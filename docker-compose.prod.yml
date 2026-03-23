@@ -32,7 +32,12 @@ services:
       - scratchpad-data:/opt/mcpworks/scratchpad
       - ./keys/jwt_private.pem:/app/keys/private.pem:ro
       - ./keys/jwt_public.pem:/app/keys/public.pem:ro
+      # Docker socket: required for agent runtime (container lifecycle management).
+      # Remove this mount if you do not use the agent runtime feature.
       - /var/run/docker.sock:/var/run/docker.sock
+    # Privileged mode + capabilities: required for nsjail sandbox isolation.
+    # nsjail creates Linux namespaces (user, pid, net, mount) which require
+    # CAP_SYS_ADMIN. User code runs inside nsjail with dropped privileges.
     privileged: true
     security_opt:
       - seccomp:unconfined

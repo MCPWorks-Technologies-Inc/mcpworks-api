@@ -43,12 +43,12 @@
 
 ## R3: Production IP Scrubbing
 
-**Decision**: Replace `159.203.30.199` with `${PROD_IP:-<your-server-ip>}` in scripts, remove from docs.
+**Decision**: Replace `<prod-ip>` with `${PROD_IP:-<your-server-ip>}` in scripts, remove from docs.
 
 **Files to scrub:**
-- `infra/prod/deploy-exporters.sh` line 4 — `PROD_IP="${1:-159.203.30.199}"`
-- `scripts/backup-db-local.sh` line 17 — `REMOTE_HOST="root@159.203.30.199"`
-- `infra/scripts/migrate-secrets.sh` line 5 — `PROD_IP="${2:-159.203.30.199}"`
+- `infra/prod/deploy-exporters.sh` line 4 — `PROD_IP="${1:-<prod-ip>}"`
+- `scripts/backup-db-local.sh` line 17 — `REMOTE_HOST="root@<prod-ip>"`
+- `infra/scripts/migrate-secrets.sh` line 5 — `PROD_IP="${2:-<prod-ip>}"`
 
 **Rationale**: Hardcoded IPs let attackers target infrastructure immediately upon repo going public.
 
