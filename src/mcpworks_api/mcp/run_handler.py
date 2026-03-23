@@ -341,6 +341,8 @@ class RunMCPHandler:
         if not backend:
             raise ValueError(f"Backend not available: {version.backend}")
 
+        agent_context = await self._load_agent_context(namespace)
+
         execution_id = str(uuid.uuid4())
         start_time = datetime.now(UTC)
 
@@ -351,6 +353,7 @@ class RunMCPHandler:
             account=self.account,
             execution_id=execution_id,
             sandbox_env=filtered_env,
+            context=agent_context,
             language=getattr(version, "language", "python"),
             namespace=self.namespace_name,
         )
@@ -393,6 +396,28 @@ class RunMCPHandler:
             },
         )
 
+    async def _load_agent_context(self, namespace: Namespace) -> dict[str, Any] | None:
+        """Load agent state as context dict for code-mode cross-function calls.
+
+        If the namespace has an associated agent, returns ``{"state": {...}}``.
+        Returns ``None`` if no agent exists (non-agent namespaces).
+        """
+        from sqlalchemy import select
+
+        from mcpworks_api.models.agent import Agent
+        from mcpworks_api.services.agent_service import AgentService
+
+        result = await self.db.execute(
+            select(Agent).where(Agent.namespace_id == namespace.id).limit(1)
+        )
+        agent = result.scalar_one_or_none()
+        if not agent:
+            return None
+
+        agent_service = AgentService(self.db)
+        agent_state = await agent_service.get_all_state(agent.id)
+        return {"state": agent_state}
+
     async def _execute_code_mode(
         self,
         code: str,
@@ -415,6 +440,12 @@ class RunMCPHandler:
 
         run_url = url_builder.mcp_url(self.namespace_name, "run")
         extra_files = generate_functions_package(functions, self.namespace_name, run_url=run_url)
+
+        # Inject agent state as context.json so cross-function calls can
+        # pass it to handler(input, context) entry points.
+        agent_context = await self._load_agent_context(namespace)
+        if agent_context:
+            extra_files["context.json"] = json.dumps(agent_context, default=str)
 
         # Inject API key for cross-language bridge (TS functions callable from Python)
         has_ts = any(getattr(v, "language", "python") == "typescript" for _, v in functions)
@@ -503,6 +534,11 @@ class RunMCPHandler:
 
         run_url = url_builder.mcp_url(self.namespace_name, "run")
         extra_files = generate_ts_functions_package(functions, self.namespace_name, run_url=run_url)
+
+        # Inject agent state as context.json for cross-function handler() calls
+        agent_context = await self._load_agent_context(namespace)
+        if agent_context:
+            extra_files["context.json"] = json.dumps(agent_context, default=str)
 
         # Inject API key for cross-language bridge (Python functions callable from TS)
         has_py = any(getattr(v, "language", "python") == "python" for _, v in functions)
