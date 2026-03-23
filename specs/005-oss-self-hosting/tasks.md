@@ -118,7 +118,7 @@
 
 ### Implementation for User Story 6
 
-- [ ] T035 [US6] Write self-hosting guide covering prerequisites (Linux, Docker, domain, DNS), key generation, env configuration, compose up, seed admin, verification, nsjail vs SANDBOX_DEV_MODE, and troubleshooting in docs/SELF-HOSTING.md
+- [x] T035 [US6] Write self-hosting guide covering prerequisites (Linux, Docker, domain, DNS), key generation, env configuration, compose up, seed admin, verification, nsjail vs SANDBOX_DEV_MODE, and troubleshooting in docs/SELF-HOSTING.md
 
 **Checkpoint**: US6 complete — self-hosting is documented.
 
@@ -145,10 +145,10 @@
 
 **Purpose**: Final verification and cleanup across all stories.
 
-- [ ] T040 Run full hardcoded domain audit: `grep -r "mcpworks\.io" src/ --include="*.py" | grep -v __pycache__` — verify zero runtime hardcoding remains
-- [ ] T041 Run existing test suite (`pytest tests/unit/ --ignore=tests/unit/test_mcp_protocol.py --ignore=tests/unit/test_mcp_router.py -q`) and verify no regressions
-- [ ] T042 Verify backward compatibility: start with no `BASE_DOMAIN` set, confirm all URLs default to mcpworks.io
-- [ ] T043 Update `.env.example` to document new env vars (BASE_DOMAIN, BASE_SCHEME, ALLOW_REGISTRATION, SMTP_*)
+- [x] T040 Run full hardcoded domain audit: `grep -r "mcpworks\.io" src/ --include="*.py" | grep -v __pycache__` — verify zero runtime hardcoding remains
+- [x] T041 Run existing test suite (`pytest tests/unit/ --ignore=tests/unit/test_mcp_protocol.py --ignore=tests/unit/test_mcp_router.py -q`) and verify no regressions
+- [x] T042 Verify backward compatibility: start with no `BASE_DOMAIN` set, confirm all URLs default to mcpworks.io
+- [x] T043 Update `.env.example` to document new env vars (BASE_DOMAIN, BASE_SCHEME, ALLOW_REGISTRATION, SMTP_*)
 
 ---
 
