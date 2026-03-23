@@ -34,8 +34,8 @@ class Settings(BaseSettings):
         description="URL scheme for generated URLs (https or http)",
     )
     allow_registration: bool = Field(
-        default=True,
-        description="Whether public user registration is enabled (set False for self-hosted)",
+        default=False,
+        description="Whether public user registration is enabled",
     )
 
     # Database
