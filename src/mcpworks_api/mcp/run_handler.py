@@ -352,6 +352,7 @@ class RunMCPHandler:
             execution_id=execution_id,
             sandbox_env=filtered_env,
             language=getattr(version, "language", "python"),
+            namespace=self.namespace_name,
         )
 
         execution_time_ms = result.execution_time_ms or int(
@@ -441,6 +442,7 @@ class RunMCPHandler:
             execution_id=execution_id,
             extra_files=extra_files,
             sandbox_env=sandbox_env,
+            namespace=self.namespace_name,
         )
 
         execution_time_ms = result.execution_time_ms or int(
@@ -533,6 +535,7 @@ class RunMCPHandler:
             extra_files=extra_files,
             sandbox_env=sandbox_env,
             language="typescript",
+            namespace=self.namespace_name,
         )
 
         execution_time_ms = result.execution_time_ms or int(

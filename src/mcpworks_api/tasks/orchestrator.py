@@ -539,6 +539,7 @@ async def _execute_namespace_function(
             account=account,
             execution_id=execution_id,
             context=context,
+            namespace=agent.name,
         )
 
         if result.success:
