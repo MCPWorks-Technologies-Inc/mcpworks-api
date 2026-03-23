@@ -4,7 +4,7 @@
 **Created:** 2026-03-20
 **Status:** Approved
 **Spec Author:** Simon Carr + Claude
-**Origin:** OpenClaw architecture analysis (see `mcpworks-internals/docs/research/technical/2026-03-20_openclaw-architecture-comparison.md`)
+**Origin:** OpenClaw architecture analysis
 
 ---
 

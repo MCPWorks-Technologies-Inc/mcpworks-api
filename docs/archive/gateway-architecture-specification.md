@@ -4,7 +4,6 @@
 **Last Updated:** 2026-02-09
 **Status:** Active
 **Related Documents:**
-- [A0 Implementation Plan](../../../mcpworks-internals/docs/implementation/A0-IMPLEMENTATION-PLAN.md)
 - [Database Models Specification](./database-models-specification.md)
 - [Code Sandbox Specification](./code-sandbox-specification.md)
 
