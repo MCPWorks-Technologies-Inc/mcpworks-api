@@ -100,11 +100,14 @@ class Settings(BaseSettings):
     rate_limit_requests_per_hour: int = Field(default=1000, ge=100, le=10000)
 
     # Admin
-    admin_emails: list[str] = Field(default_factory=lambda: ["simon.carr@mcpworks.io"])
+    admin_emails: list[str] = Field(default_factory=lambda: ["admin@mcpworks.io"])
     admin_api_key: str = Field(
         default="",
         description="Static API key for admin endpoints (X-Admin-Key header)",
     )
+
+    # Internal API URL (for intra-container calls like Discord gateway)
+    internal_api_url: str = Field(default="http://localhost:8000")
 
     # OAuth Providers
     oauth_google_client_id: str = Field(default="")
