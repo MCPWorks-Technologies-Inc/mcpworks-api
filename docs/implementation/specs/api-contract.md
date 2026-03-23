@@ -3,13 +3,13 @@
 **Version:** 1.0.0
 **Created:** 2025-11-02
 **Status:** Draft
-**Purpose:** Defines the REST API contract between `mcpworks-mcp` (MCP client) and `mcpworks-api` (backend service)
+**Purpose:** Defines the REST API contract for `mcpworks-api` (backend service)
 
 ---
 
 ## 1. Overview
 
-This document defines the HTTP/JSON API contract that the open-source MCP server (`mcpworks-mcp`) uses to communicate with the proprietary backend service (`mcpworks-api`).
+This document defines the HTTP/JSON API contract for `mcpworks-api`, the open-source (BSL 1.1) backend service powering the MCPWorks platform. AI assistants connect directly via namespace HTTPS endpoints.
 
 ### 1.1 Base URL
 
@@ -833,4 +833,4 @@ GET /v1/services?page=1&per_page=20
 
 ---
 
-**This contract is the authoritative reference for MCP server developers. Any changes require coordination between `mcpworks-mcp` and `mcpworks-api` teams.**
+**This contract is the authoritative reference for the mcpworks-api REST endpoints. Any breaking changes require semantic versioning and deprecation notices.**

@@ -29,9 +29,8 @@ Constitution → Specification (WHAT) → Plan (HOW) → Tasks (WHO/WHEN) → Co
 - Tasks MUST be 2-8 hours of work with clear acceptance criteria
 - No code without an approved specification
 
-**Rationale**: mcpworks targets $10M-$15M acquisition in 15 months. Detailed specs prevent
-costly rework and demonstrate acquisition-ready engineering discipline. Acquirer due diligence
-will review specifications; missing specs = red flag.
+**Rationale**: Detailed specs prevent costly rework and demonstrate production-ready engineering
+discipline. Open-source contributors and enterprise customers expect clear specifications.
 
 ### II. Token Efficiency & Streaming
 
@@ -68,7 +67,7 @@ Security by Default:
 - Input validation and sanitization on all endpoints
 
 **Rationale**: Bank-grade transaction safety = enterprise trust. No double-charging, no
-orphaned resources. Security incidents kill acquisitions; SOC 2 compliance starts at
+orphaned resources. Security incidents destroy customer trust; SOC 2 compliance starts at
 architecture, not retrofitted later.
 
 ### IV. Provider Abstraction & Observability
@@ -78,7 +77,7 @@ Backend infrastructure MUST be swappable; every operation MUST be traceable and 
 Provider Abstraction:
 - Abstract all provider-specific code behind interfaces
 - Start with DigitalOcean (Phase 1), support multi-provider (Phase 2+)
-- Enable acquirer migration flexibility
+- Enable self-hosting on any infrastructure
 
 Observable by Design:
 - Structured logging (JSON, searchable)
@@ -86,8 +85,8 @@ Observable by Design:
 - Metrics collection (Prometheus-compatible)
 - Customer-facing audit logs
 
-**Rationale**: Acquisition flexibility means Cloudflare or Anthropic can migrate to their
-infra. Production incidents will happen; observability = fast resolution = customer retention.
+**Rationale**: Infrastructure flexibility means self-hosters and enterprise customers can deploy
+on their preferred cloud. Production incidents will happen; observability = fast resolution = customer retention.
 
 ### V. API Contracts & Test Coverage
 
@@ -106,7 +105,7 @@ Test Coverage Requirements:
 - Load tests: 100 concurrent operations minimum
 
 **Rationale**: AI assistants cache tool schemas; breaking changes = angry developers = churn.
-Acquisition due diligence will review test coverage; <80% = red flag.
+Enterprise customers and community contributors expect well-tested code; <80% = quality risk.
 
 ## Quality Standards
 
@@ -172,12 +171,12 @@ Implementation (CODE)
 - Task acceptance criteria are clear
 - Test strategy is defined
 
-### Acquisition Readiness
+### Production Readiness
 
 All specifications MUST be written assuming:
-- Acquirer engineering team will review
-- Acquirer needs to understand architecture in <2 hours
-- Acquirer wants evidence of engineering rigor
+- Open-source contributors will review and extend the code
+- Enterprise customers need to understand architecture in <2 hours
+- Partners want evidence of engineering rigor
 
 **Acceptable Technical Debt:**
 - Temporary workarounds with documented mitigation plan
@@ -198,7 +197,7 @@ plans, tasks, and implementations MUST comply with these principles.
 ### Amendment Process
 
 This Constitution may be amended when:
-- Acquisition strategy changes materially
+- Business strategy changes materially
 - New technical constraints emerge
 - Team size changes significantly
 

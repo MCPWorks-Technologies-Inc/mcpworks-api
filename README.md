@@ -1,6 +1,6 @@
 # mcpworks API
 
-API Gateway for mcpworks platform - authentication, credit accounting, and service routing.
+Open-source (BSL 1.1) backend for the MCPWorks platform — namespace-based function hosting and autonomous agent runtime for AI assistants.
 
 ## Quick Start
 
@@ -34,3 +34,13 @@ uvicorn mcpworks_api.main:app --reload
 - `POST /v1/auth/refresh` - Refresh access token
 - `GET /v1/users/me` - Get current user profile
 - `GET /v1/health` - Health check
+
+## Self-Hosting
+
+See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for step-by-step deployment instructions.
+
+## License
+
+MCPWorks API is licensed under the [Business Source License 1.1](LICENSE). After the Change Date (2030-03-22), the license converts to Apache License 2.0.
+
+See [LICENSE](LICENSE) for details.

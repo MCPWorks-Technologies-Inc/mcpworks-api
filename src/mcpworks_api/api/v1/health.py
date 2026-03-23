@@ -11,6 +11,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api import url_builder
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.redis import get_redis
 
@@ -90,7 +91,7 @@ async def verify_domain(domain: str) -> dict[str, bool]:
     """Verify if a domain is valid for on-demand TLS certificate issuance.
 
     Called by Caddy before issuing certificates for wildcard subdomains.
-    Only allows *.create.mcpworks.io, *.run.mcpworks.io, and *.agent.mcpworks.io patterns.
+    Only allows *.create.{BASE_DOMAIN}, *.run.{BASE_DOMAIN}, and *.agent.{BASE_DOMAIN} patterns.
 
     Args:
         domain: The domain requesting a certificate.
@@ -101,7 +102,7 @@ async def verify_domain(domain: str) -> dict[str, bool]:
     from fastapi import HTTPException
 
     # Valid domain patterns for on-demand TLS
-    valid_suffixes = [".create.mcpworks.io", ".run.mcpworks.io", ".agent.mcpworks.io"]
+    valid_suffixes = url_builder.valid_suffixes()
 
     # Check if domain matches our namespace patterns
     is_valid = any(domain.endswith(suffix) for suffix in valid_suffixes)

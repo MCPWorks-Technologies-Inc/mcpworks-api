@@ -9,9 +9,9 @@
 
 ## Project Mission
 
-Build a production-grade AI-native workflow automation platform that enables AI assistants to create and execute workflows via the MCP protocol. Users create workflows visually (Activepieces), and invoke them as MCP tools from Claude Code, Codex, or GitHub Copilot.
+Build the open-source standard for token-efficient AI agents. MCPWorks is a namespace-based function hosting platform where AI assistants create and execute functions via MCP over HTTPS. Agents run autonomously with scheduling, state, and BYOAI orchestration.
 
-**Core Value Proposition:** Zapier for AI assistants - create workflows once, execute from any MCP-compatible AI tool.
+**Core Value Proposition:** Describe the automation. Your AI builds it. MCPWorks runs it. Open-source (BSL 1.1) — self-host or use MCPWorks Cloud.
 
 ---
 
@@ -26,7 +26,7 @@ Build a production-grade AI-native workflow automation platform that enables AI 
 - Write tasks defining WHO/WHEN (actionable breakdown, dependencies)
 - Only then write implementation code
 
-**Rationale:** mcpworks targets $10M-$15M acquisition in 15 months. Detailed specs prevent costly rework and demonstrate acquisition-ready engineering discipline.
+**Rationale:** Detailed specs prevent costly rework and demonstrate production-ready engineering discipline. Open-source contributors and enterprise customers expect clear specifications.
 
 ### 2. Token Efficiency First
 
@@ -67,9 +67,9 @@ Build a production-grade AI-native workflow automation platform that enables AI 
 - Abstract all provider-specific code behind interfaces
 - Start with DigitalOcean (Phase 1)
 - Support multi-provider (Phase 2+)
-- Enable acquirer migration (Phase 3)
+- Enable community self-hosting on any infrastructure (Phase 3)
 
-**Rationale:** Acquisition flexibility. Cloudflare acquires us → migrate to Workers. Anthropic acquires us → migrate to their infra.
+**Rationale:** Infrastructure flexibility. Self-hosters choose their cloud. Enterprise customers choose their provider. No vendor lock-in.
 
 ### 6. Security by Default
 
@@ -80,7 +80,7 @@ Build a production-grade AI-native workflow automation platform that enables AI 
 - Monitoring and abuse detection
 - Encryption at rest and in transit
 
-**Rationale:** Security incidents kill acquisitions. SOC 2 compliance starts at architecture, not retrofitted later.
+**Rationale:** Security incidents destroy customer trust. SOC 2 compliance starts at architecture, not retrofitted later.
 
 ### 7. Transparent Pricing
 
@@ -125,7 +125,7 @@ Minimum coverage:
 - E2E tests: Full customer workflows
 - Load tests: 100 concurrent operations
 
-**Rationale:** Acquisition due diligence will review test coverage. <80% = red flag.
+**Rationale:** Enterprise customers and community contributors expect well-tested code. <80% coverage = quality risk.
 
 ---
 
@@ -302,14 +302,14 @@ Implementation (CODE)
 
 ---
 
-## Acquisition Readiness Principles
+## Production Readiness Principles
 
-### DD-Ready Documentation
+### Community-Ready Documentation
 
 All specifications must be written assuming:
-- Acquirer engineering team will review
-- Acquirer needs to understand architecture in <2 hours
-- Acquirer wants evidence of engineering rigor
+- Open-source contributors will review and extend the code
+- Enterprise customers need to understand architecture in <2 hours
+- Partners want evidence of engineering rigor
 
 ### Technical Debt Management
 
@@ -329,7 +329,7 @@ All specifications must be written assuming:
 ## Amendment Process
 
 This Constitution may be amended when:
-- Acquisition strategy changes materially
+- Business strategy changes materially
 - New technical constraints emerge
 - Team size changes significantly (solo → team)
 

@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from mcpworks_api import url_builder
+
 if TYPE_CHECKING:
     from mcpworks_api.models import Function, FunctionVersion
 
@@ -287,7 +289,7 @@ def generate_functions_package(
 
     # _ts_bridge.py (only if namespace has TypeScript functions)
     if has_ts:
-        bridge_url = run_url or f"https://{namespace}.run.mcpworks.io/mcp"
+        bridge_url = run_url or url_builder.mcp_url(namespace, "run")
         files["functions/_ts_bridge.py"] = _TS_BRIDGE_TEMPLATE.format(run_url=bridge_url)
 
     # Per-service modules + raw code files

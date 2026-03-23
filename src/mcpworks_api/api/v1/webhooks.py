@@ -1,4 +1,4 @@
-"""Webhook ingress handler for *.agent.mcpworks.io/webhook/* requests."""
+"""Webhook ingress handler for *.agent.{BASE_DOMAIN}/webhook/* requests."""
 
 import hashlib
 import hmac
@@ -27,7 +27,7 @@ router = APIRouter(tags=["webhooks"])
 async def handle_agent_webhook(path: str, request: Request) -> JSONResponse:
     """Handle incoming webhook for agent endpoints.
 
-    URL: https://{agent-name}.agent.mcpworks.io/webhook/{path}
+    URL: https://{agent-name}.agent.{BASE_DOMAIN}/webhook/{path}
     """
     namespace = getattr(request.state, "namespace", None)
     if not namespace:

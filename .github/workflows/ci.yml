@@ -126,6 +126,8 @@ jobs:
           APP_DEBUG: "true"
           POSTGRES_HOST: localhost
           REDIS_HOST: localhost
+          ALLOW_REGISTRATION: "true"
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
         run: |
           pytest tests/ -v --cov=mcpworks_api --cov-report=xml --cov-report=term-missing --cov-fail-under=0
 

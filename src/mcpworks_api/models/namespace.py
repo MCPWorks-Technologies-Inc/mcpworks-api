@@ -159,12 +159,16 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     @property
     def create_endpoint(self) -> str:
         """Compute management endpoint URL."""
-        return f"https://{self.name}.create.mcpworks.io"
+        from mcpworks_api import url_builder
+
+        return url_builder.create_url(self.name)
 
     @property
     def run_endpoint(self) -> str:
         """Compute execution endpoint URL."""
-        return f"https://{self.name}.run.mcpworks.io"
+        from mcpworks_api import url_builder
+
+        return url_builder.run_url(self.name)
 
     def __repr__(self) -> str:
         return f"<Namespace(id={self.id}, name={self.name}, account_id={self.account_id})>"
