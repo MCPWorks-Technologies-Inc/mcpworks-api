@@ -24,6 +24,20 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
 
+    # Domain Configuration (OSS self-hosting)
+    base_domain: str = Field(
+        default="mcpworks.io",
+        description="Root domain for all URL generation, subdomain routing, and access validation",
+    )
+    base_scheme: str = Field(
+        default="https",
+        description="URL scheme for generated URLs (https or http)",
+    )
+    allow_registration: bool = Field(
+        default=True,
+        description="Whether public user registration is enabled (set False for self-hosted)",
+    )
+
     # Database
     database_url: str = Field(
         default="postgresql+asyncpg://mcpworks:mcpworks_dev@localhost:5432/mcpworks",
@@ -107,6 +121,14 @@ class Settings(BaseSettings):
     resend_from_email: str = Field(default="noreply@mcpworks.io")
     email_provider: str = Field(default="resend")
 
+    # Email - SMTP (alternative to Resend for self-hosted)
+    smtp_host: str = Field(default="", description="SMTP server hostname")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_username: str = Field(default="", description="SMTP authentication username")
+    smtp_password: str = Field(default="", description="SMTP authentication password")
+    smtp_from_email: str = Field(default="", description="SMTP sender address")
+    smtp_use_tls: bool = Field(default=True, description="Whether to use STARTTLS")
+
     # Tier Execution Limits (monthly) - per PRICING.md v7.0.0
     tier_executions_trial: int = Field(default=125_000)
     tier_executions_pro: int = Field(default=250_000)
@@ -154,13 +176,21 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        """Check if running in production environment."""
         return self.app_env == "production"
 
     @property
     def is_development(self) -> bool:
-        """Check if running in development environment."""
         return self.app_env == "development"
+
+    @property
+    def api_domain(self) -> str:
+        return f"api.{self.base_domain}"
+
+    @property
+    def billing_enabled(self) -> bool:
+        return bool(
+            self.stripe_secret_key and self.stripe_secret_key != "sk_test_placeholder"
+        )  # pragma: allowlist secret
 
 
 @lru_cache
