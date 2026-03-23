@@ -1,0 +1,55 @@
+# MCPWorks Self-Hosted Caddyfile
+# Uses {$BASE_DOMAIN} env var for domain configuration.
+# Set BASE_DOMAIN in your .env file.
+
+{
+    email {$ACME_EMAIL:admin@localhost}
+
+    on_demand_tls {
+        ask http://api:8000/v1/internal/verify-domain
+    }
+}
+
+api.{$BASE_DOMAIN} {
+    reverse_proxy api:8000 {
+        health_uri /v1/health/ready
+        health_interval 15s
+        health_timeout 5s
+    }
+
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    @legal path /v1/legal/*
+    header @legal X-Frame-Options SAMEORIGIN
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+*.create.{$BASE_DOMAIN} {
+    tls {
+        on_demand
+    }
+    reverse_proxy api:8000
+}
+
+*.run.{$BASE_DOMAIN} {
+    tls {
+        on_demand
+    }
+    reverse_proxy api:8000
+}
+
+*.agent.{$BASE_DOMAIN} {
+    tls {
+        on_demand
+    }
+    reverse_proxy api:8000
+}

@@ -67,8 +67,8 @@
 
 ### Implementation for User Story 5
 
-- [ ] T023 [P] [US5] Create LICENSE file with BSL 1.1 text (Licensor: MCPWorks Inc., Change Date: 2030-03-22, Change License: Apache License 2.0) in LICENSE
-- [ ] T024 [P] [US5] Add license badge and self-hosting section link to README.md
+- [x] T023 [P] [US5] Create LICENSE file with BSL 1.1 text (Licensor: MCPWorks Inc., Change Date: 2030-03-22, Change License: Apache License 2.0) in LICENSE
+- [x] T024 [P] [US5] Add license badge and self-hosting section link to README.md
 
 **Checkpoint**: US5 complete — legal clarity established.
 
@@ -82,12 +82,12 @@
 
 ### Implementation for User Story 2
 
-- [ ] T025 [P] [US2] Create `.env.self-hosted.example` with all required and optional env vars, guided comments, `BASE_DOMAIN=localhost`, `ALLOW_REGISTRATION=false`, no Stripe/Resend keys in .env.self-hosted.example
-- [ ] T026 [P] [US2] Create Caddyfile template using `{$BASE_DOMAIN}` env var substitution for api, *.create, *.run, *.agent server blocks in Caddyfile.self-hosted
-- [ ] T027 [US2] Create self-hosted Docker Compose with postgres:15, redis:7-alpine, api (from Dockerfile), and caddy (from Caddyfile.self-hosted) services in docker-compose.self-hosted.yml
-- [ ] T028 [US2] Create seed script that reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from env, creates admin user via SQLAlchemy, and prints confirmation in scripts/seed_admin.py
-- [ ] T029 [US2] Add `allow_registration` gate at top of registration handler — return 403 with `registration_disabled` error when disabled in src/mcpworks_api/api/v1/auth.py
-- [ ] T030 [US2] Write unit test for registration gate (enabled/disabled) in tests/unit/test_registration_gate.py
+- [x] T025 [P] [US2] Create `.env.self-hosted.example` with all required and optional env vars, guided comments, `BASE_DOMAIN=localhost`, `ALLOW_REGISTRATION=false`, no Stripe/Resend keys in .env.self-hosted.example
+- [x] T026 [P] [US2] Create Caddyfile template using `{$BASE_DOMAIN}` env var substitution for api, *.create, *.run, *.agent server blocks in Caddyfile.self-hosted
+- [x] T027 [US2] Create self-hosted Docker Compose with postgres:15, redis:7-alpine, api (from Dockerfile), and caddy (from Caddyfile.self-hosted) services in docker-compose.self-hosted.yml
+- [x] T028 [US2] Create seed script that reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from env, creates admin user via SQLAlchemy, and prints confirmation in scripts/seed_admin.py
+- [x] T029 [US2] Add `allow_registration` gate at top of registration handler — return 403 with `registration_disabled` error when disabled in src/mcpworks_api/api/v1/auth.py
+- [x] T030 [US2] Write unit test for registration gate (enabled/disabled) in tests/unit/test_registration_gate.py
 
 **Checkpoint**: US2 complete — single-command self-hosted deployment works.
 
