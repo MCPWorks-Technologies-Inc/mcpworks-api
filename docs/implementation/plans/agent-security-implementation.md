@@ -3,14 +3,13 @@
 **Version:** 1.0.0
 **Last Updated:** 2026-03-14
 **Status:** Active
-**Source Specification:** `../../mcpworks-internals/docs/implementation/agent-security-specification.md`
 **Framework:** OWASP Top 10 for LLM Applications 2025
 
 ---
 
 ## Overview
 
-This plan translates the Agent Security Specification (in mcpworks-internals) into concrete code changes for the mcpworks-api codebase. It covers P0 tasks (build before pilot users) and P1 tasks (build before public launch).
+This plan covers agent security controls for the mcpworks-api codebase. It covers P0 tasks (build before pilot users) and P1 tasks (build before public launch).
 
 **Architecture context:** The security controls in this plan are enforced in the API layer — deterministically, not by the LLM. The LLM never decides what it's allowed to do; the API decides based on the agent's tool tier, the account's quotas, and the operation's risk level.
 

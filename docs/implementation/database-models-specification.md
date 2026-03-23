@@ -4,8 +4,7 @@
 **Last Updated:** 2026-02-09
 **Status:** Active
 **Related Documents:**
-- [Namespace Architecture](../../../mcpworks-internals/docs/implementation/namespace-architecture.md)
-- [Code Execution Sandbox Specification](../../../mcpworks-internals/docs/implementation/code-execution-sandbox-specification.md)
+- [Code Sandbox Specification](code-sandbox-specification.md)
 
 ---
 
@@ -2132,7 +2131,7 @@ def hash_ip_address(ip: str, salt: str) -> str:
 - Network restrictions
 - File system isolation
 
-See: [Code Execution Sandbox Specification](../../../mcpworks-internals/docs/implementation/code-execution-sandbox-specification.md)
+See: [Code Sandbox Specification](code-sandbox-specification.md)
 
 ---
 

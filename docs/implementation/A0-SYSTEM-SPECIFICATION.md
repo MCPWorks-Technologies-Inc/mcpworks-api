@@ -399,11 +399,6 @@ mcpworks-api/
 
 ## Related Documents
 
-**In mcpworks-internals:**
-- [A0-IMPLEMENTATION-PLAN.md](../../../mcpworks-internals/docs/implementation/A0-IMPLEMENTATION-PLAN.md) - Original implementation plan
-- [STRATEGY.md](../../../mcpworks-internals/STRATEGY.md) - Business strategy
-- [FINANCIAL-PLAN.md](../../../mcpworks-internals/FINANCIAL-PLAN.md) - Financial projections
-
 ---
 
 ## Changelog

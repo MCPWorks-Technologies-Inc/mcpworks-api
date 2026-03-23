@@ -195,6 +195,7 @@ class SandboxBackend(Backend):
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
         language: str = "python",
+        namespace: str = "unknown",
     ) -> ExecutionResult:
         """Execute Python or TypeScript code in sandbox.
 
@@ -239,7 +240,6 @@ class SandboxBackend(Backend):
         tier = DEFAULT_TIER.value
         if hasattr(account, "user") and account.user is not None:
             tier = account.user.effective_tier
-        namespace = getattr(account, "namespace", None) or "unknown"
 
         if self._dev_mode:
             result = await self._execute_dev_mode(

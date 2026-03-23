@@ -179,6 +179,7 @@ async def _execute_webhook_function_direct(
                 account=account,
                 execution_id=execution_id,
                 context=context,
+                namespace=agent.name,
             )
         except Exception as e:
             run.status = "failed"

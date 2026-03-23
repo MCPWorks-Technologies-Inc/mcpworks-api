@@ -98,3 +98,15 @@ _create_function.sh
 
 # Claude Code local settings (may contain tokens in permissions)
 .claude/settings.local.json
+
+# Internal documents (governance, strategy, support, audits)
+ORDERS.md
+BILLING-PLAN.md
+PROBLEMS.md
+SUPPORT-REPORT-*.md
+SECURITY_AUDIT.md
+MCP_SECURITY_AUDIT.md
+PRODUCT-SPEC.md
+
+# CLAUDE.md is private (moved to .claude/CLAUDE.md for Claude Code)
+CLAUDE.md

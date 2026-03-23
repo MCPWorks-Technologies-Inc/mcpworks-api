@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-PROD_IP="${1:-159.203.30.199}"
+PROD_IP="${1:?Usage: deploy-exporters.sh <prod-ip> [mgmt-vpc-ip]}"
 MGMT_VPC_IP="${2:-}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
