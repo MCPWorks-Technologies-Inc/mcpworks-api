@@ -209,6 +209,12 @@ class BillingMiddleware(BaseHTTPMiddleware):
         Only tracks usage for run endpoints (function execution).
         Management operations via create endpoint are not metered.
         """
+        from mcpworks_api.config import get_settings
+
+        if not get_settings().billing_enabled:
+            response = await call_next(request)
+            return response
+
         # Only track for run endpoint
         endpoint_type = getattr(request.state, "endpoint_type", None)
         if endpoint_type != "run":

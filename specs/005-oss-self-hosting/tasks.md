@@ -101,10 +101,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Add `billing_enabled` property to BillingMiddleware (checks `settings.stripe_secret_key` truthiness), add early return in `dispatch()` when disabled in src/mcpworks_api/middleware/billing.py
-- [ ] T032 [US3] Update account/usage endpoint to return self-hosted status (`tier: "self-hosted"`, `billing_enabled: false`, `executions_limit: -1`) when billing disabled in src/mcpworks_api/api/v1/account.py
-- [ ] T033 [P] [US3] Update subscriptions endpoint to return 404 with `billing_not_configured` error when Stripe not configured in src/mcpworks_api/api/v1/subscriptions.py
-- [ ] T034 [US3] Write unit tests for billing bypass (middleware skip, account response, subscriptions 404) in tests/unit/test_billing_bypass.py
+- [x] T031 [US3] Add `billing_enabled` property to BillingMiddleware (checks `settings.stripe_secret_key` truthiness), add early return in `dispatch()` when disabled in src/mcpworks_api/middleware/billing.py
+- [x] T032 [US3] Update account/usage endpoint to return self-hosted status (`tier: "self-hosted"`, `billing_enabled: false`, `executions_limit: -1`) when billing disabled in src/mcpworks_api/api/v1/account.py
+- [x] T033 [P] [US3] Update subscriptions endpoint to return 404 with `billing_not_configured` error when Stripe not configured in src/mcpworks_api/api/v1/subscriptions.py
+- [x] T034 [US3] Write unit tests for billing bypass (middleware skip, account response, subscriptions 404) in tests/unit/test_billing_bypass.py
 
 **Checkpoint**: US3 complete — Stripe-free operation works.
 
@@ -132,10 +132,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T036 [US4] Create SmtpProvider class implementing EmailProvider protocol using aiosmtplib in src/mcpworks_api/services/smtp_provider.py
-- [ ] T037 [US4] Update `_get_provider()` selection logic: Resend → SMTP → ConsoleProvider in src/mcpworks_api/services/email.py
-- [ ] T038 [US4] Add `aiosmtplib` to project dependencies in pyproject.toml
-- [ ] T039 [US4] Write unit tests for SMTP provider and provider selection logic in tests/unit/test_smtp_provider.py
+- [x] T036 [US4] Create SmtpProvider class implementing EmailProvider protocol using aiosmtplib in src/mcpworks_api/services/smtp_provider.py
+- [x] T037 [US4] Update `_get_provider()` selection logic: Resend → SMTP → ConsoleProvider in src/mcpworks_api/services/email.py
+- [x] T038 [US4] Add `aiosmtplib` to project dependencies in pyproject.toml
+- [x] T039 [US4] Write unit tests for SMTP provider and provider selection logic in tests/unit/test_smtp_provider.py
 
 **Checkpoint**: US4 complete — email works via Resend, SMTP, or silent fallback.
 
