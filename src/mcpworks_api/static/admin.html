@@ -405,6 +405,12 @@ tailwind.config = {
 let TOKEN = null;
 const API = window.location.origin;
 
+// Read admin token from cookie (set by main.py login gate)
+(function() {
+  var m = document.cookie.match(/(?:^|;\s*)_admin_token=([^;]+)/);
+  if (m) TOKEN = decodeURIComponent(m[1]);
+})();
+
 // --- Tab system ---
 
 let _activeTab = 'overview';
@@ -475,6 +481,18 @@ document.getElementById('login-password').addEventListener('keydown', (e) => {
 document.getElementById('login-email').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('login-password').focus();
 });
+
+// Auto-login if token already set from cookie
+if (TOKEN) {
+  document.getElementById('login-section').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('search-section').classList.remove('hidden');
+  document.getElementById('user-info').classList.remove('hidden');
+  loadStats();
+  loadLeaderboard();
+  loadPendingApprovals();
+  loadNamespaces();
+}
 
 async function apiFetch(path) {
   const res = await fetch(`${API}${path}`, {
