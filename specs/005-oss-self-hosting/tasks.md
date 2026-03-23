@@ -19,9 +19,9 @@
 
 **Purpose**: Add new configuration settings and create the URL builder utility that all user stories depend on.
 
-- [ ] T001 Add `base_domain`, `base_scheme`, `allow_registration`, and SMTP settings to Settings class in src/mcpworks_api/config.py
-- [ ] T002 Create centralized URL builder module with `create_url()`, `run_url()`, `agent_url()`, `mcp_url()`, `api_url()`, `view_url()`, `chat_url()`, `valid_suffixes()` functions in src/mcpworks_api/url_builder.py
-- [ ] T003 Write unit tests for url_builder verifying all URL functions with default domain, custom domain, custom scheme, and port-in-domain in tests/unit/test_url_builder.py
+- [x] T001 Add `base_domain`, `base_scheme`, `allow_registration`, and SMTP settings to Settings class in src/mcpworks_api/config.py
+- [x] T002 Create centralized URL builder module with `create_url()`, `run_url()`, `agent_url()`, `mcp_url()`, `api_url()`, `view_url()`, `chat_url()`, `valid_suffixes()` functions in src/mcpworks_api/url_builder.py
+- [x] T003 Write unit tests for url_builder verifying all URL functions with default domain, custom domain, custom scheme, and port-in-domain in tests/unit/test_url_builder.py
 
 **Checkpoint**: URL builder and config ready — all user story work can begin.
 
