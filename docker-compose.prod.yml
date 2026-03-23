@@ -3,6 +3,7 @@ services:
     image: caddy:2-alpine
     container_name: mcpworks-caddy
     restart: unless-stopped
+    env_file: .env
     ports:
       - "80:80"
       - "443:443"
@@ -21,34 +22,11 @@ services:
       dockerfile: Dockerfile
     container_name: mcpworks-api
     restart: unless-stopped
+    env_file: .env
     expose:
       - "8000"
     ports:
-      - "10.0.0.1:9000:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - APP_ENV=production
-      - APP_DEBUG=false
-      - APP_PORT=8000
-      - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
-      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
-      - SANDBOX_DEV_MODE=false
-      - INFISICAL_TOKEN=${INFISICAL_TOKEN:-}
-      - INFISICAL_PROJECT_ID=${INFISICAL_PROJECT_ID:-}
-      - INFISICAL_API_URL=${INFISICAL_API_URL:-}
-      - SECRET_KEY=${SECRET_KEY:-}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
-      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
-      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
-      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
-      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
-      - OAUTH_STATE_SECRET=${OAUTH_STATE_SECRET:-}
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
-      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@mcpworks.io}
-      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
-      - ENCRYPTION_KEK_B64=${ENCRYPTION_KEK_B64:-}
+      - "${ADMIN_BIND:-127.0.0.1}:9000:8000"
     volumes:
       - sandbox-tmp:/tmp/sandbox
       - scratchpad-data:/opt/mcpworks/scratchpad
