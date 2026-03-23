@@ -1,7 +1,6 @@
 """Legal document endpoints - Privacy Policy, Terms of Service, AUP.
 
-ORDER-007: Serve real legal documents drafted by counsel.
-Documents sourced from mcpworks-internals/docs/legal/ (v1.0.0).
+Serves legal documents as rendered HTML via markdown.
 When www.mcpworks.io is live, these can become 302 redirects.
 """
 
