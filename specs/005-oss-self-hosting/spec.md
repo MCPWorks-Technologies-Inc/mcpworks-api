@@ -5,6 +5,13 @@
 **Status**: Draft
 **Input**: User description: "Make mcpworks-api deployable as a clean open-source package via `docker compose up` on any Linux server."
 
+## Clarifications
+
+### Session 2026-03-22
+
+- Q: BSL 1.1 Change Date and Change License parameters? → A: 4-year change date, converts to Apache 2.0 (industry standard pattern).
+- Q: Self-hosted user registration policy? → A: Closed registration by default (admin-only), configurable via `ALLOW_REGISTRATION` setting.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Domain-Agnostic Deployment (Priority: P1)
@@ -40,6 +47,7 @@ A developer clones the repository, copies the example environment file, generate
 2. **Given** a running self-hosted deployment, **When** the operator runs the seed script, **Then** an initial admin account is created and the operator can log in.
 3. **Given** a running self-hosted deployment, **When** the operator opens `https://api.<domain>/v1/health`, **Then** they receive a 200 OK response confirming database and cache connectivity.
 4. **Given** the self-hosted compose file, **When** the operator examines it, **Then** it includes postgres, redis, api, and caddy services with no external service dependencies required for basic operation.
+5. **Given** a fresh self-hosted deployment with default settings, **When** an unauthenticated user attempts to register, **Then** registration is rejected (closed by default). The admin must set `ALLOW_REGISTRATION=true` to enable public signup.
 
 ---
 
@@ -85,7 +93,7 @@ A developer evaluating the repository can immediately understand the licensing t
 
 **Acceptance Scenarios**:
 
-1. **Given** a user clones the repository, **When** they look at the root directory, **Then** a LICENSE file is present containing the BSL 1.1 license text with MCPWorks-specific parameters filled in (licensor, change date, change license).
+1. **Given** a user clones the repository, **When** they look at the root directory, **Then** a LICENSE file is present containing the BSL 1.1 license text with parameters: Licensor = MCPWorks Inc., Change Date = 4 years from release, Change License = Apache License 2.0.
 2. **Given** a user reads the README, **When** they look for license information, **Then** the license type and a link to the LICENSE file are clearly stated.
 
 ---
@@ -147,8 +155,12 @@ A system administrator who is unfamiliar with MCPWorks can follow a step-by-step
 - **FR-019**: When neither Resend nor SMTP is configured, email operations MUST fail silently (logged, not errored).
 
 **License:**
-- **FR-020**: Repository MUST contain a LICENSE file with BSL 1.1 text at the root.
+- **FR-020**: Repository MUST contain a LICENSE file with BSL 1.1 text at the root, with parameters: Licensor = MCPWorks Inc., Change Date = 4 years from release date, Change License = Apache License 2.0.
 - **FR-021**: README MUST reference the license type and link to the LICENSE file.
+
+**Registration Control:**
+- **FR-024**: Self-hosted instances MUST default to closed registration (admin-only account creation).
+- **FR-025**: An `ALLOW_REGISTRATION` configuration setting MUST control whether public registration is enabled (default: disabled).
 
 **Documentation:**
 - **FR-022**: A self-hosting guide (`docs/SELF-HOSTING.md`) MUST cover prerequisites, setup, configuration, verification, and troubleshooting.
@@ -168,7 +180,7 @@ A system administrator who is unfamiliar with MCPWorks can follow a step-by-step
 - **SC-002**: 100% of generated URLs (namespace endpoints, email links, admin pages, static assets) use the configured custom domain — zero hardcoded mcpworks.io references in runtime output.
 - **SC-003**: The platform starts and serves requests successfully with zero external service dependencies (no Stripe, no Resend, no managed databases).
 - **SC-004**: Existing MCPWorks Cloud deployments continue to function identically with no configuration changes (full backward compatibility).
-- **SC-005**: All 23 functional requirements have corresponding automated or manual test cases that pass.
+- **SC-005**: All 25 functional requirements have corresponding automated or manual test cases that pass.
 - **SC-006**: The self-hosting guide is complete enough that a system administrator unfamiliar with MCPWorks can deploy the platform without reading source code.
 
 ## Assumptions
