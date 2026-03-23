@@ -1,0 +1,9 @@
+# Security-sensitive paths require maintainer review
+/src/mcpworks_api/core/security.py    @MCPWorks-Technologies-Inc/maintainers
+/src/mcpworks_api/core/encryption.py  @MCPWorks-Technologies-Inc/maintainers
+/src/mcpworks_api/sandbox/            @MCPWorks-Technologies-Inc/maintainers
+/deploy/                              @MCPWorks-Technologies-Inc/maintainers
+/Dockerfile                           @MCPWorks-Technologies-Inc/maintainers
+/docker-compose*.yml                  @MCPWorks-Technologies-Inc/maintainers
+/.github/workflows/                   @MCPWorks-Technologies-Inc/maintainers
+/LICENSE                              @MCPWorks-Technologies-Inc/maintainers

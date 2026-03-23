@@ -25,7 +25,7 @@ MCPWorks has designated a Privacy Officer responsible for our compliance with th
 **Privacy Officer**
 MCPWORKS TECHNOLOGIES INC.
 Email: privacy@mcpworks.io
-Mailing Address: MCPWORKS TECHNOLOGIES INC., Vancouver, British Columbia, Canada V5K 0A1
+Mailing Address: MCPWORKS TECHNOLOGIES INC., Vancouver, British Columbia, Canada
 
 You may contact the Privacy Officer with any questions, concerns, or requests related to your personal information.
 
@@ -196,7 +196,7 @@ We implement the following technical and organizational measures to protect your
 - Structured logging for security event detection.
 - CI/CD pipeline with automated testing before deployment.
 
-No system is perfectly secure. If you discover a security vulnerability, please report it to security@mcpworks.io. We commit to acknowledging reports within 48 hours.
+No system is perfectly secure. If you discover a security vulnerability, please report it to security@mcpworks.io. We commit to acknowledging reports within 72 hours.
 
 ---
 

@@ -7,6 +7,26 @@
 
 MCPWorks is a platform for hosting AI agent functions with 70-98% token savings through sandboxed code execution. Data stays in the sandbox, never enters the AI context window — dramatically reducing costs and improving performance.
 
+## Why MCPWorks?
+
+Traditional AI tool calls return full results into the context window:
+
+```
+Without MCPWorks:
+  AI asks: "Get all 500 leads from the database"
+  → Tool returns 500 lead records into context → 47,000 tokens consumed
+  → AI summarizes → 200 token response
+  Total: ~47,200 tokens
+
+With MCPWorks:
+  AI writes: "from functions import store_lead; result = store_lead(action='stats')"
+  → Code runs in sandbox → data never enters context
+  → Only the result returns → 85 tokens consumed
+  Total: ~300 tokens (99.4% savings)
+```
+
+The AI writes code that calls your functions inside a secure sandbox. Data stays in the sandbox. Only the final answer comes back.
+
 ## Key Features
 
 - **Code Execution Sandbox** — Run Python and TypeScript in nsjail-isolated sandboxes with namespace, cgroup, and seccomp protection
@@ -86,35 +106,14 @@ pytest tests/ -v
 ruff check src/
 ```
 
-## How It Works
+## Who Is This For?
 
-### Token Efficiency
+- **AI agent developers** building tools for Claude, GPT, or other LLMs
+- **Teams running AI in production** who need to control token costs
+- **Companies with compliance requirements** (GDPR, SOX) who need architectural guarantees
+- **Anyone self-hosting AI infrastructure** who wants an open-source foundation
 
-Traditional AI tool calls return full results into the context window, consuming thousands of tokens. MCPWorks keeps data in the sandbox:
-
-1. AI writes code that calls namespace functions
-2. Code executes in an isolated sandbox
-3. Functions fetch/process data inside the sandbox
-4. Only the final result (tens of tokens) returns to the AI
-
-Result: 70-98% fewer tokens per operation.
-
-### Function Backends
-
-| Backend | Description | Status |
-|---------|-------------|--------|
-| Code Sandbox (nsjail) | LLM-authored Python/TypeScript in secure sandbox | Production |
-| Activepieces | Visual workflow builder | Production |
-| MCP Server Plugin | Host any third-party MCP server | Planned (A1) |
-
-### Subscription Tiers (Cloud)
-
-| Tier | Price | Agents | Executions/Month |
-|------|-------|--------|------------------|
-| 14-Day Pro Trial | Free | 5 | 125,000 |
-| Pro | $179/mo | 5 | 250,000 |
-| Enterprise | $599/mo | 20 | 1,000,000 |
-| Community (Self-Hosted) | Free | Unlimited | Unlimited |
+Self-hosted community edition is free with no limits. [MCPWorks Cloud](https://mcpworks.io) offers a managed service.
 
 ## Project Structure
 
