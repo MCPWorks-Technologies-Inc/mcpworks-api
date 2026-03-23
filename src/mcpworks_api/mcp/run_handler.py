@@ -11,6 +11,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api import url_builder
 from mcpworks_api.backends import get_backend
 from mcpworks_api.backends.sandbox import TIER_CONFIG, resolve_execution_tier
 from mcpworks_api.core.exceptions import NotFoundError
@@ -411,7 +412,7 @@ class RunMCPHandler:
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
-        run_url = f"https://{self.namespace_name}.run.mcpworks.io/mcp"
+        run_url = url_builder.mcp_url(self.namespace_name, "run")
         extra_files = generate_functions_package(functions, self.namespace_name, run_url=run_url)
 
         # Inject API key for cross-language bridge (TS functions callable from Python)
@@ -498,7 +499,7 @@ class RunMCPHandler:
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
-        run_url = f"https://{self.namespace_name}.run.mcpworks.io/mcp"
+        run_url = url_builder.mcp_url(self.namespace_name, "run")
         extra_files = generate_ts_functions_package(functions, self.namespace_name, run_url=run_url)
 
         # Inject API key for cross-language bridge (Python functions callable from TS)

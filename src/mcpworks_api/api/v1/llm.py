@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter
 
+from mcpworks_api import url_builder
+
 router = APIRouter(tags=["llm"])
 
 
@@ -42,8 +44,8 @@ async def llm_instructions() -> dict:
             },
         },
         "mcp": {
-            "create_endpoint": "https://{namespace}.create.mcpworks.io/mcp",
-            "run_endpoint": "https://{namespace}.run.mcpworks.io/mcp",
+            "create_endpoint": url_builder.mcp_url("{namespace}", "create"),
+            "run_endpoint": url_builder.mcp_url("{namespace}", "run"),
             "protocol": "JSON-RPC 2.0",
             "methods": ["tools/list", "tools/call"],
         },
@@ -57,7 +59,7 @@ async def llm_instructions() -> dict:
         "quick_start": [
             "1. POST /v1/auth/register → get access_token",
             "2. POST /v1/namespaces {name} → create namespace",
-            "3. Configure MCP: {namespace}.create.mcpworks.io/mcp",
+            f"3. Configure MCP: {url_builder.mcp_url('{namespace}', 'create')}",
             "4. Use tools/list and tools/call via MCP",
         ],
     }

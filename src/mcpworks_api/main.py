@@ -241,11 +241,11 @@ def create_app() -> FastAPI:
     @app.get("/.well-known/oauth-protected-resource")
     async def oauth_protected_resource() -> dict[str, str]:
         """Return minimal OAuth protected resource metadata."""
-        return {"resource": "https://mcpworks.io"}
+        return {"resource": f"{settings.base_scheme}://{settings.base_domain}"}
 
     # Admin HTML page — restricted to api.mcpworks.io + requires admin auth
     _admin_html_path = Path(__file__).parent / "static" / "admin.html"
-    _admin_domains = {"api.mcpworks.io"}
+    _admin_domains = {f"api.{get_settings().base_domain}"}
 
     _admin_login_html = (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin Login</title>'

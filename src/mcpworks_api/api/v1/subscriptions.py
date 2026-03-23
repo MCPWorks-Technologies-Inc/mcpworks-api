@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api import url_builder
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.redis import get_redis
 from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
@@ -154,7 +155,7 @@ async def cancel_subscription(
 )
 async def create_portal_session(
     user_id: CurrentUserId,
-    return_url: str = "https://mcpworks.io/console",
+    return_url: str = "",
     db: AsyncSession = Depends(get_db),
 ) -> PortalSessionResponse:
     """Create a Stripe Customer Portal session for self-service management.
@@ -162,6 +163,8 @@ async def create_portal_session(
     Allows users to update payment methods, view invoices, and manage
     their subscription directly in Stripe's hosted portal.
     """
+    if not return_url:
+        return_url = url_builder.api_url("/console")
     stripe_service = StripeService(db)
 
     try:

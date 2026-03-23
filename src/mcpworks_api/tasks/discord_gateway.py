@@ -17,6 +17,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from mcpworks_api import url_builder
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
 from mcpworks_api.models.agent import AgentChannel
@@ -111,7 +112,7 @@ class AgentBot(discord.Client):
             resp = await client.post(
                 url,
                 json={"message": message},
-                headers={"Host": f"{agent_name}.agent.mcpworks.io"},
+                headers={"Host": url_builder.agent_url(agent_name).split("://", 1)[1]},
             )
 
         if resp.status_code != 200:

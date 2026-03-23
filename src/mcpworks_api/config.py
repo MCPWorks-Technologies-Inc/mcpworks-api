@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,8 +60,8 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = Field(default=60, ge=5, le=1440)
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1, le=30)
     jwt_algorithm: str = "ES256"
-    jwt_issuer: str = Field(default="https://api.mcpworks.io")
-    jwt_audience: str = Field(default="https://mcpworks.io")
+    jwt_issuer: str = Field(default="")
+    jwt_audience: str = Field(default="")
 
     @field_validator("jwt_private_key", "jwt_public_key", mode="before")
     @classmethod
@@ -92,9 +92,6 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:3000",
-            "https://mcpworks.io",
-            "https://www.mcpworks.io",
-            "https://api.mcpworks.io",
         ]
     )
 
@@ -159,6 +156,23 @@ class Settings(BaseSettings):
     sandbox_config_path: Path = Field(default=Path("/etc/mcpworks/sandbox.cfg"))
     sandbox_spawn_script: Path = Field(default=Path("/opt/mcpworks/bin/spawn-sandbox.sh"))
     sandbox_rootfs_path: Path = Field(default=Path("/opt/mcpworks/rootfs"))
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.jwt_issuer:
+            object.__setattr__(self, "jwt_issuer", f"{self.base_scheme}://api.{self.base_domain}")
+        if not self.jwt_audience:
+            object.__setattr__(self, "jwt_audience", f"{self.base_scheme}://{self.base_domain}")
+        if (
+            not self.resend_from_email or self.resend_from_email == "noreply@mcpworks.io"
+        ) and self.base_domain != "mcpworks.io":
+            object.__setattr__(self, "resend_from_email", f"noreply@{self.base_domain}")
+        domain_origins = [
+            f"{self.base_scheme}://{self.base_domain}",
+            f"{self.base_scheme}://www.{self.base_domain}",
+            f"{self.base_scheme}://api.{self.base_domain}",
+        ]
+        merged = list(dict.fromkeys(self.cors_origins + domain_origins))
+        object.__setattr__(self, "cors_origins", merged)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
