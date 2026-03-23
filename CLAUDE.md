@@ -8,17 +8,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**mcpworks API** is the proprietary backend service that powers the mcpworks platform. It handles account management, usage tracking, subscription billing, and workflow execution.
+**mcpworks API** is the backend service that powers the mcpworks platform — open-source under BSL 1.1. It handles account management, usage tracking, subscription billing, namespace routing, and function/agent execution.
 
-**Architecture:** RESTful API service consumed by the open-source MCP server
+**Architecture:** RESTful API + MCP namespace endpoints (direct HTTPS, no proxy)
+- **Namespace Endpoints** — `{ns}.create.mcpworks.io` (manage) / `{ns}.run.mcpworks.io` (execute)
 - **API Endpoints** (`https://api.mcpworks.io/v1/`) - Public HTTP/JSON API
 - **Provider Orchestration** - Activepieces, Stripe, etc.
 - **Usage Tracking** - Subscription-based limits (executions per billing period)
-- **Workflow Execution** - Activepieces workflow orchestration
+- **Function Execution** - Code Sandbox (nsjail), Activepieces backends
+- **Agent Runtime** - Containerized autonomous agents with scheduling, state, BYOAI
 
-**Relationship to MCP:**
-- `mcpworks-mcp` (open-source) - MCP protocol server that calls this API
-- `mcpworks-api` (proprietary, this repo) - Backend that does the actual work
+**Strategic Context (Updated 2026-03-22):**
+MCPWorks has pivoted to an **open-source-first model**. The platform identity is "the open-source standard for token-efficient AI agents." BSL 1.1 license — self-host via `docker compose up` or use MCPWorks Cloud (managed service). Revenue comes from consulting, managed cloud subscriptions, enterprise support contracts, and commercial licenses.
 
 **Status:** Spec-driven development - specifications complete, ready for implementation
 
@@ -345,13 +346,15 @@ cat docs/implementation/guidance/mcp-token-optimization.md
 
 **Billing Model:** Monthly subscription with execution limits per billing period
 
-**Subscription Tiers:**
-| Tier | Price | Executions/Month |
-|------|-------|------------------|
-| Free | $0 | 1,000 |
-| Builder | $29/mo | 25,000 |
-| Pro | $149/mo | 250,000 |
-| Enterprise | $499+/mo | 1,000,000 |
+**Subscription Tiers (MCPWorks Cloud):**
+| Tier | Price | Agents | Executions/Month |
+|------|-------|--------|------------------|
+| 14-Day Pro Trial | $0 | 5 | 125,000 |
+| Pro | $179/mo | 5 | 250,000 |
+| Enterprise | $599/mo | 20 | 1,000,000 (fair use) |
+| Dedicated | $999/mo | Unlimited | Unlimited (fair use) |
+
+**Community Edition (Self-Hosted):** Free, BSL 1.1, `docker compose up`
 
 **Usage Check Pattern:**
 ```python
@@ -672,24 +675,37 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Make subscription tiers configurable and LLM-accessible
 - Optimize for token efficiency (200-1000 tokens)
 
-## Acquisition Context
+## Strategic Context
 
-This project is on a **15-month acquisition timeline** targeting $10M-$15M exit.
+**Model:** Open-source (BSL 1.1) + managed cloud + consulting. Build for customers and community, not acquirers.
 
-**Key Acquisition Drivers:**
-- First-mover advantage in MCP hosting (6-12 month window)
-- 98% time reduction value proposition
-- Production-grade transaction safety
-- Token efficiency (2-5x better than cloud providers)
-- Complete tech stack integration (not just hosting)
+**Identity:** The open-source standard for token-efficient AI agents.
+
+**Key Differentiators:**
+- Code Execution Sandbox delivers 70-98% token savings (data stays in sandbox, never enters AI context)
+- MCP Server Plugin Architecture: namespaces can host ANY third-party MCP server (Google Workspace, Slack, GitHub, etc.) with code-mode wrapping for universal token efficiency (A1 milestone)
+- Open-source community is the moat — not code
+- BYOAI: users bring their own AI provider, no vendor lock-in
+- Namespace-based function hosting with direct HTTPS (no proxy)
+
+**Function Backends:**
+- Code Sandbox (nsjail, A0) — LLM-authored Python/JS in secure sandbox
+- Activepieces (A0) — visual workflow builder, one plugin among many
+- MCP Server Plugin (A1) — any third-party MCP server bolted onto a namespace
+- nanobot.ai (A1) — partnership
+- Backend interface must be clean and extensible — new backends plug in without rewriting namespace routing
 
 **Code Quality Standards:**
-- Due diligence ready (comprehensive tests, documentation)
+- Production-ready (comprehensive tests, documentation)
 - Security-first (no vulnerabilities in audit)
 - Scalable architecture (1K → 10K → 100K customers)
-- Clean abstractions (easy for acquirer to integrate)
+- Clean abstractions (easy for community contributors and potential partners)
 
-**Target Acquirers:** Anthropic, Cloudflare, Microsoft/GitHub, DigitalOcean, Vercel
+**Do NOT:**
+- Reference "proxy" or "gateway" (direct HTTPS, no proxy)
+- Use "Agentic Services" or "Workflows" (agents are the product, functions are building blocks)
+- Use exit-focused or acquisition-driven language
+- Suggest closed-source SaaS approaches
 
 ## Support and Resources
 
@@ -712,6 +728,8 @@ This project is on a **15-month acquisition timeline** targeting $10M-$15M exit.
 - PostgreSQL 15+ (existing), Redis 7+ (existing, also used for OAuth state storage) (002-oauth-email-system)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, Docker SDK 7.0+, APScheduler 3.10+, cryptography (AES-256-GCM), httpx, discord.py (003-containerized-agents)
 - PostgreSQL 15+ (primary, via DO Managed Database), Redis/Valkey 7+ (rate limiting, sessions) (003-containerized-agents)
+- Python 3.11+ (existing) + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, structlog, aiosmtplib (new) (005-oss-self-hosting)
+- PostgreSQL 15+ (existing), Redis/Valkey 7+ (existing) — both bundled in self-hosted compose (005-oss-self-hosting)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe

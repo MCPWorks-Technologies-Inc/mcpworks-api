@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mcpworks-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mcpworks
+      POSTGRES_USER: mcpworks
+      POSTGRES_PASSWORD: mcpworks_selfhost  # pragma: allowlist secret
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcpworks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mcpworks-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcpworks-api
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "8000"
+    volumes:
+      - sandbox-tmp:/tmp/sandbox
+      - scratchpad-data:/opt/mcpworks/scratchpad
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+      - NET_ADMIN
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mcpworks-net
+      - mcpworks-agents
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/v1/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mcpworks-caddy
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.self-hosted:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - mcpworks-net
+
+volumes:
+  postgres-data:
+  redis-data:
+  sandbox-tmp:
+  scratchpad-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  mcpworks-net:
+    driver: bridge
+  mcpworks-agents:
+    driver: bridge
+    name: mcpworks-agents

@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from mcpworks_api import url_builder
 from mcpworks_api.core.encryption import decrypt_value, encrypt_value
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from mcpworks_api.models.agent import (
@@ -982,7 +983,7 @@ class AgentService:
         token = base64.urlsafe_b64encode(secrets_mod.token_bytes(32)).rstrip(b"=").decode()
         agent.chat_token = token
         await self.db.flush()
-        chat_url = f"https://{agent.name}.agent.mcpworks.io/chat/{token}"
+        chat_url = url_builder.chat_url(agent.name, token)
         logger.info("agent_chat_token_generated", agent_name=agent.name)
         return {"chat_url": chat_url, "chat_token": token}
 

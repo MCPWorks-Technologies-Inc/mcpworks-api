@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from mcpworks_api import url_builder
+
 
 def _sanitize_display_name(v: str | None) -> str | None:
     if v is None:
@@ -72,10 +74,10 @@ class RegisterResponse(BaseModel):
         description="Access token expiration time in seconds",
     )
     legal_urls: dict[str, str] = Field(
-        default={
-            "terms_of_service": "https://api.mcpworks.io/v1/legal/terms",
-            "privacy_policy": "https://api.mcpworks.io/v1/legal/privacy",
-            "acceptable_use_policy": "https://api.mcpworks.io/v1/legal/aup",
+        default_factory=lambda: {
+            "terms_of_service": url_builder.api_url("/v1/legal/terms"),
+            "privacy_policy": url_builder.api_url("/v1/legal/privacy"),
+            "acceptable_use_policy": url_builder.api_url("/v1/legal/aup"),
         },
         description="URLs for legal documents (ToS, Privacy Policy, AUP)",
     )

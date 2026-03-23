@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api import url_builder
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.redis import get_redis
 from mcpworks_api.dependencies import ActiveUserId as CurrentUserId
@@ -20,6 +21,19 @@ from mcpworks_api.schemas.subscription import (
 from mcpworks_api.services.stripe import StripeService
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
+
+
+def _check_billing_configured() -> None:
+    from mcpworks_api.config import get_settings
+
+    if not get_settings().billing_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "BILLING_NOT_CONFIGURED",
+                "message": "Billing is not configured on this instance",
+            },
+        )
 
 
 @router.post(
@@ -41,6 +55,7 @@ async def create_subscription(
     FR-BILL-001: Integrate with Stripe for subscription management.
     FR-BILL-002: Support builder, pro, enterprise tiers with monthly/annual billing.
     """
+    _check_billing_configured()
     stripe_service = StripeService(db)
 
     try:
@@ -78,6 +93,7 @@ async def get_current_subscription(
     db: AsyncSession = Depends(get_db),
 ) -> SubscriptionInfo:
     """Get current subscription details."""
+    _check_billing_configured()
     stripe_service = StripeService(db)
 
     subscription = await stripe_service.get_subscription(uuid.UUID(user_id))
@@ -118,6 +134,7 @@ async def cancel_subscription(
     FR-BILL-001: Subscription marked for cancellation, not immediately deleted.
     User retains access until current billing period ends.
     """
+    _check_billing_configured()
     stripe_service = StripeService(db)
 
     try:
@@ -154,7 +171,7 @@ async def cancel_subscription(
 )
 async def create_portal_session(
     user_id: CurrentUserId,
-    return_url: str = "https://mcpworks.io/console",
+    return_url: str = "",
     db: AsyncSession = Depends(get_db),
 ) -> PortalSessionResponse:
     """Create a Stripe Customer Portal session for self-service management.
@@ -162,6 +179,9 @@ async def create_portal_session(
     Allows users to update payment methods, view invoices, and manage
     their subscription directly in Stripe's hosted portal.
     """
+    _check_billing_configured()
+    if not return_url:
+        return_url = url_builder.api_url("/console")
     stripe_service = StripeService(db)
 
     try:
