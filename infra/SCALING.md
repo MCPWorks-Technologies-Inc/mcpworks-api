@@ -358,7 +358,7 @@ Using FINANCIAL-PLAN.md moderate scenario (Value Ladder pricing: Builder $49, Pr
 | 3 | 133-200 | $15,817-$22,000 | $270 | 98.3%-98.8% |
 | 4 | 200-265 | $22,000-$34,235 | $470 | 97.9%-98.6% |
 
-**Margin never drops below 95%.** Infrastructure cost is negligible relative to revenue at every phase. See `mcpworks-internals/incoming/infrastructure-cost-deep-dive.md` for the full CFO-oriented cost analysis.
+**Margin never drops below 95%.** Infrastructure cost is negligible relative to revenue at every phase.
 
 ### Detailed Cost Breakdown
 
