@@ -105,7 +105,9 @@ class AgentBot(discord.Client):
                 "Chat is not configured for this agent. Ask the admin to run configure_chat_token."
             )
 
-        url = f"http://localhost:8000/chat/{chat_token}"
+        from mcpworks_api.config import get_settings
+
+        url = f"{get_settings().internal_api_url}/chat/{chat_token}"
         message = f"[Discord message from {discord_context['author']}]: {user_message}"
 
         async with httpx.AsyncClient(timeout=600.0) as client:

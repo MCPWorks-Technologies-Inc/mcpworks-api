@@ -145,6 +145,7 @@ async def _execute_function_direct(
                 account=account,
                 execution_id=execution_id,
                 context=context,
+                namespace=namespace.name,
             )
         except Exception as e:
             await _record_failure(db, run_id, schedule, str(e))

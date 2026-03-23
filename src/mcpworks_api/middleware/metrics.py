@@ -32,33 +32,3 @@ def setup_metrics(app: FastAPI) -> Instrumentator:
     instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
     return instrumentator
-
-
-# Custom metrics for business logic (can be expanded)
-# These would be registered separately when needed
-
-# from prometheus_client import Counter, Gauge
-#
-# credit_transactions_total = Counter(
-#     "credit_transactions_total",
-#     "Total credit transactions",
-#     ["type", "status"]
-# )
-#
-# credit_balance_available = Gauge(
-#     "credit_balance_available",
-#     "Total available credits by tier",
-#     ["tier"]
-# )
-#
-# auth_attempts_total = Counter(
-#     "auth_attempts_total",
-#     "Authentication attempts",
-#     ["status", "method"]
-# )
-#
-# service_health_status = Gauge(
-#     "service_health_status",
-#     "Backend service health (0=unhealthy, 1=healthy)",
-#     ["service"]
-# )

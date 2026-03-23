@@ -114,14 +114,23 @@ def _generate_wrapper(
     from functions._registry import _track_call
     _track_call("{qualified}")
 {input_line}
-    import pathlib as _pl
+    import pathlib as _pl, json as _json
     _code_path = _pl.Path(__file__).parent / "{code_file}"
+    _ctx = {{}}
+    _ctx_path = _pl.Path("/sandbox/context.json")
+    if _ctx_path.exists():
+        try:
+            _ctx = _json.loads(_ctx_path.read_text())
+        except Exception:
+            pass
     _g = {{"input_data": input_data, "__name__": "__exec__"}}
     exec(_code_path.read_text(), _g)
     if "result" in _g:
         return _g["result"]
     if "output" in _g:
         return _g["output"]
+    if callable(_g.get("handler")):
+        return _g["handler"](input_data, _ctx)
     if callable(_g.get("main")):
         return _g["main"](input_data)
     return None

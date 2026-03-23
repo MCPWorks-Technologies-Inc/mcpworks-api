@@ -4,10 +4,7 @@
 **Date:** 2026-02-09
 **Status:** Draft
 **Author:** sandbox-engineer, cto-architect
-**Related Documents:**
-- [mcpworks-internals: code-execution-sandbox-specification.md](../../../../mcpworks-internals/docs/implementation/code-execution-sandbox-specification.md)
-- [mcpworks-internals: STRATEGY.md](../../../../mcpworks-internals/STRATEGY.md)
-- [mcpworks-internals: PRICING.md](../../../../mcpworks-internals/PRICING.md)
+**Related Documents:** None (self-contained specification)
 
 ---
 

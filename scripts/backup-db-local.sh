@@ -14,7 +14,7 @@
 set -euo pipefail
 
 BACKUP_DIR="${1:-$HOME/backups/mcpworks}"
-REMOTE_HOST="root@159.203.30.199"
+REMOTE_HOST="${MCPWORKS_PROD_HOST:?Set MCPWORKS_PROD_HOST (e.g. root@your-server-ip)}"
 CONTAINER="mcpworks-postgres"
 DB_USER="mcpworks"
 DB_NAME="mcpworks"

@@ -397,7 +397,6 @@ Token efficiency is core architecture, not optimization.
 - [MCP Protocol Specification](https://spec.modelcontextprotocol.io/) - Official MCP docs
 - [SPEC.md](../../../SPEC.md) - Main API specification (workflow platform)
 - [technical-architecture.md](../plans/technical-architecture.md) - System architecture
-- [mcpworks-internals](../../../../mcpworks-internals/docs/) - Business strategy and governance documentation (in planning repo)
 
 ### Token Estimation
 

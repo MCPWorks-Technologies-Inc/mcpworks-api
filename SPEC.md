@@ -688,11 +688,6 @@ Push to `main` triggers:
 
 | Document | Location |
 |----------|----------|
-| PRICING.md | `../mcpworks-internals/PRICING.md` |
-| STRATEGY.md | `../mcpworks-internals/STRATEGY.md` |
-| Namespace Architecture | `../mcpworks-internals/docs/implementation/namespace-architecture.md` |
-| Code Sandbox Spec | `../mcpworks-internals/docs/implementation/code-execution-sandbox-specification.md` |
-| Agent Security Spec | `../mcpworks-internals/docs/implementation/agent-security-specification.md` |
 | Database Models | `docs/implementation/database-models-specification.md` |
 | Constitution | `docs/implementation/specs/CONSTITUTION.md` |
 | Token Optimization | `docs/implementation/guidance/mcp-token-optimization.md` |

@@ -5,7 +5,7 @@
 **Status:** DEPRECATED (Pricing Model Changed)
 
 > **⚠️ NOTE:** This document references a credit-based pricing model that has been replaced with subscription-based billing. The provider selection analysis remains valid, but all "credit" pricing references should be ignored. See SPEC.md for current subscription tiers.
-**Related Documents:** [mcpworks-mcp-spec.md](../specs/mcpworks-mcp-server-spec.md), [strategic-analysis-2025-10.md](../../../../mcpworks-internals/docs/business/strategic-analysis-2025-10.md)
+**Related Documents:** [mcpworks-mcp-spec.md](../specs/mcpworks-mcp-server-spec.md)
 
 ---
 
@@ -1495,9 +1495,6 @@ def provision_hosting(customer_location, resource_spec):
 
 **Related Documents:**
 - [mcpworks-mcp-spec.md](../specs/mcpworks-mcp-server-spec.md) - MCP server tool specifications
-- [strategic-analysis-2025-10.md](../../../../mcpworks-internals/docs/business/strategic-analysis-2025-10.md) - Overall business strategy (in planning repo)
-- [domain-management.md](../../../../mcpworks-internals/docs/operations/domain-management.md) - Domain management procedures (in planning repo)
-- [revenue-simulation-model.md](../../../../mcpworks-internals/notebooks/business/revenue-simulation-model.md) - Financial projections supporting margin assumptions (in planning repo)
 
 ---
 

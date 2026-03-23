@@ -49,6 +49,7 @@ class StubBackend(Backend):
         sandbox_env: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
         language: str = "python",
+        namespace: str = "unknown",
     ) -> ExecutionResult:
         """Mock execution returning predictable results.
 
