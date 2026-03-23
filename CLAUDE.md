@@ -730,6 +730,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - PostgreSQL 15+ (primary, via DO Managed Database), Redis/Valkey 7+ (rate limiting, sessions) (003-containerized-agents)
 - Python 3.11+ (existing) + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, structlog, aiosmtplib (new) (005-oss-self-hosting)
 - PostgreSQL 15+ (existing), Redis/Valkey 7+ (existing) — both bundled in self-hosted compose (005-oss-self-hosting)
+- Python 3.11+ (existing, no changes) + None new — this is file/doc work (006-oss-release-hardening)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
