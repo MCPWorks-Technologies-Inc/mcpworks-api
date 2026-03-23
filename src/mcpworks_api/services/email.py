@@ -75,6 +75,17 @@ def _get_provider() -> EmailProvider:
     settings = get_settings()
     if settings.resend_api_key:
         return ResendProvider(settings.resend_api_key, settings.resend_from_email)
+    if settings.smtp_host:
+        from mcpworks_api.services.smtp_provider import SmtpProvider
+
+        return SmtpProvider(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_username,
+            password=settings.smtp_password,
+            from_email=settings.smtp_from_email or settings.resend_from_email,
+            use_tls=settings.smtp_use_tls,
+        )
     return ConsoleProvider()
 
 

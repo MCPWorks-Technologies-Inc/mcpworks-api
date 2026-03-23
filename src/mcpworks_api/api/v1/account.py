@@ -86,6 +86,19 @@ async def get_usage(
     - Enterprise: 1,000,000/month
     - Dedicated: Unlimited (fair use)
     """
+    from mcpworks_api.config import get_settings
+
+    if not get_settings().billing_enabled:
+        period_start, period_end = _get_billing_period()
+        return UsageResponse(
+            executions_count=0,
+            executions_limit=-1,
+            executions_remaining=-1,
+            billing_period_start=period_start,
+            billing_period_end=period_end,
+            tier="self-hosted",
+        )
+
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
     tier = user.effective_tier if user else "trial"
