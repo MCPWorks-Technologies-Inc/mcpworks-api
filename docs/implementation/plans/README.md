@@ -127,7 +127,7 @@ From CONSTITUTION.md, before marking plan as "Ready for Tasks":
 
 | Plan | Version | Status | Spec | Description |
 |------|---------|--------|------|-------------|
-| `technical-architecture.md` | 2.0 | Active | `../specs/mcpworks-mcp-server-spec.md` | **PRIMARY PLAN** System architecture for mcpworks Infrastructure MCP server: technology stack (Python/FastAPI), 19 MCP tools, provider abstraction layer, SSE streaming, subscription billing, deployment flows, scalability design (1K→10K→100K customers), disaster recovery, acquirer technical fit analysis. |
+| `technical-architecture.md` | 2.0 | Active | `../specs/mcpworks-mcp-server-spec.md` | **PRIMARY PLAN** System architecture for mcpworks Infrastructure MCP server: technology stack (Python/FastAPI), MCP tools, provider abstraction layer, SSE streaming, subscription billing, deployment flows, scalability design (1K→10K→100K customers), disaster recovery, production readiness checklist. |
 | `provider-selection-strategy.md` | 1.0 | Active | (Provider integration section of main spec) | Provider selection and integration strategy: domain registration (OpenSRS), DNS (Cloudflare), SSL (Let's Encrypt/Sectigo), hosting (DigitalOcean/Hetzner/OVH), email (Zoho/Postmark), payments (Stripe), SaaS integrations. Includes pricing analysis, margin calculations (79% achievable), API quality assessment, phased implementation roadmap (A0→A1→A2→A3). |
 
 ---

@@ -1,6 +1,6 @@
 # mcpworks API
 
-API Gateway for mcpworks platform - authentication, credit accounting, and service routing.
+Open-source (BSL 1.1) backend for the MCPWorks platform — namespace-based function hosting and autonomous agent runtime for AI assistants.
 
 ## Quick Start
 
