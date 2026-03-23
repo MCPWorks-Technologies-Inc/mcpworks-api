@@ -82,7 +82,7 @@ BASE_TOOLS: dict[str, ToolDef] = {
             "Create a new service within the current namespace. "
             "A service is a group of related functions. You must create a service before creating functions. "
             "The service is automatically created in the namespace this MCP server is connected to — do NOT pass a namespace parameter. "
-            "Example workflow: make_service(name='utils') → make_function(service='utils', name='hello', ...)"
+            "Example: make_service(name='utils') → make_function(service='utils', name='hello', ...)"
         ),
         input_schema={
             "type": "object",

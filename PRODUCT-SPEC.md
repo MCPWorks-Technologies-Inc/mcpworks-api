@@ -376,23 +376,23 @@ This is `git branch` for autonomous AI entities.
 
 | Tier | Agents | Container Resources | Min Schedule | State Storage | Includes Functions |
 |------|--------|-------------------|-------------|---------------|--------------------|
-| Free | 0 | - | - | - | Free tier |
-| Builder ($29) | 1 | 256 MB / 0.25 vCPU | 5 min | 10 MB | Full Functions access |
+| 14-Day Pro Trial | 5 | 512 MB / 0.5 vCPU | 30 sec | 100 MB | Full Functions access |
 | Pro ($179) | 5 | 512 MB / 0.5 vCPU | 30 sec | 100 MB | Full Functions access |
 | Enterprise ($599) | 20 (included) | 1 GB / 1.0 vCPU | 15 sec | 1 GB | Full Functions access |
+| Dedicated ($999) | Unlimited | Custom | Custom | Custom | Full Functions access |
 
-Agent add-ons beyond tier allocation: $9 (Builder), $19 (Pro), $29/$49 (Enterprise standard/heavy).
+**Community Edition (Self-Hosted):** Free, BSL 1.1, `docker compose up` — no agent limits.
 
 ### Agent AI Orchestration Limits
 
 When agents use AI reasoning (Reason First or Run Then Reason modes), orchestration is bounded per-invocation:
 
-| Limit | Builder | Pro | Enterprise |
-|-------|---------|-----|------------|
-| Max iterations per invocation | 5 | 10 | 25 |
-| Max tokens per invocation | 50,000 | 200,000 | 1,000,000 |
-| Max orchestration timeout | 60s | 120s | 300s |
-| Max functions per invocation | 3 | 10 | 25 |
+| Limit | Pro | Enterprise | Dedicated |
+|-------|-----|------------|-----------|
+| Max iterations per invocation | 10 | 25 | Custom |
+| Max tokens per invocation | 200,000 | 1,000,000 | Custom |
+| Max orchestration timeout | 120s | 300s | Custom |
+| Max functions per invocation | 10 | 25 | Custom |
 
 ---
 
@@ -476,10 +476,12 @@ For agents, secrets include:
 
 | Tier | Monthly | Annual | Functions | Executions/mo | Namespaces | Agents |
 |------|---------|--------|-----------|---------------|------------|--------|
-| Free | $0 | - | 5 | 1,000 | 1 | 0 |
-| Builder | $29 | $290/yr | Unlimited | 25,000 | 3 | 1 |
+| 14-Day Pro Trial | $0 | - | Unlimited | 125,000 | Unlimited | 5 |
 | Pro | $179 | $1,790/yr | Unlimited | 250,000 | Unlimited | 5 |
-| Enterprise | $599 | $5,990/yr | Unlimited | 1,000,000 | Unlimited | 20 (included) |
+| Enterprise | $599 | $5,990/yr | Unlimited | 1,000,000 (fair use) | Unlimited | 20 (included) |
+| Dedicated | $999 | $9,990/yr | Unlimited | Unlimited (fair use) | Unlimited | Unlimited |
+
+**Community Edition (Self-Hosted):** Free, BSL 1.1, `docker compose up`
 
 ### What Counts as an Execution
 

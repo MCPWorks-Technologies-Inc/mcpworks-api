@@ -5,9 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "mcpworks-api"
 version = "0.1.0"
-description = "API Gateway for mcpworks platform - authentication, credit accounting, and service routing"
+description = "Open-source backend for the MCPWorks platform - namespace-based function hosting and autonomous agent runtime"
 readme = "README.md"
-license = {text = "Proprietary - All Rights Reserved"}
+license = {text = "BSL-1.1"}
 requires-python = ">=3.11"
 authors = [
     { name = "mcpworks", email = "dev@mcpworks.io" }
