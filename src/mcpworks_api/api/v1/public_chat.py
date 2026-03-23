@@ -1,6 +1,6 @@
 """Public chat endpoint for agents via obfuscated URL token.
 
-URL: POST https://{agent}.agent.mcpworks.io/chat/{token}
+URL: POST https://{agent}.agent.{BASE_DOMAIN}/chat/{token}
 The token in the URL IS the authentication.
 """
 

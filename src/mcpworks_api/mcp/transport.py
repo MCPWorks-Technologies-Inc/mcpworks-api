@@ -268,7 +268,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
     endpoint_type = getattr(request.state, "endpoint_type", None)
     if not namespace or not endpoint_type:
         raise ValueError(
-            "Missing namespace or endpoint type. Use {namespace}.{create|run|agent}.mcpworks.io"
+            "Missing namespace or endpoint type. Use {namespace}.{create|run|agent}.<domain>"
         )
 
     args = arguments or {}

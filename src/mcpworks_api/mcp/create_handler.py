@@ -19,6 +19,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api import url_builder
 from mcpworks_api.backends.sandbox import TIER_CONFIG, resolve_execution_tier
 from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from mcpworks_api.core.input_limits import InputTooLarge, validate_input_size
@@ -1101,14 +1102,12 @@ class CreateMCPHandler:
             "created_at": agent.created_at.isoformat(),
         }
         if agent.scratchpad_token and agent.scratchpad_size_bytes > 0:
-            result["view_url"] = (
-                f"https://{agent.name}.agent.mcpworks.io/view/{agent.scratchpad_token}/"
-            )
+            result["view_url"] = url_builder.view_url(agent.name, agent.scratchpad_token)
             result["scratchpad_size_bytes"] = agent.scratchpad_size_bytes
             if agent.scratchpad_expires_at:
                 result["scratchpad_expires_at"] = agent.scratchpad_expires_at.isoformat()
         if agent.chat_token:
-            result["chat_url"] = f"https://{agent.name}.agent.mcpworks.io/chat/{agent.chat_token}"
+            result["chat_url"] = url_builder.chat_url(agent.name, agent.chat_token)
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _start_agent(self, name: str) -> MCPToolResult:

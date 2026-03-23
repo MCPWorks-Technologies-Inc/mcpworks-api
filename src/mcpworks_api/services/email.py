@@ -79,7 +79,14 @@ def _get_provider() -> EmailProvider:
 
 
 def _render_template(template_name: str, **kwargs: Any) -> str:
+    from mcpworks_api import url_builder
+
     template = _jinja_env.get_template(template_name)
+    from mcpworks_api.config import get_settings as _gs
+
+    kwargs.setdefault("base_url", url_builder.api_url())
+    kwargs.setdefault("console_url", url_builder.api_url("/console"))
+    kwargs.setdefault("base_domain", _gs().base_domain)
     return template.render(**kwargs)
 
 

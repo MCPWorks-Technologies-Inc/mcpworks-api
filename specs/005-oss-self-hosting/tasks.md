@@ -35,25 +35,25 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Update SubdomainMiddleware to use `settings.base_domain` for DEFAULT_DOMAIN and rebuild SUBDOMAIN_PATTERN regex dynamically in src/mcpworks_api/middleware/subdomain.py
-- [ ] T005 [US1] Update `_admin_domains` to derive from `settings.base_domain` instead of hardcoded set in src/mcpworks_api/main.py
-- [ ] T006 [US1] Replace hardcoded namespace URL properties with url_builder calls in src/mcpworks_api/models/namespace.py
-- [ ] T007 [P] [US1] Replace hardcoded `run_url` fallback with `url_builder.run_url()` in src/mcpworks_api/mcp/code_mode.py
-- [ ] T008 [P] [US1] Replace hardcoded `run_url` fallback with `url_builder.run_url()` in src/mcpworks_api/mcp/code_mode_ts.py
-- [ ] T009 [US1] Replace hardcoded run and agent URLs (2 locations) with url_builder calls in src/mcpworks_api/mcp/run_handler.py
-- [ ] T010 [US1] Replace hardcoded agent view/chat URLs (2 locations) with url_builder calls in src/mcpworks_api/mcp/create_handler.py
-- [ ] T011 [P] [US1] Replace hardcoded chat URL with `url_builder.chat_url()` in src/mcpworks_api/services/agent_service.py
-- [ ] T012 [P] [US1] Replace hardcoded view URL with `url_builder.view_url()` in src/mcpworks_api/services/scratchpad.py
-- [ ] T013 [US1] Replace hardcoded valid_suffixes list with `url_builder.valid_suffixes()` in src/mcpworks_api/api/v1/health.py
-- [ ] T014 [P] [US1] Replace hardcoded endpoint examples with url_builder calls in src/mcpworks_api/api/v1/llm.py
-- [ ] T015 [P] [US1] Replace hardcoded agent domain check with url_builder in src/mcpworks_api/api/v1/scratchpad_view.py
-- [ ] T016 [P] [US1] Replace hardcoded agent domain patterns with url_builder in src/mcpworks_api/api/v1/public_chat.py
-- [ ] T017 [P] [US1] Replace hardcoded agent domain patterns with url_builder in src/mcpworks_api/api/v1/webhooks.py
-- [ ] T018 [US1] Inject `base_url` (derived from `BASE_DOMAIN`) into Jinja2 email template globals in src/mcpworks_api/services/email.py
-- [ ] T019 [US1] Update base email template to use `{{ base_url }}` for all hyperlinks in src/mcpworks_api/templates/emails/base.html
-- [ ] T020 [US1] Update JWT issuer/audience defaults to derive from `base_domain` when not explicitly overridden in src/mcpworks_api/config.py
-- [ ] T021 [US1] Update CORS origins defaults to include `base_domain` subdomains in src/mcpworks_api/config.py
-- [ ] T022 [US1] Run `grep -r "mcpworks\.io" src/ --include="*.py"` and verify zero hardcoded runtime references remain (defaults with override are OK)
+- [x] T004 [US1] Update SubdomainMiddleware to use `settings.base_domain` for DEFAULT_DOMAIN and rebuild SUBDOMAIN_PATTERN regex dynamically in src/mcpworks_api/middleware/subdomain.py
+- [x] T005 [US1] Update `_admin_domains` to derive from `settings.base_domain` instead of hardcoded set in src/mcpworks_api/main.py
+- [x] T006 [US1] Replace hardcoded namespace URL properties with url_builder calls in src/mcpworks_api/models/namespace.py
+- [x] T007 [P] [US1] Replace hardcoded `run_url` fallback with `url_builder.run_url()` in src/mcpworks_api/mcp/code_mode.py
+- [x] T008 [P] [US1] Replace hardcoded `run_url` fallback with `url_builder.run_url()` in src/mcpworks_api/mcp/code_mode_ts.py
+- [x] T009 [US1] Replace hardcoded run and agent URLs (2 locations) with url_builder calls in src/mcpworks_api/mcp/run_handler.py
+- [x] T010 [US1] Replace hardcoded agent view/chat URLs (2 locations) with url_builder calls in src/mcpworks_api/mcp/create_handler.py
+- [x] T011 [P] [US1] Replace hardcoded chat URL with `url_builder.chat_url()` in src/mcpworks_api/services/agent_service.py
+- [x] T012 [P] [US1] Replace hardcoded view URL with `url_builder.view_url()` in src/mcpworks_api/services/scratchpad.py
+- [x] T013 [US1] Replace hardcoded valid_suffixes list with `url_builder.valid_suffixes()` in src/mcpworks_api/api/v1/health.py
+- [x] T014 [P] [US1] Replace hardcoded endpoint examples with url_builder calls in src/mcpworks_api/api/v1/llm.py
+- [x] T015 [P] [US1] Replace hardcoded agent domain check with url_builder in src/mcpworks_api/api/v1/scratchpad_view.py
+- [x] T016 [P] [US1] Replace hardcoded agent domain patterns with url_builder in src/mcpworks_api/api/v1/public_chat.py
+- [x] T017 [P] [US1] Replace hardcoded agent domain patterns with url_builder in src/mcpworks_api/api/v1/webhooks.py
+- [x] T018 [US1] Inject `base_url` (derived from `BASE_DOMAIN`) into Jinja2 email template globals in src/mcpworks_api/services/email.py
+- [x] T019 [US1] Update base email template to use `{{ base_url }}` for all hyperlinks in src/mcpworks_api/templates/emails/base.html
+- [x] T020 [US1] Update JWT issuer/audience defaults to derive from `base_domain` when not explicitly overridden in src/mcpworks_api/config.py
+- [x] T021 [US1] Update CORS origins defaults to include `base_domain` subdomains in src/mcpworks_api/config.py
+- [x] T022 [US1] Run `grep -r "mcpworks\.io" src/ --include="*.py"` and verify zero hardcoded runtime references remain (defaults with override are OK)
 
 **Checkpoint**: US1 complete — all generated URLs use BASE_DOMAIN. Backward compatible when unset.
 

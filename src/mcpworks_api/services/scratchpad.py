@@ -10,6 +10,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api import url_builder
 from mcpworks_api.models.agent import Agent
 from mcpworks_api.scratchpad import get_scratchpad_backend
 from mcpworks_api.scratchpad.base import ScratchpadBackend
@@ -173,7 +174,7 @@ class ScratchpadService:
 
     @staticmethod
     def _build_url(agent_name: str, token: str) -> str:
-        return f"https://{agent_name}.agent.mcpworks.io/view/{token}/"
+        return url_builder.view_url(agent_name, token)
 
     @staticmethod
     def _validate_filenames(filenames: list[str]) -> None:
