@@ -137,6 +137,13 @@ src/mcpworks_api/
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and PR process.
 
+## Community
+
+- [LinkedIn](https://www.linkedin.com/company/mcpworks/)
+- [Bluesky](https://bsky.app/profile/mcpworks.io)
+- [YouTube](https://www.youtube.com/@MCPWorks)
+- [GitHub Discussions](https://github.com/MCPWorks-Technologies-Inc/mcpworks-api/discussions)
+
 ## Security
 
 Found a vulnerability? See [SECURITY.md](SECURITY.md) for responsible disclosure instructions. Do not open public issues for security vulnerabilities.
