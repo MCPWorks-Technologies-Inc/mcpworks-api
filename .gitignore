@@ -39,7 +39,7 @@ env/
 .env.*.local
 !.env.example
 !.env.self-hosted.example
-!.env.production.example
+# .env.production.example removed — .env.example is the single source
 
 # Testing
 .coverage
@@ -114,3 +114,7 @@ PRODUCT-SPEC.md
 CLAUDE.md
 SECURITY_RECOMMENDATIONS.md
 LEAD-REPORT-*.md
+STYLE.md
+admin-login-form.png
+docs/demo-recording-script.md
+docs/demo-video-script-5min.md
