@@ -98,7 +98,7 @@ RUN pip install --no-cache-dir --target=/sandbox-packages \
 # (src/mcpworks_api/sandbox/packages_node.py) are pre-installed here.
 # Keep this list in sync with NODE_PACKAGE_REGISTRY.
 # =============================================================================
-FROM node:22-slim AS node-sandbox-builder
+FROM node:25-slim AS node-sandbox-builder
 
 WORKDIR /node-packages
 COPY deploy/nsjail/package.json .
@@ -208,7 +208,7 @@ COPY --from=nsjail-builder /usr/local/bin/nsjail /usr/local/bin/nsjail
 COPY --from=sandbox-builder /sandbox-packages /opt/mcpworks/sandbox-root/site-packages
 
 # Copy Node.js binary for TypeScript sandbox execution
-COPY --from=node:22-slim /usr/local/bin/node /opt/mcpworks/sandbox-root/usr/local/bin/node
+COPY --from=node:25-slim /usr/local/bin/node /opt/mcpworks/sandbox-root/usr/local/bin/node
 
 # Copy curated sandbox packages (Node.js/TypeScript)
 COPY --from=node-sandbox-builder /node-packages/node_modules /opt/mcpworks/sandbox-root/node_modules
