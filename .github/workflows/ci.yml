@@ -213,7 +213,7 @@ jobs:
           pip install ".[dev]" pip-audit
 
       - name: Run pip-audit for API vulnerabilities
-        run: pip-audit --desc on
+        run: pip-audit --desc on --ignore-vuln CVE-2026-4539  # pygments regex DoS, local-only, no fix available
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main
