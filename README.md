@@ -148,6 +148,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, 
 
 Found a vulnerability? See [SECURITY.md](SECURITY.md) for responsible disclosure instructions. Do not open public issues for security vulnerabilities.
 
+## Versioning
+
+MCPWorks follows [Semantic Versioning](https://semver.org/). The public API surface
+includes REST endpoints, MCP protocol behavior, Docker Compose configuration, and
+database migration compatibility.
+
+**Current status: pre-1.0.** The project is functional and deployed in production, but
+the API surface is still evolving. Minor releases (0.x.0) may include breaking changes,
+always documented in the [CHANGELOG](CHANGELOG.md) with migration instructions. Patch
+releases (0.1.x) are safe to pull without breaking existing deployments.
+
+Pin to a specific version in production. Read the CHANGELOG before upgrading across
+minor versions. See [Releases](https://github.com/MCPWorks-Technologies-Inc/mcpworks-api/releases)
+for release notes and Docker images.
+
 ## License
 
 MCPWorks API is licensed under the [Business Source License 1.1](LICENSE).
