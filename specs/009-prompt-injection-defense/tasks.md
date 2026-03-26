@@ -33,9 +33,9 @@
 
 **Purpose**: Add output_trust to Function model, wire into existing make/update function
 
-- [ ] T004 Add `output_trust` field to Function model in src/mcpworks_api/models/function.py — VARCHAR(10), NOT NULL, validate against ('prompt', 'data')
-- [ ] T005 Add `rules` field to NamespaceMcpServer model in src/mcpworks_api/models/namespace_mcp_server.py — JSONB, NOT NULL, default `{"request":[],"response":[]}`
-- [ ] T006 Create auto-classification helper in src/mcpworks_api/sandbox/injection_scan.py — suggest_trust_level(code, required_env) → str that analyzes code for mcp__ imports and external indicators, returns "data" or "prompt" with reason string
+- [x] T004 Add `output_trust` field to Function model
+- [x] T005 Add `rules` field to NamespaceMcpServer model
+- [x] T006 Auto-classification helper already in injection_scan.py (suggest_trust_level)
 
 **Checkpoint**: Foundation ready
 
