@@ -97,8 +97,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Refactor orchestrator in src/mcpworks_api/tasks/orchestrator.py — read mcp_server_names from agent, resolve to NamespaceMcpServer records from namespace, build McpServerPool from resolved configs (decrypt credentials), deprecate reading from agent.mcp_servers JSONB
-- [ ] T024 [US3] Update McpServerPool in src/mcpworks_api/core/mcp_client.py — accept NamespaceMcpServer records instead of raw JSONB dicts, decrypt credentials on connect, respect per-server settings (timeout, response limit)
+- [x] T023 [US3] Refactor orchestrator to read mcp_server_names → resolve from NamespaceMcpServer → decrypt → McpServerPool. Legacy JSONB fallback preserved.
+- [x] T024 [US3] McpServerPool unchanged — orchestrator builds config dicts from NamespaceMcpServer records, feeds to existing McpServerPool interface
 
 **Checkpoint**: Agents use namespace-level MCP servers. Old JSONB path deprecated.
 

@@ -124,13 +124,56 @@ async def run_orchestration(
         agent_state = await AgentService(db).get_all_state(agent.id)
 
     mcp_pool: McpServerPool | None = None
-    if agent.mcp_servers:
+    mcp_server_names = agent.mcp_server_names or []
+    if mcp_server_names:
+        async with get_db_context() as db:
+            from sqlalchemy import select
+
+            from mcpworks_api.core.encryption import decrypt_value as _dec
+            from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
+
+            stmt = select(NamespaceMcpServer).where(
+                NamespaceMcpServer.namespace_id == agent.namespace_id,
+                NamespaceMcpServer.name.in_(mcp_server_names),
+                NamespaceMcpServer.enabled.is_(True),
+            )
+            result = await db.execute(stmt)
+            ns_servers = result.scalars().all()
+
+            server_configs = {}
+            for srv in ns_servers:
+                config: dict = {"type": srv.transport, "url": srv.url}
+                if srv.headers_encrypted:
+                    try:
+                        config["headers"] = _dec(srv.headers_encrypted, srv.headers_dek_encrypted)
+                    except Exception:
+                        logger.warning("mcp_server_decrypt_failed", server=srv.name)
+                if srv.command:
+                    config["command"] = srv.command
+                    config["args"] = srv.command_args or []
+                server_configs[srv.name] = config
+
+        if server_configs:
+            try:
+                mcp_pool = McpServerPool(server_configs)
+                await mcp_pool.__aenter__()
+                tools.extend(mcp_pool.get_tool_definitions())
+                logger.info(
+                    "orchestration_mcp_tools_loaded",
+                    agent_name=agent.name,
+                    mcp_tools_count=len(mcp_pool.get_tool_definitions()),
+                    servers=list(server_configs.keys()),
+                )
+            except Exception:
+                logger.exception("orchestration_mcp_pool_failed", agent_name=agent.name)
+                mcp_pool = None
+    elif agent.mcp_servers:
         try:
             mcp_pool = McpServerPool(agent.mcp_servers)
             await mcp_pool.__aenter__()
             tools.extend(mcp_pool.get_tool_definitions())
             logger.info(
-                "orchestration_mcp_tools_loaded",
+                "orchestration_mcp_tools_loaded_legacy",
                 agent_name=agent.name,
                 mcp_tools_count=len(mcp_pool.get_tool_definitions()),
             )
