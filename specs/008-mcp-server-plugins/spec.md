@@ -16,6 +16,7 @@
 - Q: Should the connection pool hold persistent MCP sessions or connect per call? → A: Persistent connections with 5-minute TTL. Amortizes handshake cost, reduces load on third-party servers. Stale connections recovered transparently on next call.
 - Q: How should MCP servers relate to the namespace hierarchy? → A: Parallel concept to Services, not a type of Service. Namespace has two children: Services (native, code_sandbox) and RemoteMCP (external, proxied). Both contain functions. RemoteMCP functions are cached tool schemas, not Function DB records. `mcp__` prefix distinguishes remote tools from native functions in the sandbox.
 - Q: Migration strategy for existing agent.mcp_servers JSONB? → A: Skip automatic migration (Option D). Deprecate the JSONB column, require users to re-add servers via the new add_mcp_server tool. Only a handful of agents affected at this stage.
+- Q: Should the proxy impose a response size limit? → A: Configurable per-server by the LLM. Each RemoteMCP has LLM-tunable settings (response_limit_bytes, timeout_seconds, enabled) and user-defined environment variables — a full management interface, not just a connection proxy. Settings and env vars visible in the console as an expandable view per MCP server.
 
 ---
 
@@ -59,13 +60,16 @@ Both contain callable functions from the sandbox's perspective. The `mcp__` pref
 ### 1.5 Scope
 
 **In Scope:**
-- Per-namespace MCP server registry (add, remove, list, update)
+- Per-namespace MCP server registry (add, remove, list, describe, refresh)
+- LLM-tunable per-server settings (response limits, timeouts, retries, enable/disable)
+- Per-server environment variables (managed by LLM, visible in console)
 - Encrypted credential storage for MCP server auth (headers, tokens)
 - Tool discovery: connect to MCP server, list tools, cache schemas
 - Sandbox integration: generate callable wrappers in the `functions` package
-- Internal MCP proxy endpoint for sandbox → API → MCP server routing
-- Migration of existing `agent.mcp_servers` JSONB to new model
-- Agent integration: agents select which namespace MCP servers to use
+- Internal MCP proxy endpoint for sandbox → API → MCP server routing with per-server settings enforcement
+- Console UI: expandable view per MCP server showing settings, env vars, and tools
+- Deprecation of existing `agent.mcp_servers` JSONB column
+- Agent integration: agents select which namespace MCP servers to use by name
 - Support for SSE, Streamable HTTP, and stdio transports
 
 **Out of Scope:**
@@ -180,6 +184,34 @@ Both contain callable functions from the sandbox's perspective. The `mcp__` pref
 - **Parameters:** `name`
 - **Behavior:** Reconnect, re-discover tools, update cached schemas. Reports added/removed tools.
 - **Authorization:** Namespace owner only
+
+**REQ-MCP-005: Set MCP Server Setting**
+- **Description:** MCP tool `set_mcp_server_setting` updates a tunable setting on a remote MCP server
+- **Priority:** Must Have
+- **Parameters:** `name` (server), `key` (setting name), `value` (setting value)
+- **Allowed keys:** `response_limit_bytes`, `timeout_seconds`, `max_calls_per_execution`, `retry_on_failure`, `retry_count`, `enabled`
+- **Behavior:** Validates the key is recognized and the value type is correct. Updates the settings JSONB. Returns the full current settings.
+- **Authorization:** Namespace owner only
+
+**REQ-MCP-006: Set MCP Server Environment Variable**
+- **Description:** MCP tool `set_mcp_server_env` sets a key-value pair on a remote MCP server's environment
+- **Priority:** Must Have
+- **Parameters:** `name` (server), `key` (env var name), `value` (env var value)
+- **Behavior:** Upserts the key in the env_vars JSONB. Returns the full current env vars.
+- **Authorization:** Namespace owner only
+
+**REQ-MCP-007: Remove MCP Server Environment Variable**
+- **Description:** MCP tool `remove_mcp_server_env` removes an environment variable from a remote MCP server
+- **Priority:** Must Have
+- **Parameters:** `name` (server), `key` (env var name)
+- **Authorization:** Namespace owner only
+
+**REQ-MCP-008: Describe MCP Server**
+- **Description:** MCP tool `describe_mcp_server` returns full details of a remote MCP server including settings, env vars, and tool list
+- **Priority:** Must Have
+- **Parameters:** `name`
+- **Returns:** Server name, URL, transport, settings, env vars (values shown), tool list with schemas, enabled status, last connected timestamp
+- **Authorization:** Read access
 
 ### 3.2 Credential Storage
 
@@ -440,13 +472,37 @@ A namespace with 3 MCP servers averaging 15 tools each = ~45 tools × 18 tokens 
 | args | JSONB | For stdio transport only |
 | headers_encrypted | BYTEA | Auth headers, encrypted |
 | headers_dek_encrypted | BYTEA | DEK |
+| settings | JSONB | LLM-tunable settings (see below) |
+| env_vars | JSONB | User-defined key-value pairs, passed to MCP server as context |
 | tool_schemas | JSONB | Cached tool list from discovery |
 | tool_count | INTEGER | Cached count |
+| enabled | BOOLEAN | DEFAULT true — LLM can disable without removing |
 | last_connected_at | TIMESTAMPTZ | Last successful connection |
 | created_at | TIMESTAMPTZ | |
 | updated_at | TIMESTAMPTZ | |
 
 **Indexes:** UNIQUE(namespace_id, name)
+
+**Settings schema** (JSONB with defaults):
+```json
+{
+  "response_limit_bytes": 1048576,
+  "timeout_seconds": 30,
+  "max_calls_per_execution": 50,
+  "retry_on_failure": true,
+  "retry_count": 2
+}
+```
+All settings are LLM-configurable via `set_mcp_server_setting`. The proxy enforces these at call time.
+
+**Environment variables** (JSONB):
+```json
+{
+  "GOOGLE_PROJECT_ID": "my-project",
+  "SHEETS_DEFAULT_RANGE": "A1:Z1000"
+}
+```
+User-defined key-value pairs. Passed to the MCP server as additional context headers or used by the proxy when constructing requests. Visible in the console. Managed via `set_mcp_server_env` / `remove_mcp_server_env` tools.
 
 ### 9.2 Modified Entity: Agent
 
