@@ -75,7 +75,9 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         String(20), nullable=False, default="execute_only", server_default="execute_only"
     )
     auto_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    mcp_servers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # DEPRECATED — use mcp_server_names
+    mcp_servers: Mapped[dict | None] = mapped_column(
+        JSONB, nullable=True
+    )  # DEPRECATED — use mcp_server_names
     mcp_server_names: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
     orchestration_limits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     heartbeat_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)

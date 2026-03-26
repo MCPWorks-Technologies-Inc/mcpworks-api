@@ -35,25 +35,15 @@ class NamespaceMcpServer(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(63), nullable=False)
-    transport: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="streamable_http"
-    )
+    transport: Mapped[str] = mapped_column(String(20), nullable=False, default="streamable_http")
     url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     command: Mapped[str | None] = mapped_column(String(500), nullable=True)
     command_args: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     headers_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
-    headers_dek_encrypted: Mapped[bytes | None] = mapped_column(
-        LargeBinary, nullable=True
-    )
-    settings: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, server_default="{}"
-    )
-    env_vars: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, server_default="{}"
-    )
-    tool_schemas: Mapped[list] = mapped_column(
-        JSONB, nullable=False, server_default="[]"
-    )
+    headers_dek_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    settings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    env_vars: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    tool_schemas: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     tool_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
