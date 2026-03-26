@@ -75,11 +75,11 @@ docker compose -f docker-compose.self-hosted.yml exec api alembic upgrade head
 
 The API is now available at `https://api.yourdomain.com/v1/health` (Caddy handles TLS automatically).
 
-See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for detailed deployment instructions.
+See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for detailed deployment instructions, then [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) to create your first function.
 
 ### MCPWorks Cloud
 
-Use the managed service at [mcpworks.io](https://mcpworks.io) — no infrastructure to manage.
+Use the managed service at [mcpworks.io](https://mcpworks.io) — no infrastructure to manage. See [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) to get started.
 
 ## Development
 

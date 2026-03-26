@@ -184,3 +184,7 @@ Internet → Caddy (TLS) → MCPWorks API → PostgreSQL
 ```
 
 All services run in Docker containers on a single machine. For high-availability deployments, see the project documentation.
+
+## Next Steps
+
+Once your instance is running, follow [GETTING-STARTED.md](GETTING-STARTED.md) to create your first function.
