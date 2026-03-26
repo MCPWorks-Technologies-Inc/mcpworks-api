@@ -17,7 +17,8 @@
 - Q: Keep HMAC on trust boundary closing tags or drop it? → A: Drop HMAC. Trust markers are added server-side by the run handler after the sandbox exits. The sandbox code never sees the markers and cannot spoof them. HMAC adds complexity for a non-existent threat.
 - Q: Should rule management tools be a new tool group or part of MCP_SERVER_TOOLS? → A: Part of MCP_SERVER_TOOLS. Rules are a property of the MCP server, managed alongside settings and env vars. No separate group — user thinks "configuring my Slack server" not "configuring injection defense."
 - Q: Standalone set_function_trust tool or parameter on update_function? → A: Parameter on existing update_function. Trust level is a function property like description or tags. `update_function(service="utils", function="fetch_rss", output_trust="data")`.
-- Q: Should output_trust be optional or mandatory? → A: Mandatory. Required on make_function. No default — the user/LLM must explicitly choose `prompt` or `data`. Auto-classification provides a suggestion but the user confirms.
+- Q: Should output_trust be optional or mandatory? → A: Mandatory on native functions (make_function). No default — the user/LLM must explicitly choose `prompt` or `data`. Auto-classification provides a suggestion but the user confirms.
+- Q: How does trust work for RemoteMCP tools? → A: RemoteMCP tools default to `data` behavior via the `wrap_trust_boundary` default rule — no `output_trust` field on them. Users can override per-tool via `set_mcp_server_tool_trust` to mark individual tools as `prompt` (trusted, no wrapping) or keep the default `data` (wrapped). This is opt-in — the safe default is wrapping everything.
 
 ---
 
@@ -163,6 +164,14 @@ The sandbox returns this text in the result. The AI may interpret it as a system
 - **Required:** Yes. Must be specified on `make_function`. No default — the LLM or user must explicitly declare trust level. Auto-classification (REQ-TRUST-003) provides a suggestion during function creation, but the user confirms.
 - **Storage:** New NOT NULL column on `functions` table. Existing functions backfilled to `prompt` via migration.
 - **MCP tools:** Required parameter on `make_function`. Also settable via `update_function(output_trust="data")`.
+
+**REQ-TRUST-001B: RemoteMCP Tool Trust Override**
+- **Description:** Individual RemoteMCP tools can be flagged as `prompt` (trusted, no wrapping) or left at the default `data` (wrapped). This is a per-tool override stored on the MCP server record, not on a Function entity.
+- **Priority:** Should Have
+- **Default:** All RemoteMCP tools default to `data` (wrapped via the `wrap_trust_boundary` default rule)
+- **MCP tool:** `set_mcp_server_tool_trust(name, tool, output_trust)` — sets trust for a specific tool on a server. Added to MCP_SERVER_TOOLS group.
+- **Storage:** `tool_trust_overrides` dict in `NamespaceMcpServer.settings` JSONB: `{"read_sheet_values": "prompt", "search_gmail_messages": "data"}`
+- **Behavior:** The proxy checks tool_trust_overrides before applying `wrap_trust_boundary`. If the tool is explicitly `prompt`, wrapping is skipped for that tool.
 
 **REQ-TRUST-002: Trust Boundary Wrapping**
 - **Description:** When a function with `output_trust: data` returns a result, the result is wrapped with trust boundary markers before entering the AI context
