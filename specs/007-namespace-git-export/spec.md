@@ -59,10 +59,11 @@ Today, MCPWorks namespaces exist only as database records. If a user wants to ba
 **Workflow:**
 1. Developer asks: "Export my analytics namespace to Git format"
 2. AI calls `export_namespace` tool with name `analytics`
-3. MCPWorks serializes namespace → services → functions → agents into directory structure
-4. MCPWorks writes the directory to a temporary path and returns the path
-5. Developer commits the directory to their Git repo
-6. Future changes: developer re-exports, commits the diff
+3. MCPWorks serializes namespace → services → functions → agents into a tar.gz archive
+4. MCPWorks returns a time-limited download URL (`/v1/exports/{id}.tar.gz`, expires in 1 hour)
+5. AI downloads and extracts the archive to the local filesystem
+6. Developer commits the directory to their Git repo and pushes (using their own Git credentials — works with GitHub, GitLab, Gitea, Bitbucket, or any Git host)
+7. Future changes: developer re-exports, commits the diff
 
 **Success:** Directory contains all function code, schemas, and metadata. `git diff` shows meaningful changes between exports.
 **Failure:** Export fails with clear error if namespace doesn't exist or user lacks access.
@@ -232,16 +233,24 @@ spec:
 ### 3.2 Export Operations
 
 **REQ-EXP-010: Export Namespace**
-- **Description:** MCP tool `export_namespace` exports an entire namespace
+- **Description:** MCP tool `export_namespace` exports an entire namespace as a downloadable archive
 - **Priority:** Must Have
-- **Parameters:** `namespace` (name), `output_path` (optional, defaults to `./{namespace}`)
-- **Acceptance:** All services, functions (active version), and agents exported. No secrets in output.
+- **Parameters:** `namespace` (name)
+- **Returns:** Time-limited download URL for a `.tar.gz` archive containing the export directory
+- **Acceptance:** All services, functions (active version), and agents exported. No secrets in output. Archive URL expires after 1 hour. Archive is cleaned up after download or expiry.
 
 **REQ-EXP-011: Export Service**
-- **Description:** MCP tool `export_service` exports a single service from a namespace
+- **Description:** MCP tool `export_service` exports a single service as a downloadable archive
 - **Priority:** Should Have
-- **Parameters:** `namespace`, `service`, `output_path`
+- **Parameters:** `namespace`, `service`
+- **Returns:** Time-limited download URL for a `.tar.gz` archive
 - **Acceptance:** Only the specified service's functions are exported. Output structure is a valid service directory that can be imported into any namespace.
+
+**REQ-EXP-012: Export Delivery**
+- **Description:** Exports are delivered as downloadable archives, not written to the user's filesystem
+- **Priority:** Must Have
+- **Rationale:** MCP tools run on the MCPWorks server, not the user's machine. The archive URL lets the AI assistant (or user) download the export to their local environment where they have Git credentials and filesystem access. This is Git-host-agnostic — the user pushes to whatever remote they choose.
+- **Endpoint:** `GET /v1/exports/{export_id}.tar.gz` (authenticated, one-time download)
 
 ### 3.3 Import Operations
 
@@ -444,17 +453,19 @@ Both well under the 500 token target.
 
 ## 10. Future Considerations
 
-### 10.1 Phase 2: Git-First Workflow
+### 10.1 Phase 2: Direct Git Push
+
+- `export_to_git` tool: export + push to any Git remote in one step
+- User stores a Git remote URL + personal access token (PAT) as an encrypted secret in MCPWorks
+- Uses Git over HTTPS with PAT auth — works with any host (GitHub, GitLab, Gitea, Bitbucket, self-hosted)
+- URL format: `https://{token}@{host}/{owner}/{repo}.git`
+- No provider-specific OAuth flows — PATs are universal
+
+### 10.2 Phase 2: Git-First Workflow
 
 - Watch a Git repo, auto-import on push (webhook-triggered)
 - `mcpworks.yaml` at repo root defines which namespace to sync
 - Bi-directional sync: MCP tool edits commit back to repo
-
-### 10.2 Phase 2: GitHub Integration
-
-- `export_to_github` tool: export + create/update GitHub repo in one step
-- `import_from_github` tool: clone repo + import in one step
-- PR creation for namespace changes
 
 ### 10.3 Phase 3: Namespace Registry
 
