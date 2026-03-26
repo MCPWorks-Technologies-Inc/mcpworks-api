@@ -61,6 +61,19 @@ class McpServerService:
             args=args,
         )
 
+        default_rules = {
+            "request": [],
+            "response": [
+                {"id": "default-trust", "type": "wrap_trust_boundary", "tools": "*"},
+                {
+                    "id": "default-scan",
+                    "type": "scan_injection",
+                    "tools": "*",
+                    "strictness": "warn",
+                },
+            ],
+        }
+
         server = NamespaceMcpServer(
             namespace_id=namespace_id,
             name=name,
@@ -72,6 +85,7 @@ class McpServerService:
             headers_dek_encrypted=headers_dek,
             settings={},
             env_vars={},
+            rules=default_rules,
             tool_schemas=tool_schemas,
             tool_count=tool_count,
             last_connected_at=datetime.now(UTC),
@@ -209,6 +223,38 @@ class McpServerService:
         await self.db.flush()
         await self.db.refresh(server)
         return dict(server.env_vars)
+
+    async def add_rule(
+        self, namespace_id: uuid.UUID, name: str, direction: str, rule: dict
+    ) -> dict:
+        if direction not in ("request", "response"):
+            raise ValueError("direction must be 'request' or 'response'")
+        server = await self.get_by_name(namespace_id, name)
+        rules = dict(server.rules or {"request": [], "response": []})
+        rule_id = rule.get("id") or f"r-{uuid.uuid4().hex[:8]}"
+        rule["id"] = rule_id
+        rules.setdefault(direction, []).append(rule)
+        server.rules = rules
+        await self.db.flush()
+        await self.db.refresh(server)
+        return {"rule_id": rule_id, "rule": rule}
+
+    async def remove_rule(self, namespace_id: uuid.UUID, name: str, rule_id: str) -> None:
+        server = await self.get_by_name(namespace_id, name)
+        rules = dict(server.rules or {"request": [], "response": []})
+        for direction in ("request", "response"):
+            rules[direction] = [r for r in rules.get(direction, []) if r.get("id") != rule_id]
+        server.rules = rules
+        await self.db.flush()
+        await self.db.refresh(server)
+
+    async def list_rules(self, namespace_id: uuid.UUID, name: str) -> dict:
+        server = await self.get_by_name(namespace_id, name)
+        rules = server.rules or {"request": [], "response": []}
+        return {
+            "request_rules": rules.get("request", []),
+            "response_rules": rules.get("response", []),
+        }
 
     def _decrypt_headers(self, server: NamespaceMcpServer) -> dict[str, str] | None:
         if not server.headers_encrypted:

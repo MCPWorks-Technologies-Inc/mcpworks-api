@@ -374,6 +374,10 @@ class RunMCPHandler:
 
         if result.success:
             content_text = json.dumps(result.output)
+            if getattr(function, "output_trust", "prompt") == "data":
+                from mcpworks_api.core.trust_boundary import wrap_function_output
+
+                content_text = wrap_function_output(content_text)
         else:
             content_text = json.dumps(
                 {
@@ -532,8 +536,18 @@ class RunMCPHandler:
             called_functions=called_functions,
         )
 
+        has_data_trust = has_mcp or any(
+            getattr(func, "output_trust", "prompt") == "data" for func, _ in functions
+        )
+
         if result.success:
             content_text = json.dumps(result.output)
+            if has_data_trust:
+                from mcpworks_api.core.trust_boundary import wrap_function_output
+                from mcpworks_api.sandbox.injection_scan import scan_for_injections
+
+                if scan_for_injections(content_text):
+                    content_text = wrap_function_output(content_text)
         else:
             content_text = json.dumps(
                 {

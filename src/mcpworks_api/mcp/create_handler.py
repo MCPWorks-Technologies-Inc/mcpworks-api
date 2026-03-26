@@ -149,6 +149,10 @@ class CreateMCPHandler:
         "set_mcp_server_env": "write",
         "remove_mcp_server_env": "write",
         "configure_agent_mcp": "write",
+        "add_mcp_server_rule": "write",
+        "remove_mcp_server_rule": "write",
+        "list_mcp_server_rules": "read",
+        "set_mcp_server_tool_trust": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -478,6 +482,10 @@ class CreateMCPHandler:
             "set_mcp_server_env": self._set_mcp_server_env,
             "remove_mcp_server_env": self._remove_mcp_server_env,
             "configure_agent_mcp": self._configure_agent_mcp,
+            "add_mcp_server_rule": self._add_mcp_server_rule,
+            "remove_mcp_server_rule": self._remove_mcp_server_rule,
+            "list_mcp_server_rules": self._list_mcp_server_rules,
+            "set_mcp_server_tool_trust": self._set_mcp_server_tool_trust,
         }
 
         handler = handlers.get(name)
@@ -695,6 +703,7 @@ class CreateMCPHandler:
         template: str | None = None,
         language: str = "python",
         public_safe: bool = False,
+        output_trust: str | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
         if language not in ("python", "typescript"):
@@ -766,6 +775,17 @@ class CreateMCPHandler:
             validated_required_env = required_env
             validated_optional_env = optional_env
 
+        if output_trust is None:
+            from mcpworks_api.sandbox.injection_scan import suggest_trust_level
+
+            suggested, reason = suggest_trust_level(code, required_env)
+            raise ValueError(
+                f"output_trust is required. Suggested: '{suggested}' ({reason}). "
+                f"Set output_trust='{suggested}' or output_trust='{'data' if suggested == 'prompt' else 'prompt'}'."
+            )
+        if output_trust not in ("prompt", "data"):
+            raise ValueError("output_trust must be 'prompt' or 'data'")
+
         credential_warnings: list[str] = []
         if code:
             from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
@@ -791,6 +811,7 @@ class CreateMCPHandler:
             created_by=created_by,
             language=language,
             public_safe=public_safe,
+            output_trust=output_trust,
         )
         result: dict[str, Any] = {
             "name": f"{service}.{name}",
@@ -842,6 +863,7 @@ class CreateMCPHandler:
         created_by: str | None = None,
         restore_version: int | None = None,
         public_safe: bool | None = None,
+        output_trust: str | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
         # Look up function to determine its language for requirements validation
@@ -879,6 +901,9 @@ class CreateMCPHandler:
                         isError=True,
                     )
 
+        if output_trust is not None and output_trust not in ("prompt", "data"):
+            raise ValueError("output_trust must be 'prompt' or 'data'")
+
         credential_warnings: list[str] = []
         if code:
             from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
@@ -886,12 +911,18 @@ class CreateMCPHandler:
             credential_warnings = scan_code_for_credentials(code)
 
         # Update metadata if provided
-        if description is not None or tags is not None or public_safe is not None:
+        if (
+            description is not None
+            or tags is not None
+            or public_safe is not None
+            or output_trust is not None
+        ):
             await self.function_service.update(
                 function_id=function.id,
                 description=description,
                 tags=tags,
                 public_safe=public_safe,
+                output_trust=output_trust,
             )
 
         # Create new version if code/config/requirements/env changes or restoring
@@ -2544,4 +2575,84 @@ class CreateMCPHandler:
         await self.db.flush()
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"agent": agent_name, "mcp_servers": servers}))]
+        )
+
+    async def _add_mcp_server_rule(
+        self,
+        name: str,
+        direction: str,
+        rule: dict,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        result = await svc.add_rule(ns.id, name, direction, rule)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "added",
+                            "server": name,
+                            "direction": direction,
+                            "rule_id": result["rule_id"],
+                            "rule": result["rule"],
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_mcp_server_rule(
+        self,
+        name: str,
+        rule_id: str,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        await svc.remove_rule(ns.id, name, rule_id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({"status": "removed", "server": name, "rule_id": rule_id})
+                )
+            ]
+        )
+
+    async def _list_mcp_server_rules(self, name: str) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = McpServerService(self.db)
+        rules = await svc.list_rules(ns.id, name)
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"server": name, **rules}))])
+
+    async def _set_mcp_server_tool_trust(
+        self,
+        name: str,
+        tool: str,
+        output_trust: str,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        if output_trust not in ("prompt", "data"):
+            raise ValueError("output_trust must be 'prompt' or 'data'")
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        server = await svc.get_by_name(ns.id, name)
+        settings = dict(server.settings or {})
+        overrides = dict(settings.get("tool_trust_overrides", {}))
+        overrides[tool] = output_trust
+        settings["tool_trust_overrides"] = overrides
+        server.settings = settings
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({"server": name, "tool": tool, "output_trust": output_trust})
+                )
+            ]
         )

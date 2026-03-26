@@ -69,6 +69,23 @@ async def proxy_mcp_call(
                 error_type="DecryptionError",
             )
 
+    rules = server.rules or {"request": [], "response": []}
+    request_rules = rules.get("request", [])
+    response_rules = rules.get("response", [])
+
+    if request_rules:
+        from mcpworks_api.core.mcp_rules import RuleBlockError, evaluate_request_rules
+
+        try:
+            arguments = evaluate_request_rules(request_rules, tool_name, dict(arguments))
+        except RuleBlockError as e:
+            return ProxyResult(
+                error=str(e),
+                error_type="RuleBlockedError",
+            )
+        except ValueError as e:
+            return ProxyResult(error=str(e), error_type="RuleValidationError")
+
     try:
         session = await mcp_pool.get_or_connect(
             namespace_id=ctx.namespace_id,
@@ -119,6 +136,13 @@ async def proxy_mcp_call(
             if len(output.encode("utf-8")) > response_limit:
                 output = output[: response_limit // 4]
                 truncated = True
+
+            if response_rules:
+                from mcpworks_api.core.mcp_rules import evaluate_response_rules
+
+                output = evaluate_response_rules(
+                    response_rules, tool_name, output, server_name, settings
+                )
 
             try:
                 parsed = json.loads(output)

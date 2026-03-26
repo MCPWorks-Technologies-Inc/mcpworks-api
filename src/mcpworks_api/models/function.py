@@ -66,6 +66,12 @@ class Function(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
+    output_trust: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="prompt",
+    )
+
     active_version: Mapped[int] = mapped_column(
         Integer,
         default=1,

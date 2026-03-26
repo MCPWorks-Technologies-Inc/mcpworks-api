@@ -65,13 +65,15 @@ Replace `myns` with the namespace you want to use and `sk_live_...` with your AP
 
 Ask your AI assistant:
 
-> "Create a namespace called 'demo', then a service called 'utils', then create a function called 'hello' using the hello-world template."
+> "Create a namespace called 'demo', then a service called 'utils', then create a function called 'hello' using the hello-world template with output_trust=prompt."
 
 Or do it manually through the MCP tools:
 
 1. **`make_namespace`** — name: `demo`
 2. **`make_service`** — name: `utils`
-3. **`make_function`** — name: `hello`, service: `utils`, template: `hello-world`
+3. **`make_function`** — name: `hello`, service: `utils`, template: `hello-world`, output_trust: `prompt`
+
+Every function requires `output_trust`: use `prompt` for trusted computed output, or `data` for functions that process external content (emails, APIs, web scrapes).
 
 ## 5. Run It
 

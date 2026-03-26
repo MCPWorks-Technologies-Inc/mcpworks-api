@@ -43,6 +43,9 @@ class NamespaceMcpServer(Base, UUIDMixin, TimestampMixin):
     headers_dek_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     settings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     env_vars: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    rules: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default='{"request":[],"response":[]}'
+    )
     tool_schemas: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     tool_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(
