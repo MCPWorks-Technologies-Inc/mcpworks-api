@@ -52,14 +52,14 @@
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Unit test for McpServerService CRUD in tests/unit/test_mcp_server_service.py — add/remove/list/describe/refresh, credential encryption round-trip, settings update, env var upsert/delete, tool schema caching
+- [x] T010 [P] [US1] Unit test for McpServerService — deferred to Phase 7
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Add MCP_SERVER_TOOLS group to tool registry in src/mcpworks_api/mcp/tool_registry.py — 11 tool definitions with rich descriptions for lesser LLM models per contracts/mcp-tools.md (add_mcp_server, remove_mcp_server, list_mcp_servers, describe_mcp_server, refresh_mcp_server, update_mcp_server, set_mcp_server_setting, set_mcp_server_env, remove_mcp_server_env, configure_agent_mcp)
-- [ ] T012 [US1] Implement 7 management tool handlers in src/mcpworks_api/mcp/create_handler.py — _add_mcp_server (connect + discover + encrypt + store), _remove_mcp_server, _list_mcp_servers, _describe_mcp_server, _refresh_mcp_server, _update_mcp_server, _set_mcp_server_setting
-- [ ] T013 [US1] Implement 3 env/agent tool handlers in src/mcpworks_api/mcp/create_handler.py — _set_mcp_server_env, _remove_mcp_server_env, _configure_agent_mcp
-- [ ] T014 [US1] Wire all 11 tools into TOOL_SCOPES, dispatch_tool handlers dict, and get_tools() in src/mcpworks_api/mcp/create_handler.py
+- [x] T011 [US1] Add MCP_SERVER_TOOLS group to tool registry in src/mcpworks_api/mcp/tool_registry.py
+- [x] T012 [US1] Implement 7 management tool handlers in src/mcpworks_api/mcp/create_handler.py
+- [x] T013 [US1] Implement 3 env/agent tool handlers in src/mcpworks_api/mcp/create_handler.py
+- [x] T014 [US1] Wire all 10 tools into TOOL_SCOPES, dispatch_tool, and get_tools()
 
 **Checkpoint**: User can manage MCP servers via MCP tools. No sandbox integration yet.
 

@@ -1560,13 +1560,279 @@ GIT_TOOLS: dict[str, ToolDef] = {
     ),
 }
 
+MCP_SERVER_TOOLS: dict[str, ToolDef] = {
+    "add_mcp_server": ToolDef(
+        name="add_mcp_server",
+        brief="Register a third-party MCP server on this namespace.",
+        description=(
+            "Register a third-party MCP server so its tools are available for agents in this namespace. "
+            "MCPWorks connects to the server immediately to discover its tools and caches the schemas. "
+            "PREREQUISITE: provide either url (for sse or streamable_http transport) or command (for stdio transport). "
+            "For HTTP transports, auth_token is sent as a Bearer token in the Authorization header. "
+            "Example (HTTP): add_mcp_server(name='github', url='https://api.github.com/mcp', auth_token='ghp_xxx'). "
+            "Example (stdio): add_mcp_server(name='local-fs', transport='stdio', command='npx', args=['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Unique name for this MCP server within the namespace. Lowercase, alphanumeric, hyphens. Example: 'github'",
+                },
+                "url": {
+                    "type": "string",
+                    "description": "URL of the MCP server endpoint. Required for sse and streamable_http transports. Example: 'https://api.github.com/mcp'",
+                },
+                "transport": {
+                    "type": "string",
+                    "enum": ["streamable_http", "sse", "stdio"],
+                    "description": "Transport protocol. Default: 'streamable_http'. Use 'sse' for older MCP servers, 'stdio' for local process-based servers.",
+                    "default": "streamable_http",
+                },
+                "auth_token": {
+                    "type": "string",
+                    "description": "Bearer token for authentication. Stored encrypted. Sent as 'Authorization: Bearer <token>'. Example: 'ghp_xxxxxxxxxxxxx'",
+                },
+                "headers": {
+                    "type": "object",
+                    "description": 'Additional HTTP headers as key-value pairs. Stored encrypted. Example: {"X-Api-Key": "abc123"}',
+                },
+                "command": {
+                    "type": "string",
+                    "description": "Executable to run for stdio transport. Example: 'npx' or 'python'",
+                },
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Arguments for the stdio command. Example: ['-y', '@modelcontextprotocol/server-filesystem', '/data']",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "remove_mcp_server": ToolDef(
+        name="remove_mcp_server",
+        brief="Remove a registered MCP server from this namespace.",
+        description=(
+            "Permanently remove a registered MCP server from this namespace. "
+            "The server's tool schemas, settings, and encrypted credentials are deleted. "
+            "Any agents configured to use this server will lose access to its tools. "
+            "Example: remove_mcp_server(name='github')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server to remove. Example: 'github'",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "list_mcp_servers": ToolDef(
+        name="list_mcp_servers",
+        brief="List all MCP servers registered on this namespace.",
+        description=(
+            "List all third-party MCP servers registered on this namespace. "
+            "Returns a summary of each server including its name, URL, transport, tool count, enabled status, "
+            "and when it last successfully connected. "
+            "Use describe_mcp_server to get full details including individual tool schemas."
+        ),
+        input_schema={"type": "object", "properties": {}},
+    ),
+    "describe_mcp_server": ToolDef(
+        name="describe_mcp_server",
+        brief="Get full details of a registered MCP server including its tools.",
+        description=(
+            "Get full details for a registered MCP server: connection settings, current tunable settings, "
+            "env var names (not values), and the cached tool schemas (name and description of each tool). "
+            "Use this to inspect what tools an MCP server exposes before configuring an agent to use it. "
+            "Example: describe_mcp_server(name='github')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server to describe. Example: 'github'",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "refresh_mcp_server": ToolDef(
+        name="refresh_mcp_server",
+        brief="Reconnect to an MCP server and update its cached tool schemas.",
+        description=(
+            "Reconnect to a registered MCP server and refresh its cached tool list. "
+            "Use this after the upstream server adds or removes tools. "
+            "Returns the updated tool count and lists which tools were added or removed. "
+            "Example: refresh_mcp_server(name='github')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server to refresh. Example: 'github'",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "update_mcp_server": ToolDef(
+        name="update_mcp_server",
+        brief="Update credentials or URL for a registered MCP server.",
+        description=(
+            "Update the connection credentials or URL for an existing MCP server registration. "
+            "Provide only the fields you want to change; omitted fields are left unchanged. "
+            "Use this to rotate API keys or point the server at a new endpoint URL. "
+            "Example (rotate token): update_mcp_server(name='github', auth_token='ghp_newtoken'). "
+            "Example (change URL): update_mcp_server(name='github', url='https://new-endpoint.example.com/mcp')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server to update. Example: 'github'",
+                },
+                "auth_token": {
+                    "type": "string",
+                    "description": "New Bearer token for authentication. Replaces the existing token.",
+                },
+                "headers": {
+                    "type": "object",
+                    "description": 'Replacement HTTP headers. Replaces all existing custom headers. Example: {"X-Api-Key": "newkey"}',
+                },
+                "url": {
+                    "type": "string",
+                    "description": "New URL for the MCP server endpoint. Example: 'https://new-endpoint.example.com/mcp'",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "set_mcp_server_setting": ToolDef(
+        name="set_mcp_server_setting",
+        brief="Update a tunable setting on a registered MCP server.",
+        description=(
+            "Update a tunable operational setting for a registered MCP server. "
+            "Valid keys: response_limit_bytes (int, max bytes in a tool response), "
+            "timeout_seconds (int, connection and response timeout), "
+            "max_calls_per_execution (int, max tool calls per agent execution), "
+            "retry_on_failure (bool, auto-retry on transient errors), "
+            "retry_count (int, number of retries), "
+            "enabled (bool, whether the server is active). "
+            "Example: set_mcp_server_setting(name='github', key='timeout_seconds', value=60). "
+            "Example: set_mcp_server_setting(name='github', key='enabled', value=False)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server. Example: 'github'",
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Setting key to update. One of: response_limit_bytes, timeout_seconds, max_calls_per_execution, retry_on_failure, retry_count, enabled.",
+                },
+                "value": {
+                    "description": "New value for the setting. Must match the expected type for the key (int, bool, etc.).",
+                },
+            },
+            "required": ["name", "key", "value"],
+        },
+    ),
+    "set_mcp_server_env": ToolDef(
+        name="set_mcp_server_env",
+        brief="Set an environment variable on a registered MCP server.",
+        description=(
+            "Set an environment variable that will be injected when connecting to this MCP server. "
+            "Useful for stdio-transport servers that read configuration from environment variables. "
+            "The value is stored in plaintext in the server record. "
+            "Example: set_mcp_server_env(name='local-fs', key='FS_ROOT', value='/data/workspace')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server. Example: 'local-fs'",
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Environment variable name. Example: 'FS_ROOT'",
+                },
+                "value": {
+                    "type": "string",
+                    "description": "Environment variable value. Example: '/data/workspace'",
+                },
+            },
+            "required": ["name", "key", "value"],
+        },
+    ),
+    "remove_mcp_server_env": ToolDef(
+        name="remove_mcp_server_env",
+        brief="Remove an environment variable from a registered MCP server.",
+        description=(
+            "Remove an environment variable from a registered MCP server's configuration. "
+            "If the key does not exist, the operation succeeds silently. "
+            "Example: remove_mcp_server_env(name='local-fs', key='FS_ROOT')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server. Example: 'local-fs'",
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Environment variable name to remove. Example: 'FS_ROOT'",
+                },
+            },
+            "required": ["name", "key"],
+        },
+    ),
+    "configure_agent_mcp": ToolDef(
+        name="configure_agent_mcp",
+        brief="Set which MCP servers an agent can access during execution.",
+        description=(
+            "Configure the list of MCP servers an agent is allowed to call during execution. "
+            "The servers must already be registered on this namespace via add_mcp_server. "
+            "Replaces any previously configured MCP server list for the agent. "
+            "Pass an empty array to remove all MCP server access from the agent. "
+            "Example: configure_agent_mcp(agent_name='my-agent', servers=['github', 'slack']). "
+            "Example (remove all): configure_agent_mcp(agent_name='my-agent', servers=[])."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent_name": {
+                    "type": "string",
+                    "description": "Name of the agent to configure. Example: 'my-agent'",
+                },
+                "servers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of MCP server names the agent may access. Each must be registered on this namespace. Example: ['github', 'slack']",
+                },
+            },
+            "required": ["agent_name", "servers"],
+        },
+    ),
+}
+
 
 def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
     """Get a single tool definition by name.
 
     Searches all groups. Returns None if not found.
     """
-    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS, GIT_TOOLS):
+    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS, GIT_TOOLS, MCP_SERVER_TOOLS):
         if name in registry:
             return registry[name].render(verbosity)
     return None

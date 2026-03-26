@@ -139,6 +139,16 @@ class CreateMCPHandler:
         "export_service": "write",
         "import_namespace": "write",
         "import_service": "write",
+        "add_mcp_server": "write",
+        "remove_mcp_server": "write",
+        "list_mcp_servers": "read",
+        "describe_mcp_server": "read",
+        "refresh_mcp_server": "write",
+        "update_mcp_server": "write",
+        "set_mcp_server_setting": "write",
+        "set_mcp_server_env": "write",
+        "remove_mcp_server_env": "write",
+        "configure_agent_mcp": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -237,6 +247,13 @@ class CreateMCPHandler:
         tools.extend(
             MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
             for tool_def in GIT_TOOLS.values()
+        )
+
+        from mcpworks_api.mcp.tool_registry import MCP_SERVER_TOOLS
+
+        tools.extend(
+            MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
+            for tool_def in MCP_SERVER_TOOLS.values()
         )
 
         return tools
@@ -451,6 +468,16 @@ class CreateMCPHandler:
             "export_service": self._export_service,
             "import_namespace": self._import_namespace,
             "import_service": self._import_service,
+            "add_mcp_server": self._add_mcp_server,
+            "remove_mcp_server": self._remove_mcp_server,
+            "list_mcp_servers": self._list_mcp_servers,
+            "describe_mcp_server": self._describe_mcp_server,
+            "refresh_mcp_server": self._refresh_mcp_server,
+            "update_mcp_server": self._update_mcp_server,
+            "set_mcp_server_setting": self._set_mcp_server_setting,
+            "set_mcp_server_env": self._set_mcp_server_env,
+            "remove_mcp_server_env": self._remove_mcp_server_env,
+            "configure_agent_mcp": self._configure_agent_mcp,
         }
 
         handler = handlers.get(name)
@@ -2299,4 +2326,222 @@ class CreateMCPHandler:
                     )
                 )
             ]
+        )
+
+    async def _add_mcp_server(
+        self,
+        name: str,
+        url: str | None = None,
+        transport: str = "streamable_http",
+        auth_token: str | None = None,
+        headers: dict | None = None,
+        command: str | None = None,
+        args: list | None = None,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        server = await svc.add_server(
+            namespace_id=ns.id,
+            name=name,
+            url=url,
+            transport=transport,
+            auth_token=auth_token,
+            headers=headers,
+            command=command,
+            args=args,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "name": server.name,
+                            "url": server.url,
+                            "transport": server.transport,
+                            "tool_count": server.tool_count,
+                            "tools": [t["name"] for t in (server.tool_schemas or [])],
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_mcp_server(self, name: str) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        await svc.remove_server(ns.id, name)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"status": "removed", "name": name}))]
+        )
+
+    async def _list_mcp_servers(self) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = McpServerService(self.db)
+        servers = await svc.list_servers(ns.id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        [
+                            {
+                                "name": s.name,
+                                "url": s.url,
+                                "transport": s.transport,
+                                "tool_count": s.tool_count,
+                                "enabled": s.enabled,
+                                "last_connected": s.last_connected_at.isoformat()
+                                if s.last_connected_at
+                                else None,
+                            }
+                            for s in servers
+                        ]
+                    )
+                )
+            ]
+        )
+
+    async def _describe_mcp_server(self, name: str) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = McpServerService(self.db)
+        server = await svc.get_by_name(ns.id, name)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "name": server.name,
+                            "url": server.url,
+                            "transport": server.transport,
+                            "command": server.command,
+                            "args": server.command_args,
+                            "enabled": server.enabled,
+                            "tool_count": server.tool_count,
+                            "last_connected": server.last_connected_at.isoformat()
+                            if server.last_connected_at
+                            else None,
+                            "settings": server.get_settings(),
+                            "env_vars": list((server.env_vars or {}).keys()),
+                            "tools": [
+                                {"name": t["name"], "description": t.get("description", "")}
+                                for t in (server.tool_schemas or [])
+                            ],
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _refresh_mcp_server(self, name: str) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        server, added, removed = await svc.refresh_server(ns.id, name)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "name": server.name,
+                            "tool_count": server.tool_count,
+                            "tools_added": added,
+                            "tools_removed": removed,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _update_mcp_server(
+        self,
+        name: str,
+        auth_token: str | None = None,
+        headers: dict | None = None,
+        url: str | None = None,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        await svc.update_server(
+            namespace_id=ns.id,
+            name=name,
+            auth_token=auth_token,
+            headers=headers,
+            url=url,
+        )
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"status": "updated", "name": name}))]
+        )
+
+    async def _set_mcp_server_setting(
+        self,
+        name: str,
+        key: str,
+        value: Any,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        result = await svc.set_setting(ns.id, name, key, value)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"name": name, "settings": result}))]
+        )
+
+    async def _set_mcp_server_env(
+        self,
+        name: str,
+        key: str,
+        value: str,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        result = await svc.set_env(ns.id, name, key, value)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"name": name, "env_vars": result}))]
+        )
+
+    async def _remove_mcp_server_env(
+        self,
+        name: str,
+        key: str,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        result = await svc.remove_env(ns.id, name, key)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"name": name, "env_vars": result}))]
+        )
+
+    async def _configure_agent_mcp(
+        self,
+        agent_name: str,
+        servers: list[str],
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        mcp_svc = McpServerService(self.db)
+        for server_name in servers:
+            await mcp_svc.get_by_name(ns.id, server_name)
+
+        agent_svc = AgentService(self.db)
+        agent = await agent_svc.get_agent(self.account.id, agent_name)
+        agent.mcp_server_names = servers if servers else None
+        await self.db.flush()
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"agent": agent_name, "mcp_servers": servers}))]
         )
