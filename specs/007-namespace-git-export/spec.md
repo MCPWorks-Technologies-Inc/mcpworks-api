@@ -8,6 +8,18 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-03-26
+
+- Q: On re-export, should the repo get a full replacement or additive merge? → A: Full replacement — wipe repo working tree, write fresh snapshot, commit the diff. Git preserves history via normal diffing. MCPWorks is source of truth; no stale files from deleted functions.
+- Q: One Git remote per namespace or multiple named remotes? → A: One remote per namespace. Keeps the model simple and unambiguous. Users needing multiple destinations can configure Git mirrors on the host side.
+- Q: PAT scoped per-account or per-namespace? → A: Per-namespace. Each namespace stores its own PAT independently — different namespaces may push to different repos on different hosts.
+- Q: Performance target covers serialization only or full Git round-trip? → A: Serialization only (< 5s). Git network time is outside MCPWorks's control.
+- Q: Authorization model for export/import tools? → A: Owner only for configure_git_remote + export. Write access sufficient for import (import just creates entities, export exposes all function code to an external repo).
+
+---
+
 ## 1. Overview
 
 ### 1.1 Purpose
@@ -237,12 +249,12 @@ spec:
 ### 3.2 Git Remote Configuration
 
 **REQ-GIT-001: Configure Git Remote**
-- **Description:** MCP tool `configure_git_remote` stores a Git remote URL and credentials for a namespace
+- **Description:** MCP tool `configure_git_remote` stores a Git remote URL and credentials for a namespace. One remote per namespace; calling again overwrites the previous configuration.
 - **Priority:** Must Have
 - **Parameters:** `namespace`, `git_url` (HTTPS URL), `git_token` (personal access token), `git_branch` (default: `main`)
 - **Storage:** URL stored in plaintext, token encrypted with envelope encryption (KEK/DEK) same as other secrets
 - **Acceptance:** Remote configuration persisted. Token verified by a test `git ls-remote` before saving.
-- **Rationale:** Git HTTPS + PAT works with every major host (GitHub, GitLab, Gitea, Bitbucket, self-hosted). No provider-specific OAuth.
+- **Rationale:** Git HTTPS + PAT works with every major host (GitHub, GitLab, Gitea, Bitbucket, self-hosted). No provider-specific OAuth. One remote keeps the model simple — users needing multiple destinations configure Git mirrors on the host side.
 
 **REQ-GIT-002: Remove Git Remote**
 - **Description:** MCP tool `remove_git_remote` deletes the stored Git remote configuration
@@ -255,7 +267,7 @@ spec:
 - **Description:** MCP tool `export_namespace` serializes a namespace and pushes to its configured Git remote
 - **Priority:** Must Have
 - **Parameters:** `namespace`, `message` (optional commit message)
-- **Behavior:** Serializes namespace to the export directory format, commits, and pushes to the configured remote. If the remote repo is empty, creates initial commit. If it has prior exports, commits the diff.
+- **Behavior:** Clones the remote, replaces all working tree contents (except `.git/`) with a fresh serialization, commits the diff, and pushes. If the remote repo is empty, creates initial commit. Full replacement ensures the repo always reflects the exact namespace state — deleted functions become file deletions in the commit.
 - **Returns:** Commit SHA, files changed count, remote URL
 - **Acceptance:** All services, functions (active version), and agents exported and pushed. No secrets in output.
 
@@ -321,14 +333,19 @@ spec:
 - **Description:** Import must validate all YAML manifests and function code before creating any entities. Reject malformed input.
 - **Priority:** Must Have
 
+**REQ-SEC-004: Authorization**
+- **Description:** `configure_git_remote`, `remove_git_remote`, `export_namespace`, and `export_service` require namespace owner access. `import_namespace` and `import_service` require write access to the target namespace (or account-level access for creating new namespaces).
+- **Priority:** Must Have
+- **Rationale:** Export exposes all function code to an external repository — sensitive operation restricted to owners. Import creates entities, which is a standard write operation.
+
 ---
 
 ## 4. Non-Functional Requirements
 
 ### 4.1 Performance
 
-- **Export:** Must complete in < 5 seconds for namespaces with up to 100 functions
-- **Import:** Must complete in < 10 seconds for namespaces with up to 100 functions
+- **Export serialization:** Must complete in < 5 seconds for namespaces with up to 100 functions (excludes Git network time, which depends on remote host and connection)
+- **Import deserialization:** Must complete in < 10 seconds for namespaces with up to 100 functions (excludes Git clone time)
 - **Token Efficiency:** Export tool response < 500 tokens (returns path + summary, not file contents)
 
 ### 4.2 Compatibility
