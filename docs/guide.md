@@ -24,6 +24,7 @@ No servers to manage. No containers to configure. Write a function, and it runs.
 - [Code Mode Deep Dive](#code-mode-deep-dive)
 - [End-to-End Examples](#end-to-end-examples)
 - [Git Export & Import](#git-export--import)
+- [Remote MCP Servers](#remote-mcp-servers)
 
 ---
 
@@ -967,3 +968,86 @@ Import supports three conflict modes:
 | Agent config + system prompts | Channel credentials |
 | Agent schedules + webhooks | Agent state |
 | Service metadata | Execution history |
+
+---
+
+## Remote MCP Servers
+
+Connect any third-party MCP server to your namespace. Their tools become callable from sandbox code with the same token efficiency as native functions.
+
+### Namespace Hierarchy
+
+```
+Namespace
+├── Services (native)           ← your code, runs in sandbox
+│   └── {service}
+│       └── {function}
+├── RemoteMCP (external)        ← third-party MCP servers, proxied
+│   └── {mcp-server}
+│       └── {tool}
+```
+
+### Add an MCP Server
+
+> "Add the Slack MCP server to my namespace at `https://slack-mcp.example.com/mcp` with token `xoxb-...`"
+
+MCPWorks connects to the server, discovers its tools, encrypts the token, and stores the config. Works with any MCP server over SSE, Streamable HTTP, or stdio.
+
+### Call MCP Tools from Code
+
+```python
+from functions import mcp__slack__list_channels, mcp__slack__send_message
+
+channels = mcp__slack__list_channels()
+private = [c for c in channels if c.get('is_private')]
+mcp__slack__send_message(channel="C01234", text=f"{len(private)} private channels")
+result = {"count": len(private)}
+```
+
+The AI sends ~80 tokens of code. Slack's full channel list stays in the sandbox. Only `result` comes back. Credentials never enter the sandbox — the internal proxy handles authentication.
+
+### Tune Settings
+
+Each MCP server has LLM-configurable settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `response_limit_bytes` | 1 MB | Max response size from MCP server |
+| `timeout_seconds` | 30 | Per-call timeout |
+| `max_calls_per_execution` | 50 | Limit calls per sandbox run |
+| `retry_on_failure` | true | Retry on connection errors |
+| `retry_count` | 2 | Number of retries |
+| `enabled` | true | Disable without removing |
+
+> "Set the response limit for google-workspace to 2MB"
+
+> "Disable the github MCP server temporarily"
+
+### Environment Variables
+
+Attach key-value metadata to each MCP server:
+
+> "Set SLACK_WORKSPACE=mcpworks on the slack server"
+
+### Agent Access
+
+Agents select which namespace MCP servers they can use:
+
+> "Configure my report-agent to use the slack and google-workspace MCP servers"
+
+The agent's tool list includes all tools from those servers during orchestration runs.
+
+### Management Tools
+
+| Tool | Description |
+|------|-------------|
+| `add_mcp_server` | Register an external MCP server |
+| `remove_mcp_server` | Unregister a server |
+| `list_mcp_servers` | List all configured servers |
+| `describe_mcp_server` | Full details (settings, env vars, tools) |
+| `refresh_mcp_server` | Reconnect and update cached tools |
+| `update_mcp_server` | Rotate credentials |
+| `set_mcp_server_setting` | Tune a per-server setting |
+| `set_mcp_server_env` | Set an environment variable |
+| `remove_mcp_server_env` | Remove an environment variable |
+| `configure_agent_mcp` | Set which servers an agent can access |

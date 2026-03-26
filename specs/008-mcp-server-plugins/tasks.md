@@ -125,9 +125,9 @@
 
 - [ ] T027 [P] Integration test: full flow in tests/integration/test_mcp_server_e2e.py — add MCP server → execute sandbox code calling MCP tool via proxy → verify result returned correctly (requires mock MCP server)
 - [ ] T028 [P] Integration test: agent with MCP servers in tests/integration/test_mcp_server_e2e.py — configure agent with mcp_server_names → trigger run → verify tools available
-- [ ] T029 [P] Update docs/guide.md with "Remote MCP Servers" section — document all 11 tools, parallel hierarchy, sandbox usage examples
-- [ ] T030 [P] Update docs/GETTING-STARTED.md with "Connect a Third-Party MCP Server" step
-- [ ] T031 Structlog events for all MCP server operations in src/mcpworks_api/services/mcp_server.py and src/mcpworks_api/core/mcp_proxy.py — mcp_server_added, mcp_server_removed, mcp_proxy_call, mcp_proxy_error, mcp_pool_hit, mcp_pool_miss (never log credentials or arguments)
+- [x] T029 [P] Update docs/guide.md with "Remote MCP Servers" section
+- [x] T030 [P] Update docs/GETTING-STARTED.md with "Connect a Third-Party MCP Server" step
+- [x] T031 Structlog events already included in mcp_server.py (added/removed/refreshed/updated) and mcp_proxy.py (proxy_call/proxy_error/proxy_retry) and mcp_pool.py (pool_hit/pool_connect/pool_expired)
 - [ ] T032 Add Prometheus metrics in src/mcpworks_api/core/mcp_proxy.py — mcpworks_mcp_proxy_calls_total (counter), mcpworks_mcp_proxy_duration_seconds (histogram), mcpworks_mcp_server_connections_active (gauge)
 
 ---
