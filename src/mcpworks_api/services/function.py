@@ -45,6 +45,7 @@ class FunctionService:
         created_by: str | None = None,
         language: str = "python",
         public_safe: bool = False,
+        output_trust: str = "prompt",
     ) -> Function:
         """Create a new function with initial version.
 
@@ -84,6 +85,7 @@ class FunctionService:
             function = existing
             function.description = description
             function.tags = tags
+            function.output_trust = output_trust
             function.deleted_at = None
             function.locked = False
             function.locked_by = None
@@ -115,6 +117,7 @@ class FunctionService:
             name=name.lower(),
             description=description,
             tags=tags,
+            output_trust=output_trust,
             active_version=1,
             public_safe=public_safe,
         )
@@ -248,22 +251,11 @@ class FunctionService:
         description: str | None = None,
         tags: builtins.list[str] | None = None,
         public_safe: bool | None = None,
+        output_trust: str | None = None,
     ) -> Function:
         """Update function metadata (not code/version).
 
         For code changes, use create_version().
-
-        Args:
-            function_id: The function UUID.
-            description: New description (if provided).
-            tags: New tags (if provided).
-            public_safe: Whether function is callable from public chat (if provided).
-
-        Returns:
-            The updated function.
-
-        Raises:
-            NotFoundError: If function not found.
         """
         function = await self.get_by_id(function_id)
 
@@ -275,6 +267,9 @@ class FunctionService:
 
         if public_safe is not None:
             function.public_safe = public_safe
+
+        if output_trust is not None:
+            function.output_trust = output_trust
 
         await self.db.flush()
         await self.db.refresh(function)
