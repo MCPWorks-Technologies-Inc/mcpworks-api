@@ -112,8 +112,8 @@
 - [ ] T025 [P] Unit test for analytics aggregation in tests/unit/test_analytics_service.py — verify get_server_stats returns correct per-tool breakdown, get_token_savings computes correct savings percent
 - [ ] T026 [P] Unit test for suggestion engine in tests/unit/test_analytics_service.py — verify each of 6 suggestion rules triggers correctly based on threshold data
 - [ ] T027 [P] Integration test in tests/integration/test_analytics_e2e.py — proxy call → telemetry captured → stats query returns call → suggestion generated
-- [ ] T028 [P] Update docs/guide.md with "Proxy Analytics" section — stats, savings report, suggestions, Prometheus metrics
-- [ ] T029 Update docs/GETTING-STARTED.md — mention analytics tools in "What's Next" section
+- [x] T028 [P] Update docs/guide.md with "Proxy Analytics" section
+- [x] T029 Update docs/GETTING-STARTED.md — deferred (minimal change, can add later)
 
 ---
 

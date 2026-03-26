@@ -26,6 +26,7 @@ No servers to manage. No containers to configure. Write a function, and it runs.
 - [Git Export & Import](#git-export--import)
 - [Remote MCP Servers](#remote-mcp-servers)
 - [Prompt Injection Defense](#prompt-injection-defense)
+- [Proxy Analytics](#proxy-analytics)
 
 ---
 
@@ -1136,3 +1137,43 @@ Mark individual RemoteMCP tools as trusted to skip wrapping:
 > "Set the trust level of read_sheet_values on google-workspace to prompt"
 
 Other tools on the same server remain wrapped.
+
+---
+
+## Proxy Analytics
+
+MCPWorks tracks per-call telemetry from the MCP proxy — response sizes, latency, error rates, and token savings. Query these stats via MCP tools and let the AI optimize its own token usage.
+
+### Server Performance Stats
+
+> "How is the google-workspace MCP server performing?"
+
+Returns per-tool breakdown: call counts, average latency, response sizes, error rates, timeout rates.
+
+### Token Savings Report
+
+> "Show me the token savings for this namespace over the last 7 days"
+
+Returns total data processed in the sandbox vs tokens returned to the AI, with top consumers listed and savings percentage.
+
+### Optimization Suggestions
+
+> "Suggest optimizations for the google-workspace server"
+
+Analyzes stats and returns actionable recommendations:
+- Large responses → suggest `redact_fields` rules
+- High timeout rate → suggest increasing `timeout_seconds`
+- High error rate → suggest checking credentials
+- Unused tools → suggest removing wrappers
+- Frequent truncation → suggest adjusting `response_limit_bytes`
+
+The AI can directly apply suggestions using existing MCP tools (`add_mcp_server_rule`, `set_mcp_server_setting`).
+
+### Analytics Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_mcp_server_stats` | Per-tool performance breakdown (latency, response size, errors) |
+| `get_token_savings_report` | Namespace-wide data processed vs tokens returned to AI |
+| `suggest_optimizations` | Actionable recommendations based on stats |
+| `get_function_mcp_stats` | Per-execution MCP call counts and bytes |
