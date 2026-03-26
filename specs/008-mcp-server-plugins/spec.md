@@ -17,6 +17,7 @@
 - Q: How should MCP servers relate to the namespace hierarchy? → A: Parallel concept to Services, not a type of Service. Namespace has two children: Services (native, code_sandbox) and RemoteMCP (external, proxied). Both contain functions. RemoteMCP functions are cached tool schemas, not Function DB records. `mcp__` prefix distinguishes remote tools from native functions in the sandbox.
 - Q: Migration strategy for existing agent.mcp_servers JSONB? → A: Skip automatic migration (Option D). Deprecate the JSONB column, require users to re-add servers via the new add_mcp_server tool. Only a handful of agents affected at this stage.
 - Q: Should the proxy impose a response size limit? → A: Configurable per-server by the LLM. Each RemoteMCP has LLM-tunable settings (response_limit_bytes, timeout_seconds, enabled) and user-defined environment variables — a full management interface, not just a connection proxy. Settings and env vars visible in the console as an expandable view per MCP server.
+- Q: Console layout for RemoteMCP servers — same page or separate? → A: Same console page, new "Remote MCP Servers" section below services. Reinforces the parallel hierarchy. May move to a separate page later if the console gets crowded.
 
 ---
 
