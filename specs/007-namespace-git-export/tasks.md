@@ -19,8 +19,8 @@
 
 **Purpose**: Add git binary to container, new dependencies
 
-- [ ] T001 Add `git` to Dockerfile apt-get/apk install in Dockerfile
-- [ ] T002 Add `pyyaml` to dependencies in pyproject.toml (verify not already present)
+- [x] T001 Add `git` to Dockerfile apt-get/apk install in Dockerfile (already present)
+- [x] T002 Add `pyyaml` to dependencies in pyproject.toml
 
 ---
 
@@ -28,12 +28,12 @@
 
 **Purpose**: Database model and core services that all user stories depend on
 
-- [ ] T003 Create NamespaceGitRemote model in src/mcpworks_api/models/namespace_git_remote.py per data-model.md schema (id, namespace_id, git_url, git_branch, token_encrypted, token_dek_encrypted, last_export_at, last_export_sha, created_at, updated_at)
-- [ ] T004 Create Alembic migration for namespace_git_remotes table in alembic/versions/
-- [ ] T005 [P] Create Pydantic schemas for export/import responses in src/mcpworks_api/schemas/git_export.py (ConfigureRemoteResponse, ExportResponse, ImportResponse per contracts/mcp-tools.md)
-- [ ] T006 [P] Create Git operations service in src/mcpworks_api/services/git_remote.py — subprocess wrapper with: clone_repo(url, token, branch, dest), commit_and_push(repo_dir, message, url, token, branch), ls_remote(url, token), all with structlog logging and PAT redaction
-- [ ] T007 Create namespace serializer in src/mcpworks_api/services/git_export.py — serialize_namespace(namespace, services, functions, agents) → writes YAML manifests + handler files to a directory per REQ-EXP-001 through REQ-EXP-005 format
-- [ ] T008 Create namespace deserializer in src/mcpworks_api/services/git_import.py — deserialize_namespace(directory) → returns parsed namespace, services, functions, agents data structures; validate_export(directory) → raises on malformed input per REQ-SEC-003
+- [x] T003 Create NamespaceGitRemote model in src/mcpworks_api/models/namespace_git_remote.py per data-model.md schema (id, namespace_id, git_url, git_branch, token_encrypted, token_dek_encrypted, last_export_at, last_export_sha, created_at, updated_at)
+- [x] T004 Create Alembic migration for namespace_git_remotes table in alembic/versions/
+- [x] T005 [P] Create Pydantic schemas for export/import responses in src/mcpworks_api/schemas/git_export.py (ConfigureRemoteResponse, ExportResponse, ImportResponse per contracts/mcp-tools.md)
+- [x] T006 [P] Create Git operations service in src/mcpworks_api/services/git_remote.py — subprocess wrapper with: clone_repo(url, token, branch, dest), commit_and_push(repo_dir, message, url, token, branch), ls_remote(url, token), all with structlog logging and PAT redaction
+- [x] T007 Create namespace serializer in src/mcpworks_api/services/git_export.py — serialize_namespace(namespace, services, functions, agents) → writes YAML manifests + handler files to a directory per REQ-EXP-001 through REQ-EXP-005 format
+- [x] T008 Create namespace deserializer in src/mcpworks_api/services/git_import.py — deserialize_namespace(directory) → returns parsed namespace, services, functions, agents data structures; validate_export(directory) → raises on malformed input per REQ-SEC-003
 
 **Checkpoint**: Foundation ready — all user stories can begin
 
