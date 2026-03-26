@@ -16,6 +16,8 @@ from mcpworks_api.models.email_log import EmailLog
 from mcpworks_api.models.execution import Execution, ExecutionStatus
 from mcpworks_api.models.function import Function
 from mcpworks_api.models.function_version import ALLOWED_BACKENDS, FunctionVersion
+from mcpworks_api.models.mcp_execution_stat import McpExecutionStat
+from mcpworks_api.models.mcp_proxy_call import McpProxyCall
 from mcpworks_api.models.namespace import Namespace
 from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
 from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
@@ -56,6 +58,9 @@ __all__ = [
     "APIKey",
     # Namespace (A0)
     "Namespace",
+    # McpProxyCall / McpExecutionStat (analytics)
+    "McpProxyCall",
+    "McpExecutionStat",
     # NamespaceGitRemote
     "NamespaceGitRemote",
     # NamespaceMcpServer

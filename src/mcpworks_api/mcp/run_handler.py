@@ -3,6 +3,7 @@
 Generates dynamic tools from database and dispatches to backends.
 """
 
+import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
@@ -492,10 +493,12 @@ class RunMCPHandler:
 
         from mcpworks_api.core.exec_token_registry import (
             register_execution,
+            resolve_execution,
             unregister_execution,
         )
 
         exec_token = None
+        result = None
         if has_mcp and self.api_key and getattr(self.api_key, "_raw_key", None):
             exec_token = self.api_key._raw_key
             register_execution(
@@ -518,6 +521,24 @@ class RunMCPHandler:
             )
         finally:
             if exec_token:
+                exec_ctx = resolve_execution(exec_token)
+                if exec_ctx and exec_ctx.mcp_calls_count > 0:
+                    from mcpworks_api.services.analytics import (
+                        record_execution_stats as analytics_record_execution,
+                    )
+
+                    result_size = (
+                        len(json.dumps(result.output or "")) if result and result.output else 0
+                    )
+                    asyncio.create_task(
+                        analytics_record_execution(
+                            namespace_id=namespace.id,
+                            execution_id=execution_id,
+                            mcp_calls_count=exec_ctx.mcp_calls_count,
+                            mcp_bytes_total=exec_ctx.mcp_bytes_total,
+                            result_bytes=result_size,
+                        )
+                    )
                 unregister_execution(exec_token)
 
         execution_time_ms = result.execution_time_ms or int(

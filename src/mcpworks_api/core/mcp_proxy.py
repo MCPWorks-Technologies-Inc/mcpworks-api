@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass
 
 import structlog
@@ -37,6 +38,7 @@ async def proxy_mcp_call(
     arguments: dict,
     db: AsyncSession,
 ) -> ProxyResult:
+    start_time = time.monotonic()
     stmt = select(NamespaceMcpServer).where(
         NamespaceMcpServer.namespace_id == ctx.namespace_id,
         NamespaceMcpServer.name == server_name,
@@ -79,6 +81,20 @@ async def proxy_mcp_call(
         try:
             arguments = evaluate_request_rules(request_rules, tool_name, dict(arguments))
         except RuleBlockError as e:
+            latency_ms = int((time.monotonic() - start_time) * 1000)
+            from mcpworks_api.services import analytics as analytics_module
+
+            asyncio.create_task(
+                analytics_module.record_proxy_call(
+                    namespace_id=ctx.namespace_id,
+                    server_name=server_name,
+                    tool_name=tool_name,
+                    latency_ms=latency_ms,
+                    response_bytes=0,
+                    status="blocked",
+                    truncated=False,
+                )
+            )
             return ProxyResult(
                 error=str(e),
                 error_type="RuleBlockedError",
@@ -159,9 +175,43 @@ async def proxy_mcp_call(
                 truncated=truncated,
             )
 
+            latency_ms = int((time.monotonic() - start_time) * 1000)
+            response_size = (
+                len(output.encode("utf-8")) if isinstance(output, str) else len(str(output))
+            )
+            ctx.mcp_calls_count += 1
+            ctx.mcp_bytes_total += response_size
+            from mcpworks_api.services import analytics as analytics_module
+
+            asyncio.create_task(
+                analytics_module.record_proxy_call(
+                    namespace_id=ctx.namespace_id,
+                    server_name=server_name,
+                    tool_name=tool_name,
+                    latency_ms=latency_ms,
+                    response_bytes=response_size,
+                    status="success",
+                    truncated=truncated,
+                )
+            )
+
             return ProxyResult(result=result_value, truncated=truncated)
 
         except TimeoutError:
+            latency_ms = int((time.monotonic() - start_time) * 1000)
+            from mcpworks_api.services import analytics as analytics_module
+
+            asyncio.create_task(
+                analytics_module.record_proxy_call(
+                    namespace_id=ctx.namespace_id,
+                    server_name=server_name,
+                    tool_name=tool_name,
+                    latency_ms=latency_ms,
+                    response_bytes=0,
+                    status="timeout",
+                    truncated=False,
+                )
+            )
             return ProxyResult(
                 error=f"MCP tool '{server_name}.{tool_name}' timed out after {timeout_sec}s",
                 error_type="TimeoutError",
@@ -199,6 +249,20 @@ async def proxy_mcp_call(
         tool=tool_name,
         namespace=ctx.namespace_name,
         error=str(last_error)[:300],
+    )
+    latency_ms = int((time.monotonic() - start_time) * 1000)
+    from mcpworks_api.services import analytics as analytics_module
+
+    asyncio.create_task(
+        analytics_module.record_proxy_call(
+            namespace_id=ctx.namespace_id,
+            server_name=server_name,
+            tool_name=tool_name,
+            latency_ms=latency_ms,
+            response_bytes=0,
+            status="error",
+            truncated=False,
+        )
     )
     return ProxyResult(
         error=f"MCP tool '{server_name}.{tool_name}' failed: {str(last_error)[:200]}",

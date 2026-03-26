@@ -1372,6 +1372,7 @@ def get_tools(group: str, verbosity: str = "standard") -> list[dict]:
         "agent": AGENT_TOOLS,
         "run": RUN_TOOLS,
         "git": GIT_TOOLS,
+        "analytics": ANALYTICS_TOOLS,
     }
     registry = groups.get(group, {})
     return [tool_def.render(verbosity) for tool_def in registry.values()]
@@ -1945,12 +1946,95 @@ MCP_SERVER_TOOLS: dict[str, ToolDef] = {
 }
 
 
+ANALYTICS_TOOLS: dict[str, ToolDef] = {
+    "get_mcp_server_stats": ToolDef(
+        name="get_mcp_server_stats",
+        brief="Get per-tool performance stats for an MCP server.",
+        description="Get per-tool performance stats for a registered MCP server in this namespace.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "MCP server name",
+                },
+                "period": {
+                    "type": "string",
+                    "description": "Time period for stats",
+                    "enum": ["1h", "24h", "7d", "30d"],
+                    "default": "24h",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "get_token_savings_report": ToolDef(
+        name="get_token_savings_report",
+        brief="Get namespace-wide token savings report.",
+        description="Get a token savings report for this namespace across all MCP proxy calls.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "period": {
+                    "type": "string",
+                    "description": "Time period for the report",
+                    "enum": ["1h", "24h", "7d", "30d"],
+                    "default": "24h",
+                },
+            },
+        },
+    ),
+    "suggest_optimizations": ToolDef(
+        name="suggest_optimizations",
+        brief="Get actionable optimization suggestions for MCP server usage.",
+        description="Get actionable optimization suggestions for MCP server usage in this namespace.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "MCP server name to analyze (omit for all servers)",
+                },
+                "probe": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tool names to live-probe for response size analysis",
+                },
+            },
+        },
+    ),
+    "get_function_mcp_stats": ToolDef(
+        name="get_function_mcp_stats",
+        brief="Get per-function MCP proxy usage stats.",
+        description="Get per-function MCP proxy usage statistics for this namespace.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "period": {
+                    "type": "string",
+                    "description": "Time period for stats",
+                    "enum": ["1h", "24h", "7d", "30d"],
+                    "default": "24h",
+                },
+            },
+        },
+    ),
+}
+
+
 def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
     """Get a single tool definition by name.
 
     Searches all groups. Returns None if not found.
     """
-    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS, GIT_TOOLS, MCP_SERVER_TOOLS):
+    for registry in (
+        BASE_TOOLS,
+        AGENT_TOOLS,
+        RUN_TOOLS,
+        GIT_TOOLS,
+        MCP_SERVER_TOOLS,
+        ANALYTICS_TOOLS,
+    ):
         if name in registry:
             return registry[name].render(verbosity)
     return None

@@ -153,6 +153,10 @@ class CreateMCPHandler:
         "remove_mcp_server_rule": "write",
         "list_mcp_server_rules": "read",
         "set_mcp_server_tool_trust": "write",
+        "get_mcp_server_stats": "read",
+        "get_token_savings_report": "read",
+        "suggest_optimizations": "read",
+        "get_function_mcp_stats": "read",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -258,6 +262,13 @@ class CreateMCPHandler:
         tools.extend(
             MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
             for tool_def in MCP_SERVER_TOOLS.values()
+        )
+
+        from mcpworks_api.mcp.tool_registry import ANALYTICS_TOOLS
+
+        tools.extend(
+            MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
+            for tool_def in ANALYTICS_TOOLS.values()
         )
 
         return tools
@@ -486,6 +497,10 @@ class CreateMCPHandler:
             "remove_mcp_server_rule": self._remove_mcp_server_rule,
             "list_mcp_server_rules": self._list_mcp_server_rules,
             "set_mcp_server_tool_trust": self._set_mcp_server_tool_trust,
+            "get_mcp_server_stats": self._get_mcp_server_stats,
+            "get_token_savings_report": self._get_token_savings_report,
+            "suggest_optimizations": self._suggest_optimizations,
+            "get_function_mcp_stats": self._get_function_mcp_stats,
         }
 
         handler = handlers.get(name)
@@ -2656,3 +2671,45 @@ class CreateMCPHandler:
                 )
             ]
         )
+
+    async def _get_mcp_server_stats(
+        self,
+        name: str,
+        period: str = "24h",
+    ) -> MCPToolResult:
+        from mcpworks_api.services import analytics
+
+        namespace = await self._get_current_namespace_read()
+        result = await analytics.get_server_stats(self.db, namespace.id, name, period)
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _get_token_savings_report(
+        self,
+        period: str = "24h",
+    ) -> MCPToolResult:
+        from mcpworks_api.services import analytics
+
+        namespace = await self._get_current_namespace_read()
+        result = await analytics.get_token_savings(self.db, namespace.id, period)
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _suggest_optimizations(
+        self,
+        name: str | None = None,
+        probe: list | None = None,
+    ) -> MCPToolResult:
+        from mcpworks_api.services import analytics
+
+        namespace = await self._get_current_namespace_read()
+        result = await analytics.suggest_optimizations(self.db, namespace.id, name, probe)
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"suggestions": result}))])
+
+    async def _get_function_mcp_stats(
+        self,
+        period: str = "24h",
+    ) -> MCPToolResult:
+        from mcpworks_api.services import analytics
+
+        namespace = await self._get_current_namespace_read()
+        result = await analytics.get_function_stats(self.db, namespace.id, period)
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
