@@ -94,12 +94,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Create rule evaluation engine in src/mcpworks_api/core/mcp_rules.py — evaluate_request_rules(rules, tool_name, arguments) → modified arguments or RuleBlockError, evaluate_response_rules(rules, tool_name, response_text, scanner) → modified response text. Support all rule types from spec: inject_param, block_tool, require_param, cap_param, wrap_trust_boundary, scan_injection, strip_html, inject_header, redact_fields. Use fnmatch for tool glob matching.
-- [ ] T021 [US3] Integrate rule engine into MCP proxy in src/mcpworks_api/core/mcp_proxy.py — load server.rules, evaluate request rules before MCP call (reject if blocked), evaluate response rules after MCP call (wrap, scan, strip, redact)
-- [ ] T022 [US3] Add default rules on server creation in src/mcpworks_api/services/mcp_server.py — in add_server(), set initial rules to `{"request": [], "response": [{"id": "default-trust", "type": "wrap_trust_boundary", "tools": "*"}, {"id": "default-scan", "type": "scan_injection", "tools": "*", "strictness": "warn"}]}`
-- [ ] T023 [US3] Add rule CRUD methods to McpServerService in src/mcpworks_api/services/mcp_server.py — add_rule(namespace_id, server_name, direction, rule), remove_rule(namespace_id, server_name, rule_id), list_rules(namespace_id, server_name). Auto-generate rule IDs.
-- [ ] T024 [US3] Add 3 rule management tool handlers in src/mcpworks_api/mcp/create_handler.py — _add_mcp_server_rule, _remove_mcp_server_rule, _list_mcp_server_rules. Wire into TOOL_SCOPES (write/write/read), dispatch_tool, get_tools.
-- [ ] T025 [US3] Add 3 rule tool definitions to MCP_SERVER_TOOLS in src/mcpworks_api/mcp/tool_registry.py — add_mcp_server_rule, remove_mcp_server_rule, list_mcp_server_rules with rich descriptions
+- [x] T020 [US3] Create rule evaluation engine in src/mcpworks_api/core/mcp_rules.py
+- [x] T021 [US3] Integrate rule engine into MCP proxy
+- [x] T022 [US3] Add default rules on server creation
+- [x] T023 [US3] Add rule CRUD methods to McpServerService
+- [x] T024 [US3] Add 4 tool handlers (add/remove/list rules + set_mcp_server_tool_trust)
+- [x] T025 [US3] Add 4 tool definitions to MCP_SERVER_TOOLS
 
 **Checkpoint**: Full rules engine working. New MCP servers get default protection.
 
@@ -113,9 +113,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Add set_mcp_server_tool_trust handler in src/mcpworks_api/mcp/create_handler.py — stores override in server settings JSONB under `tool_trust_overrides` dict. Wire into TOOL_SCOPES, dispatch_tool, get_tools.
-- [ ] T027 [US4] Add tool definition for set_mcp_server_tool_trust in src/mcpworks_api/mcp/tool_registry.py — in MCP_SERVER_TOOLS group
-- [ ] T028 [US4] Modify rule evaluation in src/mcpworks_api/core/mcp_rules.py — before applying wrap_trust_boundary, check tool_trust_overrides. If tool is explicitly "prompt", skip wrapping for that tool.
+- [x] T026 [US4] set_mcp_server_tool_trust handler — included in T024
+- [x] T027 [US4] Tool definition — included in T025
+- [x] T028 [US4] Rule evaluation checks tool_trust_overrides — already in mcp_rules.py evaluate_response_rules
 
 **Checkpoint**: Granular per-tool trust control on RemoteMCP servers.
 

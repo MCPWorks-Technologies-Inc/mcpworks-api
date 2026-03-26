@@ -69,6 +69,23 @@ async def proxy_mcp_call(
                 error_type="DecryptionError",
             )
 
+    rules = server.rules or {"request": [], "response": []}
+    request_rules = rules.get("request", [])
+    response_rules = rules.get("response", [])
+
+    if request_rules:
+        from mcpworks_api.core.mcp_rules import RuleBlockError, evaluate_request_rules
+
+        try:
+            arguments = evaluate_request_rules(request_rules, tool_name, dict(arguments))
+        except RuleBlockError as e:
+            return ProxyResult(
+                error=str(e),
+                error_type="RuleBlockedError",
+            )
+        except ValueError as e:
+            return ProxyResult(error=str(e), error_type="RuleValidationError")
+
     try:
         session = await mcp_pool.get_or_connect(
             namespace_id=ctx.namespace_id,
@@ -120,45 +137,12 @@ async def proxy_mcp_call(
                 output = output[: response_limit // 4]
                 truncated = True
 
-            from mcpworks_api.sandbox.injection_scan import scan_for_injections
+            if response_rules:
+                from mcpworks_api.core.mcp_rules import evaluate_response_rules
 
-            injection_matches = scan_for_injections(output)
-            injections_found = len(injection_matches)
-
-            if injection_matches:
-                from mcpworks_api.services.security_event import fire_security_event
-
-                asyncio.create_task(
-                    fire_security_event(
-                        db=db,
-                        event_type="prompt_injection_detected",
-                        severity="warning",
-                        details={
-                            "server": server_name,
-                            "tool": tool_name,
-                            "namespace": ctx.namespace_name,
-                            "patterns": [m.pattern_name for m in injection_matches[:5]],
-                            "count": injections_found,
-                        },
-                    )
+                output = evaluate_response_rules(
+                    response_rules, tool_name, output, server_name, settings
                 )
-
-                scan_strictness = settings.get("injection_scan_strictness", "warn")
-                if scan_strictness == "flag":
-                    from mcpworks_api.core.trust_boundary import apply_injection_flags
-
-                    output = apply_injection_flags(output, injection_matches)
-                elif scan_strictness == "block":
-                    from mcpworks_api.core.trust_boundary import redact_injection
-
-                    output = redact_injection(output, injection_matches)
-
-            from mcpworks_api.core.trust_boundary import wrap_mcp_response
-
-            tool_trust_overrides = settings.get("tool_trust_overrides", {})
-            tool_trust = tool_trust_overrides.get(tool_name, "data")
-            if tool_trust != "prompt":
-                output = wrap_mcp_response(output, server_name, tool_name, injections_found)
 
             try:
                 parsed = json.loads(output)
@@ -173,7 +157,6 @@ async def proxy_mcp_call(
                 namespace=ctx.namespace_name,
                 attempt=attempt + 1,
                 truncated=truncated,
-                injections_found=injections_found,
             )
 
             return ProxyResult(result=result_value, truncated=truncated)

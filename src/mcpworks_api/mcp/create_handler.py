@@ -149,6 +149,10 @@ class CreateMCPHandler:
         "set_mcp_server_env": "write",
         "remove_mcp_server_env": "write",
         "configure_agent_mcp": "write",
+        "add_mcp_server_rule": "write",
+        "remove_mcp_server_rule": "write",
+        "list_mcp_server_rules": "read",
+        "set_mcp_server_tool_trust": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -478,6 +482,10 @@ class CreateMCPHandler:
             "set_mcp_server_env": self._set_mcp_server_env,
             "remove_mcp_server_env": self._remove_mcp_server_env,
             "configure_agent_mcp": self._configure_agent_mcp,
+            "add_mcp_server_rule": self._add_mcp_server_rule,
+            "remove_mcp_server_rule": self._remove_mcp_server_rule,
+            "list_mcp_server_rules": self._list_mcp_server_rules,
+            "set_mcp_server_tool_trust": self._set_mcp_server_tool_trust,
         }
 
         handler = handlers.get(name)
@@ -2567,4 +2575,84 @@ class CreateMCPHandler:
         await self.db.flush()
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"agent": agent_name, "mcp_servers": servers}))]
+        )
+
+    async def _add_mcp_server_rule(
+        self,
+        name: str,
+        direction: str,
+        rule: dict,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        result = await svc.add_rule(ns.id, name, direction, rule)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "added",
+                            "server": name,
+                            "direction": direction,
+                            "rule_id": result["rule_id"],
+                            "rule": result["rule"],
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_mcp_server_rule(
+        self,
+        name: str,
+        rule_id: str,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        await svc.remove_rule(ns.id, name, rule_id)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({"status": "removed", "server": name, "rule_id": rule_id})
+                )
+            ]
+        )
+
+    async def _list_mcp_server_rules(self, name: str) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = McpServerService(self.db)
+        rules = await svc.list_rules(ns.id, name)
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"server": name, **rules}))])
+
+    async def _set_mcp_server_tool_trust(
+        self,
+        name: str,
+        tool: str,
+        output_trust: str,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.mcp_server import McpServerService
+
+        if output_trust not in ("prompt", "data"):
+            raise ValueError("output_trust must be 'prompt' or 'data'")
+        ns = await self._get_current_namespace()
+        svc = McpServerService(self.db)
+        server = await svc.get_by_name(ns.id, name)
+        settings = dict(server.settings or {})
+        overrides = dict(settings.get("tool_trust_overrides", {}))
+        overrides[tool] = output_trust
+        settings["tool_trust_overrides"] = overrides
+        server.settings = settings
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({"server": name, "tool": tool, "output_trust": output_trust})
+                )
+            ]
         )

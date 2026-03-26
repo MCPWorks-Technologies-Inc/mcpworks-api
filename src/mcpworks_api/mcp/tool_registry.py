@@ -1834,6 +1834,114 @@ MCP_SERVER_TOOLS: dict[str, ToolDef] = {
             "required": ["agent_name", "servers"],
         },
     ),
+    "add_mcp_server_rule": ToolDef(
+        name="add_mcp_server_rule",
+        brief="Add a request or response rule to a registered MCP server.",
+        description=(
+            "Add a rule that is applied to tool calls made to or from a registered MCP server. "
+            "direction must be 'request' (applied before the tool call is sent) or 'response' (applied to the tool result). "
+            "Available rule types: 'redact' (remove fields matching a path or pattern), "
+            "'truncate' (limit response length), "
+            "'allow_tools' (whitelist specific tools by name), "
+            "'deny_tools' (block specific tools by name), "
+            "'inject_header' (add a header to outgoing requests). "
+            "Each rule must include a 'type' field and type-specific parameters. "
+            "Example: add_mcp_server_rule(name='github', direction='response', rule={'type': 'truncate', 'max_bytes': 4096}). "
+            "Example: add_mcp_server_rule(name='github', direction='request', rule={'type': 'allow_tools', 'tools': ['get_issue', 'list_repos']})."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server to add the rule to. Example: 'github'",
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": ["request", "response"],
+                    "description": "When the rule is applied: 'request' (before the tool call) or 'response' (after the tool result is received).",
+                },
+                "rule": {
+                    "type": "object",
+                    "description": "Rule definition. Must include 'type' (one of: redact, truncate, allow_tools, deny_tools, inject_header) plus type-specific fields.",
+                },
+            },
+            "required": ["name", "direction", "rule"],
+        },
+    ),
+    "remove_mcp_server_rule": ToolDef(
+        name="remove_mcp_server_rule",
+        brief="Remove a rule from a registered MCP server by ID.",
+        description=(
+            "Remove a request or response rule from a registered MCP server by its rule ID. "
+            "Rule IDs are returned when the rule is added via add_mcp_server_rule and visible in list_mcp_server_rules. "
+            "Example: remove_mcp_server_rule(name='github', rule_id='r-a1b2c3d4')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server. Example: 'github'",
+                },
+                "rule_id": {
+                    "type": "string",
+                    "description": "ID of the rule to remove. Example: 'r-a1b2c3d4'",
+                },
+            },
+            "required": ["name", "rule_id"],
+        },
+    ),
+    "list_mcp_server_rules": ToolDef(
+        name="list_mcp_server_rules",
+        brief="List all rules configured on a registered MCP server.",
+        description=(
+            "List all request and response rules configured on a registered MCP server. "
+            "Returns two lists: request_rules (applied before tool calls) and response_rules (applied to tool results). "
+            "Each rule includes its ID, type, and type-specific parameters. "
+            "Example: list_mcp_server_rules(name='github')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server. Example: 'github'",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "set_mcp_server_tool_trust": ToolDef(
+        name="set_mcp_server_tool_trust",
+        brief="Set the output trust level for a specific tool on a registered MCP server.",
+        description=(
+            "Override the output trust level for a specific tool exposed by a registered MCP server. "
+            "output_trust controls how tool results are handled by agents: "
+            "'prompt' means the result is included in the agent's prompt context (standard), "
+            "'data' means the result is treated as structured data and not injected into the prompt (token-efficient). "
+            "Example: set_mcp_server_tool_trust(name='github', tool='get_issue', output_trust='data')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the MCP server. Example: 'github'",
+                },
+                "tool": {
+                    "type": "string",
+                    "description": "Name of the tool to configure. Must be a tool exposed by this MCP server. Example: 'get_issue'",
+                },
+                "output_trust": {
+                    "type": "string",
+                    "enum": ["prompt", "data"],
+                    "description": "'prompt' includes tool output in the agent's prompt context. 'data' treats it as structured data (token-efficient).",
+                },
+            },
+            "required": ["name", "tool", "output_trust"],
+        },
+    ),
 }
 
 
