@@ -105,6 +105,16 @@ Create a function that does something useful. Here's an example that processes d
 
 The AI will create the function through the `make_function` tool. When you run it, pandas processes the CSV inside the sandbox — only the summary comes back to the AI. If the CSV has 10,000 rows, you save thousands of tokens.
 
+## 7. Back Up Your Namespace to Git
+
+Once you have functions worth keeping, export them to a Git repository:
+
+> "Configure my demo namespace to push to `https://github.com/youruser/demo-functions.git` with token `ghp_...`"
+
+> "Export my demo namespace to Git"
+
+Your functions, schemas, and agent configs are now version-controlled. See the [Git Export & Import](guide.md#git-export--import) section in the platform guide for the full reference.
+
 ## What's Next?
 
 - **[Platform Guide](guide.md)** — Full reference for all MCP tools, code mode, templates, and agents

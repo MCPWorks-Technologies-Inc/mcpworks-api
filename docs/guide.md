@@ -23,6 +23,7 @@ No servers to manage. No containers to configure. Write a function, and it runs.
 - [Sandbox Limits](#sandbox-limits)
 - [Code Mode Deep Dive](#code-mode-deep-dive)
 - [End-to-End Examples](#end-to-end-examples)
+- [Git Export & Import](#git-export--import)
 
 ---
 
@@ -889,3 +890,80 @@ The AI calls `update_function(service="math", name="is-prime", code="...")` whic
 > "Actually, restore the original version"
 
 The AI calls `update_function(service="math", name="is-prime", restore_version=1)` which creates version 3 with v1's code.
+
+---
+
+## Git Export & Import
+
+Back up your namespaces to any Git repository, or import namespaces from Git URLs.
+
+### Configure a Git Remote
+
+Each namespace can have one configured Git remote. Works with GitHub, GitLab, Gitea, Bitbucket, or any self-hosted Git over HTTPS.
+
+> "Configure my analytics namespace to push to `https://github.com/user/analytics-functions.git` with token `ghp_abc123...`"
+
+The tool verifies credentials before saving. The personal access token is encrypted at rest.
+
+### Export a Namespace
+
+> "Export my analytics namespace to Git"
+
+MCPWorks serializes all services, functions (active version code), and agent definitions into YAML + code files, commits, and pushes. Each export is a full replacement — the repo always reflects the exact namespace state. Git handles diffing between exports.
+
+The exported repo structure:
+
+```
+analytics/
+  namespace.yaml
+  services/
+    utils/
+      service.yaml
+      functions/
+        hello/
+          function.yaml
+          handler.py
+  agents/
+    leadgenerator/
+      agent.yaml
+```
+
+### Export a Single Service
+
+> "Export just the utils service from my analytics namespace"
+
+Only that service's functions are committed.
+
+### Import a Namespace
+
+> "Import the namespace from `https://github.com/user/analytics-functions.git`"
+
+For private repos, provide a token:
+
+> "Import from `https://github.com/user/private-repo.git` with token `ghp_abc123...`"
+
+After import, you'll need to configure:
+- AI API keys for agents (`configure_agent_ai`)
+- Channel credentials for agents (`add_channel`)
+- Environment variable values for functions declaring `required_env`
+
+### Import a Single Service
+
+> "Import the utils service from `https://github.com/user/analytics-functions.git` into my production namespace"
+
+### Conflict Handling
+
+Import supports three conflict modes:
+- **fail** (default): abort if any entity already exists
+- **skip**: skip existing entities, create only new ones
+- **overwrite**: update existing entities (creates new function versions)
+
+### What Gets Exported
+
+| Included | Not Included |
+|----------|-------------|
+| Function code (active version) | Env var values |
+| Function schemas + requirements | Agent AI API keys |
+| Agent config + system prompts | Channel credentials |
+| Agent schedules + webhooks | Agent state |
+| Service metadata | Execution history |

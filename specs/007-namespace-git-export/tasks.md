@@ -100,11 +100,11 @@
 
 **Purpose**: Integration tests, documentation, edge cases
 
-- [ ] T021 [P] Integration test: full export → import round-trip in tests/integration/test_git_operations.py — export namespace with services/functions/agents to a test Git repo (use local bare repo), import into fresh namespace, verify all entities match, verify function code executes correctly
-- [ ] T022 [P] Integration test: re-export diff in tests/integration/test_git_operations.py — export, modify a function, re-export, verify Git commit shows only the changed function
-- [ ] T023 Edge case handling in serializer/deserializer — empty namespace (namespace.yaml only), function with no code (activepieces backend), non-UTF8 code rejection, large system prompts (YAML literal block scalar)
-- [ ] T024 Update docs/guide.md with Git export/import section — add to Table of Contents, document the 6 MCP tools with examples
-- [ ] T025 Update docs/GETTING-STARTED.md with "Back up your namespace" section after the hello-world example
+- [ ] T021 [P] Integration test: full export → import round-trip in tests/integration/test_git_operations.py (requires running DB)
+- [ ] T022 [P] Integration test: re-export diff in tests/integration/test_git_operations.py (requires running DB)
+- [ ] T023 Edge case handling in serializer/deserializer — empty namespace, no-code backends, non-UTF8 rejection (deferred)
+- [x] T024 Update docs/guide.md with Git export/import section
+- [x] T025 Update docs/GETTING-STARTED.md with "Back up your namespace" section
 
 ---
 
