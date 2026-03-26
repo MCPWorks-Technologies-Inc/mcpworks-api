@@ -695,6 +695,7 @@ class CreateMCPHandler:
         template: str | None = None,
         language: str = "python",
         public_safe: bool = False,
+        output_trust: str | None = None,
     ) -> MCPToolResult:
         """Create a new function."""
         if language not in ("python", "typescript"):
@@ -766,6 +767,17 @@ class CreateMCPHandler:
             validated_required_env = required_env
             validated_optional_env = optional_env
 
+        if output_trust is None:
+            from mcpworks_api.sandbox.injection_scan import suggest_trust_level
+
+            suggested, reason = suggest_trust_level(code, required_env)
+            raise ValueError(
+                f"output_trust is required. Suggested: '{suggested}' ({reason}). "
+                f"Set output_trust='{suggested}' or output_trust='{'data' if suggested == 'prompt' else 'prompt'}'."
+            )
+        if output_trust not in ("prompt", "data"):
+            raise ValueError("output_trust must be 'prompt' or 'data'")
+
         credential_warnings: list[str] = []
         if code:
             from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
@@ -791,6 +803,7 @@ class CreateMCPHandler:
             created_by=created_by,
             language=language,
             public_safe=public_safe,
+            output_trust=output_trust,
         )
         result: dict[str, Any] = {
             "name": f"{service}.{name}",
@@ -842,6 +855,7 @@ class CreateMCPHandler:
         created_by: str | None = None,
         restore_version: int | None = None,
         public_safe: bool | None = None,
+        output_trust: str | None = None,
     ) -> MCPToolResult:
         """Update a function (creates new version)."""
         # Look up function to determine its language for requirements validation
@@ -879,6 +893,9 @@ class CreateMCPHandler:
                         isError=True,
                     )
 
+        if output_trust is not None and output_trust not in ("prompt", "data"):
+            raise ValueError("output_trust must be 'prompt' or 'data'")
+
         credential_warnings: list[str] = []
         if code:
             from mcpworks_api.sandbox.credential_scan import scan_code_for_credentials
@@ -886,12 +903,18 @@ class CreateMCPHandler:
             credential_warnings = scan_code_for_credentials(code)
 
         # Update metadata if provided
-        if description is not None or tags is not None or public_safe is not None:
+        if (
+            description is not None
+            or tags is not None
+            or public_safe is not None
+            or output_trust is not None
+        ):
             await self.function_service.update(
                 function_id=function.id,
                 description=description,
                 tags=tags,
                 public_safe=public_safe,
+                output_trust=output_trust,
             )
 
         # Create new version if code/config/requirements/env changes or restoring

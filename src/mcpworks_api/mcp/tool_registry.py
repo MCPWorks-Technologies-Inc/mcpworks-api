@@ -244,8 +244,13 @@ BASE_TOOLS: dict[str, ToolDef] = {
                     "type": "boolean",
                     "description": "If true, this function can be called from public chat endpoints (scratchpad chat). Default: false — functions are internal-only unless explicitly marked safe.",
                 },
+                "output_trust": {
+                    "type": "string",
+                    "enum": ["prompt", "data"],
+                    "description": "Trust level for function output. 'prompt' = trusted output (computed results, summaries). 'data' = untrusted external content (emails, API responses, web scrapes) — will be wrapped with trust boundary markers. Required.",
+                },
             },
-            "required": ["service", "name", "backend"],
+            "required": ["service", "name", "backend", "output_trust"],
         },
     ),
     "update_function": ToolDef(
@@ -324,6 +329,11 @@ BASE_TOOLS: dict[str, ToolDef] = {
                 "public_safe": {
                     "type": "boolean",
                     "description": "If true, this function can be called from public chat endpoints (scratchpad chat). Default: false.",
+                },
+                "output_trust": {
+                    "type": "string",
+                    "enum": ["prompt", "data"],
+                    "description": "Change the trust level. 'prompt' = trusted, 'data' = untrusted (wrapped with markers).",
                 },
             },
             "required": ["service", "name"],
