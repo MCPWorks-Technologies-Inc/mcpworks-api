@@ -17,19 +17,21 @@ Deploy MCPWorks on your own infrastructure. This guide takes you from a fresh Li
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/mcpworks/mcpworks-api.git
+git clone https://github.com/MCPWorks-Technologies-Inc/mcpworks-api.git
 cd mcpworks-api
 
 # 2. Create environment file
 cp .env.self-hosted.example .env
 
-# 3. Generate JWT keys
-python3 scripts/generate_keys.py
-# Paste the output into .env (JWT_PRIVATE_KEY and JWT_PUBLIC_KEY)
+# 3. Generate JWT key files
+mkdir -p keys
+openssl ecparam -genkey -name prime256v1 -noout -out keys/private.pem
+openssl ec -in keys/private.pem -pubout -out keys/public.pem
 
-# 4. Generate encryption key
-python3 -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
-# Paste into .env as ENCRYPTION_KEK_B64
+# 4. Generate encryption key and set it in .env
+KEK=$(python3 -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32)).decode())")
+echo "Generated key: $KEK"
+# Edit .env and set ENCRYPTION_KEK_B64=<the generated key>
 
 # 5. Set your domain in .env
 # Edit BASE_DOMAIN=yourdomain.com
@@ -41,6 +43,7 @@ docker compose -f docker-compose.self-hosted.yml up -d
 curl https://api.yourdomain.com/v1/health
 
 # 8. Create admin account
+# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env first, or the script will use defaults
 docker exec mcpworks-api python3 scripts/seed_admin.py
 ```
 
@@ -64,8 +67,8 @@ Caddy automatically provisions TLS certificates via Let's Encrypt for each subdo
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `BASE_DOMAIN` | Your domain name | `example.com` |
-| `JWT_PRIVATE_KEY` | ES256 private key (PEM) | Output of `generate_keys.py` |
-| `JWT_PUBLIC_KEY` | ES256 public key (PEM) | Output of `generate_keys.py` |
+| `JWT_PRIVATE_KEY_PATH` | Path to ES256 private key file | `/app/keys/private.pem` |
+| `JWT_PUBLIC_KEY_PATH` | Path to ES256 public key file | `/app/keys/public.pem` |
 | `ENCRYPTION_KEK_B64` | 32-byte key (base64) | Output of keygen command |
 
 ### Optional Settings

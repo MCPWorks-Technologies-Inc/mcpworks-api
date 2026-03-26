@@ -63,17 +63,17 @@ openssl ecparam -genkey -name prime256v1 -noout -out keys/private.pem
 openssl ec -in keys/private.pem -pubout -out keys/public.pem
 
 # Configure environment
-cp .env.example .env
-# Edit .env with your settings
+cp .env.self-hosted.example .env
+# Edit .env — set BASE_DOMAIN, ADMIN_EMAIL, ADMIN_PASSWORD, ENCRYPTION_KEK_B64
 
 # Start everything
-docker compose up -d
+docker compose -f docker-compose.self-hosted.yml up -d
 
 # Run database migrations
-docker compose exec api alembic upgrade head
+docker compose -f docker-compose.self-hosted.yml exec api alembic upgrade head
 ```
 
-The API is now available at `http://localhost:8001`.
+The API is now available at `https://api.yourdomain.com/v1/health` (Caddy handles TLS automatically).
 
 See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for detailed deployment instructions.
 
@@ -90,13 +90,13 @@ python3 -m venv venv && source venv/bin/activate
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Start infrastructure
+# Start database and cache (Docker)
 docker compose up -d postgres redis
 
 # Run migrations
 alembic upgrade head
 
-# Start development server
+# Start API server (locally, not in Docker)
 uvicorn mcpworks_api.main:app --reload --port 8000
 
 # Run tests
