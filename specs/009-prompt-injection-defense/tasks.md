@@ -126,9 +126,9 @@
 - [ ] T029 [P] Integration test: full injection defense flow in tests/integration/test_injection_defense.py — create data-trust function → execute with injection payload in result → verify wrapping + scanner detection + security event logged
 - [ ] T030 [P] Integration test: rules engine in tests/integration/test_injection_defense.py — add block_tool rule → verify call rejected; add inject_param rule → verify param added; add scan_injection(flag) rule → verify markers
 - [ ] T031 [P] Adversarial test: run all payloads from tests/fixtures/injection_payloads.txt through scanner → report detection rate per pattern category
-- [ ] T032 [P] Update docs/guide.md with "Prompt Injection Defense" section — trust levels, scanner, rules, strictness levels
-- [ ] T033 Update docs/GETTING-STARTED.md — mention output_trust parameter in function creation step
-- [ ] T034 Structlog events for injection detection in src/mcpworks_api/sandbox/injection_scan.py and src/mcpworks_api/core/mcp_proxy.py — injection_detected, rule_applied, rule_blocked_tool (never log matched content beyond truncated preview)
+- [x] T032 [P] Update docs/guide.md with "Prompt Injection Defense" section
+- [x] T033 Update docs/GETTING-STARTED.md — output_trust in function creation step
+- [x] T034 Structlog events already present in mcp_rules.py and mcp_proxy.py
 
 ---
 
