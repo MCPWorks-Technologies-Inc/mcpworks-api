@@ -22,16 +22,12 @@ class NamespaceGitRemote(Base, UUIDMixin, TimestampMixin):
     git_branch: Mapped[str] = mapped_column(String(100), nullable=False, default="main")
     token_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     token_dek_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    last_export_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_export_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_export_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     namespace = relationship("Namespace", back_populates="git_remote")
 
-    __table_args__ = (
-        UniqueConstraint("namespace_id", name="uq_namespace_git_remote_namespace"),
-    )
+    __table_args__ = (UniqueConstraint("namespace_id", name="uq_namespace_git_remote_namespace"),)
 
     def __repr__(self) -> str:
         return f"<NamespaceGitRemote(namespace_id={self.namespace_id}, url={self.git_url})>"

@@ -1812,9 +1812,7 @@ class CreateMCPHandler:
         from mcpworks_api.core.encryption import encrypt_value
         from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
 
-        stmt = select(NamespaceGitRemote).where(
-            NamespaceGitRemote.namespace_id == namespace.id
-        )
+        stmt = select(NamespaceGitRemote).where(NamespaceGitRemote.namespace_id == namespace.id)
         result = await self.db.execute(stmt)
         existing = result.scalar_one_or_none()
 
@@ -1859,9 +1857,7 @@ class CreateMCPHandler:
 
         from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
 
-        stmt = select(NamespaceGitRemote).where(
-            NamespaceGitRemote.namespace_id == namespace.id
-        )
+        stmt = select(NamespaceGitRemote).where(NamespaceGitRemote.namespace_id == namespace.id)
         result = await self.db.execute(stmt)
         existing = result.scalar_one_or_none()
 
@@ -1871,9 +1867,7 @@ class CreateMCPHandler:
         await self.db.delete(existing)
         await self.db.flush()
 
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps({"status": "removed"}))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"status": "removed"}))])
 
     async def _export_namespace(self, message: str | None = None) -> MCPToolResult:
         namespace = await self._get_current_namespace()
@@ -1887,9 +1881,7 @@ class CreateMCPHandler:
         from mcpworks_api.services.git_export import serialize_namespace
         from mcpworks_api.services.git_remote import clone_or_init, commit_and_push, create_temp_dir
 
-        stmt = select(NamespaceGitRemote).where(
-            NamespaceGitRemote.namespace_id == namespace.id
-        )
+        stmt = select(NamespaceGitRemote).where(NamespaceGitRemote.namespace_id == namespace.id)
         result = await self.db.execute(stmt)
         remote = result.scalar_one_or_none()
         if not remote:
@@ -1900,9 +1892,7 @@ class CreateMCPHandler:
         svc_stmt = (
             select(NamespaceService)
             .where(NamespaceService.namespace_id == namespace.id)
-            .options(
-                selectinload(NamespaceService.functions).selectinload(Function.versions)
-            )
+            .options(selectinload(NamespaceService.functions).selectinload(Function.versions))
         )
         svc_result = await self.db.execute(svc_stmt)
         db_services = svc_result.scalars().all()
@@ -1973,9 +1963,7 @@ class CreateMCPHandler:
                         {"name": s.name, "cron": s.cron_expression, "enabled": s.enabled}
                         for s in agent.schedules
                     ],
-                    "webhooks": [
-                        {"name": w.name, "enabled": w.enabled} for w in agent.webhooks
-                    ],
+                    "webhooks": [{"name": w.name, "enabled": w.enabled} for w in agent.webhooks],
                     "channels": [{"channel_type": c.channel_type} for c in agent.channels],
                 }
             )
@@ -2026,9 +2014,7 @@ class CreateMCPHandler:
             ]
         )
 
-    async def _export_service(
-        self, service: str, message: str | None = None
-    ) -> MCPToolResult:
+    async def _export_service(self, service: str, message: str | None = None) -> MCPToolResult:
         namespace = await self._get_current_namespace()
 
         from sqlalchemy import select
@@ -2040,9 +2026,7 @@ class CreateMCPHandler:
         from mcpworks_api.services.git_export import serialize_service
         from mcpworks_api.services.git_remote import clone_or_init, commit_and_push, create_temp_dir
 
-        stmt = select(NamespaceGitRemote).where(
-            NamespaceGitRemote.namespace_id == namespace.id
-        )
+        stmt = select(NamespaceGitRemote).where(NamespaceGitRemote.namespace_id == namespace.id)
         result = await self.db.execute(stmt)
         remote = result.scalar_one_or_none()
         if not remote:
@@ -2158,9 +2142,7 @@ class CreateMCPHandler:
 
             existing_ns = None
             with contextlib.suppress(NotFoundError):
-                existing_ns = await self.namespace_service.get_by_name(
-                    ns_name, self.account.id
-                )
+                existing_ns = await self.namespace_service.get_by_name(ns_name, self.account.id)
 
             if existing_ns is not None and conflict == "fail":
                 raise ConflictError(

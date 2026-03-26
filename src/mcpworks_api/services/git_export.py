@@ -139,10 +139,7 @@ def serialize_namespace(
                     {"name": w["name"], "enabled": w.get("enabled", True)}
                     for w in agent.get("webhooks", [])
                 ],
-                "channels": [
-                    {"type": c["channel_type"]}
-                    for c in agent.get("channels", [])
-                ],
+                "channels": [{"type": c["channel_type"]} for c in agent.get("channels", [])],
             },
         }
         _write_yaml(agent_dir / "agent.yaml", agent_manifest)

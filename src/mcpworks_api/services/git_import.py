@@ -198,27 +198,27 @@ def _parse_agents(agents_dir: Path, errors: list[str]) -> list[dict[str, Any]]:
         spec = agent_yaml.get("spec", {})
         heartbeat = spec.get("heartbeat", {})
 
-        agents.append({
-            "name": metadata.get("name", agent_dir.name),
-            "display_name": metadata.get("display_name"),
-            "ai_engine": spec.get("ai_engine"),
-            "ai_model": spec.get("ai_model"),
-            "system_prompt": spec.get("system_prompt"),
-            "tool_tier": spec.get("tool_tier", "standard"),
-            "scheduled_tool_tier": spec.get("scheduled_tool_tier", "execute_only"),
-            "auto_channel": spec.get("auto_channel"),
-            "memory_limit_mb": spec.get("memory_limit_mb", 256),
-            "cpu_limit": spec.get("cpu_limit", 0.25),
-            "heartbeat_enabled": heartbeat.get("enabled", False),
-            "heartbeat_interval": heartbeat.get("interval"),
-            "orchestration_limits": spec.get("orchestration_limits"),
-            "mcp_servers": spec.get("mcp_servers"),
-            "schedules": spec.get("schedules") or [],
-            "webhooks": spec.get("webhooks") or [],
-            "channels": [
-                {"channel_type": c.get("type")} for c in (spec.get("channels") or [])
-            ],
-        })
+        agents.append(
+            {
+                "name": metadata.get("name", agent_dir.name),
+                "display_name": metadata.get("display_name"),
+                "ai_engine": spec.get("ai_engine"),
+                "ai_model": spec.get("ai_model"),
+                "system_prompt": spec.get("system_prompt"),
+                "tool_tier": spec.get("tool_tier", "standard"),
+                "scheduled_tool_tier": spec.get("scheduled_tool_tier", "execute_only"),
+                "auto_channel": spec.get("auto_channel"),
+                "memory_limit_mb": spec.get("memory_limit_mb", 256),
+                "cpu_limit": spec.get("cpu_limit", 0.25),
+                "heartbeat_enabled": heartbeat.get("enabled", False),
+                "heartbeat_interval": heartbeat.get("interval"),
+                "orchestration_limits": spec.get("orchestration_limits"),
+                "mcp_servers": spec.get("mcp_servers"),
+                "schedules": spec.get("schedules") or [],
+                "webhooks": spec.get("webhooks") or [],
+                "channels": [{"channel_type": c.get("type")} for c in (spec.get("channels") or [])],
+            }
+        )
 
     return agents
 
