@@ -23,9 +23,9 @@
 
 **Purpose**: Database migration, new modules
 
-- [ ] T001 Create Alembic migration in alembic/versions/ — add `output_trust VARCHAR(10) NOT NULL DEFAULT 'prompt'` to functions table, add `rules JSONB NOT NULL DEFAULT '{"request":[],"response":[]}'` to namespace_mcp_servers table. Second step: drop default on output_trust.
-- [ ] T002 [P] Create injection scanner module at src/mcpworks_api/sandbox/injection_scan.py — InjectionMatch dataclass, _PATTERNS list with 8 pattern categories (instruction_override, role_reassignment, system_prompt_injection, delimiter_injection, authority_claim, output_manipulation, base64_obfuscation, indirect_instruction), scan_for_injections(text) and scan_json_for_injections(data) functions per research.md R1/R2
-- [ ] T003 [P] Create trust boundary module at src/mcpworks_api/core/trust_boundary.py — wrap_function_output(result_text, service, function), wrap_mcp_response(response_text, server, tool, injections_found), wrap_injection_warning(text, pattern, severity) per data-model.md
+- [x] T001 Create Alembic migration for output_trust + rules columns
+- [x] T002 [P] Create injection scanner module at src/mcpworks_api/sandbox/injection_scan.py
+- [x] T003 [P] Create trust boundary module at src/mcpworks_api/core/trust_boundary.py
 
 ---
 
