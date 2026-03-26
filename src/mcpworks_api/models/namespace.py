@@ -22,6 +22,7 @@ from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
+    from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
     from mcpworks_api.models.namespace_service import NamespaceService
     from mcpworks_api.models.namespace_share import NamespaceShare
 
@@ -113,6 +114,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     shares: Mapped[list["NamespaceShare"]] = relationship(
         "NamespaceShare",
         back_populates="namespace",
+        cascade="all, delete-orphan",
+    )
+
+    git_remote: Mapped["NamespaceGitRemote | None"] = relationship(
+        "NamespaceGitRemote",
+        back_populates="namespace",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 

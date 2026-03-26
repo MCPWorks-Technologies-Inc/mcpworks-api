@@ -1361,9 +1361,204 @@ def get_tools(group: str, verbosity: str = "standard") -> list[dict]:
         "base": BASE_TOOLS,
         "agent": AGENT_TOOLS,
         "run": RUN_TOOLS,
+        "git": GIT_TOOLS,
     }
     registry = groups.get(group, {})
     return [tool_def.render(verbosity) for tool_def in registry.values()]
+
+
+GIT_TOOLS: dict[str, ToolDef] = {
+    "configure_git_remote": ToolDef(
+        name="configure_git_remote",
+        brief="Configure a Git remote for exporting this namespace.",
+        description=(
+            "Configure a Git remote for this namespace. "
+            "You MUST call this before using export_namespace or export_service. "
+            "The namespace will push exports to this repository. "
+            "One remote per namespace; calling again overwrites the previous configuration. "
+            "Works with any Git host that supports HTTPS: GitHub, GitLab, Gitea, Bitbucket, or self-hosted. "
+            "The token is verified against the remote before saving. "
+            "Example: configure_git_remote(git_url='https://github.com/user/my-functions.git', git_token='ghp_abc123...')"
+        ),
+        detailed=(
+            "The personal access token (PAT) is encrypted at rest using AES-256-GCM envelope encryption. "
+            "The URL must be an HTTPS Git URL ending in .git. SSH URLs are not supported. "
+            "To get a PAT: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → "
+            "create with 'Contents: Read and write' permission on the target repo. "
+            "GitLab → Preferences → Access Tokens → create with 'write_repository' scope. "
+            "The token only needs push access to the single repository you configure."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "HTTPS Git URL. Must end with .git. Example: 'https://github.com/user/my-functions.git'",
+                },
+                "git_token": {
+                    "type": "string",
+                    "description": "Personal access token (PAT) with push access to the repository. Example: 'ghp_xxxxxxxxxxxx' (GitHub) or 'glpat-xxxxxxxxxxxx' (GitLab)",
+                },
+                "git_branch": {
+                    "type": "string",
+                    "description": "Target branch name. Default: 'main'. Use 'main' unless the repo uses a different default branch.",
+                    "default": "main",
+                },
+            },
+            "required": ["git_url", "git_token"],
+        },
+    ),
+    "remove_git_remote": ToolDef(
+        name="remove_git_remote",
+        brief="Remove the Git remote configuration for this namespace.",
+        description=(
+            "Remove the Git remote configuration for this namespace. "
+            "After removal, export_namespace and export_service will fail until a new remote is configured. "
+            "This does NOT delete the remote repository or its contents — only the stored configuration."
+        ),
+        input_schema={"type": "object", "properties": {}},
+    ),
+    "export_namespace": ToolDef(
+        name="export_namespace",
+        brief="Export this namespace to its configured Git remote.",
+        description=(
+            "Export the entire namespace to its configured Git remote. "
+            "PREREQUISITE: You must call configure_git_remote first. "
+            "Serializes all services, functions (active version code), and agent definitions "
+            "into YAML manifest files + handler.py/handler.ts code files, then commits and pushes to the remote. "
+            "Each export is a full replacement — the repo always reflects the exact current namespace state. "
+            "Git handles diffing between exports, so you get meaningful commit history. "
+            "Secrets (env var values, API keys, channel tokens) are NEVER exported."
+        ),
+        detailed=(
+            "The export creates this structure in the Git repo:\n"
+            "  {namespace}/namespace.yaml\n"
+            "  {namespace}/services/{service}/service.yaml\n"
+            "  {namespace}/services/{service}/functions/{function}/function.yaml\n"
+            "  {namespace}/services/{service}/functions/{function}/handler.py\n"
+            "  {namespace}/agents/{agent}/agent.yaml\n\n"
+            "function.yaml contains input/output schemas, requirements, tags, and env var declarations (names only). "
+            "handler.py contains the active version's source code. "
+            "agent.yaml contains AI engine/model, system prompt, schedules, and webhooks (no API keys or channel credentials)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Git commit message. If omitted, defaults to 'MCPWorks export: {namespace}'",
+                },
+            },
+        },
+    ),
+    "export_service": ToolDef(
+        name="export_service",
+        brief="Export a single service to the namespace's Git remote.",
+        description=(
+            "Export a single service to the namespace's configured Git remote. "
+            "PREREQUISITE: You must call configure_git_remote first. "
+            "Only the specified service and its functions are included in the commit. "
+            "Use this when you want to share or back up a specific service rather than the entire namespace."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Name of the service to export. Must be an existing service in this namespace. Example: 'utils'",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Git commit message. If omitted, defaults to 'MCPWorks export: {namespace}/{service}'",
+                },
+            },
+            "required": ["service"],
+        },
+    ),
+    "import_namespace": ToolDef(
+        name="import_namespace",
+        brief="Import a namespace from a Git repository.",
+        description=(
+            "Clone a Git repository and create a namespace from a MCPWorks export directory. "
+            "Creates the namespace, all services, functions (with code), and agent definitions in one operation. "
+            "The repo must contain a valid MCPWorks export (namespace.yaml at root or in a subdirectory). "
+            "Secrets are NOT imported — after import, you must separately configure: "
+            "(1) AI API keys for agents via configure_agent_ai, "
+            "(2) channel credentials via add_channel, "
+            "(3) environment variable values for functions that declare required_env. "
+            "For public repos, git_token is not needed. For private repos, provide a PAT with read access."
+        ),
+        detailed=(
+            "Conflict handling:\n"
+            "- 'fail' (default): Abort the entire import if ANY entity (namespace, service, or function) already exists. Safest option.\n"
+            "- 'skip': Import only entities that don't already exist. Existing entities are left untouched. Good for partial imports.\n"
+            "- 'overwrite': Update existing entities with the imported data. For functions, this creates a new version. Use when restoring from backup."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "HTTPS Git URL to clone. Example: 'https://github.com/user/my-functions.git'",
+                },
+                "git_token": {
+                    "type": "string",
+                    "description": "Personal access token for private repos. Omit for public repos. Example: 'ghp_xxxxxxxxxxxx'",
+                },
+                "git_branch": {
+                    "type": "string",
+                    "description": "Branch to clone. Default: 'main'",
+                    "default": "main",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Override the namespace name from the export. If omitted, uses the name from namespace.yaml. Example: 'my-imported-ns'",
+                },
+                "conflict": {
+                    "type": "string",
+                    "enum": ["fail", "skip", "overwrite"],
+                    "description": "How to handle existing entities. 'fail' = abort if anything exists (default, safest). 'skip' = import only new entities. 'overwrite' = update existing entities (creates new function versions).",
+                    "default": "fail",
+                },
+            },
+            "required": ["git_url"],
+        },
+    ),
+    "import_service": ToolDef(
+        name="import_service",
+        brief="Import a single service from a Git repository into this namespace.",
+        description=(
+            "Clone a Git repository and import a single service into the current namespace. "
+            "Only the specified service's functions are created. The service must exist in the repo's export structure. "
+            "Use this to pull in a shared utility service from another namespace's export. "
+            "For public repos, git_token is not needed. For private repos, provide a PAT with read access."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "HTTPS Git URL to clone. Example: 'https://github.com/user/my-functions.git'",
+                },
+                "git_token": {
+                    "type": "string",
+                    "description": "Personal access token for private repos. Omit for public repos.",
+                },
+                "service": {
+                    "type": "string",
+                    "description": "Name of the service to import from the repo. Must match a service directory in the export. Example: 'utils'",
+                },
+                "conflict": {
+                    "type": "string",
+                    "enum": ["fail", "skip", "overwrite"],
+                    "description": "How to handle existing entities. 'fail' = abort if anything exists (default). 'skip' = import only new functions. 'overwrite' = update existing functions with new versions.",
+                    "default": "fail",
+                },
+            },
+            "required": ["git_url", "service"],
+        },
+    ),
+}
 
 
 def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
@@ -1371,7 +1566,7 @@ def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
 
     Searches all groups. Returns None if not found.
     """
-    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS):
+    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS, GIT_TOOLS):
         if name in registry:
             return registry[name].render(verbosity)
     return None
