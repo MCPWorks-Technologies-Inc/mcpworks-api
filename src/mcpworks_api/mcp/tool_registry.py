@@ -1361,9 +1361,160 @@ def get_tools(group: str, verbosity: str = "standard") -> list[dict]:
         "base": BASE_TOOLS,
         "agent": AGENT_TOOLS,
         "run": RUN_TOOLS,
+        "git": GIT_TOOLS,
     }
     registry = groups.get(group, {})
     return [tool_def.render(verbosity) for tool_def in registry.values()]
+
+
+GIT_TOOLS: dict[str, ToolDef] = {
+    "configure_git_remote": ToolDef(
+        name="configure_git_remote",
+        brief="Configure a Git remote for exporting this namespace.",
+        description=(
+            "Configure a Git remote for this namespace. "
+            "The namespace will push exports to this repository. "
+            "One remote per namespace; calling again overwrites. "
+            "Works with any Git host (GitHub, GitLab, Gitea, Bitbucket, self-hosted)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "HTTPS Git URL (e.g., https://github.com/user/repo.git)",
+                },
+                "git_token": {
+                    "type": "string",
+                    "description": "Personal access token with push access",
+                },
+                "git_branch": {
+                    "type": "string",
+                    "description": "Branch name (default: main)",
+                    "default": "main",
+                },
+            },
+            "required": ["git_url", "git_token"],
+        },
+    ),
+    "remove_git_remote": ToolDef(
+        name="remove_git_remote",
+        brief="Remove the Git remote configuration for this namespace.",
+        description="Remove the Git remote configuration for this namespace.",
+        input_schema={"type": "object", "properties": {}},
+    ),
+    "export_namespace": ToolDef(
+        name="export_namespace",
+        brief="Export this namespace to its configured Git remote.",
+        description=(
+            "Export the entire namespace to its configured Git remote. "
+            "Serializes all services, functions (active version), and agents "
+            "into YAML + code files, commits, and pushes. "
+            "Full replacement: the repo always reflects the exact namespace state."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Commit message (optional)",
+                },
+            },
+        },
+    ),
+    "export_service": ToolDef(
+        name="export_service",
+        brief="Export a single service to the namespace's Git remote.",
+        description=(
+            "Export a single service to the namespace's configured Git remote. "
+            "Only that service's functions are included in the commit."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name to export",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Commit message (optional)",
+                },
+            },
+            "required": ["service"],
+        },
+    ),
+    "import_namespace": ToolDef(
+        name="import_namespace",
+        brief="Import a namespace from a Git repository.",
+        description=(
+            "Clone a Git repository and create a namespace from the export directory. "
+            "Creates the namespace, all services, functions, and agent definitions. "
+            "Secrets (API keys, channel tokens, env var values) are not imported."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "HTTPS Git URL to clone",
+                },
+                "git_token": {
+                    "type": "string",
+                    "description": "PAT for private repos (optional for public repos)",
+                },
+                "git_branch": {
+                    "type": "string",
+                    "description": "Branch to clone (default: main)",
+                    "default": "main",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Override namespace name (default: from namespace.yaml)",
+                },
+                "conflict": {
+                    "type": "string",
+                    "enum": ["fail", "skip", "overwrite"],
+                    "description": "How to handle existing entities (default: fail)",
+                    "default": "fail",
+                },
+            },
+            "required": ["git_url"],
+        },
+    ),
+    "import_service": ToolDef(
+        name="import_service",
+        brief="Import a single service from a Git repository.",
+        description=(
+            "Clone a Git repository and import a single service into an existing namespace. "
+            "Only the specified service's functions are created."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "HTTPS Git URL to clone",
+                },
+                "git_token": {
+                    "type": "string",
+                    "description": "PAT for private repos (optional for public repos)",
+                },
+                "service": {
+                    "type": "string",
+                    "description": "Service name within the repo to import",
+                },
+                "conflict": {
+                    "type": "string",
+                    "enum": ["fail", "skip", "overwrite"],
+                    "description": "How to handle existing entities (default: fail)",
+                    "default": "fail",
+                },
+            },
+            "required": ["git_url", "service"],
+        },
+    ),
+}
 
 
 def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
@@ -1371,7 +1522,7 @@ def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
 
     Searches all groups. Returns None if not found.
     """
-    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS):
+    for registry in (BASE_TOOLS, AGENT_TOOLS, RUN_TOOLS, GIT_TOOLS):
         if name in registry:
             return registry[name].render(verbosity)
     return None

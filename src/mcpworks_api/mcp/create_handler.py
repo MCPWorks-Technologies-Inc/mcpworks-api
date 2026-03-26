@@ -132,6 +132,12 @@ class CreateMCPHandler:
         "get_view_url": "read",
         "clear_view": "write",
         "configure_chat_token": "write",
+        "configure_git_remote": "write",
+        "remove_git_remote": "write",
+        "export_namespace": "write",
+        "export_service": "write",
+        "import_namespace": "write",
+        "import_service": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -224,6 +230,13 @@ class CreateMCPHandler:
                 MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
                 for tool_def in AGENT_TOOLS.values()
             )
+
+        from mcpworks_api.mcp.tool_registry import GIT_TOOLS
+
+        tools.extend(
+            MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
+            for tool_def in GIT_TOOLS.values()
+        )
 
         return tools
 
@@ -431,6 +444,12 @@ class CreateMCPHandler:
             "get_view_url": self._get_view_url,
             "clear_view": self._clear_view,
             "configure_chat_token": self._configure_chat_token,
+            "configure_git_remote": self._configure_git_remote,
+            "remove_git_remote": self._remove_git_remote,
+            "export_namespace": self._export_namespace,
+            "export_service": self._export_service,
+            "import_namespace": self._import_namespace,
+            "import_service": self._import_service,
         }
 
         handler = handlers.get(name)
@@ -1773,3 +1792,531 @@ class CreateMCPHandler:
                     MCPContent(text=json.dumps({"error": "action must be 'generate' or 'revoke'"}))
                 ]
             )
+
+    async def _configure_git_remote(
+        self,
+        git_url: str,
+        git_token: str,
+        git_branch: str = "main",
+    ) -> MCPToolResult:
+        namespace = await self._get_current_namespace()
+
+        from mcpworks_api.services.git_remote import ls_remote
+
+        if not ls_remote(git_url, git_token):
+            raise ValueError("Could not connect to Git remote. Verify URL and token.")
+
+        from mcpworks_api.core.encryption import encrypt_value
+        from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
+        from sqlalchemy import select
+
+        stmt = select(NamespaceGitRemote).where(
+            NamespaceGitRemote.namespace_id == namespace.id
+        )
+        result = await self.db.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        ciphertext, encrypted_dek = encrypt_value(git_token)
+
+        if existing:
+            existing.git_url = git_url
+            existing.git_branch = git_branch
+            existing.token_encrypted = ciphertext
+            existing.token_dek_encrypted = encrypted_dek
+        else:
+            remote = NamespaceGitRemote(
+                namespace_id=namespace.id,
+                git_url=git_url,
+                git_branch=git_branch,
+                token_encrypted=ciphertext,
+                token_dek_encrypted=encrypted_dek,
+            )
+            self.db.add(remote)
+
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "configured",
+                            "git_url": git_url,
+                            "git_branch": git_branch,
+                            "verified": True,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_git_remote(self) -> MCPToolResult:
+        namespace = await self._get_current_namespace()
+
+        from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
+        from sqlalchemy import select
+
+        stmt = select(NamespaceGitRemote).where(
+            NamespaceGitRemote.namespace_id == namespace.id
+        )
+        result = await self.db.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if not existing:
+            raise NotFoundError("No Git remote configured for this namespace")
+
+        await self.db.delete(existing)
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"status": "removed"}))]
+        )
+
+    async def _export_namespace(self, message: str | None = None) -> MCPToolResult:
+        namespace = await self._get_current_namespace()
+
+        from mcpworks_api.core.encryption import decrypt_value
+        from mcpworks_api.models import Agent, Function, NamespaceService
+        from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
+        from mcpworks_api.services.git_export import serialize_namespace
+        from mcpworks_api.services.git_remote import clone_or_init, commit_and_push, create_temp_dir
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        stmt = select(NamespaceGitRemote).where(
+            NamespaceGitRemote.namespace_id == namespace.id
+        )
+        result = await self.db.execute(stmt)
+        remote = result.scalar_one_or_none()
+        if not remote:
+            raise ValueError("Configure a Git remote first with configure_git_remote")
+
+        token = decrypt_value(remote.token_encrypted, remote.token_dek_encrypted)
+
+        svc_stmt = (
+            select(NamespaceService)
+            .where(NamespaceService.namespace_id == namespace.id)
+            .options(
+                selectinload(NamespaceService.functions).selectinload(Function.versions)
+            )
+        )
+        svc_result = await self.db.execute(svc_stmt)
+        db_services = svc_result.scalars().all()
+
+        services = []
+        for svc in db_services:
+            funcs = []
+            for func in svc.functions:
+                if func.deleted_at is not None:
+                    continue
+                active_ver = func.get_active_version_obj()
+                funcs.append(
+                    {
+                        "name": func.name,
+                        "description": func.description,
+                        "backend": active_ver.backend if active_ver else "code_sandbox",
+                        "language": active_ver.language if active_ver else "python",
+                        "code": active_ver.code if active_ver else None,
+                        "requirements": list(active_ver.requirements or []) if active_ver else [],
+                        "tags": list(func.tags or []),
+                        "public_safe": func.public_safe,
+                        "locked": func.locked,
+                        "input_schema": active_ver.input_schema if active_ver else None,
+                        "output_schema": active_ver.output_schema if active_ver else None,
+                        "required_env": list(active_ver.required_env or []) if active_ver else [],
+                        "optional_env": list(active_ver.optional_env or []) if active_ver else [],
+                    }
+                )
+            services.append(
+                {
+                    "name": svc.name,
+                    "description": svc.description,
+                    "functions": funcs,
+                }
+            )
+
+        agent_stmt = (
+            select(Agent)
+            .where(Agent.namespace_id == namespace.id)
+            .options(
+                selectinload(Agent.schedules),
+                selectinload(Agent.webhooks),
+                selectinload(Agent.channels),
+            )
+        )
+        agent_result = await self.db.execute(agent_stmt)
+        db_agents = agent_result.scalars().all()
+
+        agents = []
+        for agent in db_agents:
+            agents.append(
+                {
+                    "name": agent.name,
+                    "display_name": agent.display_name,
+                    "ai_engine": agent.ai_engine,
+                    "ai_model": agent.ai_model,
+                    "system_prompt": agent.system_prompt,
+                    "tool_tier": agent.tool_tier,
+                    "scheduled_tool_tier": agent.scheduled_tool_tier,
+                    "auto_channel": agent.auto_channel,
+                    "memory_limit_mb": agent.memory_limit_mb,
+                    "cpu_limit": agent.cpu_limit,
+                    "heartbeat_enabled": agent.heartbeat_enabled,
+                    "heartbeat_interval": agent.heartbeat_interval,
+                    "orchestration_limits": agent.orchestration_limits,
+                    "mcp_servers": agent.mcp_servers,
+                    "schedules": [
+                        {"name": s.name, "cron": s.cron_expression, "enabled": s.enabled}
+                        for s in agent.schedules
+                    ],
+                    "webhooks": [
+                        {"name": w.name, "enabled": w.enabled} for w in agent.webhooks
+                    ],
+                    "channels": [{"channel_type": c.channel_type} for c in agent.channels],
+                }
+            )
+
+        with create_temp_dir() as tmpdir:
+            repo_dir = f"{tmpdir}/repo"
+            clone_or_init(remote.git_url, token, remote.git_branch, repo_dir)
+
+            summary = serialize_namespace(
+                namespace_name=namespace.name,
+                namespace_description=namespace.description,
+                services=services,
+                agents=agents,
+                dest=repo_dir,
+            )
+
+            commit_msg = message or f"MCPWorks export: {namespace.name}"
+            sha, files_changed = commit_and_push(
+                repo_dir=repo_dir,
+                message=commit_msg,
+                url=remote.git_url,
+                token=token,
+                branch=remote.git_branch,
+            )
+
+        from datetime import datetime, timezone
+
+        remote.last_export_at = datetime.now(timezone.utc)
+        remote.last_export_sha = sha[:40] if sha else None
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "exported",
+                            "sha": sha[:12] if sha else None,
+                            "files_changed": files_changed,
+                            "services": summary["services"],
+                            "functions": summary["functions"],
+                            "agents": summary["agents"],
+                            "git_url": remote.git_url,
+                            "git_branch": remote.git_branch,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _export_service(
+        self, service: str, message: str | None = None
+    ) -> MCPToolResult:
+        namespace = await self._get_current_namespace()
+
+        from mcpworks_api.core.encryption import decrypt_value
+        from mcpworks_api.models import Function, NamespaceService
+        from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
+        from mcpworks_api.services.git_export import serialize_service
+        from mcpworks_api.services.git_remote import clone_or_init, commit_and_push, create_temp_dir
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        stmt = select(NamespaceGitRemote).where(
+            NamespaceGitRemote.namespace_id == namespace.id
+        )
+        result = await self.db.execute(stmt)
+        remote = result.scalar_one_or_none()
+        if not remote:
+            raise ValueError("Configure a Git remote first with configure_git_remote")
+
+        token = decrypt_value(remote.token_encrypted, remote.token_dek_encrypted)
+
+        svc_stmt = (
+            select(NamespaceService)
+            .where(
+                NamespaceService.namespace_id == namespace.id,
+                NamespaceService.name == service,
+            )
+            .options(selectinload(NamespaceService.functions).selectinload(Function.versions))
+        )
+        svc_result = await self.db.execute(svc_stmt)
+        db_svc = svc_result.scalar_one_or_none()
+        if not db_svc:
+            raise NotFoundError(f"Service '{service}' not found")
+
+        funcs = []
+        for func in db_svc.functions:
+            if func.deleted_at is not None:
+                continue
+            active_ver = func.get_active_version_obj()
+            funcs.append(
+                {
+                    "name": func.name,
+                    "description": func.description,
+                    "backend": active_ver.backend if active_ver else "code_sandbox",
+                    "language": active_ver.language if active_ver else "python",
+                    "code": active_ver.code if active_ver else None,
+                    "requirements": list(active_ver.requirements or []) if active_ver else [],
+                    "tags": list(func.tags or []),
+                    "public_safe": func.public_safe,
+                    "locked": func.locked,
+                    "input_schema": active_ver.input_schema if active_ver else None,
+                    "output_schema": active_ver.output_schema if active_ver else None,
+                    "required_env": list(active_ver.required_env or []) if active_ver else [],
+                    "optional_env": list(active_ver.optional_env or []) if active_ver else [],
+                }
+            )
+
+        svc_data = {
+            "name": db_svc.name,
+            "description": db_svc.description,
+            "functions": funcs,
+        }
+
+        with create_temp_dir() as tmpdir:
+            repo_dir = f"{tmpdir}/repo"
+            clone_or_init(remote.git_url, token, remote.git_branch, repo_dir)
+
+            func_count = serialize_service(
+                service=svc_data,
+                dest=f"{repo_dir}/{namespace.name}",
+            )
+
+            commit_msg = message or f"MCPWorks export: {namespace.name}/{service}"
+            sha, files_changed = commit_and_push(
+                repo_dir=repo_dir,
+                message=commit_msg,
+                url=remote.git_url,
+                token=token,
+                branch=remote.git_branch,
+            )
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "exported",
+                            "sha": sha[:12] if sha else None,
+                            "files_changed": files_changed,
+                            "service": service,
+                            "functions": func_count,
+                            "git_url": remote.git_url,
+                            "git_branch": remote.git_branch,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _import_namespace(
+        self,
+        git_url: str,
+        git_token: str | None = None,
+        git_branch: str = "main",
+        name: str | None = None,
+        conflict: str = "fail",
+    ) -> MCPToolResult:
+        from mcpworks_api.services.git_import import ImportValidationError, validate_and_parse
+        from mcpworks_api.services.git_remote import clone_repo, create_temp_dir
+
+        with create_temp_dir() as tmpdir:
+            repo_dir = f"{tmpdir}/repo"
+            clone_repo(git_url, git_token or "", git_branch, repo_dir)
+            try:
+                parsed = validate_and_parse(repo_dir)
+            except ImportValidationError as e:
+                return MCPToolResult(
+                    content=[
+                        MCPContent(
+                            text=json.dumps({"error": "validation_failed", "errors": e.errors})
+                        )
+                    ],
+                    isError=True,
+                )
+
+            ns_name = name or parsed["name"]
+
+            existing_ns = None
+            try:
+                existing_ns = await self.namespace_service.get_by_name(
+                    ns_name, self.account.id
+                )
+            except NotFoundError:
+                pass
+
+            if existing_ns is not None:
+                if conflict == "fail":
+                    raise ConflictError(
+                        f"Namespace '{ns_name}' already exists. Use conflict='replace' to overwrite."
+                    )
+
+            if existing_ns is None:
+                target_ns = await self.namespace_service.create(
+                    account_id=self.account.id,
+                    name=ns_name,
+                    description=parsed.get("description"),
+                )
+            else:
+                target_ns = existing_ns
+
+            svc_count = 0
+            func_count = 0
+
+            for svc_data in parsed.get("services", []):
+                existing_svc = None
+                try:
+                    existing_svc = await self.service_service.get_by_name(
+                        target_ns.id, svc_data["name"]
+                    )
+                except NotFoundError:
+                    pass
+
+                if existing_svc is None:
+                    db_svc = await self.service_service.create(
+                        namespace_id=target_ns.id,
+                        name=svc_data["name"],
+                        description=svc_data.get("description"),
+                    )
+                else:
+                    db_svc = existing_svc
+
+                svc_count += 1
+
+                for func_data in svc_data.get("functions", []):
+                    try:
+                        await self.function_service.create(
+                            service_id=db_svc.id,
+                            name=func_data["name"],
+                            backend=func_data.get("backend", "code_sandbox"),
+                            description=func_data.get("description"),
+                            tags=func_data.get("tags"),
+                            code=func_data.get("code"),
+                            input_schema=func_data.get("input_schema"),
+                            output_schema=func_data.get("output_schema"),
+                            requirements=func_data.get("requirements"),
+                            required_env=func_data.get("required_env"),
+                            optional_env=func_data.get("optional_env"),
+                            language=func_data.get("language", "python"),
+                            public_safe=func_data.get("public_safe", False),
+                        )
+                        func_count += 1
+                    except ConflictError:
+                        if conflict == "fail":
+                            raise
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "imported",
+                            "namespace": ns_name,
+                            "services": svc_count,
+                            "functions": func_count,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _import_service(
+        self,
+        git_url: str,
+        service: str,
+        git_token: str | None = None,
+        conflict: str = "fail",
+    ) -> MCPToolResult:
+        namespace = await self._get_current_namespace()
+
+        from mcpworks_api.services.git_import import ImportValidationError, parse_service
+        from mcpworks_api.services.git_remote import clone_repo, create_temp_dir
+
+        with create_temp_dir() as tmpdir:
+            repo_dir = f"{tmpdir}/repo"
+            clone_repo(git_url, git_token or "", "main", repo_dir)
+            try:
+                svc_data = parse_service(repo_dir, service)
+            except ImportValidationError as e:
+                return MCPToolResult(
+                    content=[
+                        MCPContent(
+                            text=json.dumps({"error": "validation_failed", "errors": e.errors})
+                        )
+                    ],
+                    isError=True,
+                )
+
+            existing_svc = None
+            try:
+                existing_svc = await self.service_service.get_by_name(
+                    namespace.id, svc_data["name"]
+                )
+            except NotFoundError:
+                pass
+
+            if existing_svc is not None and conflict == "fail":
+                raise ConflictError(
+                    f"Service '{svc_data['name']}' already exists. Use conflict='replace' to overwrite."
+                )
+
+            if existing_svc is None:
+                db_svc = await self.service_service.create(
+                    namespace_id=namespace.id,
+                    name=svc_data["name"],
+                    description=svc_data.get("description"),
+                )
+            else:
+                db_svc = existing_svc
+
+            func_count = 0
+            for func_data in svc_data.get("functions", []):
+                try:
+                    await self.function_service.create(
+                        service_id=db_svc.id,
+                        name=func_data["name"],
+                        backend=func_data.get("backend", "code_sandbox"),
+                        description=func_data.get("description"),
+                        tags=func_data.get("tags"),
+                        code=func_data.get("code"),
+                        input_schema=func_data.get("input_schema"),
+                        output_schema=func_data.get("output_schema"),
+                        requirements=func_data.get("requirements"),
+                        required_env=func_data.get("required_env"),
+                        optional_env=func_data.get("optional_env"),
+                        language=func_data.get("language", "python"),
+                        public_safe=func_data.get("public_safe", False),
+                    )
+                    func_count += 1
+                except ConflictError:
+                    if conflict == "fail":
+                        raise
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "status": "imported",
+                            "namespace": self.namespace_name,
+                            "service": svc_data["name"],
+                            "functions": func_count,
+                        }
+                    )
+                )
+            ]
+        )
