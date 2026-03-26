@@ -266,10 +266,131 @@ def _call_ts_function(qualified_name: str, input_data: dict) -> object:
 '''
 
 
+_MCP_BRIDGE_TEMPLATE = '''\
+"""MCP proxy bridge: call remote MCP server tools from sandbox code."""
+import json
+import os
+
+_PROXY_URL = "{proxy_url}"
+_BRIDGE_KEY = os.environ.get("__MCPWORKS_BRIDGE_KEY__", "")
+
+
+def _call_mcp_tool(server: str, tool: str, arguments: dict) -> object:
+    if not _BRIDGE_KEY:
+        raise RuntimeError(
+            f"Cannot call MCP tool {{server}}.{{tool}}: "
+            "bridge key not configured."
+        )
+    import httpx
+
+    response = httpx.post(
+        _PROXY_URL,
+        headers={{"Authorization": f"Bearer {{_BRIDGE_KEY}}"}},
+        json={{"server": server, "tool": tool, "arguments": arguments}},
+        timeout=60,
+    )
+    data = response.json()
+    if "error" in data and data["error"]:
+        raise RuntimeError(f"MCP tool {{server}}.{{tool}} failed: {{data['error']}}")
+    return data.get("result")
+'''
+
+
+def _generate_mcp_wrapper(server_name: str, tool: dict[str, Any]) -> str:
+    safe_server = _sanitize(server_name)
+    safe_tool = _sanitize(tool["name"])
+    qualified = f"mcp__{safe_server}__{safe_tool}"
+    desc = tool.get("description", f"MCP tool: {server_name}.{tool['name']}")
+
+    params = _params_from_schema(tool.get("input_schema"))
+    if params:
+        sig_parts = []
+        for pname, default, _desc in params:
+            if default is _NO_DEFAULT:
+                sig_parts.append(pname)
+            else:
+                sig_parts.append(f"{pname}={default!r}")
+        sig = ", ".join(sig_parts)
+        dict_entries = ", ".join(f'"{p[0]}": {p[0]}' for p in params)
+        input_line = f"    _args = {{{dict_entries}}}"
+    else:
+        sig = "**kwargs"
+        input_line = "    _args = dict(kwargs)"
+
+    return f'''def {qualified}({sig}):
+    """{desc}"""
+    from functions._registry import _track_call
+    _track_call("mcp:{server_name}.{tool["name"]}")
+{input_line}
+    from functions._mcp_bridge import _call_mcp_tool
+    return _call_mcp_tool("{server_name}", "{tool["name"]}", _args)
+'''
+
+
+def _generate_mcp_server_module(server_name: str, tools: list[dict[str, Any]]) -> str:
+    lines = [f'"""Remote MCP tools from the {server_name} server."""\n']
+    for tool in tools:
+        lines.append(_generate_mcp_wrapper(server_name, tool))
+    return "\n".join(lines)
+
+
+def _generate_init_with_mcp(
+    namespace: str,
+    services: dict[str, list[tuple[Function, FunctionVersion]]],
+    mcp_servers: list[dict[str, Any]] | None = None,
+) -> str:
+    doc_lines = [f"Available functions in the '{namespace}' namespace:", ""]
+    imports: list[str] = []
+
+    if services:
+        doc_lines.append("  [Services]")
+        for svc_name, funcs in sorted(services.items()):
+            safe_svc = _sanitize(svc_name)
+            doc_lines.append(f"    [{svc_name}]")
+            for func, version in funcs:
+                safe_name = _sanitize(func.name)
+                params = _params_from_schema(version.input_schema)
+                if params:
+                    sig = ", ".join(
+                        f"{p[0]}={p[1]!r}" if p[1] is not _NO_DEFAULT else p[0] for p in params
+                    )
+                else:
+                    sig = "**kwargs"
+                desc = func.description or ""
+                doc_lines.append(f"      {safe_name}({sig}) — {desc}")
+                imports.append(f"from functions.{safe_svc} import {safe_name}")
+            doc_lines.append("")
+
+    if mcp_servers:
+        doc_lines.append("  [RemoteMCP]")
+        for server in mcp_servers:
+            safe_server = _sanitize(server["name"])
+            doc_lines.append(f"    [{server['name']}]")
+            for tool in server.get("tool_schemas", []):
+                safe_tool = _sanitize(tool["name"])
+                qualified = f"mcp__{safe_server}__{safe_tool}"
+                params = _params_from_schema(tool.get("input_schema"))
+                if params:
+                    sig = ", ".join(
+                        f"{p[0]}={p[1]!r}" if p[1] is not _NO_DEFAULT else p[0] for p in params
+                    )
+                else:
+                    sig = "**kwargs"
+                desc = tool.get("description", "")
+                doc_lines.append(f"      {qualified}({sig}) — {desc}")
+                imports.append(f"from functions._mcp.{safe_server} import {qualified}")
+            doc_lines.append("")
+
+    docstring = "\n".join(doc_lines)
+    import_block = "\n".join(imports)
+    return f'"""\n{docstring}\n"""\n\n{import_block}\n'
+
+
 def generate_functions_package(
     functions: list[tuple[Function, FunctionVersion]],
     namespace: str,
     run_url: str | None = None,
+    mcp_servers: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     """Generate a ``functions/`` Python package from database records.
 
@@ -277,6 +398,7 @@ def generate_functions_package(
         functions: ``(Function, FunctionVersion)`` tuples from DB.
         namespace: Namespace name (for the docstring).
         run_url: MCP run server URL for cross-language bridge.
+        mcp_servers: List of {"name": str, "tool_schemas": [...]} from namespace MCP servers.
 
     Returns:
         Mapping of relative file paths → file content strings.
@@ -284,7 +406,6 @@ def generate_functions_package(
     """
     files: dict[str, str] = {}
 
-    # Group by service
     services: dict[str, list[tuple[Function, FunctionVersion]]] = {}
     has_ts = False
     for func, version in functions:
@@ -293,15 +414,12 @@ def generate_functions_package(
         if getattr(version, "language", "python") == "typescript":
             has_ts = True
 
-    # _registry.py
     files["functions/_registry.py"] = _REGISTRY_SOURCE
 
-    # _ts_bridge.py (only if namespace has TypeScript functions)
     if has_ts:
         bridge_url = run_url or url_builder.mcp_url(namespace, "run")
         files["functions/_ts_bridge.py"] = _TS_BRIDGE_TEMPLATE.format(run_url=bridge_url)
 
-    # Per-service modules + raw code files
     for svc_name, funcs in services.items():
         safe_svc = _sanitize(svc_name)
         files[f"functions/{safe_svc}.py"] = _generate_service_module(svc_name, funcs)
@@ -313,7 +431,21 @@ def generate_functions_package(
             code = version.code or ""
             files[f"functions/_code/{safe_svc}__{safe_name}.py"] = code
 
-    # __init__.py (must come after services are built)
-    files["functions/__init__.py"] = _generate_init(namespace, services)
+    if mcp_servers:
+        from mcpworks_api.config import get_settings
+
+        settings = get_settings()
+        base = getattr(settings, "base_scheme", "https") + "://"
+        base += "api." + getattr(settings, "base_domain", "localhost")
+        proxy_url = f"{base}/v1/internal/mcp-proxy"
+        files["functions/_mcp_bridge.py"] = _MCP_BRIDGE_TEMPLATE.format(proxy_url=proxy_url)
+        files["functions/_mcp/__init__.py"] = ""
+        for server in mcp_servers:
+            safe_server = _sanitize(server["name"])
+            files[f"functions/_mcp/{safe_server}.py"] = _generate_mcp_server_module(
+                server["name"], server.get("tool_schemas", [])
+            )
+
+    files["functions/__init__.py"] = _generate_init_with_mcp(namespace, services, mcp_servers)
 
     return files

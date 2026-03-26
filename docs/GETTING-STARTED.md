@@ -115,6 +115,22 @@ Once you have functions worth keeping, export them to a Git repository:
 
 Your functions, schemas, and agent configs are now version-controlled. See the [Git Export & Import](guide.md#git-export--import) section in the platform guide for the full reference.
 
+## 8. Connect a Third-Party MCP Server
+
+Add external tools to your namespace — Slack, Google Workspace, GitHub, or any MCP server:
+
+> "Add the Slack MCP server to my demo namespace at `https://slack-mcp.example.com/mcp` with token `xoxb-...`"
+
+Now your sandbox code can call Slack tools directly:
+
+```python
+from functions import mcp__slack__send_message
+mcp__slack__send_message(channel="C01234", text="Hello from MCPWorks!")
+result = {"sent": True}
+```
+
+The AI writes code, the sandbox calls Slack via the proxy, and only the result comes back. See [Remote MCP Servers](guide.md#remote-mcp-servers) for the full reference.
+
 ## What's Next?
 
 - **[Platform Guide](guide.md)** — Full reference for all MCP tools, code mode, templates, and agents

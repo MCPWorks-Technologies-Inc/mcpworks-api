@@ -396,6 +396,27 @@ class RunMCPHandler:
             },
         )
 
+    async def _load_mcp_server_tools(self, namespace_id: uuid.UUID) -> list[dict[str, Any]]:
+        from sqlalchemy import select
+
+        from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
+
+        stmt = (
+            select(NamespaceMcpServer)
+            .where(
+                NamespaceMcpServer.namespace_id == namespace_id,
+                NamespaceMcpServer.enabled.is_(True),
+            )
+            .order_by(NamespaceMcpServer.name)
+        )
+        result = await self.db.execute(stmt)
+        servers = result.scalars().all()
+        return [
+            {"name": s.name, "tool_schemas": s.tool_schemas or []}
+            for s in servers
+            if s.tool_count > 0
+        ]
+
     async def _load_agent_context(self, namespace: Namespace) -> dict[str, Any] | None:
         """Load agent state as context dict for code-mode cross-function calls.
 
@@ -438,43 +459,62 @@ class RunMCPHandler:
         namespace = await self._get_namespace()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
-        run_url = url_builder.mcp_url(self.namespace_name, "run")
-        extra_files = generate_functions_package(functions, self.namespace_name, run_url=run_url)
+        mcp_server_tools = await self._load_mcp_server_tools(namespace.id)
 
-        # Inject agent state as context.json so cross-function calls can
-        # pass it to handler(input, context) entry points.
+        run_url = url_builder.mcp_url(self.namespace_name, "run")
+        extra_files = generate_functions_package(
+            functions, self.namespace_name, run_url=run_url, mcp_servers=mcp_server_tools
+        )
+
         agent_context = await self._load_agent_context(namespace)
         if agent_context:
             extra_files["context.json"] = json.dumps(agent_context, default=str)
 
-        # Inject API key for cross-language bridge (TS functions callable from Python)
+        if sandbox_env is None:
+            sandbox_env = {}
         has_ts = any(getattr(v, "language", "python") == "typescript" for _, v in functions)
-        if has_ts and self.api_key and getattr(self.api_key, "_raw_key", None):
-            if sandbox_env is None:
-                sandbox_env = {}
+        has_mcp = bool(mcp_server_tools)
+        if (has_ts or has_mcp) and self.api_key and getattr(self.api_key, "_raw_key", None):
             sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key._raw_key
 
         backend = get_backend("code_sandbox")
         if not backend:
             raise ValueError("Code sandbox backend not available")
 
-        # Append call-log capture (legacy stderr path, kept as fallback).
-        # Primary path: execute.py reads /sandbox/.call_log directly (FINDING-04).
         augmented_code = code + _CALL_LOG_CAPTURE_SNIPPET
 
         execution_id = str(uuid.uuid4())
         start_time = datetime.now(UTC)
 
-        result = await backend.execute(
-            code=augmented_code,
-            config=None,
-            input_data={},
-            account=self.account,
-            execution_id=execution_id,
-            extra_files=extra_files,
-            sandbox_env=sandbox_env,
-            namespace=self.namespace_name,
+        from mcpworks_api.core.exec_token_registry import (
+            register_execution,
+            unregister_execution,
         )
+
+        exec_token = None
+        if has_mcp and self.api_key and getattr(self.api_key, "_raw_key", None):
+            exec_token = self.api_key._raw_key
+            register_execution(
+                token=exec_token,
+                namespace_id=namespace.id,
+                namespace_name=self.namespace_name,
+                execution_id=execution_id,
+            )
+
+        try:
+            result = await backend.execute(
+                code=augmented_code,
+                config=None,
+                input_data={},
+                account=self.account,
+                execution_id=execution_id,
+                extra_files=extra_files,
+                sandbox_env=sandbox_env,
+                namespace=self.namespace_name,
+            )
+        finally:
+            if exec_token:
+                unregister_execution(exec_token)
 
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
