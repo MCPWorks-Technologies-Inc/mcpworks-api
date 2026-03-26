@@ -8,6 +8,17 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-03-26
+
+- Q: How does the MCP proxy resolve the calling namespace from the bridge key? → A: Bridge key maps to an active execution record, which already has the namespace ID. Reuses existing execution tracking — no new auth mechanism.
+- Q: Should the connection pool hold persistent MCP sessions or connect per call? → A: Persistent connections with 5-minute TTL. Amortizes handshake cost, reduces load on third-party servers. Stale connections recovered transparently on next call.
+- Q: How should MCP servers relate to the namespace hierarchy? → A: Parallel concept to Services, not a type of Service. Namespace has two children: Services (native, code_sandbox) and RemoteMCP (external, proxied). Both contain functions. RemoteMCP functions are cached tool schemas, not Function DB records. `mcp__` prefix distinguishes remote tools from native functions in the sandbox.
+- Q: Migration strategy for existing agent.mcp_servers JSONB? → A: Skip automatic migration (Option D). Deprecate the JSONB column, require users to re-add servers via the new add_mcp_server tool. Only a handful of agents affected at this stage.
+
+---
+
 ## 1. Overview
 
 ### 1.1 Purpose
@@ -20,7 +31,23 @@ Today, connecting an AI assistant to a third-party MCP server means the full too
 
 This also solves the "MCP server sprawl" problem: instead of configuring 10 MCP servers on every AI assistant, users configure them once on their MCPWorks namespace and access them through the single MCPWorks MCP connection.
 
-### 1.3 Success Criteria
+### 1.3 Namespace Hierarchy
+
+MCP servers are a parallel concept to Services within a namespace — not a type of Service:
+
+```
+Namespace
+├── Services (native)           ← your code, runs in sandbox
+│   └── {service}
+│       └── {function}          ← Function model in DB, code_sandbox backend
+├── RemoteMCP (external)        ← third-party MCP servers, proxied
+│   └── {mcp-server}
+│       └── {tool}              ← cached tool schema, not a Function DB record
+```
+
+Both contain callable functions from the sandbox's perspective. The `mcp__` prefix distinguishes remote tools from native functions.
+
+### 1.4 Success Criteria
 
 **This spec is successful when:**
 - [ ] A user can add a third-party MCP server to their namespace with a single MCP tool call
@@ -29,7 +56,7 @@ This also solves the "MCP server sprawl" problem: instead of configuring 10 MCP 
 - [ ] Token savings from code-mode wrapping apply to third-party MCP tool calls (data stays in sandbox)
 - [ ] The existing per-agent `mcp_servers` JSONB column is migrated to the new encrypted per-namespace model
 
-### 1.4 Scope
+### 1.5 Scope
 
 **In Scope:**
 - Per-namespace MCP server registry (add, remove, list, update)
@@ -166,10 +193,10 @@ This also solves the "MCP server sprawl" problem: instead of configuring 10 MCP 
 - **Priority:** Must Have
 - **Details:** The sandbox calls the internal proxy with the bridge key. The proxy looks up and decrypts credentials server-side. Credentials flow only between the MCPWorks API process and the external MCP server.
 
-**REQ-CRED-003: Migration from Agent JSONB**
-- **Description:** Existing `agent.mcp_servers` JSONB configs must be migrated to the new per-namespace encrypted model
+**REQ-CRED-003: Deprecate Agent JSONB**
+- **Description:** The existing `agent.mcp_servers` JSONB column is deprecated. The orchestrator stops reading it. Users re-add servers via the new `add_mcp_server` tool.
 - **Priority:** Must Have
-- **Details:** Extract server configs from all agents, deduplicate by URL within each namespace, encrypt credentials, populate new table. Update agents to reference servers by name instead of storing full configs.
+- **Details:** No automatic migration — only a handful of agents are affected at this stage. The JSONB column is left in place (nullable) and removed in a later migration after all agents have been updated. The orchestrator reads from `NamespaceMcpServer` exclusively.
 
 ### 3.3 Sandbox Integration
 
@@ -186,10 +213,10 @@ This also solves the "MCP server sprawl" problem: instead of configuring 10 MCP 
 - **Description:** A new internal API endpoint that proxies MCP tool calls from the sandbox to external MCP servers
 - **Priority:** Must Have
 - **Endpoint:** `POST /v1/internal/mcp-proxy`
-- **Authentication:** Bridge key (same `__MCPWORKS_BRIDGE_KEY__` used by TypeScript bridge)
+- **Authentication:** Bridge key (same `__MCPWORKS_BRIDGE_KEY__` used by TypeScript bridge). The proxy resolves the namespace by looking up the active execution record associated with the bridge key — no namespace parameter needed.
 - **Request body:** `{"server": "slack", "tool": "send_message", "arguments": {...}}`
 - **Behavior:**
-  1. Validate bridge key
+  1. Validate bridge key → resolve execution record → extract namespace ID
   2. Look up MCP server config for the namespace
   3. Decrypt credentials
   4. Connect to MCP server (or reuse pooled connection)
@@ -205,16 +232,21 @@ This also solves the "MCP server sprawl" problem: instead of configuring 10 MCP 
 **REQ-SAND-004: Tool Discovery in Sandbox**
 - **Description:** Sandbox code must be able to discover available MCP server tools via the functions package
 - **Priority:** Must Have
-- **Details:** `import functions; print(functions.__doc__)` includes MCP tools in the catalog:
+- **Details:** `import functions; print(functions.__doc__)` includes MCP tools in a separate section reflecting the parallel hierarchy:
   ```
-  Available functions in the 'analytics' namespace:
+  Available functions in the 'assistantpam' namespace:
 
-    [utils]
-      hello(name) — Greet someone
+    [Services]
+      [email-tools]
+        check_email(account) — Check inbox for new messages
+        format_report(data) — Format data into a report
 
-    [mcp: slack]
-      mcp__slack__send_message(channel, text) — Send a message to a Slack channel
-      mcp__slack__list_channels() — List all channels
+    [RemoteMCP]
+      [google-workspace]
+        mcp__google_workspace__search_gmail_messages(query) — Search Gmail
+        mcp__google_workspace__read_sheet_values(spreadsheet_id, range) — Read from Sheets
+      [slack]
+        mcp__slack__send_message(channel, text) — Send a Slack message
   ```
 
 ### 3.4 Agent Integration
@@ -420,8 +452,9 @@ A namespace with 3 MCP servers averaging 15 tools each = ~45 tools × 18 tokens 
 
 | Change | Details |
 |--------|---------|
-| Deprecate `mcp_servers` JSONB | Replace with `mcp_server_names` (ARRAY of VARCHAR) referencing NamespaceMcpServer by name |
-| Migration | Extract configs from JSONB, create NamespaceMcpServer records, update agent to name list |
+| Deprecate `mcp_servers` JSONB | Stop reading in orchestrator. Column remains nullable, removed in future migration. |
+| Add `mcp_server_names` | ARRAY of VARCHAR referencing NamespaceMcpServer by name. Orchestrator reads this to determine which remote MCP servers the agent can access. |
+| No automatic migration | Users re-add servers via `add_mcp_server` tool. Only a few agents affected. |
 
 ---
 
