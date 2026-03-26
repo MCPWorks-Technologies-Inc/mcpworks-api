@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "20260326_000001"
-down_revision = "20260319_000004_add_public_safe_to_functions"
+down_revision = "20260319_000004"
 branch_labels = None
 depends_on = None
 
