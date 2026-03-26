@@ -17,6 +17,7 @@
 - Q: Keep HMAC on trust boundary closing tags or drop it? → A: Drop HMAC. Trust markers are added server-side by the run handler after the sandbox exits. The sandbox code never sees the markers and cannot spoof them. HMAC adds complexity for a non-existent threat.
 - Q: Should rule management tools be a new tool group or part of MCP_SERVER_TOOLS? → A: Part of MCP_SERVER_TOOLS. Rules are a property of the MCP server, managed alongside settings and env vars. No separate group — user thinks "configuring my Slack server" not "configuring injection defense."
 - Q: Standalone set_function_trust tool or parameter on update_function? → A: Parameter on existing update_function. Trust level is a function property like description or tags. `update_function(service="utils", function="fetch_rss", output_trust="data")`.
+- Q: Should output_trust be optional or mandatory? → A: Mandatory. Required on make_function. No default — the user/LLM must explicitly choose `prompt` or `data`. Auto-classification provides a suggestion but the user confirms.
 
 ---
 
@@ -159,9 +160,9 @@ The sandbox returns this text in the result. The AI may interpret it as a system
 - **Values:**
   - `prompt` — output is trusted (AI-generated summaries, computed results). No wrapping.
   - `data` — output contains untrusted external content (emails, API responses, web scrapes). Wrapped with trust boundary.
-  - `auto` (default) — system infers based on context. Functions calling RemoteMCP tools default to `data`. Pure computation defaults to `prompt`.
-- **Storage:** New column on `functions` table
-- **MCP tool:** New `output_trust` parameter on existing `update_function` tool. Example: `update_function(service="utils", function="fetch_rss", output_trust="data")`
+- **Required:** Yes. Must be specified on `make_function`. No default — the LLM or user must explicitly declare trust level. Auto-classification (REQ-TRUST-003) provides a suggestion during function creation, but the user confirms.
+- **Storage:** New NOT NULL column on `functions` table. Existing functions backfilled to `prompt` via migration.
+- **MCP tools:** Required parameter on `make_function`. Also settable via `update_function(output_trust="data")`.
 
 **REQ-TRUST-002: Trust Boundary Wrapping**
 - **Description:** When a function with `output_trust: data` returns a result, the result is wrapped with trust boundary markers before entering the AI context
@@ -174,15 +175,15 @@ The sandbox returns this text in the result. The AI may interpret it as a system
   ```
 - **Enforcement:** Applied in the run handler after sandbox execution, before returning to the AI. The markers wrap the serialized result string directly — they must be visible in the AI's context window, not hidden in metadata.
 
-**REQ-TRUST-003: Auto-Classification Logic**
-- **Description:** When `output_trust` is `auto`, the system infers the trust level at function creation/update time via static analysis of the code. The inferred value is stored on the function record and visible via `describe_function`.
+**REQ-TRUST-003: Trust Classification Suggestion**
+- **Description:** When `make_function` is called without `output_trust`, the system analyzes the code and suggests a trust level — but rejects the call if `output_trust` is not provided. The suggestion is returned in the error message to help the LLM choose.
 - **Priority:** Should Have
-- **Timing:** Runs during `make_function` and `update_function`. Does not run per-execution.
-- **Rules:**
-  - If the function's code imports any `mcp__*` wrapper → `data`
-  - If the function has `required_env` containing URL/API/TOKEN keywords → `data`
-  - If the function has no external dependencies → `prompt`
-  - If uncertain → `prompt` (fail-open to avoid breaking existing workflows; the scanner still runs)
+- **Timing:** Runs during `make_function` validation. Static analysis only.
+- **Suggestion rules:**
+  - If the function's code imports any `mcp__*` wrapper → suggest `data`
+  - If the function has `required_env` containing URL/API/TOKEN keywords → suggest `data`
+  - If the function has no external dependencies → suggest `prompt`
+- **Error format:** `"output_trust is required. Suggested: 'data' (function imports mcp__google_workspace tools). Set output_trust='data' or output_trust='prompt'."`
 
 ### 3.2 Prompt Injection Scanner
 
@@ -374,7 +375,7 @@ The sandbox returns this text in the result. The AI may interpret it as a system
 
 | Field | Change | Description |
 |-------|--------|-------------|
-| `output_trust` | NEW, VARCHAR(10), DEFAULT 'auto' | `prompt`, `data`, or `auto` |
+| `output_trust` | NEW, VARCHAR(10), NOT NULL | `prompt` or `data`. Required on creation. Existing functions backfilled to `prompt`. |
 
 ### 7.2 Modified: NamespaceMcpServer
 
