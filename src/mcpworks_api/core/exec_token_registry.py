@@ -16,12 +16,14 @@ logger = structlog.get_logger(__name__)
 _registry: dict[str, ExecutionContext] = {}
 
 
-@dataclass(frozen=True)
+@dataclass
 class ExecutionContext:
     execution_id: str
     namespace_id: uuid.UUID
     namespace_name: str
     created_at: datetime
+    mcp_calls_count: int = 0
+    mcp_bytes_total: int = 0
 
 
 def register_execution(

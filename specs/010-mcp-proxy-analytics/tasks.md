@@ -19,11 +19,11 @@
 
 **Purpose**: Database tables, models, schemas
 
-- [ ] T001 Create Alembic migration in alembic/versions/ — create `mcp_proxy_calls` table and `mcp_execution_stats` table per data-model.md with composite indexes
-- [ ] T002 [P] Create McpProxyCall model in src/mcpworks_api/models/mcp_proxy_call.py — id, namespace_id, server_name, tool_name, called_at, latency_ms, response_bytes, response_tokens_est, status, error_type, truncated, injections_found
-- [ ] T003 [P] Create McpExecutionStat model in src/mcpworks_api/models/mcp_execution_stat.py — id, namespace_id, execution_id, executed_at, mcp_calls_count, mcp_bytes_total, result_bytes, tokens_saved_est
-- [ ] T004 Register both models in src/mcpworks_api/models/__init__.py
-- [ ] T005 [P] Create Pydantic schemas in src/mcpworks_api/schemas/analytics.py — ServerStatsResponse, ToolStats, TokenSavingsResponse, SuggestionResponse, Suggestion, FunctionMcpStatsResponse
+- [x] T001 Create Alembic migration for analytics tables
+- [x] T002 [P] Create McpProxyCall model
+- [x] T003 [P] Create McpExecutionStat model
+- [x] T004 Register both models in __init__.py
+- [x] T005 [P] Create Pydantic schemas in analytics.py
 
 ---
 
@@ -31,10 +31,10 @@
 
 **Purpose**: Analytics service + telemetry capture functions
 
-- [ ] T006 Create analytics service in src/mcpworks_api/services/analytics.py — get_server_stats(db, namespace_id, server_name, period), get_token_savings(db, namespace_id, period), get_function_stats(db, namespace_id, service, function, period). SQL aggregation queries per research.md R2.
-- [ ] T007 Create async telemetry capture function in src/mcpworks_api/services/analytics.py — record_proxy_call(namespace_id, server_name, tool_name, latency_ms, response_bytes, status, error_type, truncated, injections_found). Async INSERT using get_db_context pattern.
-- [ ] T008 Create suggestion engine in src/mcpworks_api/services/analytics.py — suggest_optimizations(db, namespace_id, server_name, probe_tools). 6 threshold rules per research.md R3. Live probe via MCP pool per research.md R4. Field analysis for probed tools.
-- [ ] T009 Extend ExecutionContext in src/mcpworks_api/core/exec_token_registry.py — add mcp_calls_count (int, default 0) and mcp_bytes_total (int, default 0) fields to the dataclass
+- [x] T006 Create analytics service (aggregation + savings + function stats)
+- [x] T007 Create async telemetry capture (record_proxy_call)
+- [x] T008 Create suggestion engine (6 threshold rules)
+- [x] T009 Extend ExecutionContext with mcp_calls_count + mcp_bytes_total
 
 **Checkpoint**: Foundation ready
 
