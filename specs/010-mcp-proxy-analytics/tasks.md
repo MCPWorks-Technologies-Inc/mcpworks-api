@@ -48,10 +48,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Integrate telemetry capture into MCP proxy in src/mcpworks_api/core/mcp_proxy.py — after returning ProxyResult, call asyncio.create_task(record_proxy_call(...)) with all call metrics. Also increment ctx.mcp_calls_count and ctx.mcp_bytes_total on the ExecutionContext.
-- [ ] T011 [US1] Add ANALYTICS_TOOLS group to tool registry in src/mcpworks_api/mcp/tool_registry.py — get_mcp_server_stats ToolDef with name, period params and rich description
-- [ ] T012 [US1] Implement get_mcp_server_stats handler in src/mcpworks_api/mcp/create_handler.py — get namespace (read), call analytics.get_server_stats, return ServerStatsResponse
-- [ ] T013 [US1] Wire get_mcp_server_stats into TOOL_SCOPES (read), dispatch_tool, and get_tools() in src/mcpworks_api/mcp/create_handler.py — add ANALYTICS_TOOLS unconditionally to get_tools
+- [x] T010 [US1] Integrate telemetry capture into MCP proxy + exec context tracking
+- [x] T011 [US1] Add ANALYTICS_TOOLS group to tool registry (4 tools)
+- [x] T012 [US1] Implement get_mcp_server_stats handler
+- [x] T013 [US1] Wire all analytics tools into TOOL_SCOPES, dispatch_tool, get_tools
 
 **Checkpoint**: Proxy calls captured, stats queryable per-tool.
 
@@ -65,10 +65,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Capture execution stats in run handler in src/mcpworks_api/mcp/run_handler.py — after sandbox exit (in the finally block), read ctx.mcp_calls_count and ctx.mcp_bytes_total from ExecutionContext, compute result_bytes from the result, async INSERT into mcp_execution_stats
-- [ ] T015 [US2] Add get_token_savings_report to ANALYTICS_TOOLS in src/mcpworks_api/mcp/tool_registry.py — ToolDef with period param
-- [ ] T016 [US2] Implement get_token_savings_report handler in src/mcpworks_api/mcp/create_handler.py — call analytics.get_token_savings, return TokenSavingsResponse
-- [ ] T017 [US2] Wire into TOOL_SCOPES (read), dispatch_tool in src/mcpworks_api/mcp/create_handler.py
+- [x] T014 [US2] Capture execution stats in run handler (finally block)
+- [x] T015 [US2] get_token_savings_report in ANALYTICS_TOOLS (included in T011)
+- [x] T016 [US2] Implement get_token_savings_report handler (included in T012)
+- [x] T017 [US2] Wired into TOOL_SCOPES + dispatch (included in T013)
 
 **Checkpoint**: Token savings visible. AI can report ROI.
 
@@ -82,10 +82,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Add suggest_optimizations + get_function_mcp_stats to ANALYTICS_TOOLS in src/mcpworks_api/mcp/tool_registry.py — ToolDefs with probe param and rich descriptions
-- [ ] T019 [US3] Implement suggest_optimizations handler in src/mcpworks_api/mcp/create_handler.py — call analytics.suggest_optimizations with optional probe tools, return SuggestionResponse
-- [ ] T020 [US3] Implement get_function_mcp_stats handler in src/mcpworks_api/mcp/create_handler.py — call analytics.get_function_stats, return FunctionMcpStatsResponse
-- [ ] T021 [US3] Wire both into TOOL_SCOPES (read), dispatch_tool in src/mcpworks_api/mcp/create_handler.py
+- [x] T018 [US3] suggest_optimizations + get_function_mcp_stats in ANALYTICS_TOOLS (included in T011)
+- [x] T019 [US3] Implement suggest_optimizations handler (included in T012)
+- [x] T020 [US3] Implement get_function_mcp_stats handler (included in T012)
+- [x] T021 [US3] Wired into TOOL_SCOPES + dispatch (included in T013)
 
 **Checkpoint**: AI can self-optimize token usage based on real data.
 
@@ -99,9 +99,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T022 [US4] Add Prometheus metrics in src/mcpworks_api/core/mcp_proxy.py — Counter (mcpworks_mcp_proxy_calls_total), Histogram (mcpworks_mcp_proxy_latency_seconds, mcpworks_mcp_proxy_response_bytes). Increment alongside telemetry capture.
-- [ ] T023 [US4] Create cleanup task in src/mcpworks_api/tasks/cleanup.py — async function that deletes rows from mcp_proxy_calls and mcp_execution_stats older than 30 days. Batch delete with LIMIT 10000 per iteration.
-- [ ] T024 [US4] Register cleanup task in APScheduler in src/mcpworks_api/main.py — daily at 03:00 UTC, same pattern as existing scheduled tasks
+- [ ] T022 [US4] Prometheus metrics — deferred to Phase 7
+- [x] T023 [US4] Create cleanup task in src/mcpworks_api/tasks/cleanup.py
+- [x] T024 [US4] Register cleanup loop in src/mcpworks_api/main.py (daily async loop)
 
 **Checkpoint**: External monitoring + automatic retention.
 
