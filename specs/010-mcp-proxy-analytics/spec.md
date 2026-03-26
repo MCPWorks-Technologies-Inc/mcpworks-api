@@ -8,6 +8,18 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-03-26
+
+- Q: Why Redis for analytics storage instead of PostgreSQL? → A: PostgreSQL. Redis is a cache and ephemeral — analytics data with 30-day retention, structured aggregation (GROUP BY, AVG, time bucketing), and joins to existing tables belongs in the relational DB. Async INSERT after proxy response, same perf profile as Redis ZADD. One migration, no Redis memory pressure.
+- Q: How does suggest_optimizations know which fields to recommend redacting? → A: Live probe. When called, makes one real call per tool with minimal arguments to sample the current response structure. Analyzes JSON for large fields. No response content stored in analytics tables.
+- Q: Should live probes be automatic or user-triggered? → A: User-triggered. suggest_optimizations accepts an optional `probe` parameter listing tool names to probe. No automatic probing — avoids side effects from write-like tools and gives the user control over which tools get real calls.
+- Q: How should the 30-day cleanup job run? → A: APScheduler daily task inside the API process. Already use APScheduler for agent scheduling. No external cron dependency.
+- Q: Should analytics tools be a new group or part of MCP_SERVER_TOOLS? → A: New ANALYTICS_TOOLS group. Read-only observability tools are conceptually different from server management. Separate group enables tier-based or feature-flag gating.
+
+---
+
 ## 1. Overview
 
 ### 1.1 Purpose
@@ -41,7 +53,7 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
 **In Scope:**
 - Per-call telemetry capture in the MCP proxy (response size, latency, status, error type)
 - Per-execution telemetry for sandbox runs (MCP calls made, total data processed, result size)
-- Storage in Redis with TTL-based retention (rolling window, not permanent)
+- Storage in PostgreSQL with periodic cleanup (30-day retention)
 - 4 MCP tools for querying stats and getting optimization suggestions
 - Prometheus metrics export for external monitoring
 - Token estimation (response bytes / 4 as approximation)
@@ -124,7 +136,7 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
   - `error_type` — null or error classification
   - `truncated` — whether response was truncated by limit
   - `injections_found` — count from injection scanner
-- **Storage:** Redis sorted sets keyed by `(namespace_id, server_name, tool_name)` with timestamp scores. TTL: 30 days.
+- **Storage:** PostgreSQL table `mcp_proxy_calls`. Async INSERT after proxy response. 30-day retention via periodic cleanup.
 
 **REQ-TEL-002: Per-Execution Metrics**
 - **Description:** Each sandbox execution records MCP-related telemetry
@@ -136,7 +148,7 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
   - `mcp_bytes_total` — total response bytes from all MCP calls
   - `result_bytes` — size of sandbox result returned to AI
   - `tokens_saved_est` — `(mcp_bytes_total - result_bytes) / 4`
-- **Storage:** Redis hash keyed by `namespace_id:execution_stats` with rolling counters
+- **Storage:** PostgreSQL table `mcp_execution_stats`. Async INSERT. 30-day retention.
 
 ### 3.2 MCP Tools
 
@@ -192,7 +204,7 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
 **REQ-TOOL-003: Suggest Optimizations**
 - **Description:** MCP tool `suggest_optimizations` analyzes stats and returns actionable recommendations
 - **Priority:** Should Have
-- **Parameters:** `name` (server, optional — all servers if omitted)
+- **Parameters:** `name` (server, optional — all servers if omitted), `probe` (optional list of tool names — makes a live call to sample response structure for field-level redact suggestions. Only probe tools you know are safe to call.)
 - **Returns:** List of suggestions, each with a recommended action the AI can take via existing tools
   ```json
   {
@@ -231,7 +243,7 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
 - **Description:** The `suggest_optimizations` tool analyzes collected stats and generates recommendations
 - **Priority:** Should Have
 - **Suggestion rules:**
-  - **Large responses:** If avg response > 100KB, suggest `redact_fields` if top-level JSON keys are identifiable
+  - **Large responses:** If avg response > 100KB, make a live probe call to the tool to sample the current response structure. Analyze top-level JSON keys by size, suggest `redact_fields` for the largest fields.
   - **High timeout rate:** If timeout rate > 10%, suggest increasing `timeout_seconds`
   - **High error rate:** If error rate > 20%, suggest checking credentials or server health
   - **Unused tools:** If tools have 0 calls over 7 days, suggest reviewing whether wrappers are needed
@@ -256,21 +268,21 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
 
 ### 4.1 Performance
 
-- **Telemetry capture:** < 1ms overhead per proxy call (Redis ZADD + pipeline)
-- **Stats query:** < 100ms for aggregation over 24h window
-- **No impact on proxy latency** — telemetry is fire-and-forget (async after response returned)
+- **Telemetry capture:** < 1ms overhead per proxy call (async INSERT, fire-and-forget)
+- **Stats query:** < 200ms for aggregation over 24h window with proper indexes
+- **No impact on proxy latency** — telemetry is fire-and-forget (asyncio.create_task after response returned)
 
 ### 4.2 Storage
 
-- **Redis sorted sets** with timestamp scores for efficient range queries
-- **30-day TTL** — data automatically expires, no cleanup job needed
-- **Estimated storage:** ~100 bytes per call record. At 1000 calls/day = ~3MB/month per namespace
-- **No PostgreSQL tables** — this is ephemeral operational data, not worth schema changes
+- **PostgreSQL tables** with timestamp indexes for efficient range queries
+- **30-day retention** — APScheduler daily task deletes rows older than 30 days (same scheduler infrastructure as agent cron jobs)
+- **Estimated storage:** ~200 bytes per call record. At 1000 calls/day = ~6MB/month per namespace. Well within PostgreSQL comfort zone.
+- **Async writes** — telemetry INSERT runs in a background task after the proxy response is returned, same pattern as security event logging
 
 ### 4.3 Reliability
 
-- **Telemetry failures don't block proxy calls.** If Redis is down, calls proceed without stats.
-- **Approximate accuracy is fine.** Token estimation is `bytes/4`. Aggregation may miss calls during Redis failures. This is operational intelligence, not billing.
+- **Telemetry failures don't block proxy calls.** If the async INSERT fails, the call proceeds without stats.
+- **Approximate accuracy is fine.** Token estimation is `bytes/4`. Aggregation may miss calls if async INSERT fails. This is operational intelligence, not billing.
 
 ---
 
@@ -278,7 +290,7 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
 
 ### 5.1 Technical Constraints
 
-- Redis is the only storage for analytics (no new DB tables)
+- PostgreSQL for analytics storage (two new tables: mcp_proxy_calls, mcp_execution_stats)
 - Token estimation is approximate (`bytes / 4`) — good enough for optimization decisions
 - Suggestion engine is rule-based, not LLM-based (no AI calls for generating suggestions)
 - Per-function stats require the execution token registry to track which function made which proxy calls — may need enrichment from 008's exec token registry
@@ -299,55 +311,60 @@ This is the AI optimizing its own infrastructure costs based on real telemetry. 
 **Scenario:** User queries stats for a newly added server with 0 calls
 **Expected Behavior:** Return empty stats with `total_calls: 0`. Suggestions return "Insufficient data."
 
-### 6.2 Edge Case: Redis Unavailable
+### 6.2 Edge Case: DB Write Failure
 
-**Scenario:** Redis is down when stats are queried
-**Expected Behavior:** Return error: "Analytics temporarily unavailable." Proxy calls continue unaffected.
+**Scenario:** Async INSERT fails (connection issue, disk full)
+**Expected Behavior:** Failure is logged. Proxy call result is unaffected. Stats for that call are lost — acceptable for operational intelligence.
 
 ### 6.3 Edge Case: Very High Call Volume
 
 **Scenario:** Namespace makes 100K+ proxy calls per day
-**Expected Behavior:** Redis handles this fine (sorted sets are O(log N)). Aggregation over 30d may be slower — cap at 24h for detailed per-tool stats, return summaries only for longer periods.
+**Expected Behavior:** PostgreSQL handles this with indexed queries. Aggregation over 30d with proper indexes is fast. For very high volume, consider time-based partitioning in Phase 2.
 
 ---
 
 ## 7. Data Model
 
-### 7.1 Redis Key Structure
+### 7.1 New Table: mcp_proxy_calls
 
-```
-# Per-call records (sorted set, score = timestamp)
-analytics:{namespace_id}:{server_name}:{tool_name}:calls
-  → members: JSON-encoded call records
-  → TTL: 30 days
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| id | UUID | PK | |
+| namespace_id | UUID | FK → namespaces.id, ON DELETE CASCADE | |
+| server_name | VARCHAR(63) | NOT NULL | MCP server name |
+| tool_name | VARCHAR(255) | NOT NULL | Tool called |
+| called_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | When the call was made |
+| latency_ms | INTEGER | NOT NULL | Round-trip time |
+| response_bytes | INTEGER | NOT NULL | Response size before truncation |
+| response_tokens_est | INTEGER | NOT NULL | response_bytes / 4 |
+| status | VARCHAR(20) | NOT NULL | success, timeout, error, blocked |
+| error_type | VARCHAR(100) | NULLABLE | Error classification |
+| truncated | BOOLEAN | NOT NULL, DEFAULT false | Whether response hit limit |
+| injections_found | INTEGER | NOT NULL, DEFAULT 0 | Injection scanner count |
 
-# Per-execution summaries (sorted set, score = timestamp)
-analytics:{namespace_id}:executions
-  → members: JSON-encoded execution summaries
-  → TTL: 30 days
+**Indexes:**
+- `(namespace_id, called_at)` — time-range queries per namespace
+- `(namespace_id, server_name, tool_name, called_at)` — per-tool aggregation
 
-# Rolling counters (hash, for fast reads)
-analytics:{namespace_id}:{server_name}:counters
-  → total_calls, total_errors, total_bytes, total_latency_ms
-  → TTL: 30 days (refreshed on write)
-```
+**Retention:** Rows older than 30 days deleted by periodic cleanup task.
 
-### 7.2 Call Record Schema
+### 7.2 New Table: mcp_execution_stats
 
-```json
-{
-  "ts": 1711468800,
-  "tool": "search_gmail",
-  "lat": 340,
-  "bytes": 85000,
-  "status": "success",
-  "err": null,
-  "trunc": false,
-  "inj": 0
-}
-```
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| id | UUID | PK | |
+| namespace_id | UUID | FK → namespaces.id, ON DELETE CASCADE | |
+| execution_id | VARCHAR(64) | NOT NULL | Sandbox execution ID |
+| executed_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| mcp_calls_count | INTEGER | NOT NULL, DEFAULT 0 | Total MCP proxy calls |
+| mcp_bytes_total | INTEGER | NOT NULL, DEFAULT 0 | Total response bytes from MCP |
+| result_bytes | INTEGER | NOT NULL, DEFAULT 0 | Sandbox result size returned to AI |
+| tokens_saved_est | INTEGER | NOT NULL, DEFAULT 0 | (mcp_bytes_total - result_bytes) / 4 |
 
-Compact field names to minimize Redis memory usage.
+**Indexes:**
+- `(namespace_id, executed_at)` — time-range queries
+
+**Retention:** Same 30-day cleanup.
 
 ---
 
