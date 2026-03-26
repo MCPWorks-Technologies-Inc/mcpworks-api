@@ -8,6 +8,18 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-03-26
+
+- Q: Should trust markers wrap the result string (visible in AI context) or be structured metadata? → A: Wrap the serialized result string only. The markers must be visible in the AI's context window to influence reasoning. Structured metadata may be ignored by some models.
+- Q: Should auto trust classification happen at creation time or execution time? → A: At creation time. Static analysis when make_function/update_function is called, result stored on the function record. Avoids per-execution overhead and makes trust level inspectable via describe_function.
+- Q: Keep HMAC on trust boundary closing tags or drop it? → A: Drop HMAC. Trust markers are added server-side by the run handler after the sandbox exits. The sandbox code never sees the markers and cannot spoof them. HMAC adds complexity for a non-existent threat.
+- Q: Should rule management tools be a new tool group or part of MCP_SERVER_TOOLS? → A: Part of MCP_SERVER_TOOLS. Rules are a property of the MCP server, managed alongside settings and env vars. No separate group — user thinks "configuring my Slack server" not "configuring injection defense."
+- Q: Standalone set_function_trust tool or parameter on update_function? → A: Parameter on existing update_function. Trust level is a function property like description or tags. `update_function(service="utils", function="fetch_rss", output_trust="data")`.
+
+---
+
 ## 1. Overview
 
 ### 1.1 Purpose
@@ -149,7 +161,7 @@ The sandbox returns this text in the result. The AI may interpret it as a system
   - `data` — output contains untrusted external content (emails, API responses, web scrapes). Wrapped with trust boundary.
   - `auto` (default) — system infers based on context. Functions calling RemoteMCP tools default to `data`. Pure computation defaults to `prompt`.
 - **Storage:** New column on `functions` table
-- **MCP tool:** `set_function_trust(service, function, output_trust)`
+- **MCP tool:** New `output_trust` parameter on existing `update_function` tool. Example: `update_function(service="utils", function="fetch_rss", output_trust="data")`
 
 **REQ-TRUST-002: Trust Boundary Wrapping**
 - **Description:** When a function with `output_trust: data` returns a result, the result is wrapped with trust boundary markers before entering the AI context
@@ -160,11 +172,12 @@ The sandbox returns this text in the result. The AI may interpret it as a system
   {original result}
   [/UNTRUSTED_OUTPUT]
   ```
-- **Enforcement:** Applied in the run handler after sandbox execution, before returning to the AI
+- **Enforcement:** Applied in the run handler after sandbox execution, before returning to the AI. The markers wrap the serialized result string directly — they must be visible in the AI's context window, not hidden in metadata.
 
 **REQ-TRUST-003: Auto-Classification Logic**
-- **Description:** When `output_trust` is `auto`, the system infers the trust level
+- **Description:** When `output_trust` is `auto`, the system infers the trust level at function creation/update time via static analysis of the code. The inferred value is stored on the function record and visible via `describe_function`.
 - **Priority:** Should Have
+- **Timing:** Runs during `make_function` and `update_function`. Does not run per-execution.
 - **Rules:**
   - If the function's code imports any `mcp__*` wrapper → `data`
   - If the function has `required_env` containing URL/API/TOKEN keywords → `data`
@@ -248,7 +261,7 @@ The sandbox returns this text in the result. The AI may interpret it as a system
 **REQ-RULES-004: Rule Management Tools**
 - **Description:** MCP tools for managing per-server rules
 - **Priority:** Must Have
-- **Tools:**
+- **Tools** (added to MCP_SERVER_TOOLS group from 008, alongside existing server management tools):
   - `add_mcp_server_rule(name, direction, rule)` — add a request or response rule. Returns rule with generated ID.
   - `remove_mcp_server_rule(name, rule_id)` — remove a rule by ID
   - `list_mcp_server_rules(name)` — list all rules for a server
@@ -289,11 +302,7 @@ The sandbox returns this text in the result. The AI may interpret it as a system
 **REQ-FORMAT-002: Marker Integrity**
 - **Description:** The markers themselves must not be spoofable by injected content
 - **Priority:** Must Have
-- **Approach:** Include a per-execution HMAC in the closing tag that the AI framework can verify:
-  ```
-  [/EXTERNAL_DATA hmac="{hmac_of_content}"]
-  ```
-  The HMAC key is derived from the execution token. If the content was modified (e.g., by injected text adding a fake closing tag), the HMAC won't match.
+- **Approach:** Trust markers are added server-side by the run handler after the sandbox exits. The sandbox code never sees the markers and cannot inject fake ones. No HMAC needed — the server is the sole source of markers.
 
 ---
 
@@ -344,7 +353,7 @@ The sandbox returns this text in the result. The AI may interpret it as a system
 ### 6.2 Edge Case: Nested Trust Markers
 
 **Scenario:** External data contains text that looks like a trust boundary marker: `[EXTERNAL_DATA ...]`
-**Expected Behavior:** HMAC verification prevents spoofing. The inner fake marker has no valid HMAC and is treated as data.
+**Expected Behavior:** Not a real threat. Trust markers are only added server-side after the sandbox exits. Any marker-like text inside the data is just data — the AI sees it nested inside the real server-generated markers and knows the outer markers are authoritative.
 
 ### 6.3 Edge Case: Large Response with Many Injection Patterns
 
@@ -433,7 +442,7 @@ This is one layer in the stack:
 
 - Injection scanner detects all documented patterns
 - Scanner does not false-positive on a corpus of 100 normal English emails
-- Trust boundary wrapping produces valid markers with correct HMAC
+- Trust boundary wrapping produces valid markers with correct format
 - Rule engine applies request rules (inject_param, block_tool, cap_param)
 - Rule engine applies response rules (wrap, scan, strip_html, redact_fields)
 - `auto` trust classification logic
@@ -448,7 +457,7 @@ This is one layer in the stack:
 ### 9.3 Adversarial Tests
 
 - Corpus of known prompt injection payloads (from injection attack databases) → scanner detection rate
-- Nested/escaped markers → HMAC prevents spoofing
+- Nested/escaped markers → server-side generation prevents spoofing
 - Large payload with 100+ patterns → capped at 50, summary count correct
 
 ---
