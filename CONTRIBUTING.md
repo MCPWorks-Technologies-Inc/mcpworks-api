@@ -91,17 +91,42 @@ Use the [Feature Request](https://github.com/MCPWorks-Technologies-Inc/mcpworks-
 - Your proposed solution
 - Alternatives you've considered
 
-### Submitting Code
+### Bug Fixes, Docs, and Refactors
+
+For small changes that don't add new features:
 
 1. **Fork** the repository
-2. **Create a branch** from `main`:
-   - `feature/description` for new features
-   - `fix/description` for bug fixes
-   - `refactor/description` for refactoring
-   - `docs/description` for documentation
-3. **Write tests** for your changes
-4. **Ensure all tests pass** and linting is clean
+2. **Create a branch** from `main`: `fix/description`, `docs/description`, or `refactor/description`
+3. **Make your changes**, write tests if applicable
+4. **Ensure CI passes** (`ruff check src/` and `pytest tests/ -v`)
 5. **Submit a pull request** against `main`
+
+### New Features (Spec-First Workflow)
+
+Features require a specification before code. This project uses the **speckit** methodology — specs define *what*, plans define *how*, tasks define *when*.
+
+1. **Fork** the repository
+2. **Create a branch** named `NNN-feature-name` (e.g., `008-webhook-retry`)
+3. **Write the spec** in `specs/NNN-feature-name/spec.md` — what the feature does, user scenarios, requirements, edge cases. Use `docs/implementation/specs/TEMPLATE.md` as a starting point.
+4. **Open a draft PR** with just the spec for early feedback
+5. **Create the plan** in `specs/NNN-feature-name/plan.md` — tech choices, data model, architecture
+6. **Break into tasks** in `specs/NNN-feature-name/tasks.md` — ordered, atomic, 2-8 hours each
+7. **Implement** following the task list
+8. **Mark the PR as ready** when implementation is complete
+
+If you use Claude Code or another AI assistant with speckit commands:
+```
+/speckit.specify    → Generate spec from a description
+/speckit.clarify    → Find and resolve ambiguities in the spec
+/speckit.plan       → Generate implementation plan + research
+/speckit.tasks      → Generate task breakdown
+/speckit.implement  → Execute the task list
+```
+
+The full artifact flow:
+```
+Constitution → Specification (WHAT) → Plan (HOW) → Tasks (WHO/WHEN) → Code
+```
 
 ### Commit Messages
 
@@ -120,9 +145,10 @@ Co-Authored-By: Your Name <your@email.com>
 ### Pull Request Process
 
 1. PRs require at least one review before merging
-2. All CI checks must pass (lint, test, security scan)
+2. All CI checks must pass (lint, test, build, security scan)
 3. Keep PRs focused — one logical change per PR
 4. Update documentation if your change affects public APIs
+5. **Feature PRs** must include spec artifacts in `specs/NNN-feature-name/`
 
 ## Architecture Notes
 
