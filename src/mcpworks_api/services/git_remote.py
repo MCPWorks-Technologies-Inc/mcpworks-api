@@ -119,7 +119,7 @@ def commit_and_push(
     _run_git(["add", "-A"], cwd=str(repo_dir))
 
     status = _run_git(["status", "--porcelain"], cwd=str(repo_dir))
-    files_changed = len([l for l in status.stdout.strip().split("\n") if l.strip()])
+    files_changed = len([line for line in status.stdout.strip().split("\n") if line.strip()])
     if files_changed == 0:
         logger.info("git_no_changes", message="Nothing to commit")
         head = _run_git(["rev-parse", "HEAD"], cwd=str(repo_dir))

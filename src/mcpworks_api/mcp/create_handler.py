@@ -14,6 +14,7 @@ Exposes 6 additional tools (agent-enabled tiers only):
 import contextlib
 import json
 import secrets
+from datetime import UTC
 from typing import Any
 
 import structlog
@@ -1806,9 +1807,10 @@ class CreateMCPHandler:
         if not ls_remote(git_url, git_token):
             raise ValueError("Could not connect to Git remote. Verify URL and token.")
 
+        from sqlalchemy import select
+
         from mcpworks_api.core.encryption import encrypt_value
         from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
-        from sqlalchemy import select
 
         stmt = select(NamespaceGitRemote).where(
             NamespaceGitRemote.namespace_id == namespace.id
@@ -1853,8 +1855,9 @@ class CreateMCPHandler:
     async def _remove_git_remote(self) -> MCPToolResult:
         namespace = await self._get_current_namespace()
 
-        from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
         from sqlalchemy import select
+
+        from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
 
         stmt = select(NamespaceGitRemote).where(
             NamespaceGitRemote.namespace_id == namespace.id
@@ -1875,13 +1878,14 @@ class CreateMCPHandler:
     async def _export_namespace(self, message: str | None = None) -> MCPToolResult:
         namespace = await self._get_current_namespace()
 
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
         from mcpworks_api.core.encryption import decrypt_value
         from mcpworks_api.models import Agent, Function, NamespaceService
         from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
         from mcpworks_api.services.git_export import serialize_namespace
         from mcpworks_api.services.git_remote import clone_or_init, commit_and_push, create_temp_dir
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
 
         stmt = select(NamespaceGitRemote).where(
             NamespaceGitRemote.namespace_id == namespace.id
@@ -1997,9 +2001,9 @@ class CreateMCPHandler:
                 branch=remote.git_branch,
             )
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        remote.last_export_at = datetime.now(timezone.utc)
+        remote.last_export_at = datetime.now(UTC)
         remote.last_export_sha = sha[:40] if sha else None
         await self.db.flush()
 
@@ -2027,13 +2031,14 @@ class CreateMCPHandler:
     ) -> MCPToolResult:
         namespace = await self._get_current_namespace()
 
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
         from mcpworks_api.core.encryption import decrypt_value
         from mcpworks_api.models import Function, NamespaceService
         from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
         from mcpworks_api.services.git_export import serialize_service
         from mcpworks_api.services.git_remote import clone_or_init, commit_and_push, create_temp_dir
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
 
         stmt = select(NamespaceGitRemote).where(
             NamespaceGitRemote.namespace_id == namespace.id
@@ -2152,18 +2157,15 @@ class CreateMCPHandler:
             ns_name = name or parsed["name"]
 
             existing_ns = None
-            try:
+            with contextlib.suppress(NotFoundError):
                 existing_ns = await self.namespace_service.get_by_name(
                     ns_name, self.account.id
                 )
-            except NotFoundError:
-                pass
 
-            if existing_ns is not None:
-                if conflict == "fail":
-                    raise ConflictError(
-                        f"Namespace '{ns_name}' already exists. Use conflict='replace' to overwrite."
-                    )
+            if existing_ns is not None and conflict == "fail":
+                raise ConflictError(
+                    f"Namespace '{ns_name}' already exists. Use conflict='replace' to overwrite."
+                )
 
             if existing_ns is None:
                 target_ns = await self.namespace_service.create(
@@ -2179,12 +2181,10 @@ class CreateMCPHandler:
 
             for svc_data in parsed.get("services", []):
                 existing_svc = None
-                try:
+                with contextlib.suppress(NotFoundError):
                     existing_svc = await self.service_service.get_by_name(
                         target_ns.id, svc_data["name"]
                     )
-                except NotFoundError:
-                    pass
 
                 if existing_svc is None:
                     db_svc = await self.service_service.create(
@@ -2262,12 +2262,10 @@ class CreateMCPHandler:
                 )
 
             existing_svc = None
-            try:
+            with contextlib.suppress(NotFoundError):
                 existing_svc = await self.service_service.get_by_name(
                     namespace.id, svc_data["name"]
                 )
-            except NotFoundError:
-                pass
 
             if existing_svc is not None and conflict == "fail":
                 raise ConflictError(

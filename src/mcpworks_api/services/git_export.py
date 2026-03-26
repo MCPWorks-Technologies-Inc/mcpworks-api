@@ -11,9 +11,8 @@ Produces the directory structure defined in spec REQ-EXP-001:
 
 from __future__ import annotations
 
-import os
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +49,7 @@ def serialize_namespace(
         "metadata": {
             "name": namespace_name,
             "description": namespace_description or "",
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "exported_from": getattr(settings, "base_domain", "localhost"),
             "mcpworks_version": "0.1.0",
         },
