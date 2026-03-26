@@ -29,22 +29,26 @@ Today, MCPWorks namespaces exist only as database records. If a user wants to ba
 ### 1.4 Scope
 
 **In Scope:**
-- Export namespace to directory structure (MCP tool + CLI)
-- Export individual service within a namespace
-- Import namespace from directory structure (MCP tool + CLI)
+- Configure a Git remote (URL + PAT) per namespace
+- Export namespace to Git remote (serialize + commit + push)
+- Export individual service to Git remote
+- Import namespace from any Git URL (clone + deserialize + create)
+- Import individual service from any Git URL
 - Portable YAML manifest format for metadata
 - Function code exported as standalone files (handler.py / handler.ts)
 - Agent definitions (config, schedules, webhooks — no state, no secrets)
 - Env var declarations (names only, never values)
+- Provider-agnostic: any Git host that supports HTTPS + PAT
 
 **Out of Scope:**
-- Git-first workflow (editing in repo, pushing to MCPWorks) — future spec
-- GitHub integration (auto-push, webhooks, PR creation) — future spec
+- Git-first workflow (editing in repo, auto-sync to MCPWorks) — future spec
+- Auto-export on change (every mutation becomes a commit) — future spec
 - Namespace marketplace / registry — future spec
 - Agent state export (encrypted, instance-specific)
 - Execution history export
 - Account/user export
-- Diff/merge of namespace changes
+- SSH key auth for Git remotes (HTTPS + PAT is universal and sufficient)
+- Git LFS (function code is text, no large binary support needed)
 
 ---
 
@@ -57,16 +61,17 @@ Today, MCPWorks namespaces exist only as database records. If a user wants to ba
 **Context:** Developer has a namespace `analytics` with 3 services and 12 functions
 
 **Workflow:**
-1. Developer asks: "Export my analytics namespace to Git format"
-2. AI calls `export_namespace` tool with name `analytics`
-3. MCPWorks serializes namespace → services → functions → agents into a tar.gz archive
-4. MCPWorks returns a time-limited download URL (`/v1/exports/{id}.tar.gz`, expires in 1 hour)
-5. AI downloads and extracts the archive to the local filesystem
-6. Developer commits the directory to their Git repo and pushes (using their own Git credentials — works with GitHub, GitLab, Gitea, Bitbucket, or any Git host)
-7. Future changes: developer re-exports, commits the diff
+1. Developer stores a Git remote URL + PAT: "Configure my analytics namespace to push to `https://github.com/user/analytics-functions.git` with this token"
+2. AI calls `configure_git_remote` tool with the URL and PAT (encrypted at rest)
+3. Developer asks: "Export my analytics namespace to Git"
+4. AI calls `export_namespace` tool with name `analytics`
+5. MCPWorks serializes namespace → services → functions → agents into the export directory structure
+6. MCPWorks commits and pushes to the configured remote (Git over HTTPS with PAT)
+7. Developer sees the commit on GitHub/GitLab/wherever
+8. Future changes: developer re-exports, MCPWorks commits the diff
 
-**Success:** Directory contains all function code, schemas, and metadata. `git diff` shows meaningful changes between exports.
-**Failure:** Export fails with clear error if namespace doesn't exist or user lacks access.
+**Success:** Remote repo contains all function code, schemas, and metadata. `git log` shows the export commit. `git diff` between exports shows meaningful changes.
+**Failure:** Export fails with clear error if namespace doesn't exist, user lacks access, or Git push fails (bad PAT, repo not found).
 
 ### 2.2 Secondary Scenario: Move to a Self-Hosted Instance
 
@@ -75,13 +80,12 @@ Today, MCPWorks namespaces exist only as database records. If a user wants to ba
 **Context:** Developer exported their namespace from Cloud, now importing to self-hosted
 
 **Workflow:**
-1. Developer has `analytics/` directory from a previous export
-2. Developer connects AI to self-hosted instance's create endpoint
-3. Developer asks: "Import the analytics namespace from ./analytics"
-4. AI calls `import_namespace` tool with path `./analytics`
-5. MCPWorks reads the directory, creates namespace, services, functions
-6. MCPWorks reports: "Created namespace 'analytics' with 3 services, 12 functions, 2 agents"
-7. Developer sets environment variable values (prompted for any declared `required_env`)
+1. Developer connects AI to self-hosted instance's create endpoint
+2. Developer asks: "Import the analytics namespace from `https://github.com/user/analytics-functions.git`"
+3. AI calls `import_namespace` tool with the Git URL (and optional PAT for private repos)
+4. MCPWorks clones the repo, reads the directory structure, creates namespace, services, functions, agents
+5. MCPWorks reports: "Created namespace 'analytics' with 3 services, 12 functions, 2 agents"
+6. Developer sets environment variable values and agent secrets (prompted for any declared `required_env`)
 
 **Success:** All functions execute correctly on the new instance.
 **Failure:** Import fails gracefully if namespace already exists (conflict), with option to merge or overwrite.
@@ -93,12 +97,12 @@ Today, MCPWorks namespaces exist only as database records. If a user wants to ba
 **Context:** Developer has a `utils` service with helper functions they want to share
 
 **Workflow:**
-1. Developer asks: "Export the utils service from my analytics namespace"
+1. Developer asks: "Export the utils service from my analytics namespace to Git"
 2. AI calls `export_service` tool with namespace `analytics`, service `utils`
-3. MCPWorks writes only that service's functions and metadata
-4. Developer shares the directory (GitHub, zip, etc.)
+3. MCPWorks commits only that service's functions and metadata to the configured remote
+4. Developer shares the repo link
 
-**Success:** Exported service can be imported into any namespace on any instance.
+**Success:** Exported service can be imported into any namespace on any instance via its Git URL.
 
 ---
 
@@ -230,40 +234,50 @@ spec:
       # on import, user must re-configure channel credentials
 ```
 
-### 3.2 Export Operations
+### 3.2 Git Remote Configuration
+
+**REQ-GIT-001: Configure Git Remote**
+- **Description:** MCP tool `configure_git_remote` stores a Git remote URL and credentials for a namespace
+- **Priority:** Must Have
+- **Parameters:** `namespace`, `git_url` (HTTPS URL), `git_token` (personal access token), `git_branch` (default: `main`)
+- **Storage:** URL stored in plaintext, token encrypted with envelope encryption (KEK/DEK) same as other secrets
+- **Acceptance:** Remote configuration persisted. Token verified by a test `git ls-remote` before saving.
+- **Rationale:** Git HTTPS + PAT works with every major host (GitHub, GitLab, Gitea, Bitbucket, self-hosted). No provider-specific OAuth.
+
+**REQ-GIT-002: Remove Git Remote**
+- **Description:** MCP tool `remove_git_remote` deletes the stored Git remote configuration
+- **Priority:** Must Have
+- **Parameters:** `namespace`
+
+### 3.3 Export Operations
 
 **REQ-EXP-010: Export Namespace**
-- **Description:** MCP tool `export_namespace` exports an entire namespace as a downloadable archive
+- **Description:** MCP tool `export_namespace` serializes a namespace and pushes to its configured Git remote
 - **Priority:** Must Have
-- **Parameters:** `namespace` (name)
-- **Returns:** Time-limited download URL for a `.tar.gz` archive containing the export directory
-- **Acceptance:** All services, functions (active version), and agents exported. No secrets in output. Archive URL expires after 1 hour. Archive is cleaned up after download or expiry.
+- **Parameters:** `namespace`, `message` (optional commit message)
+- **Behavior:** Serializes namespace to the export directory format, commits, and pushes to the configured remote. If the remote repo is empty, creates initial commit. If it has prior exports, commits the diff.
+- **Returns:** Commit SHA, files changed count, remote URL
+- **Acceptance:** All services, functions (active version), and agents exported and pushed. No secrets in output.
 
 **REQ-EXP-011: Export Service**
-- **Description:** MCP tool `export_service` exports a single service as a downloadable archive
+- **Description:** MCP tool `export_service` serializes a single service and pushes to a Git remote
 - **Priority:** Should Have
-- **Parameters:** `namespace`, `service`
-- **Returns:** Time-limited download URL for a `.tar.gz` archive
-- **Acceptance:** Only the specified service's functions are exported. Output structure is a valid service directory that can be imported into any namespace.
+- **Parameters:** `namespace`, `service`, `git_url` (optional, falls back to namespace remote), `message`
+- **Acceptance:** Only the specified service's functions are exported and pushed.
 
-**REQ-EXP-012: Export Delivery**
-- **Description:** Exports are delivered as downloadable archives, not written to the user's filesystem
-- **Priority:** Must Have
-- **Rationale:** MCP tools run on the MCPWorks server, not the user's machine. The archive URL lets the AI assistant (or user) download the export to their local environment where they have Git credentials and filesystem access. This is Git-host-agnostic — the user pushes to whatever remote they choose.
-- **Endpoint:** `GET /v1/exports/{export_id}.tar.gz` (authenticated, one-time download)
-
-### 3.3 Import Operations
+### 3.4 Import Operations
 
 **REQ-IMP-001: Import Namespace**
-- **Description:** MCP tool `import_namespace` creates a namespace from an exported directory
+- **Description:** MCP tool `import_namespace` clones a Git repo and creates a namespace from the export directory
 - **Priority:** Must Have
-- **Parameters:** `path` (directory), `name` (optional override), `conflict` (`fail` | `skip` | `overwrite`, default `fail`)
+- **Parameters:** `git_url` (HTTPS URL), `git_token` (optional, for private repos), `git_branch` (default: `main`), `name` (optional override), `conflict` (`fail` | `skip` | `overwrite`, default `fail`)
+- **Behavior:** Clones the repo to a temp directory, reads the export structure, creates all entities in a single DB transaction, cleans up the temp directory.
 - **Acceptance:** Namespace, services, functions, and agents created. Missing env var values reported. Agent secrets (API keys, channel configs) reported as needing configuration.
 
 **REQ-IMP-002: Import Service**
-- **Description:** MCP tool `import_service` imports a service directory into an existing namespace
+- **Description:** MCP tool `import_service` clones a Git repo and imports a service into an existing namespace
 - **Priority:** Should Have
-- **Parameters:** `path`, `namespace`, `conflict` (`fail` | `skip` | `overwrite`)
+- **Parameters:** `git_url`, `git_token` (optional), `service` (name within the repo), `namespace` (target), `conflict` (`fail` | `skip` | `overwrite`)
 - **Acceptance:** Functions created under the target namespace's service.
 
 **REQ-IMP-003: Conflict Resolution**
@@ -334,9 +348,11 @@ spec:
 
 ### 5.1 Technical Constraints
 
-- Export writes to the local filesystem (sandbox execution context or API server filesystem)
-- Import reads from the local filesystem
+- Git operations (clone, commit, push) run on the API server in a temp directory, cleaned up after each operation
+- Requires `git` binary available in the API container (add to Dockerfile if not present)
+- Git HTTPS + PAT auth only — no SSH key support (keeps implementation simple, PATs are universal)
 - Code sandbox functions have their code in the DB; non-code-sandbox backends (activepieces, github_repo) may not have exportable code — export their config only
+- PAT stored with envelope encryption (same KEK/DEK pattern as all other secrets)
 
 ### 5.2 Assumptions
 
@@ -356,7 +372,19 @@ spec:
 **Expected Behavior:** Return error with message "Namespace 'xyz' not found"
 **Recovery:** User corrects the namespace name
 
-### 6.2 Error: Import Conflict
+### 6.2 Error: Git Push Failure
+
+**Trigger:** Export serializes successfully but push fails (expired PAT, repo deleted, network error)
+**Expected Behavior:** Return error with Git stderr message. Serialized data is discarded (temp directory cleaned up). No partial commits on the remote.
+**Recovery:** User fixes credentials (`configure_git_remote`) or resolves the remote issue, then re-exports.
+
+### 6.3 Error: Git Clone Failure
+
+**Trigger:** Import cannot clone the source repo (bad URL, expired token, private repo without token)
+**Expected Behavior:** Return error with Git stderr message. No entities created.
+**Recovery:** User provides correct URL/token.
+
+### 6.4 Error: Import Conflict
 
 **Trigger:** Import finds existing namespace/service/function with same name
 **Expected Behavior:** Behavior depends on `conflict` parameter (fail/skip/overwrite)
@@ -393,15 +421,17 @@ spec:
 ### 7.1 Tool Definitions
 
 **Estimated tokens for tool schemas:**
-- `export_namespace`: ~150 tokens (3 params)
-- `export_service`: ~180 tokens (4 params)
-- `import_namespace`: ~200 tokens (4 params)
-- `import_service`: ~200 tokens (4 params)
-- Total: ~730 tokens for all 4 tools
+- `configure_git_remote`: ~200 tokens (4 params)
+- `remove_git_remote`: ~80 tokens (1 param)
+- `export_namespace`: ~150 tokens (2 params)
+- `export_service`: ~180 tokens (3 params)
+- `import_namespace`: ~250 tokens (5 params)
+- `import_service`: ~250 tokens (5 params)
+- Total: ~1110 tokens for all 6 tools
 
 ### 7.2 Typical Responses
 
-**Export response:** ~100 tokens (path + summary counts)
+**Export response:** ~120 tokens (commit SHA, files changed, remote URL)
 **Import response:** ~150 tokens (summary counts + warnings list)
 
 Both well under the 500 token target.
@@ -453,25 +483,25 @@ Both well under the 500 token target.
 
 ## 10. Future Considerations
 
-### 10.1 Phase 2: Direct Git Push
-
-- `export_to_git` tool: export + push to any Git remote in one step
-- User stores a Git remote URL + personal access token (PAT) as an encrypted secret in MCPWorks
-- Uses Git over HTTPS with PAT auth — works with any host (GitHub, GitLab, Gitea, Bitbucket, self-hosted)
-- URL format: `https://{token}@{host}/{owner}/{repo}.git`
-- No provider-specific OAuth flows — PATs are universal
-
-### 10.2 Phase 2: Git-First Workflow
+### 10.1 Phase 2: Git-First Workflow
 
 - Watch a Git repo, auto-import on push (webhook-triggered)
 - `mcpworks.yaml` at repo root defines which namespace to sync
-- Bi-directional sync: MCP tool edits commit back to repo
+- Bi-directional sync: MCP tool edits auto-commit back to repo
+- "GitOps for functions" — edit handler.py in your IDE, push, namespace updates
+
+### 10.2 Phase 2: Auto-Export on Change
+
+- Option to auto-push to Git remote on every function create/update/delete
+- Namespace acts as a live mirror to the Git repo
+- Every MCP tool mutation becomes a Git commit
 
 ### 10.3 Phase 3: Namespace Registry
 
 - Publish namespaces to a public registry
 - `mcpworks install analytics/csv-tools` — like npm packages
 - Versioned namespace releases
+- Import from registry URL without needing a PAT
 
 ### 10.4 Known Limitations
 
