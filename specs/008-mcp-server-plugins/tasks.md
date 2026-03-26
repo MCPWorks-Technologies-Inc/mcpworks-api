@@ -23,10 +23,10 @@
 
 **Purpose**: Database schema, new model, dependencies
 
-- [ ] T001 Create NamespaceMcpServer model in src/mcpworks_api/models/namespace_mcp_server.py per data-model.md (id, namespace_id, name, transport, url, command, command_args, headers_encrypted, headers_dek_encrypted, settings JSONB, env_vars JSONB, tool_schemas JSONB, tool_count, enabled, last_connected_at, timestamps)
-- [ ] T002 Add `mcp_servers` relationship on Namespace model in src/mcpworks_api/models/namespace.py (one-to-many, cascade delete)
-- [ ] T003 Register NamespaceMcpServer in src/mcpworks_api/models/__init__.py
-- [ ] T004 Create Alembic migration in alembic/versions/ — create namespace_mcp_servers table + add mcp_server_names ARRAY column to agents table
+- [x] T001 Create NamespaceMcpServer model in src/mcpworks_api/models/namespace_mcp_server.py
+- [x] T002 Add `mcp_servers` relationship on Namespace model in src/mcpworks_api/models/namespace.py
+- [x] T003 Register NamespaceMcpServer in src/mcpworks_api/models/__init__.py
+- [x] T004 Create Alembic migration + add mcp_server_names ARRAY column to agents
 
 ---
 

@@ -18,6 +18,7 @@ from mcpworks_api.models.function import Function
 from mcpworks_api.models.function_version import ALLOWED_BACKENDS, FunctionVersion
 from mcpworks_api.models.namespace import Namespace
 from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
+from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
 from mcpworks_api.models.namespace_service import NamespaceService
 from mcpworks_api.models.namespace_share import NamespaceShare, ShareStatus
 from mcpworks_api.models.oauth_account import OAuthAccount
@@ -57,6 +58,8 @@ __all__ = [
     "Namespace",
     # NamespaceGitRemote
     "NamespaceGitRemote",
+    # NamespaceMcpServer
+    "NamespaceMcpServer",
     # NamespaceService (A0)
     "NamespaceService",
     # NamespaceShare

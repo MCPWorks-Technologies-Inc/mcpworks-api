@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
     from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
+    from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
     from mcpworks_api.models.namespace_service import NamespaceService
     from mcpworks_api.models.namespace_share import NamespaceShare
 
@@ -122,6 +123,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         back_populates="namespace",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+
+    mcp_servers: Mapped[list["NamespaceMcpServer"]] = relationship(
+        "NamespaceMcpServer",
+        back_populates="namespace",
+        cascade="all, delete-orphan",
+        order_by="NamespaceMcpServer.name",
     )
 
     __table_args__ = (
