@@ -34,11 +34,11 @@
 
 **Purpose**: Core services and infrastructure that all user stories depend on
 
-- [ ] T005 [P] Create Pydantic schemas in src/mcpworks_api/schemas/mcp_server.py (AddServerResponse, ListServersResponse, DescribeServerResponse, RefreshResponse, SettingsResponse, EnvVarsResponse, ConfigureAgentMcpResponse, ProxyRequest, ProxyResponse)
-- [ ] T006 [P] Create McpServerService in src/mcpworks_api/services/mcp_server.py — CRUD operations: add_server (connect + discover + encrypt + store), remove_server, list_servers, describe_server, refresh_server (reconnect + update cached schemas), update_server (rotate credentials), set_setting, get_settings, set_env, remove_env, get_env
-- [ ] T007 Create execution token registry in src/mcpworks_api/core/exec_token_registry.py — in-memory dict mapping exec_token → ExecutionContext(execution_id, namespace_id, namespace_name, created_at). Functions: register_execution(token, namespace_id, namespace_name, execution_id), resolve_execution(token) → ExecutionContext | None, unregister_execution(token)
-- [ ] T008 Create MCP proxy core logic in src/mcpworks_api/core/mcp_proxy.py — proxy_mcp_call(namespace_id, server_name, tool_name, arguments, settings) → ProxyResult. Handles: get/create pooled connection, decrypt credentials, call tool, enforce response_limit_bytes, enforce timeout_seconds, handle retries, truncation flag
-- [ ] T009 Create connection pool manager in src/mcpworks_api/core/mcp_pool.py — NamespaceMcpPool class with get_or_connect(namespace_id, server_name, config) → ClientSession, evict(namespace_id, server_name), evict_stale(ttl_seconds=300), close_all(). Keyed by (namespace_id, server_name). Lazy eviction on access.
+- [x] T005 [P] Create Pydantic schemas in src/mcpworks_api/schemas/mcp_server.py
+- [x] T006 [P] Create McpServerService in src/mcpworks_api/services/mcp_server.py
+- [x] T007 Create execution token registry in src/mcpworks_api/core/exec_token_registry.py
+- [x] T008 Create MCP proxy core logic in src/mcpworks_api/core/mcp_proxy.py
+- [x] T009 Create connection pool manager in src/mcpworks_api/core/mcp_pool.py
 
 **Checkpoint**: Foundation ready — all user stories can begin
 
