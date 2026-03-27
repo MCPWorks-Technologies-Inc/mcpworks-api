@@ -2,7 +2,7 @@
 
 MCPWorks is a code execution platform for AI assistants. You create Python functions through the MCP protocol, and AI agents (Claude Code, Codex, GitHub Copilot) can discover and execute them in secure sandboxes.
 
-No servers to manage. No containers to configure. Write a function, and it runs.
+Deploy it on your own infrastructure, write a function, and it runs.
 
 ---
 
@@ -36,8 +36,8 @@ No servers to manage. No containers to configure. Write a function, and it runs.
 
 A namespace is your top-level organizational unit. It maps to a subdomain pair:
 
-- `myns.create.mcpworks.io` — management
-- `myns.run.mcpworks.io` — execution
+- `{ns}.create.{BASE_DOMAIN}` — management
+- `{ns}.run.{BASE_DOMAIN}` — execution
 
 Namespace names must be DNS-compliant: lowercase alphanumeric with hyphens, 1–63 characters, must start and end with an alphanumeric character.
 
@@ -68,46 +68,7 @@ Currently supported: `code_sandbox` (secure Python execution via nsjail). Future
 
 ## Getting Started
 
-### 1. Create Your Account
-
-Register at `https://api.mcpworks.io/register` with your email. You get 1,000 free function executions per month.
-
-### 2. Get Your API Key
-
-After registration, log in at `https://api.mcpworks.io/login`. From the dashboard, create an API key. The raw key is shown only once — save it.
-
-### 3. Connect Your AI Assistant
-
-Add this to your project's `.mcp.json` (or `~/.claude/settings.json` for global access):
-
-```json
-{
-  "mcpServers": {
-    "myns-create": {
-      "type": "http",
-      "url": "https://myns.create.mcpworks.io/mcp",
-      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
-    },
-    "myns-run": {
-      "type": "http",
-      "url": "https://myns.run.mcpworks.io/mcp",
-      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
-    }
-  }
-}
-```
-
-Replace `myns` with your namespace name and `YOUR_API_KEY` with your actual key.
-
-### 4. Create a Service and Function
-
-Ask your AI assistant:
-
-> "Create a service called 'utils' in my MCPWorks namespace, then create a hello-world function using the hello-world template."
-
-### 5. Execute It
-
-> "Run hello-world with name 'MCPWorks'"
+See [GETTING-STARTED.md](GETTING-STARTED.md) for the full setup walkthrough — from deployment to running your first function.
 
 ---
 
@@ -115,7 +76,7 @@ Ask your AI assistant:
 
 Every namespace gets two MCP endpoints, each serving a different purpose:
 
-### Create Endpoint — `{namespace}.create.mcpworks.io/mcp`
+### Create Endpoint — `{namespace}.create.{BASE_DOMAIN}/mcp`
 
 Management operations. Use this to:
 
@@ -125,7 +86,7 @@ Management operations. Use this to:
 
 **Not metered.** Management calls don't count against your execution quota.
 
-### Run Endpoint — `{namespace}.run.mcpworks.io/mcp`
+### Run Endpoint — `{namespace}.run.{BASE_DOMAIN}/mcp`
 
 Function execution. Operates in two modes:
 
@@ -586,9 +547,9 @@ Base64-encode a JSON object of key-value pairs and add the `X-MCPWorks-Env` head
 ```json
 {
   "mcpServers": {
-    "myns-run": {
+    "example-run": {
       "type": "http",
-      "url": "https://myns.run.mcpworks.io/mcp",
+      "url": "https://example.run.example.com/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY",
         "X-MCPWorks-Env": "base64:eyJPUEVOQUlfQVBJX0tFWSI6InNrLXh4eCJ9"
@@ -634,14 +595,14 @@ When an agent is created, its namespace gains a third MCP endpoint:
 
 | Interface | Pattern | Purpose |
 |-----------|---------|---------|
-| Create | `{ns}.create.mcpworks.io/mcp` | Manage functions (same as before) |
-| Run | `{ns}.run.mcpworks.io/mcp` | Execute functions (same as before) |
-| Agent | `{ns}.agent.mcpworks.io/mcp` | Webhook delivery and agent communication |
+| Create | `{ns}.create.{BASE_DOMAIN}/mcp` | Manage functions (same as before) |
+| Run | `{ns}.run.{BASE_DOMAIN}/mcp` | Execute functions (same as before) |
+| Agent | `{ns}.agent.{BASE_DOMAIN}/mcp` | Webhook delivery and agent communication |
 
 ### What Agents Can Do
 
 - **Run on a schedule** — cron expressions with tier-based minimum intervals (e.g., every 5 minutes on Builder Agent, every 15 seconds on Enterprise Agent)
-- **Receive webhooks** — external services POST to `{agent-name}.agent.mcpworks.io` and the agent processes events
+- **Receive webhooks** — external services POST to `{agent-name}.agent.{BASE_DOMAIN}` and the agent processes events
 - **Persist state** — encrypted key-value store for maintaining context across executions
 - **Use AI engines** — BYOAI: configure any supported LLM provider (Anthropic, OpenAI, Google, Grok, DeepSeek, Kimi, OpenRouter, or self-hosted Ollama)
 - **Communicate** — send and receive messages via Discord, Slack, WhatsApp, or email channels

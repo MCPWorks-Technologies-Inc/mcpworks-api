@@ -19,12 +19,12 @@ All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
   "mcpServers": {
     "{ns}-create": {
       "type": "http",
-      "url": "https://{ns}.create.mcpworks.io/mcp",
+      "url": "https://{ns}.create.{BASE_DOMAIN}/mcp",
       "headers": { "Authorization": "Bearer {API_KEY}" }
     },
     "{ns}-run": {
       "type": "http",
-      "url": "https://{ns}.run.mcpworks.io/mcp",
+      "url": "https://{ns}.run.{BASE_DOMAIN}/mcp",
       "headers": {
         "Authorization": "Bearer {API_KEY}",
         "X-MCPWorks-Env": "base64:{base64-encoded JSON of env vars}"
@@ -32,7 +32,7 @@ All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
     },
     "{ns}-agent": {
       "type": "http",
-      "url": "https://{ns}.agent.mcpworks.io/mcp",
+      "url": "https://{ns}.agent.{BASE_DOMAIN}/mcp",
       "headers": { "Authorization": "Bearer {API_KEY}" }
     }
   }
@@ -47,10 +47,10 @@ The `{ns}-agent` entry is only needed for namespaces with a running agent.
 
 | Endpoint | Pattern | Purpose | Metered |
 |----------|---------|---------|---------|
-| Create | `{ns}.create.mcpworks.io/mcp` | Namespace/service/function CRUD | No |
-| Run (code mode) | `{ns}.run.mcpworks.io/mcp` | Single `execute` tool, write Python | Yes |
-| Run (tool mode) | `{ns}.run.mcpworks.io/mcp?mode=tools` | One tool per function | Yes |
-| Agent | `{ns}.agent.mcpworks.io/mcp` | Webhook delivery to agent containers | No |
+| Create | `{ns}.create.{BASE_DOMAIN}/mcp` | Namespace/service/function CRUD | No |
+| Run (code mode) | `{ns}.run.{BASE_DOMAIN}/mcp` | Single `execute` tool, write Python | Yes |
+| Run (tool mode) | `{ns}.run.{BASE_DOMAIN}/mcp?mode=tools` | One tool per function | Yes |
+| Agent | `{ns}.agent.{BASE_DOMAIN}/mcp` | Webhook delivery to agent containers | No |
 
 Default run mode is **code** (no query param needed). Agent endpoint is only active for namespaces with a running agent.
 
@@ -399,7 +399,7 @@ make_function(
 | `No code provided` | Empty code in execute/make_function | Provide code or use a template |
 | `Invalid tool name format` | Tool mode name missing `.` | Use `service.function` format |
 | `Authentication failed` | Bad or missing API key | Check Authorization header |
-| `INVALID_HOST` | Wrong subdomain format | Use `{ns}.{create|run}.mcpworks.io` |
+| `INVALID_HOST` | Wrong subdomain format | Use `{ns}.{create|run}.{BASE_DOMAIN}` |
 
 ---
 

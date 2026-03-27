@@ -33,7 +33,7 @@ The AI writes code that calls your functions inside a secure sandbox. Data stays
 - **Namespace-based Function Hosting** — Organize functions into services within namespaces, each with its own MCP endpoint
 - **Autonomous Agent Runtime** — Agents with scheduling, persistent state, webhooks, Discord integration, and AI orchestration
 - **BYOAI (Bring Your Own AI)** — No vendor lock-in. Use Claude, GPT, Gemini, or any OpenAI-compatible provider
-- **MCP Protocol Native** — Full Model Context Protocol support with `{ns}.create.mcpworks.io` and `{ns}.run.mcpworks.io` endpoints
+- **MCP Protocol Native** — Full Model Context Protocol support with `{ns}.create.{domain}` and `{ns}.run.{domain}` endpoints
 - **Architectural Compliance** — GDPR/SOX compliance by design, not bolt-on
 
 ## Architecture
@@ -42,9 +42,9 @@ The AI writes code that calls your functions inside a secure sandbox. Data stays
 Client (Claude, GPT, etc.)
     |
     v
-*.create.mcpworks.io  ──>  Create Handler  ──>  Manage functions, agents, state
-*.run.mcpworks.io     ──>  Run Handler     ──>  Execute functions in sandbox
-api.mcpworks.io       ──>  REST API        ──>  Auth, accounts, usage, admin
+*.create.{domain}  ──>  Create Handler  ──>  Manage functions, agents, state
+*.run.{domain}     ──>  Run Handler     ──>  Execute functions in sandbox
+api.{domain}       ──>  REST API        ──>  Auth, accounts, usage, admin
 ```
 
 **Stack:** Python 3.11+ / FastAPI / SQLAlchemy (async) / PostgreSQL / Redis / nsjail
@@ -75,11 +75,7 @@ docker compose -f docker-compose.self-hosted.yml exec api alembic upgrade head
 
 The API is now available at `https://api.yourdomain.com/v1/health` (Caddy handles TLS automatically).
 
-See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for detailed deployment instructions, then [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) to create your first function.
-
-### MCPWorks Cloud
-
-Use the managed service at [mcpworks.io](https://mcpworks.io) — no infrastructure to manage. See [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) to get started.
+See [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) for the full walkthrough — from deployment to running your first function.
 
 ## Development
 
@@ -113,7 +109,7 @@ ruff check src/
 - **Companies with compliance requirements** (GDPR, SOX) who need architectural guarantees
 - **Anyone self-hosting AI infrastructure** who wants an open-source foundation
 
-Self-hosted community edition is free with no limits. [MCPWorks Cloud](https://mcpworks.io) offers a managed service.
+The self-hosted community edition is free with no limits.
 
 ## Project Structure
 
