@@ -278,6 +278,17 @@ Common causes:
 - Host kernel must support namespaces and cgroups v2
 - Check: `docker exec mcpworks-api nsjail --help`
 
+### Admin access denied
+
+If you get 403 on `/admin`, your email isn't in `ADMIN_EMAILS`:
+- Check: the email you log in with must be in the `ADMIN_EMAILS` list in `.env`
+- Default is `["admin@mcpworks.io"]` — change it to your email
+- After changing `.env`, use `docker compose up -d api` (not `restart`) to pick up env changes
+
+### Environment changes not taking effect
+
+`docker compose restart` does not re-read `.env` — it restarts the same container with the old environment. Use `docker compose up -d api` to recreate the container with updated env vars.
+
 ### Registration disabled
 
 Self-hosted instances default to closed registration. To enable:
