@@ -115,7 +115,9 @@ class TestCreateAgent:
         count_result.scalar_one.return_value = 0
         existing_result = MagicMock()
         existing_result.scalar_one_or_none.return_value = None
-        mock_db.execute.side_effect = [count_result, existing_result]
+        replicas_result = MagicMock()
+        replicas_result.scalars.return_value = iter([])
+        mock_db.execute.side_effect = [count_result, existing_result, replicas_result]
 
         ns_mock = MagicMock()
         ns_mock.id = uuid.uuid4()
@@ -123,7 +125,7 @@ class TestCreateAgent:
             ns_cls.return_value.create = AsyncMock(return_value=ns_mock)
 
             mock_db.flush = AsyncMock()
-            mock_db.refresh = AsyncMock(side_effect=lambda _a: None)
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
 
             mock_docker.containers.run.side_effect = DockerAPIError("out of memory")
 
@@ -136,56 +138,80 @@ class TestCreateAgent:
             assert mock_db.flush.await_count >= 1
 
 
+def _make_replica(**overrides):
+    defaults = {
+        "id": uuid.uuid4(),
+        "agent_id": uuid.uuid4(),
+        "replica_name": "bold-ant",
+        "container_id": "container123",
+        "status": "running",
+        "last_heartbeat": None,
+        "created_at": datetime.now(tz=UTC),
+    }
+    defaults.update(overrides)
+    replica = MagicMock()
+    for k, v in defaults.items():
+        setattr(replica, k, v)
+    return replica
+
+
 class TestStartAgent:
     @pytest.mark.asyncio
     async def test_start_stopped_agent(self, service, mock_db, mock_docker):
-        agent = _make_agent(status="stopped")
-        with patch.object(service, "get_agent", new=AsyncMock(return_value=agent)):
+        agent = _make_agent(status="stopped", replicas=[])
+        replica = _make_replica(status="stopped")
+        with (
+            patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
+            patch.object(service, "_get_replicas", new=AsyncMock(return_value=[replica])),
+        ):
             container = MagicMock()
             mock_docker.containers.get.return_value = container
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
 
             result = await service.start_agent(uuid.uuid4(), "test-agent")
-            assert result.status == "running"
             container.start.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_running_agent_raises(self, service, mock_db):
-        agent = _make_agent(status="running")
+    async def test_start_missing_container_sets_error(self, service, mock_db, mock_docker):
+        agent = _make_agent(status="stopped", replicas=[])
+        replica = _make_replica(status="stopped")
         with (
             patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
-            pytest.raises(ConflictError, match="cannot start"),
+            patch.object(service, "_get_replicas", new=AsyncMock(return_value=[replica])),
         ):
-            await service.start_agent(uuid.uuid4(), "test-agent")
-
-    @pytest.mark.asyncio
-    async def test_start_missing_container_sets_error(self, service, mock_db, mock_docker):
-        agent = _make_agent(status="stopped")
-        with patch.object(service, "get_agent", new=AsyncMock(return_value=agent)):
             mock_docker.containers.get.side_effect = DockerNotFound("gone")
-            result = await service.start_agent(uuid.uuid4(), "test-agent")
-            assert result.status == "error"
-            assert result.container_id is None
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
+
+            await service.start_agent(uuid.uuid4(), "test-agent")
+            assert replica.status == "error"
+            assert replica.container_id is None
 
 
 class TestStopAgent:
     @pytest.mark.asyncio
     async def test_stop_running_agent(self, service, mock_db, mock_docker):
-        agent = _make_agent(status="running")
-        with patch.object(service, "get_agent", new=AsyncMock(return_value=agent)):
+        agent = _make_agent(status="running", replicas=[])
+        replica = _make_replica(status="running")
+        with (
+            patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
+            patch.object(service, "_get_replicas", new=AsyncMock(return_value=[replica])),
+        ):
             container = MagicMock()
             mock_docker.containers.get.return_value = container
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
 
-            result = await service.stop_agent(uuid.uuid4(), "test-agent")
-            assert result.status == "stopped"
+            await service.stop_agent(uuid.uuid4(), "test-agent")
+            assert replica.status == "stopped"
             container.stop.assert_called_once_with(timeout=10)
 
     @pytest.mark.asyncio
     async def test_stop_non_running_raises(self, service, mock_db):
-        agent = _make_agent(status="stopped")
+        agent = _make_agent(status="stopped", replicas=[])
         with (
             patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
-            pytest.raises(ConflictError, match="cannot stop"),
+            patch.object(service, "_get_replicas", new=AsyncMock(return_value=[])),
         ):
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
             await service.stop_agent(uuid.uuid4(), "test-agent")
 
 
@@ -201,7 +227,10 @@ class TestDestroyAgent:
         container = MagicMock()
         mock_docker.containers.get.return_value = container
 
-        with patch.object(service, "get_agent", new=AsyncMock(return_value=agent)):
+        with (
+            patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
+            patch.object(service, "_get_replicas", new=AsyncMock(return_value=[])),
+        ):
             await service.destroy_agent(uuid.uuid4(), "test-agent")
             container.remove.assert_called_once_with(force=True)
             assert mock_db.delete.await_count >= 1

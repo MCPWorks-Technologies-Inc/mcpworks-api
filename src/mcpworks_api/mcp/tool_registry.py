@@ -483,8 +483,8 @@ AGENT_TOOLS: dict[str, ToolDef] = {
     ),
     "describe_agent": ToolDef(
         name="describe_agent",
-        brief="Get full details for an agent including status, AI config, and resource limits.",
-        description="Get full details for an agent including status, AI engine config, resource limits, and creation date.",
+        brief="Get full details for an agent including status, AI config, replicas, and resource limits.",
+        description="Get full details for an agent including status, AI engine config, resource limits, replica list with names/status/heartbeat, and creation date.",
         input_schema={
             "type": "object",
             "properties": {
@@ -496,10 +496,35 @@ AGENT_TOOLS: dict[str, ToolDef] = {
             "required": ["name"],
         },
     ),
+    "scale_agent": ToolDef(
+        name="scale_agent",
+        brief="Scale an agent to a target number of replicas.",
+        description=(
+            "Scale an agent to a target number of replicas. Each replica runs the same configuration "
+            "(functions, AI engine, schedules, webhooks). Each replica counts as one agent slot toward "
+            "your tier limit. Replicas get auto-generated verb-animal names (e.g., daring-duck). "
+            "Set replicas=0 to stop all replicas without destroying the agent."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Agent name",
+                },
+                "replicas": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Target replica count",
+                },
+            },
+            "required": ["name", "replicas"],
+        },
+    ),
     "start_agent": ToolDef(
         name="start_agent",
-        brief="Start a stopped agent.",
-        description="Start a stopped agent. The agent must exist and be in 'stopped' status.",
+        brief="Start a stopped agent or specific replica.",
+        description="Start a stopped agent. Starts all replicas, or a specific one if replica is specified.",
         input_schema={
             "type": "object",
             "properties": {
@@ -507,20 +532,28 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                     "type": "string",
                     "description": "Agent name to start",
                 },
+                "replica": {
+                    "type": "string",
+                    "description": "Target a specific replica by verb-animal name. Omit to start all stopped replicas.",
+                },
             },
             "required": ["name"],
         },
     ),
     "stop_agent": ToolDef(
         name="stop_agent",
-        brief="Stop a running agent, pausing schedules and webhook processing.",
-        description="Stop a running agent. Pauses scheduled tasks and webhook processing. The agent can be restarted with start_agent.",
+        brief="Stop a running agent or specific replica.",
+        description="Stop a running agent. Pauses scheduled tasks and webhook processing. Stops all replicas, or a specific one if replica is specified. The agent can be restarted with start_agent.",
         input_schema={
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
                     "description": "Agent name to stop",
+                },
+                "replica": {
+                    "type": "string",
+                    "description": "Target a specific replica by verb-animal name. Omit to stop all running replicas.",
                 },
             },
             "required": ["name"],
@@ -608,6 +641,16 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                         },
                     },
                     "required": ["strategy"],
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["single", "cluster"],
+                    "description": (
+                        "Execution mode for clustered agents. "
+                        "'single' (default): exactly one replica executes the schedule. "
+                        "'cluster': all replicas execute the schedule independently."
+                    ),
+                    "default": "single",
                 },
                 "orchestration_mode": {
                     "type": "string",
@@ -1033,7 +1076,8 @@ AGENT_TOOLS: dict[str, ToolDef] = {
             "Send a message to an agent's AI engine and get its response. "
             "The agent can call namespace functions, platform tools (get_state, set_state, send_to_channel), and MCP tools during the conversation. "
             "The agent must have an AI engine configured (use configure_agent_ai first). "
-            "Use this to talk to the agent, test its orchestration behavior, or ask it to run its pipeline."
+            "For clustered agents, specify a replica name for session continuity. "
+            "If omitted, the message is routed to any available replica and the response includes which replica handled it."
         ),
         input_schema={
             "type": "object",
@@ -1045,6 +1089,10 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                 "message": {
                     "type": "string",
                     "description": "Message to send to the agent's AI engine",
+                },
+                "replica": {
+                    "type": "string",
+                    "description": "Target a specific replica for session continuity. Omit for any available replica.",
                 },
             },
             "required": ["agent_name", "message"],
