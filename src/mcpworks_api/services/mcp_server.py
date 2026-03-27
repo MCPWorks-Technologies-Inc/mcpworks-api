@@ -74,6 +74,14 @@ class McpServerService:
             ],
         }
 
+        import hashlib
+        import json
+
+        initial_hashes = {
+            t["name"]: hashlib.sha256(json.dumps(t, sort_keys=True).encode()).hexdigest()[:16]
+            for t in tool_schemas
+        }
+
         server = NamespaceMcpServer(
             namespace_id=namespace_id,
             name=name,
@@ -83,7 +91,7 @@ class McpServerService:
             command_args=args,
             headers_encrypted=headers_enc,
             headers_dek_encrypted=headers_dek,
-            settings={},
+            settings={"tool_schema_hashes": initial_hashes},
             env_vars={},
             rules=default_rules,
             tool_schemas=tool_schemas,
@@ -143,6 +151,32 @@ class McpServerService:
         added = sorted(new_names - old_names)
         removed = sorted(old_names - new_names)
 
+        import hashlib
+        import json
+
+        old_hashes = {
+            t["name"]: hashlib.sha256(json.dumps(t, sort_keys=True).encode()).hexdigest()[:16]
+            for t in (server.tool_schemas or [])
+        }
+        new_hashes = {
+            t["name"]: hashlib.sha256(json.dumps(t, sort_keys=True).encode()).hexdigest()[:16]
+            for t in new_schemas
+        }
+        schema_changes = []
+        for tool_name in sorted(old_names & new_names):
+            if old_hashes.get(tool_name) != new_hashes.get(tool_name):
+                schema_changes.append(tool_name)
+
+        if schema_changes:
+            logger.warning(
+                "mcp_schema_changed",
+                name=name,
+                changed_tools=schema_changes,
+            )
+
+        settings = dict(server.settings or {})
+        settings["tool_schema_hashes"] = new_hashes
+        server.settings = settings
         server.tool_schemas = new_schemas
         server.tool_count = new_count
         server.last_connected_at = datetime.now(UTC)
@@ -155,8 +189,9 @@ class McpServerService:
             tool_count=new_count,
             added=len(added),
             removed=len(removed),
+            schema_changes=len(schema_changes),
         )
-        return server, added, removed
+        return server, added, removed, schema_changes
 
     async def update_server(
         self,
