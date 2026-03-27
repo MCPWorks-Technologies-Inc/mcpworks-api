@@ -5,7 +5,9 @@ for known prompt injection patterns. Returns structured matches with
 severity levels.
 """
 
+import base64
 import re
+import unicodedata
 from dataclasses import dataclass
 
 
@@ -110,14 +112,39 @@ _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
 MAX_MATCHES = 50
 MAX_MATCH_TEXT = 200
 
+_ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\ufeff\u00ad\u2060]")
+_BASE64_BLOCK = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
+
+
+def normalize_text(text: str) -> str:
+    result = unicodedata.normalize("NFKC", text)
+    result = _ZERO_WIDTH.sub("", result)
+    result = re.sub(r"[ \t]+", " ", result)
+
+    decoded_parts = []
+    for m in _BASE64_BLOCK.finditer(result):
+        try:
+            decoded = base64.b64decode(m.group(0)).decode("utf-8", errors="ignore")
+            if len(decoded) > 5 and decoded.isprintable():
+                decoded_parts.append(decoded)
+        except Exception:
+            pass
+
+    if decoded_parts:
+        result = result + "\n" + "\n".join(decoded_parts)
+
+    return result
+
 
 def scan_for_injections(text: str) -> list[InjectionMatch]:
     if not text:
         return []
 
+    normalized = normalize_text(text)
+
     matches: list[InjectionMatch] = []
     for pattern_name, pattern, severity in _PATTERNS:
-        for m in pattern.finditer(text):
+        for m in pattern.finditer(normalized):
             if len(matches) >= MAX_MATCHES:
                 return matches
             matched = m.group(0)[:MAX_MATCH_TEXT]

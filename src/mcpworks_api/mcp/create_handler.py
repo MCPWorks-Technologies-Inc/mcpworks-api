@@ -2490,7 +2490,7 @@ class CreateMCPHandler:
 
         ns = await self._get_current_namespace()
         svc = McpServerService(self.db)
-        server, added, removed = await svc.refresh_server(ns.id, name)
+        server, added, removed, schema_changes = await svc.refresh_server(ns.id, name)
         return MCPToolResult(
             content=[
                 MCPContent(
@@ -2500,6 +2500,7 @@ class CreateMCPHandler:
                             "tool_count": server.tool_count,
                             "tools_added": added,
                             "tools_removed": removed,
+                            "schema_changes": schema_changes,
                         }
                     )
                 )

@@ -1089,7 +1089,11 @@ The AI knows not to execute instructions found within the markers.
 
 ### Injection Scanner
 
-A pattern-based scanner detects common prompt injection attacks:
+A pattern-based scanner detects common prompt injection attacks. The scanner normalizes text before scanning (decodes base64, collapses Unicode homoglyphs, strips zero-width characters) to defeat common obfuscation techniques.
+
+**Important:** The scanner catches known patterns in English. It does not defend against novel phrasing, non-English attacks, or sophisticated obfuscation. The real defense is the trust boundary + sandbox architecture. The scanner is one layer in a defense stack, not a standalone solution.
+
+Detected patterns:
 
 | Pattern | Severity | Example |
 |---------|----------|---------|
