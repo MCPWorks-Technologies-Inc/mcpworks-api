@@ -595,7 +595,7 @@ When an agent is created, its namespace gains a third MCP endpoint:
 
 | Interface | Pattern | Purpose |
 |-----------|---------|---------|
-| Create | `{ns}.create.{BASE_DOMAIN}/mcp` | Manage functions (same as before) |
+| Create | `{ns}.create.{BASE_DOMAIN}/mcp` | Manage functions and agents |
 | Run | `{ns}.run.{BASE_DOMAIN}/mcp` | Execute functions (same as before) |
 | Agent | `{ns}.agent.{BASE_DOMAIN}/mcp` | Webhook delivery and agent communication |
 
@@ -650,7 +650,34 @@ Agents are managed through the console or MCP tools:
 
 The create endpoint exposes agent management tools when on an agent-enabled tier:
 
-`make_agent`, `list_agents`, `describe_agent`, `start_agent`, `stop_agent`, `destroy_agent`, `clone_agent`, `configure_ai`, `add_schedule`, `add_webhook`, `set_state`, `get_state`
+`make_agent`, `list_agents`, `describe_agent`, `start_agent`, `stop_agent`, `destroy_agent`, `clone_agent`, `scale_agent`, `configure_ai`, `add_schedule`, `add_webhook`, `set_state`, `get_state`
+
+### Agent Clusters
+
+An agent can be scaled to multiple replicas using `scale_agent`. Each replica is an independent container running the same agent configuration (AI engine, functions, schedules, webhooks) but with its own state and runtime.
+
+```
+scale_agent(name="my-agent", replicas=3)
+```
+
+Replicas are assigned verb-animal names (e.g., `running-fox`, `swift-otter`, `calm-hawk`). These names appear in `describe_agent` and `list_agents` output.
+
+**Scheduling modes** — the `add_schedule` tool accepts a `mode` parameter:
+
+- `single` (default) — one replica executes the schedule, round-robin across the cluster
+- `cluster` — all replicas execute the schedule simultaneously
+
+```
+add_schedule(name="my-agent", function_name="poll-feed", cron_expression="*/5 * * * *", mode="cluster")
+```
+
+**Chat session affinity** — when using `chat_with_agent`, pass the `replica` parameter to route the conversation to a specific replica by its verb-animal name. Without it, the platform selects the least-loaded replica.
+
+```
+chat_with_agent(name="my-agent", message="status update", replica="running-fox")
+```
+
+**Slot accounting** — each replica counts as one agent slot against your tier limit. Scaling a single agent to 3 replicas consumes 3 of your available agent slots.
 
 ---
 

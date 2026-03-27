@@ -230,9 +230,11 @@ Agents = long-running containers with AI engine, schedules, webhooks, state, and
 | `stop_agent` | `name` | Stop running container |
 | `destroy_agent` | `name` | Remove container and resources |
 | `clone_agent` | `source_name`, `new_name` | Copy namespace, functions, state, schedules |
+| `scale_agent` | `name`, `replicas` | Scale to N replicas (each counts as 1 agent slot) |
 | `configure_ai` | `name`, `engine`, `model`, `api_key` | Set AI engine (restart agent to apply) |
-| `add_schedule` | `name`, `function_name`, `cron_expression` | Cron schedule with tier min interval |
+| `add_schedule` | `name`, `function_name`, `cron_expression` | Optional `mode`: `single` (default, round-robin) or `cluster` (all replicas) |
 | `add_webhook` | `name`, `path` | Register webhook path |
+| `chat_with_agent` | `name`, `message` | Optional `replica` for session affinity (verb-animal name) |
 | `set_state` | `name`, `key`, `value` | Encrypted K/V store |
 | `get_state` | `name`, `key` | Retrieve state value |
 
@@ -249,11 +251,13 @@ Agents = long-running containers with AI engine, schedules, webhooks, state, and
 | `openrouter` | OpenRouter | OpenAI-compatible |
 | `ollama` | Self-hosted | OpenAI-compatible |
 
-### Agent Resources (per container)
+### Agent Resources (per replica)
+
+Each replica gets full tier resources. Each replica counts as 1 agent slot.
 
 | Resource | builder-agent | pro-agent | enterprise-agent |
 |----------|--------------|-----------|-----------------|
-| Agents | 1 | 5 | 20 |
+| Agent slots | 1 | 5 | 20 |
 | RAM | 256 MB | 512 MB | 1 GB |
 | CPU | 0.25 vCPU | 0.5 vCPU | 1.0 vCPU |
 | Min schedule | 5 min | 30 sec | 15 sec |
