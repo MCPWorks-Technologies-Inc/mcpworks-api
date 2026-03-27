@@ -6,39 +6,45 @@ From zero to running your first function. This guide covers deploying MCPWorks o
 
 | Requirement | Minimum | Notes |
 |-------------|---------|-------|
-| OS | Linux (kernel 5.10+) | macOS/Windows for evaluation only |
+| OS | Linux (kernel 5.10+) | macOS/Windows work for evaluation with `SANDBOX_DEV_MODE=true` (no code isolation) |
 | Docker | 24.0+ | With Docker Compose v2 |
 | RAM | 2 GB | 4 GB recommended |
 | Disk | 20 GB | SSD recommended |
 | Domain | Wildcard DNS | Required for namespace subdomains |
 | Ports | 80, 443 | Must be open for Let's Encrypt |
 
-## 1. Clone and Configure
+## 1. Clone and Generate Keys
 
 ```bash
 git clone https://github.com/MCPWorks-Technologies-Inc/mcpworks-api.git
 cd mcpworks-api
 
-# Create environment file
-cp .env.self-hosted.example .env
-```
-
-Edit `.env` and set:
-
-- **`BASE_DOMAIN`** — your domain (e.g. `example.com`)
-- **`ADMIN_EMAILS`** — JSON list of admin email addresses (e.g. `["admin@example.com"]`)
-
-## 2. Generate Keys
-
-```bash
 # JWT signing keys (ES256)
 mkdir -p keys
 openssl ecparam -genkey -name prime256v1 -noout -out keys/private.pem
 openssl ec -in keys/private.pem -pubout -out keys/public.pem
 
-# Encryption key — copy the output into ENCRYPTION_KEK_B64 in .env
+# Generate an encryption key (you'll need this in the next step)
 python3 -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
 ```
+
+Copy the encryption key output — you'll paste it into `.env` next.
+
+## 2. Configure Environment
+
+```bash
+cp .env.self-hosted.example .env
+```
+
+Edit `.env` and set these values:
+
+| Variable | What to set |
+|----------|-------------|
+| `BASE_DOMAIN` | Your domain (e.g. `example.com`) |
+| `ENCRYPTION_KEK_B64` | The encryption key you generated in step 1 |
+| `ADMIN_EMAILS` | JSON list of admin emails (e.g. `["admin@example.com"]`) |
+
+The JWT key paths are pre-configured to `/app/keys/private.pem` and `/app/keys/public.pem` — no changes needed if you generated keys in the default `keys/` directory.
 
 ## 3. Configure DNS
 
@@ -53,6 +59,8 @@ Set up these DNS records pointing to your server:
 
 Caddy automatically provisions TLS certificates via Let's Encrypt on first access.
 
+DNS propagation can take a few minutes. You can verify with `dig api.yourdomain.com` before continuing.
+
 ## 4. Start the Server
 
 ```bash
@@ -64,6 +72,8 @@ Wait for the health check to pass:
 ```bash
 curl https://api.yourdomain.com/v1/health
 ```
+
+If this fails, check [Troubleshooting](#troubleshooting) below.
 
 ## 5. Create Your Admin Account
 
@@ -125,39 +135,39 @@ Your AI assistant                    MCPWorks
 
 The sandbox ran the code, returned the result, and destroyed itself. No data leaked into the AI context.
 
-## 9. Write a Real Function
+---
 
-Create a function that does something useful. Here's an example that processes data without sending it through the AI:
+## Next Steps
+
+Once you're running, here are some things to try:
+
+### Write a Real Function
 
 > "Create a function called 'analyze-csv' in the utils service. It should accept a CSV string as input, parse it, and return summary statistics (row count, column names, numeric column means). Use the pandas package."
 
-The AI will create the function through the `make_function` tool. When you run it, pandas processes the CSV inside the sandbox — only the summary comes back to the AI. If the CSV has 10,000 rows, you save thousands of tokens.
+The AI creates the function through `make_function`. When you run it, pandas processes the CSV inside the sandbox — only the summary comes back. If the CSV has 10,000 rows, you save thousands of tokens.
 
-## 10. Back Up Your Namespace to Git
-
-Once you have functions worth keeping, export them to a Git repository:
+### Back Up Your Namespace to Git
 
 > "Configure my namespace to push to `https://github.com/youruser/demo-functions.git` with token `ghp_...`"
 
 > "Export my namespace to Git"
 
-Your functions, schemas, and agent configs are now version-controlled. See the [Git Export & Import](guide.md#git-export--import) section in the platform guide for the full reference.
+See [Git Export & Import](guide.md#git-export--import) in the platform guide.
 
-## 11. Connect a Third-Party MCP Server
+### Connect a Third-Party MCP Server
 
-Add external tools to your namespace — Slack, Google Workspace, GitHub, or any MCP server:
+Add Slack, Google Workspace, GitHub, or any MCP server to your namespace:
 
 > "Add the Slack MCP server to my namespace at `https://slack-mcp.example.com/mcp` with token `xoxb-...`"
 
-Now your sandbox code can call Slack tools directly:
+See [Remote MCP Servers](guide.md#remote-mcp-servers) in the platform guide.
 
-```python
-from functions import mcp__slack__send_message
-mcp__slack__send_message(channel="C01234", text="Hello from MCPWorks!")
-result = {"sent": True}
-```
+### Learn More
 
-The AI writes code, the sandbox calls Slack via the proxy, and only the result comes back. See [Remote MCP Servers](guide.md#remote-mcp-servers) for the full reference.
+- **[Platform Guide](guide.md)** — Full reference for all MCP tools, code mode, templates, and agents
+- **[API Contract](implementation/specs/api-contract.md)** — REST API reference
+- **[Token Savings Analysis](token-savings-analysis.md)** — How sandbox execution reduces token costs
 
 ---
 
@@ -178,8 +188,6 @@ The AI writes code, the sandbox calls Slack via the proxy, and only the result c
 |----------|---------|-------------|
 | `BASE_SCHEME` | `https` | Use `http` for local dev without TLS |
 | `ALLOW_REGISTRATION` | `false` | Set `true` to allow public signup |
-| `ADMIN_EMAIL` | - | Email for seed admin account |
-| `ADMIN_PASSWORD` | - | Password for seed admin account |
 | `STRIPE_SECRET_KEY` | (empty) | Enable billing when set |
 | `RESEND_API_KEY` | (empty) | Enable Resend email when set |
 | `SMTP_HOST` | (empty) | Enable SMTP email when set |
@@ -285,12 +293,6 @@ Internet → Caddy (TLS) → MCPWorks API → PostgreSQL
 ```
 
 All services run in Docker containers on a single machine. For high-availability deployments, see the project documentation.
-
-## What's Next?
-
-- **[Platform Guide](guide.md)** — Full reference for all MCP tools, code mode, templates, and agents
-- **[API Contract](implementation/specs/api-contract.md)** — REST API reference
-- **[Token Savings Analysis](token-savings-analysis.md)** — How sandbox execution reduces token costs
 
 ### Key Concepts
 

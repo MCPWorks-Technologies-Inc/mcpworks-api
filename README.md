@@ -57,20 +57,17 @@ api.{domain}       ──>  REST API        ──>  Auth, accounts, usage, admi
 git clone https://github.com/MCPWorks-Technologies-Inc/mcpworks-api.git
 cd mcpworks-api
 
+# Configure environment
+cp .env.self-hosted.example .env
+# Edit .env — set BASE_DOMAIN, ENCRYPTION_KEK_B64, ADMIN_EMAILS
+
 # Generate JWT signing keys
 mkdir -p keys
 openssl ecparam -genkey -name prime256v1 -noout -out keys/private.pem
 openssl ec -in keys/private.pem -pubout -out keys/public.pem
 
-# Configure environment
-cp .env.self-hosted.example .env
-# Edit .env — set BASE_DOMAIN, ADMIN_EMAIL, ADMIN_PASSWORD, ENCRYPTION_KEK_B64
-
-# Start everything
+# Start everything (migrations run automatically on startup)
 docker compose -f docker-compose.self-hosted.yml up -d
-
-# Run database migrations
-docker compose -f docker-compose.self-hosted.yml exec api alembic upgrade head
 ```
 
 The API is now available at `https://api.yourdomain.com/v1/health` (Caddy handles TLS automatically).

@@ -656,6 +656,8 @@ The create endpoint exposes agent management tools when on an agent-enabled tier
 
 ## Billing & Tiers
 
+Self-hosted instances run without billing by default — all users get unlimited executions. The tiers below apply when Stripe billing is enabled (see [Billing](GETTING-STARTED.md#billing) in the getting started guide).
+
 ### Subscription Tiers
 
 | Tier | Price | Executions/Month |

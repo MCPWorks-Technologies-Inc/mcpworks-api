@@ -6,7 +6,7 @@
 
 ## Platform Summary
 
-MCPWorks = serverless Python functions managed and executed via MCP protocol.
+MCPWorks = self-hosted Python function platform managed and executed via MCP protocol.
 Two endpoints per namespace. Create endpoint for CRUD. Run endpoint for execution.
 All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
 
@@ -405,9 +405,11 @@ make_function(
 
 ## Auth Flow
 
-1. Register: `POST /v1/auth/register` (email, password, name, accept_tos)
+1. Create admin account: `seed_admin.py` script (see [Getting Started](GETTING-STARTED.md#5-create-your-admin-account))
 2. Login: `POST /v1/auth/login` → JWT tokens
-3. Create API key: `POST /v1/auth/api-keys` (requires JWT)
+3. Create API key: `POST /v1/auth/api-keys` (requires JWT) or use the console
 4. Use API key in MCP: `Authorization: Bearer {raw_key}`
+
+Public registration is disabled by default. Set `ALLOW_REGISTRATION=true` in `.env` to enable `POST /v1/auth/register`.
 
 API keys can also be exchanged for JWTs via `POST /v1/auth/token`.
