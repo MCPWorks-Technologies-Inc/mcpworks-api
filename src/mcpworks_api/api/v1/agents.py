@@ -132,7 +132,7 @@ async def create_agent(
             display_name=request.display_name,
         )
         await db.commit()
-        await db.refresh(agent)
+        await db.refresh(agent, ["replicas"])
     except ForbiddenError as e:
         raise HTTPException(
             status_code=403, detail={"error": "AGENT_TIER_REQUIRED", "message": str(e)}
@@ -1076,7 +1076,7 @@ async def clone_agent(
             tier=user.effective_tier,
         )
         await db.commit()
-        await db.refresh(new_agent)
+        await db.refresh(new_agent, ["replicas"])
     except ConflictError as e:
         raise HTTPException(status_code=409, detail={"error": "CONFLICT", "message": str(e)})
     except ForbiddenError as e:
