@@ -1,81 +1,46 @@
 # Getting Started with MCPWorks
 
-From zero to running your first function in 5 minutes. This tutorial assumes you have a running MCPWorks instance — either [self-hosted](SELF-HOSTING.md) or on [MCPWorks Cloud](https://mcpworks.io).
+From zero to running your first function in 5 minutes. This tutorial assumes you have a running MCPWorks instance — see [Self-Hosting](SELF-HOSTING.md) if you haven't set one up yet.
 
 ## 1. Create an Account
 
-**Self-hosted:** Run the seed script to create your admin account:
+Run the seed script to create your admin account:
 
 ```bash
-docker compose -f docker-compose.self-hosted.yml exec api \
-  python3 scripts/seed_admin.py
+docker compose -f docker-compose.self-hosted.yml exec \
+  -e ADMIN_EMAIL=you@example.com \
+  -e ADMIN_PASSWORD=your-password \
+  api python3 scripts/seed_admin.py
 ```
 
-Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your `.env` first, or the script uses defaults.
+Replace `you@example.com` and `your-password` with your desired credentials. The email must match an entry in `ADMIN_EMAILS` in your `.env` for admin access.
 
-**MCPWorks Cloud:** Register at `https://api.mcpworks.io/register`.
+## 2. Open the Console
 
-## 2. Get an API Key
+Open `https://api.<your-domain>/console` in your browser and log in with the credentials you just created.
 
-```bash
-# Log in (replace with your URL for self-hosted)
-API=https://api.mcpworks.io
+The console walks you through three setup steps:
 
-# Get an access token
-TOKEN=$(curl -s -X POST $API/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "password": "your-password"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+1. **Create a namespace** — this becomes your subdomain prefix (e.g. `demo.create.<your-domain>`)
+2. **Create an API key** — starts with `sk_live_`, shown only once — copy it
+3. **Connect your AI assistant** — the console generates the `.mcp.json` config for Claude Code, Cursor, and other clients, pre-filled with your namespace URLs and API key
 
-# Create an API key
-curl -s -X POST $API/v1/keys \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-first-key"}' | python3 -m json.tool
-```
+Once your AI assistant is connected, come back here.
 
-Save the `raw_key` from the response. It starts with `sk_live_` and is shown only once.
-
-## 3. Connect Your AI Assistant
-
-Add this to your project's `.mcp.json` (Claude Code, Codex, Copilot, etc.):
-
-```json
-{
-  "mcpServers": {
-    "myns-create": {
-      "type": "http",
-      "url": "https://myns.create.mcpworks.io/mcp",
-      "headers": { "Authorization": "Bearer sk_live_..." }
-    },
-    "myns-run": {
-      "type": "http",
-      "url": "https://myns.run.mcpworks.io/mcp",
-      "headers": { "Authorization": "Bearer sk_live_..." }
-    }
-  }
-}
-```
-
-Replace `myns` with the namespace you want to use and `sk_live_...` with your API key.
-
-**Self-hosted:** Replace `mcpworks.io` with your `BASE_DOMAIN`.
-
-## 4. Create Your First Function
+## 3. Create Your First Function
 
 Ask your AI assistant:
 
-> "Create a namespace called 'demo', then a service called 'utils', then create a function called 'hello' using the hello-world template with output_trust=prompt."
+> "Create a service called 'utils', then create a function called 'hello' using the hello-world template with output_trust=prompt."
 
-Or do it manually through the MCP tools:
+Or use the MCP tools directly:
 
-1. **`make_namespace`** — name: `demo`
-2. **`make_service`** — name: `utils`
-3. **`make_function`** — name: `hello`, service: `utils`, template: `hello-world`, output_trust: `prompt`
+1. **`make_service`** — name: `utils`
+2. **`make_function`** — name: `hello`, service: `utils`, template: `hello-world`, output_trust: `prompt`
 
 Every function requires `output_trust`: use `prompt` for trusted computed output, or `data` for functions that process external content (emails, APIs, web scrapes).
 
-## 5. Run It
+## 4. Run It
 
 Ask your AI assistant:
 
@@ -99,7 +64,7 @@ Your AI assistant                    MCPWorks
 
 The sandbox ran the code, returned the result, and destroyed itself. No data leaked into the AI context.
 
-## 6. Write a Real Function
+## 5. Write a Real Function
 
 Create a function that does something useful. Here's an example that processes data without sending it through the AI:
 
@@ -107,21 +72,21 @@ Create a function that does something useful. Here's an example that processes d
 
 The AI will create the function through the `make_function` tool. When you run it, pandas processes the CSV inside the sandbox — only the summary comes back to the AI. If the CSV has 10,000 rows, you save thousands of tokens.
 
-## 7. Back Up Your Namespace to Git
+## 6. Back Up Your Namespace to Git
 
 Once you have functions worth keeping, export them to a Git repository:
 
-> "Configure my demo namespace to push to `https://github.com/youruser/demo-functions.git` with token `ghp_...`"
+> "Configure my namespace to push to `https://github.com/youruser/demo-functions.git` with token `ghp_...`"
 
-> "Export my demo namespace to Git"
+> "Export my namespace to Git"
 
 Your functions, schemas, and agent configs are now version-controlled. See the [Git Export & Import](guide.md#git-export--import) section in the platform guide for the full reference.
 
-## 8. Connect a Third-Party MCP Server
+## 7. Connect a Third-Party MCP Server
 
 Add external tools to your namespace — Slack, Google Workspace, GitHub, or any MCP server:
 
-> "Add the Slack MCP server to my demo namespace at `https://slack-mcp.example.com/mcp` with token `xoxb-...`"
+> "Add the Slack MCP server to my namespace at `https://slack-mcp.example.com/mcp` with token `xoxb-...`"
 
 Now your sandbox code can call Slack tools directly:
 
