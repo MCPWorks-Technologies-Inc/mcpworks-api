@@ -125,7 +125,7 @@ class TestCreateAgent:
             ns_cls.return_value.create = AsyncMock(return_value=ns_mock)
 
             mock_db.flush = AsyncMock()
-            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *_args, **_kwargs: None)
 
             mock_docker.containers.run.side_effect = DockerAPIError("out of memory")
 
@@ -166,9 +166,9 @@ class TestStartAgent:
         ):
             container = MagicMock()
             mock_docker.containers.get.return_value = container
-            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *_args, **_kwargs: None)
 
-            result = await service.start_agent(uuid.uuid4(), "test-agent")
+            await service.start_agent(uuid.uuid4(), "test-agent")
             container.start.assert_called_once()
 
     @pytest.mark.asyncio
@@ -180,7 +180,7 @@ class TestStartAgent:
             patch.object(service, "_get_replicas", new=AsyncMock(return_value=[replica])),
         ):
             mock_docker.containers.get.side_effect = DockerNotFound("gone")
-            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *_args, **_kwargs: None)
 
             await service.start_agent(uuid.uuid4(), "test-agent")
             assert replica.status == "error"
@@ -198,7 +198,7 @@ class TestStopAgent:
         ):
             container = MagicMock()
             mock_docker.containers.get.return_value = container
-            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *_args, **_kwargs: None)
 
             await service.stop_agent(uuid.uuid4(), "test-agent")
             assert replica.status == "stopped"
@@ -211,7 +211,7 @@ class TestStopAgent:
             patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
             patch.object(service, "_get_replicas", new=AsyncMock(return_value=[])),
         ):
-            mock_db.refresh = AsyncMock(side_effect=lambda _a, *args, **kwargs: None)
+            mock_db.refresh = AsyncMock(side_effect=lambda _a, *_args, **_kwargs: None)
             await service.stop_agent(uuid.uuid4(), "test-agent")
 
 

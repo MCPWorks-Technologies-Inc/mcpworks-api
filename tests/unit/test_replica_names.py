@@ -39,8 +39,7 @@ class TestReplicaNameGenerator:
 
     def test_raises_when_pool_exhausted(self):
         full_pool = {f"{v}-{a}" for v in VERBS for a in ANIMALS}
-        try:
+        import pytest
+
+        with pytest.raises(RuntimeError, match="No unique replica names available"):
             generate_replica_name(existing_names=full_pool)
-            assert False, "Should have raised RuntimeError"
-        except RuntimeError as e:
-            assert "No unique replica names available" in str(e)

@@ -60,11 +60,7 @@ async def handle_agent_webhook(path: str, request: Request) -> JSONResponse:
                 AgentReplica.status == "running",
             )
         )
-        running_replicas = list(replicas_result.scalars())
-        chosen_replica = None
-        if running_replicas:
-            import random
-            chosen_replica = random.choice(running_replicas)
+        _ = list(replicas_result.scalars())
 
         if webhook.secret_hash:
             signature = request.headers.get("X-Webhook-Signature", "")

@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from croniter import croniter
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
