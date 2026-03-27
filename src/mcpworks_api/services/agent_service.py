@@ -316,7 +316,9 @@ class AgentService:
 
     async def get_agent(self, account_id: uuid.UUID, agent_name: str) -> Agent:
         result = await self.db.execute(
-            select(Agent).where(Agent.account_id == account_id, Agent.name == agent_name)
+            select(Agent)
+            .where(Agent.account_id == account_id, Agent.name == agent_name)
+            .options(selectinload(Agent.replicas))
         )
         agent = result.scalar_one_or_none()
         if not agent:
@@ -334,7 +336,10 @@ class AgentService:
 
     async def list_agents(self, account_id: uuid.UUID) -> list[Agent]:
         result = await self.db.execute(
-            select(Agent).where(Agent.account_id == account_id).order_by(Agent.created_at.desc())
+            select(Agent)
+            .where(Agent.account_id == account_id)
+            .options(selectinload(Agent.replicas))
+            .order_by(Agent.created_at.desc())
         )
         return list(result.scalars().all())
 
