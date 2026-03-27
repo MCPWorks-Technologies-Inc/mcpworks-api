@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.models.account import Account
-from mcpworks_api.models.agent import Agent, AgentRun
+from mcpworks_api.models.agent import Agent, AgentReplica, AgentRun
 from mcpworks_api.services.agent_service import AgentService
 from mcpworks_api.services.function import FunctionService
 from mcpworks_api.tasks.orchestrator import run_orchestration
@@ -51,8 +51,18 @@ async def handle_agent_webhook(path: str, request: Request) -> JSONResponse:
             __import__("sqlalchemy").select(Agent).where(Agent.id == webhook.agent_id)
         )
         agent = agent_result.scalar_one_or_none()
-        if not agent or agent.status != "running":
+        if not agent or agent.status not in ("running", "degraded"):
             return JSONResponse(status_code=503, content={"detail": "Agent is not running"})
+
+        replicas_result = await db.execute(
+            __import__("sqlalchemy")
+            .select(AgentReplica)
+            .where(
+                AgentReplica.agent_id == agent.id,
+                AgentReplica.status == "running",
+            )
+        )
+        _ = list(replicas_result.scalars())
 
         if webhook.secret_hash:
             signature = request.headers.get("X-Webhook-Signature", "")

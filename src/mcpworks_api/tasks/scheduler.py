@@ -15,14 +15,14 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from croniter import croniter
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from mcpworks_api.backends import get_backend
 from mcpworks_api.core.database import get_db_context
 from mcpworks_api.models.account import Account
-from mcpworks_api.models.agent import Agent, AgentRun, AgentSchedule
+from mcpworks_api.models.agent import Agent, AgentReplica, AgentRun, AgentSchedule, ScheduledJob
 from mcpworks_api.models.namespace import Namespace
 from mcpworks_api.services.agent_service import AgentService
 from mcpworks_api.services.function import FunctionService
@@ -423,18 +423,24 @@ async def _poll_and_execute() -> int:
         if agent.heartbeat_next_at is None or agent.heartbeat_next_at <= now:
             due_heartbeats.append(agent)
 
-    if not due_schedules and not due_heartbeats:
+    if due_schedules:
+        await _create_scheduled_jobs(due_schedules, now)
+
+    pending_jobs = await _claim_pending_jobs()
+
+    if not pending_jobs and not due_heartbeats:
         return 0
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_EXECUTIONS)
 
-    async def _run_schedule(sched: AgentSchedule) -> None:
+    async def _run_job(job: ScheduledJob, sched: AgentSchedule, agent: Agent) -> None:
         async with semaphore:
             try:
-                await _execute_scheduled_function(sched, sched.agent)
+                await _execute_claimed_job(job, sched, agent)
             except Exception:
                 logger.exception(
-                    "schedule_execution_error",
+                    "scheduled_job_execution_error",
+                    job_id=str(job.id),
                     schedule_id=str(sched.id),
                 )
 
@@ -448,12 +454,253 @@ async def _poll_and_execute() -> int:
                     agent_name=agent.name,
                 )
 
-    tasks = [asyncio.create_task(_run_schedule(s)) for s in due_schedules]
+    tasks = [asyncio.create_task(_run_job(j, s, a)) for j, s, a in pending_jobs]
     tasks += [asyncio.create_task(_run_heartbeat(a)) for a in due_heartbeats]
     await asyncio.gather(*tasks, return_exceptions=True)
-    executed = len(due_schedules) + len(due_heartbeats)
+    executed = len(pending_jobs) + len(due_heartbeats)
 
     return executed
+
+
+async def _create_scheduled_jobs(
+    due_schedules: list[AgentSchedule],
+    fire_time: datetime,
+) -> None:
+    """Create ScheduledJob rows for due schedules. Single-mode: 1 row. Cluster-mode: 1 per replica."""
+    async with get_db_context() as db:
+        for schedule in due_schedules:
+            existing = await db.execute(
+                select(ScheduledJob).where(
+                    ScheduledJob.schedule_id == schedule.id,
+                    ScheduledJob.fire_time == fire_time,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            mode = getattr(schedule, "mode", "single") or "single"
+
+            if mode == "cluster":
+                replicas_result = await db.execute(
+                    select(AgentReplica).where(
+                        AgentReplica.agent_id == schedule.agent_id,
+                        AgentReplica.status == "running",
+                    )
+                )
+                replicas = list(replicas_result.scalars())
+                for replica in replicas:
+                    job = ScheduledJob(
+                        agent_id=schedule.agent_id,
+                        schedule_id=schedule.id,
+                        replica_id=replica.id,
+                        fire_time=fire_time,
+                        status="pending",
+                    )
+                    db.add(job)
+            else:
+                job = ScheduledJob(
+                    agent_id=schedule.agent_id,
+                    schedule_id=schedule.id,
+                    replica_id=None,
+                    fire_time=fire_time,
+                    status="pending",
+                )
+                db.add(job)
+
+            await db.execute(
+                update(AgentSchedule)
+                .where(AgentSchedule.id == schedule.id)
+                .values(next_run_at=_compute_next_run(schedule.cron_expression, schedule.timezone))
+            )
+
+
+async def _claim_pending_jobs() -> list[tuple[ScheduledJob, AgentSchedule, Agent]]:
+    """Claim pending single-mode jobs via FOR UPDATE SKIP LOCKED. Returns (job, schedule, agent) tuples."""
+    claimed: list[tuple[ScheduledJob, AgentSchedule, Agent]] = []
+
+    async with get_db_context() as db:
+        single_result = await db.execute(
+            select(ScheduledJob)
+            .where(
+                ScheduledJob.status == "pending",
+                ScheduledJob.replica_id.is_(None),
+            )
+            .with_for_update(skip_locked=True)
+            .limit(MAX_CONCURRENT_EXECUTIONS)
+        )
+        single_jobs = list(single_result.scalars())
+
+        cluster_result = await db.execute(
+            select(ScheduledJob)
+            .where(
+                ScheduledJob.status == "pending",
+                ScheduledJob.replica_id.isnot(None),
+            )
+            .limit(MAX_CONCURRENT_EXECUTIONS)
+        )
+        cluster_jobs = list(cluster_result.scalars())
+
+        all_jobs = single_jobs + cluster_jobs
+
+        for job in all_jobs:
+            if job.replica_id is None:
+                replica_result = await db.execute(
+                    select(AgentReplica)
+                    .where(
+                        AgentReplica.agent_id == job.agent_id,
+                        AgentReplica.status == "running",
+                    )
+                    .limit(1)
+                )
+                replica = replica_result.scalar_one_or_none()
+                if not replica:
+                    continue
+                job.claimed_by = replica.id
+            else:
+                job.claimed_by = job.replica_id
+
+            job.status = "claimed"
+            job.claimed_at = datetime.now(UTC)
+
+            schedule_result = await db.execute(
+                select(AgentSchedule)
+                .where(AgentSchedule.id == job.schedule_id)
+                .options(selectinload(AgentSchedule.agent))
+            )
+            schedule = schedule_result.scalar_one_or_none()
+            if schedule and schedule.agent:
+                claimed.append((job, schedule, schedule.agent))
+
+    return claimed
+
+
+async def _execute_claimed_job(
+    job: ScheduledJob,
+    schedule: AgentSchedule,
+    agent: Agent,
+) -> None:
+    """Execute a claimed scheduled job and update its status."""
+    async with get_db_context() as db:
+        await db.execute(
+            update(ScheduledJob).where(ScheduledJob.id == job.id).values(status="running")
+        )
+
+    try:
+        await _execute_scheduled_function(schedule, agent)
+    except Exception as e:
+        async with get_db_context() as db:
+            await db.execute(
+                update(ScheduledJob)
+                .where(ScheduledJob.id == job.id)
+                .values(
+                    status="failed",
+                    completed_at=datetime.now(UTC),
+                    error=str(e)[:1000],
+                )
+            )
+        return
+
+    async with get_db_context() as db:
+        await db.execute(
+            update(ScheduledJob)
+            .where(ScheduledJob.id == job.id)
+            .values(
+                status="complete",
+                completed_at=datetime.now(UTC),
+            )
+        )
+
+
+STALE_JOB_TIMEOUT_SECONDS = 300
+REPLICA_HEARTBEAT_TIMEOUT_SECONDS = 60
+
+
+async def _reap_stale_jobs() -> int:
+    """Mark pending jobs as failed if unclaimed for longer than the stale timeout."""
+    cutoff = datetime.now(UTC) - timedelta(seconds=STALE_JOB_TIMEOUT_SECONDS)
+    async with get_db_context() as db:
+        result = await db.execute(
+            update(ScheduledJob)
+            .where(
+                ScheduledJob.status == "pending",
+                ScheduledJob.created_at < cutoff,
+            )
+            .values(
+                status="failed",
+                completed_at=datetime.now(UTC),
+                error="Stale: unclaimed within timeout",
+            )
+            .returning(ScheduledJob.id)
+        )
+        reaped_ids = list(result.scalars())
+        if reaped_ids:
+            logger.warning("stale_jobs_reaped", count=len(reaped_ids))
+        return len(reaped_ids)
+
+
+async def _check_replica_health() -> int:
+    """Check for unhealthy replicas and replace them to maintain target count."""
+    replaced = 0
+    async with get_db_context() as db:
+        cutoff = datetime.now(UTC) - timedelta(seconds=REPLICA_HEARTBEAT_TIMEOUT_SECONDS)
+        result = await db.execute(
+            select(AgentReplica)
+            .join(Agent, AgentReplica.agent_id == Agent.id)
+            .where(
+                AgentReplica.status == "running",
+                AgentReplica.last_heartbeat.isnot(None),
+                AgentReplica.last_heartbeat < cutoff,
+                Agent.enabled.is_(True),
+            )
+        )
+        stale_replicas = list(result.scalars())
+
+        for replica in stale_replicas:
+            replica.status = "error"
+            logger.warning(
+                "replica_heartbeat_timeout",
+                replica=replica.replica_name,
+                agent_id=str(replica.agent_id),
+                last_heartbeat=replica.last_heartbeat.isoformat()
+                if replica.last_heartbeat
+                else None,
+            )
+
+        agents_needing_replacement: set[str] = set()
+        for replica in stale_replicas:
+            agents_needing_replacement.add(str(replica.agent_id))
+
+        for agent_id_str in agents_needing_replacement:
+            agent_id = __import__("uuid").UUID(agent_id_str)
+            agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+            agent = agent_result.scalar_one_or_none()
+            if not agent:
+                continue
+
+            running_result = await db.execute(
+                select(func.count(AgentReplica.id)).where(
+                    AgentReplica.agent_id == agent_id,
+                    AgentReplica.status == "running",
+                )
+            )
+            running_count = running_result.scalar_one()
+
+            if running_count < agent.target_replicas:
+                service = AgentService(db)
+                needed = agent.target_replicas - running_count
+                for _ in range(needed):
+                    try:
+                        await service._create_replica(agent)
+                        replaced += 1
+                    except Exception:
+                        logger.exception(
+                            "replica_replacement_failed",
+                            agent_name=agent.name,
+                        )
+
+    if replaced:
+        logger.info("replicas_replaced", count=replaced)
+    return replaced
 
 
 async def _initialize_next_run_times() -> None:
@@ -495,6 +742,16 @@ async def run_scheduler_loop() -> None:
                 logger.info("scheduler_poll_complete", executed=count)
         except Exception:
             logger.exception("scheduler_poll_error")
+
+        try:
+            await _reap_stale_jobs()
+        except Exception:
+            logger.exception("stale_job_reaper_error")
+
+        try:
+            await _check_replica_health()
+        except Exception:
+            logger.exception("replica_health_check_error")
 
         ANOMALY_DETECTION_COUNTER["ticks"] += POLL_INTERVAL_SECONDS
         if ANOMALY_DETECTION_COUNTER["ticks"] >= ANOMALY_DETECTION_INTERVAL:

@@ -105,6 +105,7 @@ class CreateMCPHandler:
         "list_agents": "read",
         "describe_agent": "read",
         "make_agent": "write",
+        "scale_agent": "write",
         "start_agent": "write",
         "stop_agent": "write",
         "destroy_agent": "write",
@@ -449,6 +450,7 @@ class CreateMCPHandler:
             "make_agent": self._make_agent,
             "list_agents": self._list_agents,
             "describe_agent": self._describe_agent,
+            "scale_agent": self._scale_agent,
             "start_agent": self._start_agent,
             "stop_agent": self._stop_agent,
             "destroy_agent": self._destroy_agent,
@@ -1166,6 +1168,7 @@ class CreateMCPHandler:
                                     "name": a.name,
                                     "display_name": a.display_name,
                                     "status": a.status,
+                                    "target_replicas": a.target_replicas,
                                 }
                                 for a in agents
                             ],
@@ -1180,11 +1183,22 @@ class CreateMCPHandler:
         """Get full details for an agent."""
         service = AgentService(self.db)
         agent = await service.get_agent(self.account.id, name)
+        replicas = await service._get_replicas(agent.id)
         result = {
             "id": str(agent.id),
             "name": agent.name,
             "display_name": agent.display_name,
             "status": agent.status,
+            "target_replicas": agent.target_replicas,
+            "replicas": [
+                {
+                    "name": r.replica_name,
+                    "status": r.status,
+                    "last_heartbeat": r.last_heartbeat.isoformat() if r.last_heartbeat else None,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in replicas
+            ],
             "ai_engine": agent.ai_engine,
             "ai_model": agent.ai_model,
             "system_prompt": agent.system_prompt,
@@ -1203,18 +1217,35 @@ class CreateMCPHandler:
             result["chat_url"] = url_builder.chat_url(agent.name, agent.chat_token)
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
-    async def _start_agent(self, name: str) -> MCPToolResult:
-        """Start a stopped agent."""
+    async def _scale_agent(self, name: str, replicas: int) -> MCPToolResult:
+        """Scale an agent to a target number of replicas."""
         service = AgentService(self.db)
-        agent = await service.start_agent(self.account.id, name)
+        agent = await service.scale_agent(
+            self.account.id, name, replicas, self.account.user.subscription_tier
+        )
+        total_slots = await service.get_total_replica_count(self.account.id)
+        tier_config = service._get_tier_config(self.account.user.subscription_tier)
+        result = {
+            "agent": agent.name,
+            "target_replicas": agent.target_replicas,
+            "replicas": [{"name": r.replica_name, "status": r.status} for r in agent.replicas],
+            "slots_used": total_slots,
+            "slots_limit": tier_config["max_agents"],
+        }
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _start_agent(self, name: str, replica: str | None = None) -> MCPToolResult:
+        """Start a stopped agent or specific replica."""
+        service = AgentService(self.db)
+        agent = await service.start_agent(self.account.id, name, replica_name=replica)
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"name": agent.name, "status": agent.status}))]
         )
 
-    async def _stop_agent(self, name: str) -> MCPToolResult:
-        """Stop a running agent."""
+    async def _stop_agent(self, name: str, replica: str | None = None) -> MCPToolResult:
+        """Stop a running agent or specific replica."""
         service = AgentService(self.db)
-        agent = await service.stop_agent(self.account.id, name)
+        agent = await service.stop_agent(self.account.id, name, replica_name=replica)
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"name": agent.name, "status": agent.status}))]
         )
@@ -1236,6 +1267,7 @@ class CreateMCPHandler:
         cron_expression: str,
         failure_policy: dict,
         timezone: str = "UTC",
+        mode: str = "single",
         orchestration_mode: str = "direct",
     ) -> MCPToolResult:
         """Add a cron schedule to an agent."""
@@ -1249,6 +1281,7 @@ class CreateMCPHandler:
             failure_policy=failure_policy,
             tier=self.account.user.effective_tier,
             orchestration_mode=orchestration_mode,
+            mode=mode,
         )
         return MCPToolResult(
             content=[
@@ -1260,6 +1293,7 @@ class CreateMCPHandler:
                             "function_name": function_name,
                             "cron_expression": cron_expression,
                             "timezone": timezone,
+                            "mode": schedule.mode,
                             "orchestration_mode": schedule.orchestration_mode,
                             "enabled": schedule.enabled,
                         }
@@ -1630,11 +1664,47 @@ class CreateMCPHandler:
             ]
         )
 
-    async def _chat_with_agent(self, agent_name: str, message: str) -> MCPToolResult:
+    async def _chat_with_agent(
+        self, agent_name: str, message: str, replica: str | None = None
+    ) -> MCPToolResult:
         """Send a message to an agent's AI and return its response."""
         from mcpworks_api.core.ai_client import AIClientError
 
         service = AgentService(self.db)
+
+        if replica:
+            agent = await service.get_agent(self.account.id, agent_name)
+            replicas = await service._get_replicas(agent.id)
+            matched = next((r for r in replicas if r.replica_name == replica), None)
+            if not matched:
+                return MCPToolResult(
+                    content=[
+                        MCPContent(
+                            text=json.dumps(
+                                {"error": f"Replica '{replica}' not found in agent '{agent_name}'"}
+                            )
+                        )
+                    ]
+                )
+            if matched.status != "running":
+                return MCPToolResult(
+                    content=[
+                        MCPContent(
+                            text=json.dumps(
+                                {
+                                    "error": f"Replica '{replica}' is {matched.status}, not available for chat"
+                                }
+                            )
+                        )
+                    ]
+                )
+            chosen_replica = replica
+        else:
+            agent = await service.get_agent(self.account.id, agent_name)
+            replicas = await service._get_replicas(agent.id)
+            running = [r for r in replicas if r.status == "running"]
+            chosen_replica = running[0].replica_name if running else None
+
         try:
             response = await service.chat_with_agent(
                 account_id=self.account.id,
@@ -1644,18 +1714,15 @@ class CreateMCPHandler:
             )
         except AIClientError as exc:
             return MCPToolResult(content=[MCPContent(text=json.dumps({"error": str(exc)}))])
-        return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "agent_name": agent_name,
-                            "response": response,
-                        }
-                    )
-                )
-            ]
-        )
+
+        result = {
+            "agent_name": agent_name,
+            "response": response,
+        }
+        if chosen_replica:
+            result["replica"] = chosen_replica
+
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _add_channel(
         self,

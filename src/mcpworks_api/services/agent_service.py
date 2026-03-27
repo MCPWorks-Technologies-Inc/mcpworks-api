@@ -21,6 +21,7 @@ from mcpworks_api.core.exceptions import ConflictError, ForbiddenError, NotFound
 from mcpworks_api.models.agent import (
     Agent,
     AgentChannel,
+    AgentReplica,
     AgentRun,
     AgentSchedule,
     AgentState,
@@ -70,6 +71,14 @@ class AgentService:
         )
         return result.scalar_one()
 
+    async def get_total_replica_count(self, account_id: uuid.UUID) -> int:
+        result = await self.db.execute(
+            select(func.count(AgentReplica.id))
+            .join(Agent, AgentReplica.agent_id == Agent.id)
+            .where(Agent.account_id == account_id)
+        )
+        return result.scalar_one()
+
     async def create_agent(
         self,
         account_id: uuid.UUID,
@@ -102,40 +111,14 @@ class AgentService:
             status="creating",
             memory_limit_mb=tier_config["memory_limit_mb"],
             cpu_limit=tier_config["cpu_limit"],
+            target_replicas=1,
         )
         self.db.add(agent)
         await self.db.flush()
         await self.db.refresh(agent)
 
-        try:
-            self._ensure_network()
-            container = self.docker_client.containers.run(
-                AGENT_IMAGE,
-                name=f"{AGENT_CONTAINER_PREFIX}{name}",
-                detach=True,
-                network=AGENT_NETWORK_NAME,
-                mem_limit=f"{tier_config['memory_limit_mb']}m",
-                nano_cpus=int(tier_config["cpu_limit"] * 1e9),
-                environment={
-                    "AGENT_NAME": name,
-                    "AGENT_ID": str(agent.id),
-                    "MCPWORKS_API_URL": "http://mcpworks-api:8000",
-                },
-                restart_policy={"Name": "unless-stopped"},
-                read_only=True,
-                tmpfs={"/tmp": "size=64m,noexec,nosuid"},
-                cap_drop=["ALL"],
-                cap_add=["NET_BIND_SERVICE"],
-                security_opt=["no-new-privileges"],
-                user="1000:1000",
-            )
-            agent.container_id = container.id
-            agent.status = "running"
-        except DockerAPIError as e:
-            logger.error("agent_container_create_failed", agent=name, error=str(e))
-            agent.status = "error"
-            agent.container_id = None
-
+        replica = await self._create_replica(agent)
+        agent.status = self._derive_agent_status(agent)
         await self.db.flush()
         await self.db.refresh(agent)
 
@@ -145,6 +128,189 @@ class AgentService:
             agent_name=name,
             account_id=str(account_id),
             status=agent.status,
+            replica=replica.replica_name,
+        )
+        return agent
+
+    async def _create_replica(self, agent: Agent) -> AgentReplica:
+        from mcpworks_api.core.replica_names import generate_replica_name
+
+        existing_names = {r.replica_name for r in await self._get_replicas(agent.id)}
+        replica_name = generate_replica_name(existing_names)
+
+        replica = AgentReplica(
+            agent_id=agent.id,
+            replica_name=replica_name,
+            status="creating",
+        )
+        self.db.add(replica)
+        await self.db.flush()
+        await self.db.refresh(replica)
+
+        try:
+            self._ensure_network()
+            cluster_size = len(existing_names) + 1
+            container = self.docker_client.containers.run(
+                AGENT_IMAGE,
+                name=f"{AGENT_CONTAINER_PREFIX}{agent.name}-{replica_name}",
+                detach=True,
+                network=AGENT_NETWORK_NAME,
+                mem_limit=f"{agent.memory_limit_mb}m",
+                nano_cpus=int(agent.cpu_limit * 1e9),
+                environment={
+                    "AGENT_NAME": agent.name,
+                    "AGENT_ID": str(agent.id),
+                    "MCPWORKS_API_URL": "http://mcpworks-api:8000",
+                    "MCPWORKS_REPLICA_NAME": replica_name,
+                    "MCPWORKS_CLUSTER_SIZE": str(cluster_size),
+                },
+                restart_policy={"Name": "unless-stopped"},
+                read_only=True,
+                tmpfs={"/tmp": "size=64m,noexec,nosuid"},
+                cap_drop=["ALL"],
+                cap_add=["NET_BIND_SERVICE"],
+                security_opt=["no-new-privileges"],
+                user="1000:1000",
+            )
+            replica.container_id = container.id
+            replica.status = "running"
+        except DockerAPIError as e:
+            logger.error(
+                "replica_container_create_failed",
+                agent=agent.name,
+                replica=replica_name,
+                error=str(e),
+            )
+            replica.status = "error"
+
+        await self.db.flush()
+        return replica
+
+    async def _get_replicas(self, agent_id: uuid.UUID) -> list[AgentReplica]:
+        result = await self.db.execute(
+            select(AgentReplica)
+            .where(AgentReplica.agent_id == agent_id)
+            .order_by(AgentReplica.created_at)
+        )
+        return list(result.scalars())
+
+    def _derive_agent_status(self, agent: Agent) -> str:
+        replicas = agent.replicas if agent.replicas else []
+        if not replicas:
+            return agent.status if agent.status in ("creating", "destroying") else "stopped"
+        statuses = {r.status for r in replicas}
+        if statuses == {"running"}:
+            return "running"
+        if statuses == {"stopped"}:
+            return "stopped"
+        if "running" in statuses:
+            return "degraded"
+        if "error" in statuses:
+            return "error"
+        return "creating"
+
+    def _stop_replica_container(self, replica: AgentReplica) -> None:
+        if not replica.container_id:
+            return
+        try:
+            container = self.docker_client.containers.get(replica.container_id)
+            container.stop(timeout=10)
+        except (DockerNotFound, DockerAPIError) as e:
+            logger.warning("replica_stop_failed", replica=replica.replica_name, error=str(e))
+
+    def _remove_replica_container(self, replica: AgentReplica) -> None:
+        if not replica.container_id:
+            return
+        try:
+            container = self.docker_client.containers.get(replica.container_id)
+            container.remove(force=True)
+        except DockerNotFound:
+            pass
+        except DockerAPIError as e:
+            logger.warning("replica_remove_failed", replica=replica.replica_name, error=str(e))
+
+    async def _rolling_restart(self, agent: Agent) -> None:
+        """Restart all replicas one at a time, maintaining availability."""
+        replicas = await self._get_replicas(agent.id)
+        running = [r for r in replicas if r.status == "running"]
+        if len(running) <= 1:
+            for r in running:
+                if r.container_id:
+                    try:
+                        container = self.docker_client.containers.get(r.container_id)
+                        container.restart(timeout=10)
+                        r.status = "running"
+                    except (DockerNotFound, DockerAPIError) as e:
+                        logger.error("replica_restart_failed", replica=r.replica_name, error=str(e))
+                        r.status = "error"
+            await self.db.flush()
+            return
+
+        for replica in running:
+            if not replica.container_id:
+                continue
+            try:
+                container = self.docker_client.containers.get(replica.container_id)
+                container.restart(timeout=10)
+                replica.status = "running"
+                logger.info(
+                    "replica_rolling_restart", replica=replica.replica_name, agent=agent.name
+                )
+            except (DockerNotFound, DockerAPIError) as e:
+                logger.error("replica_restart_failed", replica=replica.replica_name, error=str(e))
+                replica.status = "error"
+            await self.db.flush()
+
+    async def _trigger_rolling_restart_if_clustered(self, agent: Agent) -> None:
+        """Trigger a rolling restart if the agent has more than 1 replica."""
+        if agent.target_replicas > 1:
+            await self._rolling_restart(agent)
+
+    async def scale_agent(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+        target_replicas: int,
+        tier: str,
+    ) -> Agent:
+        agent = await self.get_agent(account_id, agent_name)
+        tier_config = self._get_tier_config(tier)
+
+        current_replicas = await self._get_replicas(agent.id)
+        current_count = len(current_replicas)
+
+        other_replica_count = await self.get_total_replica_count(account_id) - current_count
+        total_after = other_replica_count + target_replicas
+        if total_after > tier_config["max_agents"]:
+            raise ConflictError(
+                f"Scaling to {target_replicas} replicas would use {total_after} slots "
+                f"(limit: {tier_config['max_agents']})"
+            )
+
+        agent.target_replicas = target_replicas
+
+        if target_replicas > current_count:
+            for _ in range(target_replicas - current_count):
+                await self._create_replica(agent)
+        elif target_replicas < current_count:
+            to_remove = current_count - target_replicas
+            newest_first = sorted(current_replicas, key=lambda r: r.created_at, reverse=True)
+            for replica in newest_first[:to_remove]:
+                self._stop_replica_container(replica)
+                self._remove_replica_container(replica)
+                await self.db.delete(replica)
+
+        await self.db.flush()
+        await self.db.refresh(agent, ["replicas"])
+        agent.status = self._derive_agent_status(agent)
+        await self.db.flush()
+
+        logger.info(
+            "agent_scaled",
+            agent_id=str(agent.id),
+            agent_name=agent_name,
+            target_replicas=target_replicas,
+            actual_replicas=len(agent.replicas),
         )
         return agent
 
@@ -172,56 +338,87 @@ class AgentService:
         )
         return list(result.scalars().all())
 
-    async def start_agent(self, account_id: uuid.UUID, agent_name: str) -> Agent:
+    async def start_agent(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+        replica_name: str | None = None,
+    ) -> Agent:
         agent = await self.get_agent(account_id, agent_name)
-        if agent.status not in ("stopped", "error"):
-            raise ConflictError(f"Agent '{agent_name}' is {agent.status}, cannot start")
+        replicas = await self._get_replicas(agent.id)
 
-        if agent.container_id:
-            try:
-                container = self.docker_client.containers.get(agent.container_id)
-                container.start()
-                agent.status = "running"
-            except DockerNotFound:
-                agent.status = "error"
-                agent.container_id = None
-            except DockerAPIError as e:
-                logger.error("agent_start_failed", agent=agent_name, error=str(e))
-                agent.status = "error"
+        if replica_name:
+            replica = next((r for r in replicas if r.replica_name == replica_name), None)
+            if not replica:
+                raise NotFoundError(f"Replica '{replica_name}' not found in agent '{agent_name}'")
+            if replica.status not in ("stopped", "error"):
+                raise ConflictError(f"Replica '{replica_name}' is {replica.status}, cannot start")
+            self._start_replica_container(replica)
         else:
-            agent.status = "error"
+            for replica in replicas:
+                if replica.status in ("stopped", "error"):
+                    self._start_replica_container(replica)
 
+        await self.db.flush()
+        await self.db.refresh(agent, ["replicas"])
+        agent.status = self._derive_agent_status(agent)
         await self.db.flush()
         logger.info("agent_started", agent_id=str(agent.id), status=agent.status)
         return agent
 
-    async def stop_agent(self, account_id: uuid.UUID, agent_name: str) -> Agent:
+    async def stop_agent(
+        self,
+        account_id: uuid.UUID,
+        agent_name: str,
+        replica_name: str | None = None,
+    ) -> Agent:
         agent = await self.get_agent(account_id, agent_name)
-        if agent.status != "running":
-            raise ConflictError(f"Agent '{agent_name}' is {agent.status}, cannot stop")
+        replicas = await self._get_replicas(agent.id)
 
-        if agent.container_id:
-            try:
-                container = self.docker_client.containers.get(agent.container_id)
-                container.stop(timeout=10)
-                agent.status = "stopped"
-            except DockerNotFound:
-                agent.status = "stopped"
-                agent.container_id = None
-            except DockerAPIError as e:
-                logger.error("agent_stop_failed", agent=agent_name, error=str(e))
-                agent.status = "error"
+        if replica_name:
+            replica = next((r for r in replicas if r.replica_name == replica_name), None)
+            if not replica:
+                raise NotFoundError(f"Replica '{replica_name}' not found in agent '{agent_name}'")
+            if replica.status != "running":
+                raise ConflictError(f"Replica '{replica_name}' is {replica.status}, cannot stop")
+            self._stop_replica_container(replica)
+            replica.status = "stopped"
         else:
-            agent.status = "stopped"
+            for replica in replicas:
+                if replica.status == "running":
+                    self._stop_replica_container(replica)
+                    replica.status = "stopped"
 
+        await self.db.flush()
+        await self.db.refresh(agent, ["replicas"])
+        agent.status = self._derive_agent_status(agent)
         await self.db.flush()
         logger.info("agent_stopped", agent_id=str(agent.id), status=agent.status)
         return agent
+
+    def _start_replica_container(self, replica: AgentReplica) -> None:
+        if not replica.container_id:
+            replica.status = "error"
+            return
+        try:
+            container = self.docker_client.containers.get(replica.container_id)
+            container.start()
+            replica.status = "running"
+        except DockerNotFound:
+            replica.status = "error"
+            replica.container_id = None
+        except DockerAPIError as e:
+            logger.error("replica_start_failed", replica=replica.replica_name, error=str(e))
+            replica.status = "error"
 
     async def destroy_agent(self, account_id: uuid.UUID, agent_name: str) -> Agent:
         agent = await self.get_agent(account_id, agent_name)
         agent.status = "destroying"
         await self.db.flush()
+
+        replicas = await self._get_replicas(agent.id)
+        for replica in replicas:
+            self._remove_replica_container(replica)
 
         if agent.container_id:
             try:
@@ -351,6 +548,7 @@ class AgentService:
         failure_policy: dict,
         tier: str,
         orchestration_mode: str = "direct",
+        mode: str = "single",
     ) -> AgentSchedule:
         agent = await self.get_agent(account_id, agent_name)
         tier_config = self._get_tier_config(tier)
@@ -369,6 +567,7 @@ class AgentService:
             timezone=timezone,
             failure_policy=failure_policy,
             orchestration_mode=orchestration_mode,
+            mode=mode,
             enabled=True,
             consecutive_failures=0,
             next_run_at=_compute_next_run(cron_expression, timezone),
@@ -681,6 +880,7 @@ class AgentService:
         await self.db.flush()
         await self.db.refresh(agent)
         logger.info("agent_ai_configured", agent_id=str(agent.id), engine=engine, model=model)
+        await self._trigger_rolling_restart_if_clustered(agent)
         return agent
 
     @staticmethod
@@ -1262,6 +1462,7 @@ class AgentService:
             auto_channel=source.auto_channel,
             mcp_servers=source.mcp_servers,
             cloned_from_id=source.id,
+            target_replicas=1,
         )
         self.db.add(new_agent)
         await self.db.flush()

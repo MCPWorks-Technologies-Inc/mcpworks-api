@@ -39,6 +39,16 @@ class CreateAgentRequest(BaseModel):
         return v
 
 
+class AgentReplicaResponse(BaseModel):
+    id: uuid.UUID
+    replica_name: str
+    status: str
+    last_heartbeat: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class AgentResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -46,6 +56,8 @@ class AgentResponse(BaseModel):
     namespace_id: uuid.UUID | None = None
     namespace_name: str | None = None
     status: str
+    target_replicas: int = 1
+    replicas: list[AgentReplicaResponse] = []
     tool_tier: str = "standard"
     ai_engine: str | None = None
     ai_model: str | None = None
@@ -116,7 +128,18 @@ class CreateScheduleRequest(BaseModel):
     function_name: str = Field(..., min_length=1, max_length=255)
     cron_expression: str = Field(..., min_length=9, max_length=255)
     timezone: str = Field("UTC", max_length=50)
+    mode: str = Field(
+        "single",
+        description="single: exactly one replica executes. cluster: all replicas execute independently.",
+    )
     failure_policy: dict[str, Any] = Field(...)
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        if v not in ("single", "cluster"):
+            raise ValueError("mode must be 'single' or 'cluster'")
+        return v
 
     @field_validator("failure_policy")
     @classmethod
@@ -140,6 +163,7 @@ class ScheduleResponse(BaseModel):
     cron_expression: str
     cron_description: str = ""
     timezone: str
+    mode: str = "single"
     failure_policy: dict[str, Any]
     enabled: bool
     consecutive_failures: int

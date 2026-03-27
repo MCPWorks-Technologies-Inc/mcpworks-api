@@ -24,7 +24,10 @@ from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 
 AGENT_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
-AGENT_STATUSES = ("creating", "running", "stopped", "error", "destroying")
+AGENT_STATUSES = ("creating", "running", "stopped", "error", "destroying", "degraded")
+REPLICA_STATUSES = ("creating", "running", "stopped", "error")
+SCHEDULE_MODES = ("single", "cluster")
+JOB_STATUSES = ("pending", "claimed", "running", "complete", "failed")
 RUN_STATUSES = ("running", "completed", "failed", "timeout")
 TRIGGER_TYPES = ("cron", "webhook", "manual", "ai", "heartbeat")
 CHANNEL_TYPES = ("discord", "slack", "whatsapp", "email")
@@ -92,6 +95,9 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         ForeignKey("agents.id", ondelete="SET NULL"),
         nullable=True,
     )
+    target_replicas: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     scratchpad_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     chat_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scratchpad_size_bytes: Mapped[int] = mapped_column(
@@ -129,6 +135,12 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         "AgentChannel",
         back_populates="agent",
         cascade="all, delete-orphan",
+    )
+    replicas: Mapped[list["AgentReplica"]] = relationship(
+        "AgentReplica",
+        back_populates="agent",
+        cascade="all, delete-orphan",
+        order_by="AgentReplica.created_at",
     )
 
     __table_args__ = (
@@ -227,6 +239,9 @@ class AgentSchedule(Base, UUIDMixin):
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="UTC")
     failure_policy: Mapped[dict] = mapped_column(JSONB, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    mode: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="single", server_default="single"
+    )
     orchestration_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="direct")
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -328,4 +343,85 @@ class AgentChannel(Base, UUIDMixin):
     def validate_channel_type(self, key: str, value: str) -> str:
         if value not in CHANNEL_TYPES:
             raise ValueError(f"Invalid channel type: {value}")
+        return value
+
+
+class AgentReplica(Base, UUIDMixin):
+    __tablename__ = "agent_replicas"
+
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    replica_name: Mapped[str] = mapped_column(String(63), nullable=False)
+    container_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="creating")
+    last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    agent: Mapped["Agent"] = relationship("Agent", back_populates="replicas")
+
+    __table_args__ = (
+        UniqueConstraint("agent_id", "replica_name", name="uq_agent_replica_name"),
+        Index("ix_agent_replicas_agent_id", "agent_id"),
+        Index("ix_agent_replicas_status", "agent_id", "status"),
+    )
+
+    @validates("status")
+    def validate_status(self, key: str, value: str) -> str:
+        if value not in REPLICA_STATUSES:
+            raise ValueError(f"Invalid replica status: {value}")
+        return value
+
+
+class ScheduledJob(Base, UUIDMixin):
+    __tablename__ = "scheduled_jobs"
+
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    schedule_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_schedules.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    replica_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_replicas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    fire_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    claimed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_replicas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_scheduled_jobs_pending",
+            "agent_id",
+            "status",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_scheduled_jobs_schedule", "schedule_id", "fire_time"),
+        Index("ix_scheduled_jobs_cleanup", "status", "completed_at"),
+    )
+
+    @validates("status")
+    def validate_status(self, key: str, value: str) -> str:
+        if value not in JOB_STATUSES:
+            raise ValueError(f"Invalid job status: {value}")
         return value
