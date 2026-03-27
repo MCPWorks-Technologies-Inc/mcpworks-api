@@ -327,7 +327,9 @@ class AgentService:
 
     async def get_agent_by_id(self, account_id: uuid.UUID, agent_id: uuid.UUID) -> Agent:
         result = await self.db.execute(
-            select(Agent).where(Agent.account_id == account_id, Agent.id == agent_id)
+            select(Agent)
+            .where(Agent.account_id == account_id, Agent.id == agent_id)
+            .options(selectinload(Agent.replicas))
         )
         agent = result.scalar_one_or_none()
         if not agent:
