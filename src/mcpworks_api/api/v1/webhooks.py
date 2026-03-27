@@ -55,7 +55,9 @@ async def handle_agent_webhook(path: str, request: Request) -> JSONResponse:
             return JSONResponse(status_code=503, content={"detail": "Agent is not running"})
 
         replicas_result = await db.execute(
-            __import__("sqlalchemy").select(AgentReplica).where(
+            __import__("sqlalchemy")
+            .select(AgentReplica)
+            .where(
                 AgentReplica.agent_id == agent.id,
                 AgentReplica.status == "running",
             )

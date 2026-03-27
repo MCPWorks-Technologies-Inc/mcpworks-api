@@ -1228,10 +1228,7 @@ class CreateMCPHandler:
         result = {
             "agent": agent.name,
             "target_replicas": agent.target_replicas,
-            "replicas": [
-                {"name": r.replica_name, "status": r.status}
-                for r in agent.replicas
-            ],
+            "replicas": [{"name": r.replica_name, "status": r.status} for r in agent.replicas],
             "slots_used": total_slots,
             "slots_limit": tier_config["max_agents"],
         }
@@ -1681,15 +1678,25 @@ class CreateMCPHandler:
             matched = next((r for r in replicas if r.replica_name == replica), None)
             if not matched:
                 return MCPToolResult(
-                    content=[MCPContent(text=json.dumps({
-                        "error": f"Replica '{replica}' not found in agent '{agent_name}'"
-                    }))]
+                    content=[
+                        MCPContent(
+                            text=json.dumps(
+                                {"error": f"Replica '{replica}' not found in agent '{agent_name}'"}
+                            )
+                        )
+                    ]
                 )
             if matched.status != "running":
                 return MCPToolResult(
-                    content=[MCPContent(text=json.dumps({
-                        "error": f"Replica '{replica}' is {matched.status}, not available for chat"
-                    }))]
+                    content=[
+                        MCPContent(
+                            text=json.dumps(
+                                {
+                                    "error": f"Replica '{replica}' is {matched.status}, not available for chat"
+                                }
+                            )
+                        )
+                    ]
                 )
             chosen_replica = replica
         else:
@@ -1715,11 +1722,7 @@ class CreateMCPHandler:
         if chosen_replica:
             result["replica"] = chosen_replica
 
-        return MCPToolResult(
-            content=[
-                MCPContent(text=json.dumps(result))
-            ]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _add_channel(
         self,

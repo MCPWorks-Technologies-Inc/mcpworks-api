@@ -253,7 +253,9 @@ class AgentService:
                 container = self.docker_client.containers.get(replica.container_id)
                 container.restart(timeout=10)
                 replica.status = "running"
-                logger.info("replica_rolling_restart", replica=replica.replica_name, agent=agent.name)
+                logger.info(
+                    "replica_rolling_restart", replica=replica.replica_name, agent=agent.name
+                )
             except (DockerNotFound, DockerAPIError) as e:
                 logger.error("replica_restart_failed", replica=replica.replica_name, error=str(e))
                 replica.status = "error"

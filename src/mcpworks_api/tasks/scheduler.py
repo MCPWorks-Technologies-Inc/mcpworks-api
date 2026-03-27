@@ -545,10 +545,12 @@ async def _claim_pending_jobs() -> list[tuple[ScheduledJob, AgentSchedule, Agent
         for job in all_jobs:
             if job.replica_id is None:
                 replica_result = await db.execute(
-                    select(AgentReplica).where(
+                    select(AgentReplica)
+                    .where(
                         AgentReplica.agent_id == job.agent_id,
                         AgentReplica.status == "running",
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
                 replica = replica_result.scalar_one_or_none()
                 if not replica:
@@ -580,9 +582,7 @@ async def _execute_claimed_job(
     """Execute a claimed scheduled job and update its status."""
     async with get_db_context() as db:
         await db.execute(
-            update(ScheduledJob)
-            .where(ScheduledJob.id == job.id)
-            .values(status="running")
+            update(ScheduledJob).where(ScheduledJob.id == job.id).values(status="running")
         )
 
     try:
@@ -661,7 +661,9 @@ async def _check_replica_health() -> int:
                 "replica_heartbeat_timeout",
                 replica=replica.replica_name,
                 agent_id=str(replica.agent_id),
-                last_heartbeat=replica.last_heartbeat.isoformat() if replica.last_heartbeat else None,
+                last_heartbeat=replica.last_heartbeat.isoformat()
+                if replica.last_heartbeat
+                else None,
             )
 
         agents_needing_replacement: set[str] = set()

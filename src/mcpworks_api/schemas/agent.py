@@ -128,7 +128,10 @@ class CreateScheduleRequest(BaseModel):
     function_name: str = Field(..., min_length=1, max_length=255)
     cron_expression: str = Field(..., min_length=9, max_length=255)
     timezone: str = Field("UTC", max_length=50)
-    mode: str = Field("single", description="single: exactly one replica executes. cluster: all replicas execute independently.")
+    mode: str = Field(
+        "single",
+        description="single: exactly one replica executes. cluster: all replicas execute independently.",
+    )
     failure_policy: dict[str, Any] = Field(...)
 
     @field_validator("mode")
