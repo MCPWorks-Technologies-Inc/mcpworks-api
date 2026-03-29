@@ -58,11 +58,19 @@ class ProcedureService:
             if "." not in ref:
                 raise ValueError(f"Step {i + 1}: function_ref must be in 'service.function' format")
             svc_name, fn_name = ref.split(".", 1)
+            svc_result = await self.db.execute(
+                select(NamespaceService).where(
+                    NamespaceService.namespace_id == namespace_id,
+                    NamespaceService.name == svc_name,
+                )
+            )
+            svc_obj = svc_result.scalar_one_or_none()
+            if not svc_obj:
+                raise NotFoundError(f"Step {i + 1}: service '{svc_name}' not found in namespace")
             try:
-                svc_obj = await fn_service.get_service_by_name(namespace_id, svc_name)
                 await fn_service.get_by_name(svc_obj.id, fn_name)
             except Exception:
-                raise NotFoundError(f"Step {i + 1}: function '{ref}' not found in namespace")
+                raise NotFoundError(f"Step {i + 1}: function '{fn_name}' not found in service '{svc_name}'")
 
         normalized_steps = []
         for i, step in enumerate(steps):
