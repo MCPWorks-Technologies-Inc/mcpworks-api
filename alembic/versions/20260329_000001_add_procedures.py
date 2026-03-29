@@ -59,7 +59,7 @@ def upgrade() -> None:
         sa.Column("trigger_type", sa.String(20), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="running"),
         sa.Column("current_step", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("step_results", JSONB(), nullable=False, server_default="'[]'::jsonb"),
+        sa.Column("step_results", JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("input_context", JSONB(), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
