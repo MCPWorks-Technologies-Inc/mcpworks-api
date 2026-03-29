@@ -70,7 +70,9 @@ class ProcedureService:
             try:
                 await fn_service.get_by_name(svc_obj.id, fn_name)
             except Exception:
-                raise NotFoundError(f"Step {i + 1}: function '{fn_name}' not found in service '{svc_name}'")
+                raise NotFoundError(
+                    f"Step {i + 1}: function '{fn_name}' not found in service '{svc_name}'"
+                )
 
         normalized_steps = []
         for i, step in enumerate(steps):
