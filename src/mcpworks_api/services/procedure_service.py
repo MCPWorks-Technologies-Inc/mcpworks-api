@@ -103,6 +103,7 @@ class ProcedureService:
         )
         self.db.add(version)
         await self.db.flush()
+        await self.db.refresh(procedure, ["versions"])
 
         logger.info(
             "procedure_created",
