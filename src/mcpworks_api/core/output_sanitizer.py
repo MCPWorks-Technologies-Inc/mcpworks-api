@@ -6,13 +6,23 @@ Scrubs secrets from sandbox execution output before returning to LLMs.
 import re
 
 SECRET_PATTERNS: list[tuple[str, str]] = [
-    (r"sk-[a-zA-Z0-9]{20,}", "[REDACTED_API_KEY]"),
     (r"sk-proj-[a-zA-Z0-9_-]{50,}", "[REDACTED_API_KEY]"),
     (r"sk-ant-[a-zA-Z0-9_-]{50,}", "[REDACTED_API_KEY]"),
+    (r"sk_live_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_KEY]"),
+    (r"sk_test_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_KEY]"),
+    (r"pk_live_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_KEY]"),
+    (r"pk_test_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_KEY]"),
+    (r"rk_live_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_KEY]"),
+    (r"rk_test_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_KEY]"),
+    (r"whsec_[a-zA-Z0-9]{12,}", "[REDACTED_STRIPE_WEBHOOK]"),
+    (r"sk-[a-zA-Z0-9]{20,}", "[REDACTED_API_KEY]"),
     (r"AKIA[0-9A-Z]{16}", "[REDACTED_AWS_KEY]"),
     (r"ghp_[a-zA-Z0-9]{36}", "[REDACTED_GITHUB_TOKEN]"),
     (r"gho_[a-zA-Z0-9]{36}", "[REDACTED_GITHUB_TOKEN]"),
     (r"glpat-[a-zA-Z0-9_-]{20,}", "[REDACTED_GITLAB_TOKEN]"),
+    (r"xoxb-[a-zA-Z0-9-]{20,}", "[REDACTED_SLACK_TOKEN]"),
+    (r"xoxp-[a-zA-Z0-9-]{20,}", "[REDACTED_SLACK_TOKEN]"),
+    (r"xoxa-[a-zA-Z0-9-]{20,}", "[REDACTED_SLACK_TOKEN]"),
     (r"mcpw_[a-f0-9]{64}", "[REDACTED_MCPWORKS_KEY]"),
     (r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+", "[REDACTED_JWT]"),
     (
@@ -37,8 +47,30 @@ OUTPUT_SIZE_LIMITS: dict[str, int] = {
 }
 
 
-def scrub_secrets(output: str) -> tuple[str, int]:
-    """Scrub secret patterns from output.
+MIN_ENV_VALUE_LENGTH = 8
+
+
+def scrub_env_values(output: str, env_values: list[str]) -> tuple[str, int]:
+    """Replace exact env var values in output with redaction marker.
+
+    Only matches values of MIN_ENV_VALUE_LENGTH or more characters to avoid
+    false positives on short strings.
+
+    Returns:
+        (scrubbed_output, redaction_count)
+    """
+    count = 0
+    for value in env_values:
+        if len(value) < MIN_ENV_VALUE_LENGTH:
+            continue
+        if value in output:
+            output = output.replace(value, "[REDACTED:secret_detected]")
+            count += 1
+    return output, count
+
+
+def scrub_secrets(output: str, env_values: list[str] | None = None) -> tuple[str, int]:
+    """Scrub secret patterns and env var values from output.
 
     Returns:
         (scrubbed_output, redaction_count)
@@ -47,6 +79,9 @@ def scrub_secrets(output: str) -> tuple[str, int]:
     for pattern, replacement in _COMPILED_PATTERNS:
         output, n = pattern.subn(replacement, output)
         count += n
+    if env_values:
+        output, env_count = scrub_env_values(output, env_values)
+        count += env_count
     return output, count
 
 

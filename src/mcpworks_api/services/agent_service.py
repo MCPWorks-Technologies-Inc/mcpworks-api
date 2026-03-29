@@ -960,7 +960,9 @@ class AgentService:
 
         api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
 
-        tools = await build_tool_definitions(agent.namespace_id, self.db, public_only=public_only)
+        tools = await build_tool_definitions(
+            agent.namespace_id, self.db, public_only=public_only, agent_mode=True
+        )
         agent_state = await self.get_all_state(agent.id)
 
         mcp_pool: McpServerPool | None = None

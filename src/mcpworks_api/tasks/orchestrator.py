@@ -20,6 +20,7 @@ from mcpworks_api.backends import get_backend
 from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
 from mcpworks_api.core.ai_tools import (
     PLATFORM_TOOL_NAMES,
+    RESTRICTED_AGENT_TOOLS,
     augment_system_prompt,
     build_tool_definitions,
     format_available_tools,
@@ -120,7 +121,7 @@ async def run_orchestration(
     api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
 
     async with get_db_context() as db:
-        tools = await build_tool_definitions(agent.namespace_id, db)
+        tools = await build_tool_definitions(agent.namespace_id, db, agent_mode=True)
         agent_state = await AgentService(db).get_all_state(agent.id)
 
     mcp_pool: McpServerPool | None = None
@@ -351,6 +352,40 @@ async def run_orchestration(
                         "Orchestration halted.",
                         duration_ms=_elapsed_ms(start_time),
                     )
+
+                if tool_name in RESTRICTED_AGENT_TOOLS:
+                    import asyncio as _asyncio_rt
+
+                    from mcpworks_api.services.security_event import fire_security_event
+
+                    _asyncio_rt.create_task(
+                        fire_security_event(
+                            db=None,
+                            event_type="restricted_tool_attempt",
+                            severity="high",
+                            details={
+                                "agent": agent.name,
+                                "tool": tool_name,
+                                "trigger_type": trigger_type,
+                            },
+                        )
+                    )
+                    logger.warning(
+                        "restricted_tool_attempt",
+                        agent=agent.name,
+                        tool=tool_name,
+                        trigger_type=trigger_type,
+                    )
+                    tool_results.append(
+                        _tool_result(
+                            tool_id,
+                            tool_name,
+                            json.dumps(
+                                {"error": f"Tool '{tool_name}' is not available to agents."}
+                            ),
+                        )
+                    )
+                    continue
 
                 source = (
                     "mcp"
