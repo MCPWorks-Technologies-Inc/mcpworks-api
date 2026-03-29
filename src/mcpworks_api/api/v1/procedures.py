@@ -5,9 +5,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcpworks_api.api.v1.agents import get_current_account, get_current_user
 from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import ConflictError, NotFoundError
-from mcpworks_api.dependencies import get_current_account, get_current_user, require_scope
+from mcpworks_api.dependencies import require_scope
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.user import User
 from mcpworks_api.schemas.procedure import (
