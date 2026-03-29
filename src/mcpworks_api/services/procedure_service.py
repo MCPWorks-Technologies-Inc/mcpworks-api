@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from mcpworks_api.core.exceptions import ConflictError, NotFoundError
+from mcpworks_api.models.function import Function
 from mcpworks_api.models.namespace_service import NamespaceService
 from mcpworks_api.models.procedure import (
     Procedure,
     ProcedureExecution,
     ProcedureVersion,
 )
-from mcpworks_api.services.function import FunctionService
 
 logger = structlog.get_logger(__name__)
 
@@ -52,27 +52,23 @@ class ProcedureService:
         if existing.scalar_one_or_none():
             raise ConflictError(f"Procedure '{name}' already exists in service '{service_name}'")
 
-        fn_service = FunctionService(self.db)
         for i, step in enumerate(steps):
             ref = step["function_ref"]
             if "." not in ref:
                 raise ValueError(f"Step {i + 1}: function_ref must be in 'service.function' format")
             svc_name, fn_name = ref.split(".", 1)
-            svc_result = await self.db.execute(
-                select(NamespaceService).where(
+            fn_result = await self.db.execute(
+                select(Function.id)
+                .join(NamespaceService, Function.service_id == NamespaceService.id)
+                .where(
                     NamespaceService.namespace_id == namespace_id,
                     NamespaceService.name == svc_name,
+                    Function.name == fn_name.lower(),
+                    Function.deleted_at.is_(None),
                 )
             )
-            svc_obj = svc_result.scalar_one_or_none()
-            if not svc_obj:
-                raise NotFoundError(f"Step {i + 1}: service '{svc_name}' not found in namespace")
-            try:
-                await fn_service.get_by_name(svc_obj.id, fn_name)
-            except Exception:
-                raise NotFoundError(
-                    f"Step {i + 1}: function '{fn_name}' not found in service '{svc_name}'"
-                )
+            if not fn_result.scalar_one_or_none():
+                raise NotFoundError(f"Step {i + 1}: function '{ref}' not found in namespace")
 
         normalized_steps = []
         for i, step in enumerate(steps):
