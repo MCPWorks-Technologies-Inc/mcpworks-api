@@ -9,11 +9,15 @@ from pydantic import BaseModel, Field, field_validator
 
 class ProcedureStepSchema(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    function_ref: str = Field(..., min_length=3, max_length=255, description="service.function format")
+    function_ref: str = Field(
+        ..., min_length=3, max_length=255, description="service.function format"
+    )
     instructions: str = Field(..., min_length=1, max_length=4000)
     failure_policy: str = Field("required", description="required, allowed, or skip")
     max_retries: int = Field(1, ge=0, le=5)
-    validation: dict[str, Any] | None = Field(None, description='e.g. {"required_fields": ["token"]}')
+    validation: dict[str, Any] | None = Field(
+        None, description='e.g. {"required_fields": ["token"]}'
+    )
 
     @field_validator("failure_policy")
     @classmethod
