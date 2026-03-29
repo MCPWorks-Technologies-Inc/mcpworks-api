@@ -654,14 +654,19 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                 },
                 "orchestration_mode": {
                     "type": "string",
-                    "enum": ["direct", "reason_first", "run_then_reason"],
+                    "enum": ["direct", "reason_first", "run_then_reason", "procedure"],
                     "description": (
                         "How the schedule interacts with the agent's AI engine. "
                         "'direct' (default): execute function without AI. "
                         "'reason_first': send trigger to AI, let it decide which functions to call. "
-                        "'run_then_reason': execute function first, pass output to AI for analysis."
+                        "'run_then_reason': execute function first, pass output to AI for analysis. "
+                        "'procedure': execute a named procedure step-by-step."
                     ),
                     "default": "direct",
+                },
+                "procedure_name": {
+                    "type": "string",
+                    "description": "Required when orchestration_mode is 'procedure'. Name of the procedure to execute.",
                 },
             },
             "required": [
@@ -735,12 +740,13 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                 },
                 "orchestration_mode": {
                     "type": "string",
-                    "enum": ["direct", "reason_first", "run_then_reason"],
+                    "enum": ["direct", "reason_first", "run_then_reason", "procedure"],
                     "description": (
                         "How the webhook interacts with the agent's AI engine. "
                         "'direct' (default): execute handler function without AI. "
                         "'reason_first': send webhook payload to AI, let it decide which functions to call. "
-                        "'run_then_reason': execute handler first, pass output to AI for analysis."
+                        "'run_then_reason': execute handler first, pass output to AI for analysis. "
+                        "'procedure': execute a named procedure step-by-step."
                     ),
                     "default": "direct",
                 },
@@ -1157,6 +1163,163 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                 },
             },
             "required": ["agent_name", "channel_type"],
+        },
+    ),
+    "make_procedure": ToolDef(
+        name="make_procedure",
+        brief="Create a procedure — an ordered sequence of steps that each call a specific function.",
+        description=(
+            "Create a procedure with ordered steps. Each step references a function that the AI must call. "
+            "The orchestrator enforces step-by-step execution and captures actual function results as proof. "
+            "This eliminates LLM hallucination of function calls."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "name": {"type": "string", "description": "Procedure name"},
+                "description": {"type": "string", "description": "What this procedure does"},
+                "steps": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "description": "Ordered list of steps",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Step name"},
+                            "function_ref": {
+                                "type": "string",
+                                "description": "Function to call (service.function format)",
+                            },
+                            "instructions": {
+                                "type": "string",
+                                "description": "Instructions for the AI at this step",
+                            },
+                            "failure_policy": {
+                                "type": "string",
+                                "enum": ["required", "allowed", "skip"],
+                                "default": "required",
+                            },
+                            "max_retries": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5,
+                                "default": 1,
+                            },
+                            "validation": {
+                                "type": "object",
+                                "description": "Optional: {required_fields: ['field1']}",
+                            },
+                        },
+                        "required": ["name", "function_ref", "instructions"],
+                    },
+                },
+            },
+            "required": ["service", "name", "steps"],
+        },
+    ),
+    "update_procedure": ToolDef(
+        name="update_procedure",
+        brief="Update a procedure's steps (creates a new immutable version).",
+        description="Update a procedure. If steps are provided, a new version is created. Old versions remain for audit.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "name": {"type": "string", "description": "Procedure name"},
+                "description": {"type": "string"},
+                "steps": {
+                    "type": "array",
+                    "description": "New step definitions (creates new version)",
+                },
+            },
+            "required": ["service", "name"],
+        },
+    ),
+    "delete_procedure": ToolDef(
+        name="delete_procedure",
+        brief="Soft-delete a procedure. Execution records are preserved.",
+        description="Soft-delete a procedure. It will no longer appear in listings. Historical execution records remain intact for audit.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "name": {"type": "string", "description": "Procedure name"},
+            },
+            "required": ["service", "name"],
+        },
+    ),
+    "list_procedures": ToolDef(
+        name="list_procedures",
+        brief="List all procedures in a service.",
+        description="List all procedures in a service with their names, step counts, and versions.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+            },
+            "required": ["service"],
+        },
+    ),
+    "describe_procedure": ToolDef(
+        name="describe_procedure",
+        brief="Get full details of a procedure including step definitions and version history.",
+        description="Get full details of a procedure: steps, failure policies, validation rules, version history.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "name": {"type": "string", "description": "Procedure name"},
+            },
+            "required": ["service", "name"],
+        },
+    ),
+    "run_procedure": ToolDef(
+        name="run_procedure",
+        brief="Execute a procedure step-by-step with enforced function calls.",
+        description=(
+            "Execute a procedure. The orchestrator steps through each defined step, calling the required function "
+            "and capturing its result before advancing. Each step produces verifiable proof of execution."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "name": {"type": "string", "description": "Procedure name"},
+                "input_context": {
+                    "type": "object",
+                    "description": "Optional initial context available to step 1",
+                },
+            },
+            "required": ["service", "name"],
+        },
+    ),
+    "list_procedure_executions": ToolDef(
+        name="list_procedure_executions",
+        brief="List execution records for a procedure.",
+        description="List execution records with status, timestamps, and step counts. Filter by status.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "name": {"type": "string", "description": "Procedure name"},
+                "status": {"type": "string", "enum": ["running", "completed", "failed"]},
+                "limit": {"type": "integer", "default": 10},
+            },
+            "required": ["service", "name"],
+        },
+    ),
+    "describe_procedure_execution": ToolDef(
+        name="describe_procedure_execution",
+        brief="Get the full audit trail for a procedure execution.",
+        description="Get step-by-step details: function called, result data, retry attempts, timestamps, and status for each step.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "execution_id": {"type": "string", "description": "Execution UUID"},
+            },
+            "required": ["execution_id"],
         },
     ),
     "clone_agent": ToolDef(

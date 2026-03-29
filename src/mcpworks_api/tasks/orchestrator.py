@@ -837,3 +837,318 @@ def _limit_result(
         error=error,
         context_tokens=context_tokens,
     )
+
+
+async def run_procedure_orchestration(
+    agent: Agent,
+    procedure_name: str,
+    service_name: str,
+    trigger_type: str,
+    account: Account,
+    tier: str,
+    input_context: dict | None = None,
+) -> OrchestrationResult:
+    """Execute a procedure step-by-step, enforcing function calls at each step."""
+    from mcpworks_api.models.procedure import ProcedureExecution
+    from mcpworks_api.services.procedure_service import ProcedureService
+
+    start_time = time.monotonic()
+
+    if not agent.ai_engine or not agent.ai_api_key_encrypted:
+        return OrchestrationResult(
+            success=False,
+            final_text=None,
+            error="Agent has no AI engine configured",
+            duration_ms=_elapsed_ms(start_time),
+        )
+
+    api_key = decrypt_value(agent.ai_api_key_encrypted, agent.ai_api_key_dek_encrypted)
+    limits = resolve_orchestration_limits(tier, agent)
+
+    async with get_db_context() as db:
+        proc_service = ProcedureService(db)
+        try:
+            procedure = await proc_service.get_procedure(
+                agent.namespace_id, service_name, procedure_name
+            )
+        except Exception as e:
+            return OrchestrationResult(
+                success=False, final_text=None, error=str(e), duration_ms=_elapsed_ms(start_time)
+            )
+
+        active_version = procedure.get_active_version_obj()
+        if not active_version:
+            return OrchestrationResult(
+                success=False,
+                final_text=None,
+                error=f"No active version for procedure '{procedure_name}'",
+                duration_ms=_elapsed_ms(start_time),
+            )
+
+        steps = active_version.steps
+        execution = await proc_service.create_execution(
+            procedure=procedure,
+            trigger_type=trigger_type,
+            agent_id=agent.id,
+            input_context=input_context,
+        )
+        execution_id = execution.id
+
+    async with get_db_context() as db:
+        tools = await build_tool_definitions(agent.namespace_id, db, agent_mode=True)
+        agent_state = await AgentService(db).get_all_state(agent.id)
+
+    functions_called: list[str] = []
+    total_tokens = 0
+    iterations = 0
+    accumulated_context: dict = {}
+    step_results: list[dict] = []
+
+    if input_context:
+        accumulated_context["input"] = input_context
+
+    for step in steps:
+        step_num = step["step_number"]
+        step_name = step["name"]
+        function_ref = step["function_ref"]
+        instructions = step["instructions"]
+        failure_policy = step.get("failure_policy", "required")
+        max_retries = step.get("max_retries", 1)
+        validation = step.get("validation")
+
+        svc_name, fn_name = function_ref.split(".", 1)
+        tool_name = f"{svc_name}__{fn_name}"
+
+        step_result: dict = {
+            "step_number": step_num,
+            "name": step_name,
+            "status": "running",
+            "function_called": None,
+            "result": None,
+            "error": None,
+            "attempt_count": 0,
+            "attempts": [],
+        }
+
+        step_succeeded = False
+        for attempt in range(max_retries + 1):
+            attempt_record: dict = {
+                "attempt": attempt + 1,
+                "started_at": datetime.now(UTC).isoformat(),
+                "completed_at": None,
+                "success": False,
+                "error": None,
+            }
+            step_result["attempt_count"] = attempt + 1
+
+            if _elapsed_seconds(start_time) >= limits["max_execution_seconds"]:
+                attempt_record["error"] = "Execution time limit exceeded"
+                attempt_record["completed_at"] = datetime.now(UTC).isoformat()
+                step_result["attempts"].append(attempt_record)
+                break
+
+            ctx_str = json.dumps(accumulated_context, default=str) if accumulated_context else "{}"
+            system_prompt = (
+                f"You are executing step {step_num} of a procedure.\n\n"
+                f"## Step: {step_name}\n"
+                f"## Instructions\n{instructions}\n\n"
+                f"## Required Function\n"
+                f"You MUST call the function `{tool_name}` to complete this step.\n"
+                f"Do NOT respond with text only — you must make a tool call to `{tool_name}`.\n\n"
+                f"## Context from prior steps\n{ctx_str}\n"
+            )
+
+            messages: list[dict] = [
+                {
+                    "role": "user",
+                    "content": f"Execute step {step_num}: {step_name}. Call `{tool_name}` now.",
+                }
+            ]
+
+            try:
+                response = await chat_with_tools(
+                    engine=agent.ai_engine,
+                    model=agent.ai_model or "",
+                    api_key=api_key,
+                    messages=messages,
+                    tools=tools,
+                    system_prompt=system_prompt,
+                )
+            except AIClientError as e:
+                attempt_record["error"] = str(e)[:500]
+                attempt_record["completed_at"] = datetime.now(UTC).isoformat()
+                step_result["attempts"].append(attempt_record)
+                continue
+
+            iterations += 1
+            usage = response.get("usage", {})
+            total_tokens += usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+
+            content_blocks = response.get("content", [])
+            stop_reason = response.get("stop_reason", "end_turn")
+
+            if stop_reason != "tool_use":
+                attempt_record["error"] = (
+                    "LLM responded with text instead of calling the required function"
+                )
+                attempt_record["completed_at"] = datetime.now(UTC).isoformat()
+                step_result["attempts"].append(attempt_record)
+                continue
+
+            called_correct = False
+            for block in content_blocks:
+                if block.get("type") != "tool_use":
+                    continue
+                called_tool = block["name"]
+                tool_input = block.get("input", {})
+
+                if called_tool != tool_name:
+                    attempt_record["error"] = (
+                        f"Called '{called_tool}' instead of required '{tool_name}'"
+                    )
+                    continue
+
+                result_str = await _dispatch_tool(
+                    called_tool,
+                    tool_input,
+                    agent,
+                    account,
+                    tier,
+                    agent_state=agent_state,
+                    trigger_type=trigger_type,
+                    available_tools=tools,
+                )
+
+                is_error = '"error"' in result_str[:50]
+                if is_error:
+                    attempt_record["error"] = result_str[:500]
+                    continue
+
+                try:
+                    result_data = json.loads(result_str)
+                except (json.JSONDecodeError, TypeError):
+                    result_data = result_str
+
+                if validation and isinstance(validation, dict):
+                    required_fields = validation.get("required_fields", [])
+                    if required_fields and isinstance(result_data, dict):
+                        missing = [f for f in required_fields if f not in result_data]
+                        if missing:
+                            attempt_record["error"] = f"Validation failed: missing fields {missing}"
+                            continue
+
+                step_result["function_called"] = called_tool
+                step_result["result"] = result_data
+                functions_called.append(called_tool)
+                called_correct = True
+                attempt_record["success"] = True
+                break
+
+            attempt_record["completed_at"] = datetime.now(UTC).isoformat()
+            step_result["attempts"].append(attempt_record)
+
+            if called_correct:
+                step_succeeded = True
+                break
+
+        if step_succeeded:
+            step_result["status"] = "success"
+            accumulated_context[f"step_{step_num}"] = {
+                "name": step_name,
+                "status": "success",
+                "result": step_result["result"],
+            }
+        elif failure_policy == "skip":
+            step_result["status"] = "skipped"
+            accumulated_context[f"step_{step_num}"] = {
+                "name": step_name,
+                "status": "skipped",
+                "result": None,
+            }
+        elif failure_policy == "allowed":
+            step_result["status"] = "failed"
+            accumulated_context[f"step_{step_num}"] = {
+                "name": step_name,
+                "status": "failed",
+                "result": None,
+            }
+        else:
+            step_result["status"] = "failed"
+            step_results.append(step_result)
+            async with get_db_context() as db:
+                proc_service = ProcedureService(db)
+                exec_result = await db.execute(
+                    select(ProcedureExecution).where(ProcedureExecution.id == execution_id)
+                )
+                execution = exec_result.scalar_one()
+                await proc_service.update_execution(
+                    execution,
+                    status="failed",
+                    current_step=step_num,
+                    step_results=step_results,
+                    completed_at=datetime.now(UTC),
+                    error=f"Required step {step_num} ({step_name}) failed after {step_result['attempt_count']} attempts",
+                )
+
+            logger.warning(
+                "procedure_step_failed",
+                procedure=procedure_name,
+                step=step_num,
+                step_name=step_name,
+                attempts=step_result["attempt_count"],
+            )
+
+            return OrchestrationResult(
+                success=False,
+                final_text=f"Procedure failed at step {step_num} ({step_name})",
+                functions_called=functions_called,
+                iterations=iterations,
+                total_tokens=total_tokens,
+                duration_ms=_elapsed_ms(start_time),
+                error=f"Required step {step_num} ({step_name}) failed",
+            )
+
+        step_results.append(step_result)
+
+        async with get_db_context() as db:
+            exec_result = await db.execute(
+                select(ProcedureExecution).where(ProcedureExecution.id == execution_id)
+            )
+            execution = exec_result.scalar_one()
+            execution.current_step = step_num
+            execution.step_results = step_results
+            await db.flush()
+
+    async with get_db_context() as db:
+        exec_result = await db.execute(
+            select(ProcedureExecution).where(ProcedureExecution.id == execution_id)
+        )
+        execution = exec_result.scalar_one()
+        proc_service = ProcedureService(db)
+        await proc_service.update_execution(
+            execution,
+            status="completed",
+            current_step=len(steps),
+            step_results=step_results,
+            completed_at=datetime.now(UTC),
+        )
+
+    logger.info(
+        "procedure_completed",
+        procedure=procedure_name,
+        steps_completed=len(steps),
+        functions_called=functions_called,
+        iterations=iterations,
+        duration_ms=_elapsed_ms(start_time),
+    )
+
+    result = OrchestrationResult(
+        success=True,
+        final_text=f"Procedure '{procedure_name}' completed successfully ({len(steps)} steps)",
+        functions_called=functions_called,
+        iterations=iterations,
+        total_tokens=total_tokens,
+        duration_ms=_elapsed_ms(start_time),
+    )
+    await _post_orchestration(agent, trigger_type, result)
+    return result

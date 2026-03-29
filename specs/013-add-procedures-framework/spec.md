@@ -5,6 +5,13 @@
 **Status**: Draft
 **Input**: User description: "Add a Procedures framework to MCPWorks that solves the problem of LLM hallucination during agent orchestration by creating sequential, auditable execution pipelines that force the LLM to prove each step was actually executed."
 
+## Clarifications
+
+### Session 2026-03-29
+
+- Q: Can agents create, update, or delete procedures during AI orchestration? → A: No — restricted, same as function management tools. Agents can execute procedures but not author them.
+- Q: What is the maximum number of steps per procedure? → A: 20 steps maximum.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Create and Execute a Procedure (Priority: P1)
@@ -129,11 +136,11 @@ An operator creates a procedure where step 1 authenticates and returns an access
 - **FR-007**: System MUST version procedures immutably — updates create new versions, old versions remain for audit trail.
 - **FR-008**: System MUST forward accumulated step results to subsequent steps, giving the LLM context from all prior steps.
 - **FR-009**: System MUST support procedure execution via schedules, webhooks, manual triggers, and channel messages by adding `procedure` as an orchestration mode.
-- **FR-010**: System MUST expose procedure management (create, read, update, delete, list) via both MCP tools and REST API.
+- **FR-010**: System MUST expose procedure management (create, read, update, delete, list) via both MCP tools and REST API. Procedure management tools (make_procedure, update_procedure, delete_procedure) MUST be restricted from agent AI orchestration, consistent with function management restrictions (014-agent-security-hardening).
 - **FR-011**: System MUST validate that all functions referenced in a procedure exist in the namespace at creation time.
 - **FR-012**: System MUST support optional validation rules per step that check the function result for required fields or patterns before marking the step as successful.
 - **FR-013**: System MUST record procedure executions as AgentRun records with `trigger_type` indicating the source and the full step-by-step audit data stored in the result.
-- **FR-014**: System MUST enforce that a procedure contains at least one step and that each step references exactly one function.
+- **FR-014**: System MUST enforce that a procedure contains between 1 and 20 steps, and that each step references exactly one function.
 - **FR-015**: System MUST soft-delete procedures while preserving all historical execution records for audit purposes.
 
 ### Key Entities

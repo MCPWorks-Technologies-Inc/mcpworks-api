@@ -109,6 +109,14 @@ class CreateMCPHandler:
         "start_agent": "write",
         "stop_agent": "write",
         "destroy_agent": "write",
+        "make_procedure": "write",
+        "update_procedure": "write",
+        "delete_procedure": "write",
+        "list_procedures": "read",
+        "describe_procedure": "read",
+        "run_procedure": "execute",
+        "list_procedure_executions": "read",
+        "describe_procedure_execution": "read",
         "add_schedule": "write",
         "remove_schedule": "write",
         "list_schedules": "read",
@@ -473,6 +481,14 @@ class CreateMCPHandler:
             "add_channel": self._add_channel,
             "remove_channel": self._remove_channel,
             "clone_agent": self._clone_agent,
+            "make_procedure": self._make_procedure,
+            "update_procedure": self._update_procedure,
+            "delete_procedure": self._delete_procedure,
+            "list_procedures": self._list_procedures,
+            "describe_procedure": self._describe_procedure,
+            "run_procedure": self._run_procedure,
+            "list_procedure_executions": self._list_procedure_executions,
+            "describe_procedure_execution": self._describe_procedure_execution,
             "lock_function": self._lock_function,
             "unlock_function": self._unlock_function,
             "publish_view": self._publish_view,
@@ -1762,6 +1778,265 @@ class CreateMCPHandler:
                 MCPContent(
                     text=json.dumps(
                         {"agent_name": agent_name, "channel_type": channel_type, "removed": True}
+                    )
+                )
+            ]
+        )
+
+    async def _make_procedure(
+        self, service: str, name: str, steps: list[dict], description: str | None = None
+    ) -> MCPToolResult:
+        """Create a procedure."""
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        namespace = await self._get_current_namespace()
+        proc_service = ProcedureService(self.db)
+        procedure = await proc_service.create_procedure(
+            namespace_id=namespace.id,
+            service_name=service,
+            name=name,
+            steps=steps,
+            description=description,
+        )
+        version = procedure.get_active_version_obj()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "id": str(procedure.id),
+                            "name": procedure.name,
+                            "service": service,
+                            "version": procedure.active_version,
+                            "step_count": len(version.steps) if version else 0,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _update_procedure(
+        self,
+        service: str,
+        name: str,
+        steps: list[dict] | None = None,
+        description: str | None = None,
+    ) -> MCPToolResult:
+        """Update a procedure (creates new version if steps change)."""
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        namespace = await self._get_current_namespace()
+        proc_service = ProcedureService(self.db)
+        procedure = await proc_service.update_procedure(
+            namespace_id=namespace.id,
+            service_name=service,
+            name=name,
+            steps=steps,
+            description=description,
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "name": procedure.name,
+                            "version": procedure.active_version,
+                            "updated": True,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _delete_procedure(self, service: str, name: str) -> MCPToolResult:
+        """Soft-delete a procedure."""
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        namespace = await self._get_current_namespace()
+        proc_service = ProcedureService(self.db)
+        await proc_service.delete_procedure(namespace.id, service, name)
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"name": name, "deleted": True}))])
+
+    async def _list_procedures(self, service: str) -> MCPToolResult:
+        """List all procedures in a service."""
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        namespace = await self._get_current_namespace()
+        proc_service = ProcedureService(self.db)
+        procedures = await proc_service.list_procedures(namespace.id, service)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "procedures": [
+                                {
+                                    "name": p.name,
+                                    "description": p.description,
+                                    "version": p.active_version,
+                                    "step_count": len(p.get_active_version_obj().steps)
+                                    if p.get_active_version_obj()
+                                    else 0,
+                                }
+                                for p in procedures
+                            ],
+                            "total": len(procedures),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _describe_procedure(self, service: str, name: str) -> MCPToolResult:
+        """Get full procedure details."""
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        namespace = await self._get_current_namespace()
+        proc_service = ProcedureService(self.db)
+        procedure = await proc_service.get_procedure(namespace.id, service, name)
+        version = procedure.get_active_version_obj()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "id": str(procedure.id),
+                            "name": procedure.name,
+                            "description": procedure.description,
+                            "service": service,
+                            "active_version": procedure.active_version,
+                            "steps": version.steps if version else [],
+                            "versions": [
+                                {
+                                    "version": v.version,
+                                    "created_by": v.created_by,
+                                    "created_at": v.created_at.isoformat(),
+                                }
+                                for v in procedure.versions
+                            ],
+                            "created_at": procedure.created_at.isoformat(),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _run_procedure(
+        self, service: str, name: str, input_context: dict | None = None
+    ) -> MCPToolResult:
+        """Execute a procedure step-by-step."""
+        from mcpworks_api.tasks.orchestrator import run_procedure_orchestration
+
+        namespace = await self._get_current_namespace()
+        agent_service = AgentService(self.db)
+        agents = await agent_service.list_agents(self.account.id)
+        agent = next((a for a in agents if a.namespace_id == namespace.id), None)
+
+        if not agent:
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps(
+                            {
+                                "error": "No agent found for this namespace. Procedures require an agent with an AI engine configured."
+                            }
+                        )
+                    )
+                ]
+            )
+
+        result = await run_procedure_orchestration(
+            agent=agent,
+            procedure_name=name,
+            service_name=service,
+            trigger_type="manual",
+            account=self.account,
+            tier=self.account.user.effective_tier,
+            input_context=input_context,
+        )
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "procedure": name,
+                            "success": result.success,
+                            "steps_completed": len(result.functions_called),
+                            "functions_called": result.functions_called,
+                            "error": result.error,
+                            "duration_ms": result.duration_ms,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_procedure_executions(
+        self, service: str, name: str, status: str | None = None, limit: int = 10
+    ) -> MCPToolResult:
+        """List execution records for a procedure."""
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        namespace = await self._get_current_namespace()
+        proc_service = ProcedureService(self.db)
+        procedure = await proc_service.get_procedure(namespace.id, service, name)
+        executions = await proc_service.list_executions(procedure.id, status=status, limit=limit)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "executions": [
+                                {
+                                    "id": str(e.id),
+                                    "status": e.status,
+                                    "trigger_type": e.trigger_type,
+                                    "version": e.procedure_version,
+                                    "steps_completed": len(
+                                        [s for s in e.step_results if s.get("status") == "success"]
+                                    ),
+                                    "started_at": e.started_at.isoformat(),
+                                    "completed_at": e.completed_at.isoformat()
+                                    if e.completed_at
+                                    else None,
+                                }
+                                for e in executions
+                            ],
+                            "total": len(executions),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _describe_procedure_execution(self, execution_id: str) -> MCPToolResult:
+        """Get full audit trail for an execution."""
+        import uuid as uuid_module
+
+        from mcpworks_api.services.procedure_service import ProcedureService
+
+        proc_service = ProcedureService(self.db)
+        execution = await proc_service.get_execution(uuid_module.UUID(execution_id))
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "id": str(execution.id),
+                            "procedure_id": str(execution.procedure_id),
+                            "version": execution.procedure_version,
+                            "status": execution.status,
+                            "trigger_type": execution.trigger_type,
+                            "current_step": execution.current_step,
+                            "step_results": execution.step_results,
+                            "input_context": execution.input_context,
+                            "started_at": execution.started_at.isoformat(),
+                            "completed_at": execution.completed_at.isoformat()
+                            if execution.completed_at
+                            else None,
+                            "error": execution.error,
+                        }
                     )
                 )
             ]
