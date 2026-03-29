@@ -30,10 +30,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_procedures_namespace_id", "procedures", ["namespace_id"])
     op.create_index("ix_procedures_service_id", "procedures", ["service_id"])
-    op.create_unique_constraint(
+    op.create_index(
         "uq_procedure_service_name",
         "procedures",
         ["service_id", "name"],
+        unique=True,
         postgresql_where=sa.text("is_deleted = false"),
     )
 
