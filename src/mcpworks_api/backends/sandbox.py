@@ -270,27 +270,33 @@ class SandboxBackend(Backend):
                 language=language,
             )
 
-        return self._sanitize_output(result, tier)
+        env_values = list(sandbox_env.values()) if sandbox_env else []
+        return self._sanitize_output(result, tier, env_values=env_values)
 
-    def _sanitize_output(self, result: ExecutionResult, tier: str) -> ExecutionResult:
+    def _sanitize_output(
+        self,
+        result: ExecutionResult,
+        tier: str,
+        env_values: list[str] | None = None,
+    ) -> ExecutionResult:
         """Apply output size limits and secret scrubbing."""
         base_tier = tier.replace("-agent", "") if tier.endswith("-agent") else tier
 
         if result.output is not None and isinstance(result.output, str):
             result.output = enforce_output_size(result.output, base_tier)
-            scrubbed, count = scrub_secrets(result.output)
+            scrubbed, count = scrub_secrets(result.output, env_values=env_values)
             if count > 0:
                 logger.warning("secrets_redacted_from_output", count=count, tier=tier)
                 result.output = scrubbed
 
         if result.stdout is not None:
             result.stdout = enforce_output_size(result.stdout, base_tier)
-            scrubbed, count = scrub_secrets(result.stdout)
+            scrubbed, count = scrub_secrets(result.stdout, env_values=env_values)
             if count > 0:
                 result.stdout = scrubbed
 
         if result.stderr is not None:
-            scrubbed, count = scrub_secrets(result.stderr)
+            scrubbed, count = scrub_secrets(result.stderr, env_values=env_values)
             if count > 0:
                 result.stderr = scrubbed
 
