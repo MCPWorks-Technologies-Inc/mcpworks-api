@@ -31,7 +31,7 @@ JOB_STATUSES = ("pending", "claimed", "running", "complete", "failed")
 RUN_STATUSES = ("running", "completed", "failed", "timeout")
 TRIGGER_TYPES = ("cron", "webhook", "manual", "ai", "heartbeat")
 CHANNEL_TYPES = ("discord", "slack", "whatsapp", "email")
-ORCHESTRATION_MODES = ("direct", "reason_first", "run_then_reason")
+ORCHESTRATION_MODES = ("direct", "reason_first", "run_then_reason", "procedure")
 AI_ENGINES = (
     "anthropic",
     "openai",
@@ -243,6 +243,7 @@ class AgentSchedule(Base, UUIDMixin):
         String(10), nullable=False, default="single", server_default="single"
     )
     orchestration_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="direct")
+    procedure_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -273,6 +274,7 @@ class AgentWebhook(Base, UUIDMixin):
     handler_function_name: Mapped[str] = mapped_column(String(255), nullable=False)
     secret_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     orchestration_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="direct")
+    procedure_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default="now()"

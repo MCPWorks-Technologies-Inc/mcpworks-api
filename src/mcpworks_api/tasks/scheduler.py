@@ -197,6 +197,38 @@ async def _execute_scheduled_function(
 
     orch_mode = getattr(schedule, "orchestration_mode", "direct") or "direct"
 
+    if orch_mode == "procedure":
+        procedure_name = getattr(schedule, "procedure_name", None)
+        if not procedure_name:
+            logger.error("schedule_procedure_no_name", schedule_id=str(schedule.id))
+            return
+        if not agent.ai_engine:
+            logger.error("schedule_procedure_no_ai", schedule_id=str(schedule.id))
+            return
+
+        async with get_db_context() as db:
+            account = await _get_schedule_account(agent, db)
+        if not account:
+            logger.error("schedule_account_not_found", agent_id=str(agent.id))
+            return
+
+        tier = account.user.effective_tier if account.user else "pro-agent"
+        svc_name = (
+            schedule.function_name.split(".")[0] if "." in schedule.function_name else "default"
+        )
+
+        from mcpworks_api.tasks.orchestrator import run_procedure_orchestration
+
+        await run_procedure_orchestration(
+            agent=agent,
+            procedure_name=procedure_name,
+            service_name=svc_name,
+            trigger_type="cron",
+            account=account,
+            tier=tier,
+        )
+        return
+
     if orch_mode != "direct" and not agent.ai_engine:
         logger.warning(
             "schedule_ai_fallback_direct",

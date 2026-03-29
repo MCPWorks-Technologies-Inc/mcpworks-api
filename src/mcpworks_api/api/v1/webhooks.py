@@ -87,9 +87,46 @@ async def handle_agent_webhook(path: str, request: Request) -> JSONResponse:
         orch_mode = webhook.orchestration_mode or "direct"
         tier = account.user.effective_tier if account.user else "pro-agent"
 
-        if orch_mode != "direct" and not agent.ai_engine:
-            logger.warning("webhook_ai_fallback_direct", agent_name=namespace, path=path)
-            orch_mode = "direct"
+    if orch_mode == "procedure":
+        procedure_name = getattr(webhook, "procedure_name", None)
+        if not procedure_name:
+            return JSONResponse(
+                status_code=422, content={"detail": "procedure_name required for procedure mode"}
+            )
+        if not agent.ai_engine:
+            return JSONResponse(
+                status_code=422, content={"detail": "Agent needs AI engine for procedure mode"}
+            )
+
+        svc_name = (
+            webhook.handler_function_name.split(".")[0]
+            if "." in webhook.handler_function_name
+            else "default"
+        )
+
+        from mcpworks_api.tasks.orchestrator import run_procedure_orchestration
+
+        proc_result = await run_procedure_orchestration(
+            agent=agent,
+            procedure_name=procedure_name,
+            service_name=svc_name,
+            trigger_type="webhook",
+            account=account,
+            tier=tier,
+            input_context={"webhook_path": path, "payload": payload},
+        )
+        return JSONResponse(
+            content={
+                "status": "completed" if proc_result.success else "failed",
+                "procedure": procedure_name,
+                "steps_completed": len(proc_result.functions_called),
+                "error": proc_result.error,
+            }
+        )
+
+    if orch_mode != "direct" and not agent.ai_engine:
+        logger.warning("webhook_ai_fallback_direct", agent_name=namespace, path=path)
+        orch_mode = "direct"
 
     if orch_mode == "direct":
         result = await _execute_webhook_function_direct(webhook, agent, account, payload)

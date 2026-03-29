@@ -14,6 +14,7 @@ from mcpworks_api.api.v1.legal import router as legal_router
 from mcpworks_api.api.v1.llm import router as llm_router
 from mcpworks_api.api.v1.namespaces import router as namespaces_router
 from mcpworks_api.api.v1.oauth import router as oauth_router
+from mcpworks_api.api.v1.procedures import router as procedures_router
 from mcpworks_api.api.v1.quickstart import router as quickstart_router
 from mcpworks_api.api.v1.shares import router as shares_router
 from mcpworks_api.api.v1.subscriptions import router as subscriptions_router
@@ -37,6 +38,7 @@ router.include_router(subscriptions_router)
 router.include_router(webhook_router)
 router.include_router(namespaces_router)  # A0: Namespace management
 router.include_router(agents_router)  # A0: Containerized agents
+router.include_router(procedures_router)  # A0: Procedures framework
 router.include_router(agent_lock_router)  # A0: Function locking (admin)
 router.include_router(shares_router)  # Namespace sharing
 router.include_router(audit_router)  # ORDER-022: Security audit logs

@@ -133,6 +133,9 @@ RESTRICTED_AGENT_TOOLS = frozenset(
         "delete_service",
         "lock_function",
         "unlock_function",
+        "make_procedure",
+        "update_procedure",
+        "delete_procedure",
     ]
 )
 
