@@ -263,6 +263,10 @@ Each replica gets full tier resources. Each replica counts as 1 agent slot.
 | Min schedule | 5 min | 30 sec | 15 sec |
 | State storage | 10 MB | 100 MB | 1 GB |
 
+### Agent Security
+
+Agents cannot call function management tools (`make_function`, `update_function`, `delete_function`, `make_service`, `delete_service`, `lock_function`, `unlock_function`) during orchestration. All function output is scanned for leaked secrets (API keys, JWTs, connection URIs, private keys, env var values) before reaching the AI context. Detected secrets are replaced with `[REDACTED_*]` markers.
+
 ---
 
 ## Tier Limits

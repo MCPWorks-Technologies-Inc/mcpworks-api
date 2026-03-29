@@ -679,6 +679,24 @@ chat_with_agent(name="my-agent", message="status update", replica="running-fox")
 
 **Slot accounting** — each replica counts as one agent slot against your tier limit. Scaling a single agent to 3 replicas consumes 3 of your available agent slots.
 
+### Agent Security
+
+Agents operate under restricted permissions during orchestration to prevent unintended modifications and credential leakage.
+
+**Function management is user-only.** Agents cannot create, modify, or delete functions — only users interacting through the create endpoint can. The management tools (`make_function`, `update_function`, `delete_function`, `make_service`, `delete_service`, `lock_function`, `unlock_function`) are blocked during agent orchestration.
+
+**Output secret scanning.** All function output is scanned for leaked credentials before it reaches the AI context. The scanner detects:
+
+- API keys — Stripe, Slack, OpenAI, AWS, GitHub, GitLab tokens
+- Authentication tokens — JWTs, Bearer tokens
+- Connection URIs — PostgreSQL, MySQL, MongoDB, Redis, AMQP
+- Private keys — RSA, EC, OpenSSH
+- Environment variable values — any values passed via `X-MCPWorks-Env`
+
+Detected secrets are replaced with `[REDACTED_*]` markers (e.g., `[REDACTED_STRIPE_KEY]`, `[REDACTED_JWT]`). The original output is never exposed to the AI engine.
+
+A security event is logged each time a secret is detected, including the redaction type and the function that produced the output.
+
 ---
 
 ## Billing & Tiers
