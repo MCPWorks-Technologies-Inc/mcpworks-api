@@ -32,7 +32,7 @@ class Function(Base, UUIDMixin, TimestampMixin):
 
     Functions provide:
     - Named, versioned executable units
-    - Multi-backend support (Code Sandbox, Activepieces, etc.)
+    - Multi-backend support (Code Sandbox, GitHub Repo, etc.)
     - Immutable version history
     - Tag-based organization and discovery
 

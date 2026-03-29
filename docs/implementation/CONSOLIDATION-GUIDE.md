@@ -103,7 +103,7 @@ class User(Base):
 ### 2. Service Model → Extend for Functions
 
 **File:** `models/service.py`
-**Current:** Tracks external services (agent, activepieces)
+**Current:** Tracks external services (agent)
 **Action:** Keep for backend services, add new Function model separately
 
 ```python

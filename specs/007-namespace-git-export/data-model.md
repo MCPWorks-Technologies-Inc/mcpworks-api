@@ -65,7 +65,7 @@ metadata:
   name: string
   description: string   # nullable
 spec:
-  backend: enum         # code_sandbox | activepieces | nanobot | github_repo
+  backend: enum         # code_sandbox | nanobot | github_repo
   language: enum        # python | typescript
   requirements: [string]  # package names
   tags: [string]

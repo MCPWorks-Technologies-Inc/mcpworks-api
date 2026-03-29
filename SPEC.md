@@ -13,7 +13,7 @@ The **mcpworks-api** is the backend service powering the MCPWorks namespace-base
 ### Key Responsibilities
 
 - **Namespace Management**: Namespaces, services, and functions (CRUD via MCP protocol)
-- **Function Execution**: Secure code sandbox (nsjail), Activepieces workflows, future backends
+- **Function Execution**: Secure code sandbox (nsjail), future backends
 - **Autonomous Agents**: Containerized agents with scheduling, webhooks, AI orchestration, state, and communication channels
 - **User & Account Management**: Registration, OAuth (Google/GitHub), API key management
 - **Usage Tracking & Billing**: Tier-based execution limits enforced via Redis, Stripe subscriptions
@@ -91,7 +91,6 @@ The **mcpworks-api** is the backend service powering the MCPWorks namespace-base
 | Backend | Status | Description |
 |---------|--------|-------------|
 | **Code Sandbox** | Production | LLM-authored Python execution via nsjail |
-| **Activepieces** | Production | Visual workflow builder (150+ integrations) |
 | **nanobot.ai** | Deferred (A1) | AI agent framework partnership |
 | **GitHub Repo** | Future | Repository-backed functions |
 
@@ -167,7 +166,7 @@ Account (1:1 User)
 | description | TEXT | |
 | tags | TEXT[] | |
 | active_version | INTEGER | Points to FunctionVersion |
-| backend | VARCHAR(20) | code_sandbox, activepieces, nanobot, github_repo |
+| backend | VARCHAR(20) | code_sandbox, nanobot, github_repo |
 | locked | BOOLEAN | Prevents modification when true |
 | locked_by | VARCHAR(100) | Attribution |
 
@@ -706,7 +705,7 @@ Push to `main` triggers:
 - Added configurable per-agent orchestration limits
 - Renamed max_total_tokens → max_ai_tokens
 - Removed stale SQL schemas (replaced with model reference tables)
-- Removed Activepieces integration details (backend abstraction layer)
+- Removed legacy integration details (backend abstraction layer)
 
 **v2.0.0 (2026-02-10):**
 - Namespace architecture migration from workflows

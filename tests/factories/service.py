@@ -46,7 +46,7 @@ class AgentServiceFactory(ServiceFactory):
 
     name = "agent"
     display_name = "Agent MCP"
-    description = "Activepieces workflow execution"
+    description = "Agent orchestration and execution"
     url = "http://mcpworks-agent:8000"
     health_check_url = "http://mcpworks-agent:8000/health"
     credit_cost = Decimal("5.00")

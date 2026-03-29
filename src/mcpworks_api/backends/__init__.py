@@ -5,9 +5,8 @@ functions to retrieve them by name.
 
 Available Backends:
 - code_sandbox: Secure sandboxed Python/TypeScript execution
-- activepieces: Visual workflow automation (A1 milestone)
-- nanobot: Definition TBD (A2 milestone)
-- github_repo: GitHub repository-based functions (A3 milestone)
+- nanobot: Definition TBD (future milestone)
+- github_repo: GitHub repository-based functions (future milestone)
 """
 
 from mcpworks_api.backends.base import Backend, ExecutionResult, ValidationResult
@@ -43,7 +42,7 @@ def get_backend(name: str) -> Backend | None:
     """Get a backend by name.
 
     Args:
-        name: Backend identifier (code_sandbox, activepieces, etc.)
+        name: Backend identifier (code_sandbox, nanobot, github_repo)
 
     Returns:
         Backend instance or None if not found.
@@ -91,9 +90,8 @@ register_backend(SandboxBackend())
 from mcpworks_api.backends.stub import StubBackend
 
 # Future milestones:
-# A1: register_backend(ActivepiecesBackend())
-# A2: register_backend(NanobotBackend())
-# A3: register_backend(GitHubRepoBackend())
+# register_backend(NanobotBackend())
+# register_backend(GitHubRepoBackend())
 
 __all__ = [
     # Base

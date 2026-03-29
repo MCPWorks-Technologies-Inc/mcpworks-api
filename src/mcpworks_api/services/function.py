@@ -52,7 +52,7 @@ class FunctionService:
         Args:
             service_id: The service that will contain this function.
             name: Function name (unique within service).
-            backend: Backend type (code_sandbox, activepieces, etc.).
+            backend: Backend type (code_sandbox, nanobot, github_repo).
             description: Optional description.
             tags: Optional tags for categorization.
             code: Optional code (for code_sandbox backend).

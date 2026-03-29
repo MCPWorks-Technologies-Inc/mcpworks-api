@@ -1,7 +1,7 @@
 """Abstract base class for function backends.
 
 Backends provide the execution layer for functions. Each backend type
-(code_sandbox, activepieces, nanobot, github_repo) implements this interface.
+(code_sandbox, nanobot, github_repo) implements this interface.
 """
 
 from abc import ABC, abstractmethod
@@ -63,7 +63,7 @@ class Backend(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Backend identifier (code_sandbox, activepieces, nanobot, github_repo)."""
+        """Backend identifier (code_sandbox, nanobot, github_repo)."""
         pass
 
     @property

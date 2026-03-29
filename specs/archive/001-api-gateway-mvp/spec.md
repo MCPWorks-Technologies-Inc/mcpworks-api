@@ -219,7 +219,7 @@ New users register and obtain API keys to integrate with mcpworks-gateway.
 ## Out of Scope
 
 - Workflow CRUD operations (handled by mcpworks-agent)
-- Activepieces integration (handled by mcpworks-agent)
+- Workflow integration (handled by mcpworks-agent)
 - Math verification logic (handled by mcpworks-math)
 - Local proxy functionality (handled by mcpworks-gateway)
 - Web dashboard UI (future phase)

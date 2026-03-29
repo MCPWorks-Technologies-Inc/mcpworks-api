@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-ALLOWED_BACKENDS = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+ALLOWED_BACKENDS = {"code_sandbox", "nanobot", "github_repo"}
 ALLOWED_LANGUAGES = {"python", "typescript"}
 
 
@@ -17,7 +17,7 @@ class FunctionVersionCreate(BaseModel):
     backend: str = Field(
         ...,
         description="Function backend",
-        examples=["code_sandbox", "activepieces"],
+        examples=["code_sandbox"],
     )
 
     language: str = Field(

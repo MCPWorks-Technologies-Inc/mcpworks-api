@@ -118,7 +118,7 @@ src/mcpworks_api/
     models/           # SQLAlchemy ORM models
     schemas/          # Pydantic API schemas
     services/         # Business logic
-    backends/         # Execution backends (sandbox, activepieces)
+    backends/         # Execution backends (sandbox)
     mcp/              # MCP protocol handlers
     tasks/            # Background tasks (orchestrator, scheduler)
     middleware/       # Auth, rate limiting, metrics

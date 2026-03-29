@@ -62,7 +62,7 @@ Every code change creates a new immutable version. You can restore any previous 
 
 ### Backends
 
-Currently supported: `code_sandbox` (secure Python execution via nsjail). Future backends include `activepieces` (workflow orchestration), `nanobot`, and `github_repo`.
+Currently supported: `code_sandbox` (secure Python execution via nsjail). Future backends include `nanobot` and `github_repo`.
 
 ---
 
@@ -157,7 +157,7 @@ Create a new function in a service.
 |-----------|------|----------|-------------|
 | `service` | string | Yes | Service name |
 | `name` | string | Yes | Function name |
-| `backend` | string | Yes | Execution backend: `code_sandbox`, `activepieces`, `nanobot`, `github_repo` |
+| `backend` | string | Yes | Execution backend: `code_sandbox`, `nanobot`, `github_repo` |
 | `code` | string | No | Python source code |
 | `config` | object | No | Backend-specific configuration |
 | `input_schema` | object | No | JSON Schema for input parameters |

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 # Allowed backend types
-ALLOWED_BACKENDS = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+ALLOWED_BACKENDS = {"code_sandbox", "nanobot", "github_repo"}
 
 # Allowed programming languages
 ALLOWED_LANGUAGES = {"python", "typescript"}
@@ -140,7 +140,7 @@ class FunctionVersion(Base, UUIDMixin):
             name="function_version_positive",
         ),
         CheckConstraint(
-            "backend IN ('code_sandbox', 'activepieces', 'nanobot', 'github_repo')",
+            "backend IN ('code_sandbox', 'nanobot', 'github_repo')",
             name="function_version_backend_valid",
         ),
         Index("ix_function_versions_function_id", "function_id"),

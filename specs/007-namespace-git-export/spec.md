@@ -368,7 +368,7 @@ spec:
 - Git operations (clone, commit, push) run on the API server in a temp directory, cleaned up after each operation
 - Requires `git` binary available in the API container (add to Dockerfile if not present)
 - Git HTTPS + PAT auth only — no SSH key support (keeps implementation simple, PATs are universal)
-- Code sandbox functions have their code in the DB; non-code-sandbox backends (activepieces, github_repo) may not have exportable code — export their config only
+- Code sandbox functions have their code in the DB; non-code-sandbox backends (github_repo) may not have exportable code — export their config only
 - PAT stored with envelope encryption (same KEK/DEK pattern as all other secrets)
 
 ### 5.2 Assumptions
@@ -415,7 +415,7 @@ spec:
 
 ### 6.4 Edge Case: Function with No Code
 
-**Scenario:** Function uses `activepieces` backend — no code to export
+**Scenario:** Function uses a non-code-sandbox backend — no code to export
 **Expected Behavior:** Export `function.yaml` with config but no `handler.py`. Note backend type in manifest.
 **Rationale:** Not all backends have exportable code
 

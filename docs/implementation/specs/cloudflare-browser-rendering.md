@@ -384,7 +384,6 @@ MCPWorks API
 
 Browser Rendering joins the existing backend types:
 - Code Sandbox
-- Activepieces
 - nanobot.ai
 - GitHub Repo
 - **Browser Rendering** (new)

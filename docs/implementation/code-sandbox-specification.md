@@ -1410,7 +1410,6 @@ if __name__ == '__main__':
 MCPWorks SDK - Available inside Code Execution Sandbox
 
 Provides access to:
-- mcpworks.workflows.{workflow_name}.run() - Execute Activepieces workflows
 - mcpworks.services.{service_name}.run() - Call services
 - mcpworks.http.get/post() - Make HTTP requests (through egress proxy)
 

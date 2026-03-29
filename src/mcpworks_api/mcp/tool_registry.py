@@ -160,7 +160,7 @@ BASE_TOOLS: dict[str, ToolDef] = {
                 },
                 "backend": {
                     "type": "string",
-                    "enum": ["code_sandbox", "activepieces", "nanobot", "github_repo"],
+                    "enum": ["code_sandbox", "nanobot", "github_repo"],
                     "description": "Execution backend. Use 'code_sandbox' for Python and TypeScript functions.",
                 },
                 "language": {
@@ -193,7 +193,7 @@ BASE_TOOLS: dict[str, ToolDef] = {
                 },
                 "config": {
                     "type": "object",
-                    "description": "Backend-specific configuration. Required for 'activepieces' backend. Not needed for 'code_sandbox'.",
+                    "description": "Backend-specific configuration. Not needed for 'code_sandbox'.",
                 },
                 "input_schema": {
                     "type": "object",
@@ -275,7 +275,7 @@ BASE_TOOLS: dict[str, ToolDef] = {
                 },
                 "backend": {
                     "type": "string",
-                    "enum": ["code_sandbox", "activepieces", "nanobot", "github_repo"],
+                    "enum": ["code_sandbox", "nanobot", "github_repo"],
                     "description": "Execution backend. Use 'code_sandbox' for Python and TypeScript functions.",
                 },
                 "code": {
@@ -284,7 +284,7 @@ BASE_TOOLS: dict[str, ToolDef] = {
                 },
                 "config": {
                     "type": "object",
-                    "description": "Backend-specific configuration. Required for 'activepieces' backend. Not needed for 'code_sandbox'.",
+                    "description": "Backend-specific configuration. Not needed for 'code_sandbox'.",
                 },
                 "input_schema": {
                     "type": "object",

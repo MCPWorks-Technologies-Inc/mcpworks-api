@@ -81,12 +81,6 @@ This is the **master specification** for the MCPWorks A0 implementation. It cons
                                     │  └─────────────────────────────┘  │
                                     │                                   │
                                     │  ┌─────────────────────────────┐  │
-                                    │  │ Activepieces (A1)           │  │
-                                    │  │ • Visual workflows          │  │
-                                    │  │ • 150+ integrations         │  │
-                                    │  └─────────────────────────────┘  │
-                                    │                                   │
-                                    │  ┌─────────────────────────────┐  │
                                     │  │ nanobot.ai (A2)             │  │
                                     │  │ • TBD                       │  │
                                     │  └─────────────────────────────┘  │

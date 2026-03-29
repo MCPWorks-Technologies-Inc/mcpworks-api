@@ -188,7 +188,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("function_id", "version", name="uq_function_version_number"),
         sa.CheckConstraint("version > 0", name="function_version_positive"),
         sa.CheckConstraint(
-            "backend IN ('code_sandbox', 'activepieces', 'nanobot', 'github_repo')",
+            "backend IN ('code_sandbox', 'nanobot', 'github_repo')",
             name="function_version_backend_valid",
         ),
     )

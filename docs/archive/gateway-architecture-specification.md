@@ -106,12 +106,6 @@ The Gateway is the **single entrypoint** for all MCPWorks requests. It handles:
                                     │  └─────────────────────────────┘  │
                                     │                                   │
                                     │  ┌─────────────────────────────┐  │
-                                    │  │ Activepieces (A1)           │  │
-                                    │  │ • Visual workflows          │  │
-                                    │  │ • 150+ integrations         │  │
-                                    │  └─────────────────────────────┘  │
-                                    │                                   │
-                                    │  ┌─────────────────────────────┐  │
                                     │  │ nanobot.ai (A2)             │  │
                                     │  │ • TBD                       │  │
                                     │  └─────────────────────────────┘  │
@@ -150,7 +144,6 @@ src/mcpworks_api/
 │   ├── __init__.py
 │   ├── base.py                   # Abstract backend interface
 │   ├── sandbox.py                # Code Sandbox backend
-│   ├── activepieces.py           # Activepieces backend (A1)
 │   └── nanobot.py                # nanobot.ai backend (A2)
 │
 ├── models/                       # SQLAlchemy models
@@ -737,7 +730,7 @@ class CreateMCPHandler:
                         "name": {"type": "string", "description": "Function name"},
                         "backend": {
                             "type": "string",
-                            "enum": ["code_sandbox", "activepieces", "nanobot", "github_repo"],
+                            "enum": ["code_sandbox", "nanobot", "github_repo"],
                             "description": "Execution backend"
                         },
                         "code": {"type": "string", "description": "Function code (for code_sandbox)"},
@@ -1227,8 +1220,7 @@ def list_backends() -> list[str]:
 # Register default backends
 register_backend(SandboxBackend())
 
-# Future backends (A1, A2, A3)
-# register_backend(ActivepiecesBackend())
+# Future backends (A2, A3)
 # register_backend(NanobotBackend())
 # register_backend(GitHubRepoBackend())
 ```

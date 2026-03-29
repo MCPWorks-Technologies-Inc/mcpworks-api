@@ -125,7 +125,7 @@ class CreateFunctionRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=63)
     backend: str = Field(
-        ..., description="Execution backend (code_sandbox, activepieces, nanobot, github_repo)"
+        ..., description="Execution backend (code_sandbox, nanobot, github_repo)"
     )
     description: str | None = Field(None, max_length=500)
     tags: list[str] | None = None

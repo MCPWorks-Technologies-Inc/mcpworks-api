@@ -43,7 +43,7 @@ Function authors need their code to call external APIs (OpenAI, Stripe, database
 - Encrypted environment profiles (Phase 2, see Section 11)
 - Per-service or per-function scoping from the client side (namespace-level only)
 - UI/dashboard for env var management (no management needed — nothing is stored)
-- Activepieces or nanobot backend env var injection (code_sandbox only for Phase 1)
+- Non-sandbox backend env var injection (code_sandbox only for Phase 1)
 
 ---
 
@@ -243,7 +243,7 @@ Function authors need their code to call external APIs (OpenAI, Stripe, database
 
 - MCP clients support custom `headers` in HTTP server config (verified: Claude Code, Claude Desktop both support this)
 - Users can set shell environment variables and run base64 encoding (standard developer capability)
-- Functions that need env vars are code_sandbox backend only (Activepieces has its own credential system)
+- Functions that need env vars are code_sandbox backend only
 - **Risk if wrong:** If a major MCP client drops header support, we'd need an alternative transport. Mitigation: headers are part of the MCP spec for Streamable HTTP.
 
 ---
@@ -535,11 +535,7 @@ This preserves zero-knowledge while enabling multi-device workflows. Ship only i
 
 Support `X-MCPWorks-Env-{NAME}: {value}` as an alternative to the single base64 blob. More human-readable for simple cases. Server supports both, preferring the encoded form.
 
-### 11.3 Phase 2: Activepieces Backend Env Vars
-
-Activepieces has its own credential/connection system. If users need env var passthrough for Activepieces functions, design a bridge. Not needed for A0.
-
-### 11.4 Known Limitations
+### 11.3 Known Limitations
 
 - **No env var rotation notification:** If a user rotates an API key, they update their local config. We have no way to notify them if a function starts failing due to an expired key. Acceptable — standard developer workflow.
 - **No env var sharing between namespaces:** Each namespace is a separate MCP server entry. Users who want the same key in multiple namespaces must configure it in each. Acceptable — explicit is better than implicit.

@@ -29,7 +29,7 @@ This specification defines the database models and schemas for the MCPWorks A0 p
 - Namespace management with network security controls
 - Service organization within namespaces
 - Function versioning with immutable deployments
-- Multi-backend function execution (Code Sandbox, Activepieces, etc.)
+- Multi-backend function execution (Code Sandbox, etc.)
 - Security event logging for SOC 2 compliance
 - Webhook delivery system
 
@@ -432,7 +432,7 @@ class Function(Base, UUIDMixin, TimestampMixin):
 
     Functions provide:
     - Named, versioned executable units
-    - Multi-backend support (Code Sandbox, Activepieces, etc.)
+    - Multi-backend support (Code Sandbox, etc.)
     - Immutable version history
     - Tag-based organization and discovery
 
@@ -620,7 +620,7 @@ class FunctionVersion(Base, UUIDMixin):
     backend: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        doc="Function backend (code_sandbox, activepieces, nanobot, github_repo)"
+        doc="Function backend (code_sandbox, nanobot, github_repo)"
     )
 
     # Backend-Specific Data
@@ -675,7 +675,7 @@ class FunctionVersion(Base, UUIDMixin):
             name="function_version_positive"
         ),
         CheckConstraint(
-            "backend IN ('code_sandbox', 'activepieces', 'nanobot', 'github_repo')",
+            "backend IN ('code_sandbox', 'nanobot', 'github_repo')",
             name="function_version_backend_valid"
         ),
         Index("ix_function_versions_function_id", "function_id"),
@@ -686,7 +686,7 @@ class FunctionVersion(Base, UUIDMixin):
     @validates("backend")
     def validate_backend(self, key: str, value: str) -> str:
         """Validate backend is one of supported types."""
-        allowed_backends = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+        allowed_backends = {"code_sandbox", "nanobot", "github_repo"}
         if value not in allowed_backends:
             raise ValueError(f"Backend must be one of {allowed_backends}")
         return value
@@ -1094,7 +1094,7 @@ class Execution(Base, UUIDMixin):
             name="execution_status_valid"
         ),
         CheckConstraint(
-            "backend IN ('code_sandbox', 'activepieces', 'nanobot', 'github_repo')",
+            "backend IN ('code_sandbox', 'nanobot', 'github_repo')",
             name="execution_backend_valid"
         ),
         CheckConstraint(
@@ -1119,7 +1119,7 @@ class Execution(Base, UUIDMixin):
     @validates("backend")
     def validate_backend(self, key: str, value: str) -> str:
         """Validate backend is one of supported types."""
-        allowed_backends = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+        allowed_backends = {"code_sandbox", "nanobot", "github_repo"}
         if value not in allowed_backends:
             raise ValueError(f"Backend must be one of {allowed_backends}")
         return value
@@ -1359,7 +1359,7 @@ class FunctionVersionCreate(BaseModel):
     backend: str = Field(
         ...,
         description="Function backend",
-        examples=["code_sandbox", "activepieces"]
+        examples=["code_sandbox"]
     )
 
     code: Optional[str] = Field(
@@ -1386,7 +1386,7 @@ class FunctionVersionCreate(BaseModel):
     @classmethod
     def validate_backend(cls, v: str) -> str:
         """Validate backend is supported."""
-        allowed = {"code_sandbox", "activepieces", "nanobot", "github_repo"}
+        allowed = {"code_sandbox", "nanobot", "github_repo"}
         if v not in allowed:
             raise ValueError(f"Backend must be one of {allowed}")
         return v
@@ -1750,7 +1750,7 @@ def upgrade() -> None:
             name='function_version_positive'
         ),
         sa.CheckConstraint(
-            "backend IN ('code_sandbox', 'activepieces', 'nanobot', 'github_repo')",
+            "backend IN ('code_sandbox', 'nanobot', 'github_repo')",
             name='function_version_backend_valid'
         )
     )

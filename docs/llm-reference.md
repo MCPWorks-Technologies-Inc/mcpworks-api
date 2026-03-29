@@ -183,7 +183,6 @@ Three ways to return output (checked in order):
 | Backend | Status | Description |
 |---------|--------|-------------|
 | `code_sandbox` | Active | Secure Python execution (nsjail) |
-| `activepieces` | Future | Workflow orchestration |
 | `nanobot` | Future | — |
 | `github_repo` | Future | — |
 
