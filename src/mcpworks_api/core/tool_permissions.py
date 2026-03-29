@@ -104,6 +104,8 @@ MANAGEMENT_RATE_LIMITS: dict[str, tuple[int, int]] = {
 
 
 def is_tool_allowed(tool_tier: ToolTier, tool_name: str) -> bool:
+    if "__" in tool_name:
+        return True
     return tool_name in TIER_TOOLS.get(tool_tier, frozenset())
 
 
