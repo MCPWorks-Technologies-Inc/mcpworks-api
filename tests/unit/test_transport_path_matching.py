@@ -4,12 +4,8 @@ Tests the _is_mcp_protocol_path function directly by extracting it
 without importing the full transport module (which requires the MCP SDK).
 """
 
-import importlib
-import re
 import sys
 from unittest.mock import MagicMock
-
-import pytest
 
 # The transport module requires `mcp` SDK. Mock it so we can import just
 # the path-matching helper without the full dependency chain.

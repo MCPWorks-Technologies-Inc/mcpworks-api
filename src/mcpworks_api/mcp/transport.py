@@ -339,10 +339,7 @@ def _is_mcp_protocol_path(path: str, method: str = "") -> bool:
       /mcp/agent/{ns}/view/...       — agent scratchpad (4+ segments)
     """
     if path in ("/mcp", "/mcp/"):
-        # Let GET /mcp fall through to discovery endpoint
-        if method.upper() == "GET":
-            return False
-        return True
+        return method.upper() != "GET"
     if not path.startswith("/mcp/"):
         return False
     segments = path.rstrip("/").split("/")

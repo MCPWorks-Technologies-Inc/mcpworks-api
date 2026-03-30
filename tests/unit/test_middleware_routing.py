@@ -6,9 +6,9 @@ import pytest
 from starlette.datastructures import URL
 
 from mcpworks_api.middleware.routing import (
-    PathRoutingMiddleware,
     _NAMESPACE_RE,
     _VALID_ENDPOINTS,
+    PathRoutingMiddleware,
 )
 from mcpworks_api.middleware.subdomain import EndpointType
 
@@ -80,7 +80,7 @@ class TestNamespaceRegex:
 
 class TestValidEndpoints:
     def test_valid_set(self):
-        assert _VALID_ENDPOINTS == frozenset({"create", "run", "agent"})
+        assert frozenset({"create", "run", "agent"}) == _VALID_ENDPOINTS
 
 
 class TestPathRoutingMiddlewareDispatch:
