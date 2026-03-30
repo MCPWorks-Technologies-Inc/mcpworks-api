@@ -1,0 +1,92 @@
+# server0.pop11.mcpworks.io — MCPWorks platform services
+# All services self-hosted. TLS handled by edge node (api.mcpworks.io).
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mcpworks-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mcpworks
+      POSTGRES_USER: mcpworks
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcpworks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    secrets:
+      - postgres_password
+
+  redis:
+    image: redis:7-alpine
+    container_name: mcpworks-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcpworks-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcpworks-api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - sandbox-tmp:/tmp/sandbox
+      - scratchpad-data:/opt/mcpworks/scratchpad
+      - ./keys/jwt_private.pem:/app/keys/private.pem:ro
+      - ./keys/jwt_public.pem:/app/keys/public.pem:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+      - NET_ADMIN
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mcpworks-net
+      - mcpworks-agents
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/v1/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres-data:
+  redis-data:
+  sandbox-tmp:
+  scratchpad-data:
+
+networks:
+  mcpworks-net:
+    driver: bridge
+  mcpworks-agents:
+    driver: bridge
+    name: mcpworks-agents
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt

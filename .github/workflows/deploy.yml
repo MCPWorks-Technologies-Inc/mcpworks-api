@@ -1,17 +1,14 @@
 # Automated Deployment to Production
-# Triggers on push to main after CI passes
-#
-# Previously used `workflow_call` to re-run all CI jobs (~9 min duplicated).
-# Now waits for the CI workflow that already triggered on the same push.
+# Runs on a self-hosted runner on server0.pop11.
+# Push to main → CI passes (GitHub-hosted) → Deploy runs locally on server0.
 
 name: Deploy
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
-# Only run one deployment at a time
 concurrency:
   group: production-deploy
   cancel-in-progress: false
@@ -54,60 +51,16 @@ jobs:
 
   deploy:
     name: Deploy to Production
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: wait-for-ci
     environment: production
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Sync to build context
         run: |
-          mkdir -p ~/.ssh
-          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          # Add known hosts with retry
-          for i in 1 2 3; do
-            ssh-keyscan -T 10 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
-            echo "Retry $i..."
-            sleep 5
-          done
-          # Verify key file
-          if [ ! -s ~/.ssh/deploy_key ]; then
-            echo "Error: SSH key is empty"
-            exit 1
-          fi
-
-      - name: Sync code to server
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-        run: |
-          # Allowlist-only sync: only files needed for Docker build and runtime.
-          # Everything else stays off the server. --delete removes stale files.
-          #
-          # What the server needs:
-          #   src/              Application code (COPY in Dockerfile)
-          #   deploy/           nsjail scripts, config, rootfs (COPY in Dockerfile)
-          #   alembic/          Database migrations (COPY in Dockerfile)
-          #   alembic.ini       Migration config (COPY in Dockerfile)
-          #   scripts/          start.sh entrypoint (COPY in Dockerfile)
-          #   docs/guide.md     User-facing docs served by API (COPY in Dockerfile)
-          #   docs/llm-reference.md  LLM reference served by API (COPY in Dockerfile)
-          #   pyproject.toml    Python deps (COPY in Dockerfile)
-          #   README.md         Required by pyproject.toml metadata
-          #   Dockerfile        Docker build
-          #   docker-compose.prod.yml  Container orchestration
-          #   Caddyfile         Reverse proxy config
-          #
-          # NOT synced (and removed if present):
-          #   CLAUDE.md, SPEC.md, .secrets.baseline  (internal docs / security risk)
-          #   tests/, docs/implementation/, infra/    (dev-only)
-          #   .github/, .pre-commit-config.yaml       (CI/dev tooling)
-          rsync -avz --delete \
+          sudo rsync -a --delete \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --include='src/***' \
@@ -121,50 +74,42 @@ jobs:
             --include='pyproject.toml' \
             --include='README.md' \
             --include='Dockerfile' \
-            --include='docker-compose.prod.yml' \
-            --include='Caddyfile' \
             --exclude='*' \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            ./ ${DEPLOY_USER}@${DEPLOY_HOST}:/opt/mcpworks/
+            ./ /opt/mcpworks/src/
 
       - name: Rebuild and restart
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        working-directory: /opt/mcpworks
         run: |
-          ssh -i ~/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
-            set -euo pipefail
+          set -euo pipefail
 
-            echo "=== Starting deployment ==="
-            cd /opt/mcpworks
+          echo "=== Deploying $(git -C src rev-parse --short HEAD) ==="
 
-            # Rebuild and restart
-            echo "Rebuilding Docker image..."
-            docker compose -f docker-compose.prod.yml build api
+          echo "Rebuilding Docker image..."
+          sudo docker compose build api
 
-            echo "Restarting API and Caddy containers..."
-            docker compose -f docker-compose.prod.yml up -d api
-            docker compose -f docker-compose.prod.yml restart caddy
+          echo "Restarting API container..."
+          sudo docker compose up -d api
 
-            # Wait for health check
-            echo "Waiting for health check..."
-            sleep 15
-
-            # Verify
-            if docker compose -f docker-compose.prod.yml ps api | grep -q "(healthy)"; then
-              echo "Deployment successful! API is healthy."
-            else
-              echo "WARNING: Health check status:"
-              docker compose -f docker-compose.prod.yml ps api
+          echo "Waiting for health check..."
+          for i in $(seq 1 12); do
+            sleep 5
+            if sudo docker compose ps api 2>/dev/null | grep -q "(healthy)"; then
+              echo "API is healthy"
+              break
             fi
+            echo "  attempt $i/12..."
+          done
 
-            # Cleanup
-            docker image prune -f
+          if ! sudo docker compose ps api 2>/dev/null | grep -q "(healthy)"; then
+            echo "ERROR: API not healthy after 60s"
+            sudo docker logs mcpworks-api --tail 30
+            exit 1
+          fi
 
-            echo "=== Deployment complete ==="
-          ENDSSH
+          sudo docker image prune -f
+          echo "=== Deploy complete ==="
 
-      - name: Verify deployment
+      - name: Verify via public endpoint
         run: |
           sleep 5
           curl -sf https://api.mcpworks.io/v1/health || echo "Health check pending..."

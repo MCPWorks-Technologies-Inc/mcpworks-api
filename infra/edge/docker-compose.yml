@@ -1,0 +1,19 @@
+# Edge node (api.mcpworks.io) — TLS termination and reverse proxy only.
+# All application traffic is forwarded over WireGuard to server0.pop11 / server1.pop11.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: mcpworks-edge-caddy
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    network_mode: host
+    # host networking so Caddy can reach WireGuard peers (10.100.0.x)
+    # without extra Docker network config
+
+volumes:
+  caddy-data:
+  caddy-config:
