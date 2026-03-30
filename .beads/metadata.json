@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "mcpworks_api",
+  "project_id": "3f0fe4b6-9262-469a-98d5-59dc1e5bcb78"
+}

@@ -118,3 +118,7 @@ STYLE.md
 admin-login-form.png
 docs/demo-recording-script.md
 docs/demo-video-script-5min.md
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
