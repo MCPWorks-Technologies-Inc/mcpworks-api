@@ -168,7 +168,7 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     Namespace model for organizing functions and services.
 
     Namespaces provide:
-    - Unique DNS subdomain ({namespace}.create.mcpworks.io, {namespace}.run.mcpworks.io)
+    - Unique MCP endpoint (/mcp/create/{namespace}, /mcp/run/{namespace})
     - Resource isolation between accounts
     - Network security controls (IP allowlisting)
     - Organizational boundary for services and functions
@@ -1216,12 +1216,12 @@ class NamespaceResponse(NamespaceBase):
     @property
     def create_endpoint(self) -> str:
         """Compute create endpoint URL."""
-        return f"https://{self.name}.create.mcpworks.io"
+        return url_builder.create_url(self.name)
 
     @property
     def run_endpoint(self) -> str:
         """Compute run endpoint URL."""
-        return f"https://{self.name}.run.mcpworks.io"
+        return url_builder.run_url(self.name)
 
 
 class NamespaceList(BaseModel):

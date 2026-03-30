@@ -228,7 +228,7 @@ async def handle_mcp_request(
     if not namespace_name:
         return make_error_response(
             MCPErrorCodes.INVALID_REQUEST,
-            "Missing namespace. Use {namespace}.create.<domain> or {namespace}.run.<domain>",
+            "Missing namespace. Use /mcp/{create|run|agent}/{namespace}",
         ).model_dump()
 
     if endpoint_type not in ("create", "run", "agent"):

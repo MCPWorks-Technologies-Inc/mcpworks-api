@@ -34,12 +34,12 @@ Deploy it on your own infrastructure, write a function, and it runs.
 
 ### Namespaces
 
-A namespace is your top-level organizational unit. It maps to a subdomain pair:
+A namespace is your top-level organizational unit. It maps to a pair of MCP endpoints:
 
-- `{ns}.create.{BASE_DOMAIN}` — management
-- `{ns}.run.{BASE_DOMAIN}` — execution
+- `/mcp/create/{ns}` — management
+- `/mcp/run/{ns}` — execution
 
-Namespace names must be DNS-compliant: lowercase alphanumeric with hyphens, 1–63 characters, must start and end with an alphanumeric character.
+Namespace names must be lowercase alphanumeric with hyphens, 1–63 characters, must start and end with an alphanumeric character.
 
 ### Services
 

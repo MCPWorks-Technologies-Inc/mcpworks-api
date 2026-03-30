@@ -23,6 +23,7 @@ from mcpworks_api.mcp.transport import MCPTransportMiddleware, session_manager
 from mcpworks_api.middleware import (
     BillingMiddleware,
     CorrelationIdMiddleware,
+    PathRoutingMiddleware,
     RequestLoggingMiddleware,
     SubdomainMiddleware,
     register_exception_handlers,
@@ -200,8 +201,12 @@ def create_app() -> FastAPI:
     # Rate limiting middleware
     app.add_middleware(RateLimitMiddleware)
 
-    # Subdomain parsing (A0: namespace + endpoint type extraction)
-    app.add_middleware(SubdomainMiddleware)
+    # Namespace + endpoint type extraction (015: path-based or subdomain)
+    routing_mode = settings.routing_mode
+    if routing_mode in ("path", "both"):
+        app.add_middleware(PathRoutingMiddleware)
+    if routing_mode in ("subdomain", "both"):
+        app.add_middleware(SubdomainMiddleware)
 
     # ORDER-021: Structured per-request logging (runs after correlation ID is set)
     app.add_middleware(RequestLoggingMiddleware)
@@ -234,6 +239,11 @@ def create_app() -> FastAPI:
     app.include_router(public_chat_router)
     app.include_router(mcp_proxy_router)
 
+    # 015: Path-based agent sub-routes (/mcp/agent/{ns}/webhook, /chat, /view)
+    from mcpworks_api.api.v1.agent_path_routes import router as agent_path_router
+
+    app.include_router(agent_path_router)
+
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:
         setup_metrics(app)
@@ -246,6 +256,18 @@ def create_app() -> FastAPI:
             "name": "mcpworks API",
             "version": "0.1.0",
             "docs": "/docs" if settings.app_debug else "disabled",
+        }
+
+    # MCP protocol discovery
+    @app.get("/mcp")
+    async def mcp_discovery() -> dict:
+        """MCP protocol discovery endpoint."""
+        return {
+            "protocol": "mcp",
+            "version": "2024-11-05",
+            "url_template": "/mcp/{endpoint}/{namespace}",
+            "endpoints": ["create", "run", "agent"],
+            "docs": "/docs/quickstart",
         }
 
     # OAuth Protected Resource metadata (RFC 9728)

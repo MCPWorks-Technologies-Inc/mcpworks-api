@@ -80,6 +80,10 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Process request and extract subdomain information."""
+        # Skip if PathRoutingMiddleware already handled this request
+        if getattr(request.state, "namespace", None) is not None:
+            return await call_next(request)
+
         # Skip exempt paths
         if request.url.path in self.exempt_paths:
             return await call_next(request)
@@ -130,8 +134,18 @@ class SubdomainMiddleware(BaseHTTPMiddleware):
         request.state.namespace = match.group("namespace")
         request.state.endpoint_type = EndpointType(match.group("endpoint"))
         request.state.is_local = False
+        request.state._routed_by_subdomain = True
 
-        return await call_next(request)
+        response = await call_next(request)
+
+        from mcpworks_api.config import get_settings
+
+        if get_settings().routing_mode == "both":
+            response.headers["X-MCPWorks-Deprecated"] = (
+                "subdomain-routing; migrate to /mcp/{endpoint}/{namespace}"
+            )
+
+        return response
 
     def _is_local_host(self, host: str) -> bool:
         """Check if host is a local development address."""

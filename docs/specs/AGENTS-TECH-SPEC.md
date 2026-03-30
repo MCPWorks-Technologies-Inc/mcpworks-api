@@ -330,41 +330,24 @@ class AgentService:
 
 ### DNS
 
-Cloudflare already has wildcard `*.mcpworks.io`. Add:
-- `*.agent.mcpworks.io` → A record → `<prod-server-ip>` (same droplet initially)
+With path-based routing, all traffic goes through `api.mcpworks.io`. No additional DNS records needed for agents.
 
 ### Caddy Routing
 
-Add to Caddyfile:
+All agent traffic is handled via path-based routing through the main `api.mcpworks.io` block. Agent endpoints:
+- `/mcp/agent/{name}` — MCP protocol
+- `/mcp/agent/{name}/webhook/{path}` — webhook ingress
+- `/mcp/agent/{name}/chat/{token}` — public chat
+- `/mcp/agent/{name}/view/{token}/` — scratchpad view
 
-```
-*.agent.mcpworks.io {
-    tls {
-        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-    }
-
-    @webhook path /webhook/*
-
-    handle @webhook {
-        reverse_proxy mcpworks-api:8000
-    }
-
-    handle {
-        reverse_proxy mcpworks-api:8000
-    }
-}
-```
-
-All `*.agent.mcpworks.io` traffic routes to the API server. The API server inspects the `Host` header, resolves the agent name, and either:
-- Forwards webhook payloads to the agent container (via Docker network)
-- Handles MCP protocol requests directly
+The API server's `PathRoutingMiddleware` extracts the agent name from the URL path and routes to the appropriate handler.
 
 ### Webhook Ingress Path
 
 ```
 External system
     │
-    │ POST https://dogedetective.agent.mcpworks.io/webhook/price-alert
+    │ POST https://api.mcpworks.io/mcp/agent/dogedetective/webhook/price-alert
     │
     ├── Cloudflare (DDoS, TLS termination)
     ├── Caddy (TLS, reverse proxy)
@@ -408,7 +391,7 @@ from apscheduler.triggers.cron import CronTrigger
 scheduler = AsyncIOScheduler()
 
 async def execute_scheduled_function(schedule_id: str, function_name: str):
-    # Call {namespace}.run.mcpworks.io to execute the function
+    # Call /mcp/run/{namespace} to execute the function
     # Record AgentRun
     pass
 
@@ -599,7 +582,7 @@ The existing admin dashboard (if web-based) or admin API needs:
 | Droplet | s-2vcpu-4gb ($24/mo) | s-4vcpu-8gb ($48/mo) |
 | Docker | Running API + Caddy | + agent containers |
 | Network | Single bridge | + `mcpworks-agents` bridge |
-| DNS | `*.mcpworks.io` wildcard | + `*.agent.mcpworks.io` (same wildcard covers it) |
+| DNS | `api.mcpworks.io` A record | Path-based routing — no wildcard DNS needed |
 
 ### Resource Budget (s-4vcpu-8gb = 8 GB RAM, 4 vCPU)
 

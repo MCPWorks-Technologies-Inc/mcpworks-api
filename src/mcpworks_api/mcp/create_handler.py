@@ -83,7 +83,7 @@ def _coerce_json_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 class CreateMCPHandler:
-    """Handler for *.create.mcpworks.io endpoints.
+    """Handler for /mcp/create/{namespace} endpoints.
 
     Provides management operations for namespaces, services, and functions.
     """

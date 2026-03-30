@@ -139,8 +139,8 @@ It requires OPENAI_API_KEY."</code></pre>
 
 <h2>What's Happening Behind the Scenes</h2>
 <ul>
-<li><strong>create endpoint</strong> (<code>*.create.{{BASE_DOMAIN}}</code>) — manages your namespaces, services, and functions</li>
-<li><strong>run endpoint</strong> (<code>*.run.{{BASE_DOMAIN}}</code>) — executes functions in a secure nsjail sandbox</li>
+<li><strong>create endpoint</strong> (<code>/mcp/create/{{namespace}}</code>) — manages your namespaces, services, and functions</li>
+<li><strong>run endpoint</strong> (<code>/mcp/run/{{namespace}}</code>) — executes functions in a secure nsjail sandbox</li>
 <li>Each function runs in an isolated container with no network access to your database or secrets</li>
 <li>60+ Python packages pre-installed (numpy, pandas, httpx, etc.) — use <code>list_packages</code> to see all</li>
 <li>Environment variables are passed per-request via header — never stored server-side</li>

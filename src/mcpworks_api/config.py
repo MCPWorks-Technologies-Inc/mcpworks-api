@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         default="https",
         description="URL scheme for generated URLs (https or http)",
     )
+    routing_mode: Literal["path", "subdomain", "both"] = Field(
+        default="path",
+        description="URL routing: path (/mcp/create/ns), subdomain (ns.create.domain), or both",
+    )
     allow_registration: bool = Field(
         default=False,
         description="Whether public user registration is enabled",

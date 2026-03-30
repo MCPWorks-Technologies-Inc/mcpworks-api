@@ -34,7 +34,7 @@ These Terms are governed by the laws of British Columbia and the federal laws of
 
 ## 2. The Service
 
-MCPWorks provides namespace-based function hosting for AI assistants. You create functions through a management interface (`{namespace}.create.mcpworks.io`) and execute them through a run interface (`{namespace}.run.mcpworks.io`). Functions execute on one of several backends (Code Sandbox, nanobot.ai, or GitHub Repo).
+MCPWorks provides namespace-based function hosting for AI assistants. You create functions through a management interface (`/mcp/create/{namespace}`) and execute them through a run interface (`/mcp/run/{namespace}`). Functions execute on one of several backends (Code Sandbox, nanobot.ai, or GitHub Repo).
 
 We may offer the Service in alpha, beta, or preview stages. Features in those stages may change or be removed with 14 days notice.
 

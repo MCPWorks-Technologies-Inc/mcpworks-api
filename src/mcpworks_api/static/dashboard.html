@@ -222,8 +222,8 @@ async function loadDashboard() {
                         </div>
                         <p class="text-gray-400 text-sm mb-2">${ns.description || ''}</p>
                         <div class="text-xs text-gray-500 space-y-1">
-                            <div>Create: <code class="text-gray-400">${ns.name}.create.mcpworks.io</code></div>
-                            <div>Run: <code class="text-gray-400">${ns.name}.run.mcpworks.io</code></div>
+                            <div>Create: <code class="text-gray-400">/mcp/create/${ns.name}</code></div>
+                            <div>Run: <code class="text-gray-400">/mcp/run/${ns.name}</code></div>
                         </div>
                         <div id="ns-${ns.name}-services" class="mt-3 space-y-2"></div>
                     </div>

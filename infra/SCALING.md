@@ -153,7 +153,7 @@ Add a second API box behind a load balancer. Split sandbox execution to a dedica
 | **Total** | | **$270** |
 
 **Actions:**
-1. **DO Load Balancer** — $12/mo. Health check on `/v1/health`. Round-robin distribution. No sticky sessions needed (stateless JWT + stateless MCP). Wildcard TLS for `*.create.mcpworks.io` and `*.run.mcpworks.io` terminated at the LB.
+1. **DO Load Balancer** — $12/mo. Health check on `/v1/health`. Round-robin distribution. No sticky sessions needed (stateless JWT + stateless MCP). Single TLS cert for `api.mcpworks.io` terminated at the LB (path-based routing — no wildcard certs needed).
 2. **Second API droplet** — Identical container deployment. PgBouncer on each box. Since MCP transport is stateless and auth is JWT-based, no session synchronization needed.
 3. **Sandbox worker** — Dedicated droplet running only sandbox executions. API dispatches execution requests to the worker via a Redis task queue (Celery with Redis broker, or a lightweight asyncio consumer). This isolates sandbox resource usage from API request handling.
 4. **Task queue for sandbox** — Replace direct `asyncio.create_subprocess_exec()` with a Celery task (or Redis Streams consumer). API enqueues `{code, env, tier, timeout}`, worker dequeues and executes in nsjail, returns result. Timeout and retry handled at the queue level.
@@ -317,7 +317,7 @@ Use Celery with Redis broker. Worker runs with `--concurrency=8` (or tuned per t
 
 - **Algorithm:** Round-robin (all API boxes are identical)
 - **Health check:** HTTP GET `/v1/health` every 10s, 3 failures = remove from pool
-- **TLS:** Wildcard cert for `*.create.mcpworks.io` and `*.run.mcpworks.io` via Let's Encrypt. Caddy on each API box handles app-level TLS; LB does TCP passthrough, OR LB terminates TLS and forwards HTTP internally.
+- **TLS:** Single cert for `api.mcpworks.io` via Let's Encrypt (path-based routing — no wildcard certs needed). LB terminates TLS and forwards HTTP internally.
 - **Sticky sessions:** Not needed. JWT auth is stateless, MCP transport is stateless.
 - **Websockets/SSE:** LB supports forwarding. No special config.
 
@@ -502,7 +502,7 @@ DO App Platform and similar managed container services add cost and reduce contr
 □ Deploy identical API stack to second droplet
 □ Provision DO Load Balancer, add both API droplets as targets
 □ Update DNS: api.mcpworks.io → LB IP
-□ Update wildcard DNS: *.create.mcpworks.io, *.run.mcpworks.io → LB IP
+□ Verify api.mcpworks.io DNS points to LB IP (path-based routing — no wildcard DNS needed)
 □ Test health check failover (stop one API box, verify traffic routes to other)
 □ Replace asyncio.create_task() fire-and-forget with Celery tasks for security events
 □ Upgrade managed Postgres if connection count requires it

@@ -10,7 +10,7 @@ From zero to running your first function. This guide covers deploying MCPWorks o
 | Docker | 24.0+ | With Docker Compose v2 |
 | RAM | 2 GB | 4 GB recommended |
 | Disk | 20 GB | SSD recommended |
-| Domain | Wildcard DNS | Required for namespace subdomains |
+| Domain | Optional | Not required — path-based routing works with IP address only |
 | Ports | 80, 443 | Must be open for Let's Encrypt |
 
 ## 1. Clone and Generate Keys
@@ -92,7 +92,7 @@ Open `https://api.<your-domain>/console` in your browser and log in.
 
 The console walks you through three setup steps:
 
-1. **Create a namespace** — this becomes your subdomain prefix (e.g. `demo.create.<your-domain>`)
+1. **Create a namespace** — this becomes your MCP endpoint path (e.g. `/mcp/create/demo`)
 2. **Create an API key** — starts with `sk_live_`, shown only once — copy it
 3. **Connect your AI assistant** — the console generates the `.mcp.json` config for Claude Code, Cursor, and other clients, pre-filled with your namespace URLs and API key
 
@@ -309,7 +309,7 @@ All services run in Docker containers on a single machine. For high-availability
 
 | Concept | What it does |
 |---------|-------------|
-| **Namespace** | Top-level container, maps to `{ns}.create.` and `{ns}.run.` subdomains |
+| **Namespace** | Top-level container, maps to `/mcp/create/{ns}` and `/mcp/run/{ns}` endpoints |
 | **Service** | Groups related functions (like a folder) |
 | **Function** | Executable code with input/output schemas |
 | **Code mode** | AI writes Python that calls your functions inside the sandbox |

@@ -1,17 +1,14 @@
 # MCPWorks Production Caddyfile
-# Caddy automatically provisions SSL via Let's Encrypt
+# All MCP traffic routes through api.mcpworks.io using path-based routing:
+#   /mcp/create/{namespace}  — management
+#   /mcp/run/{namespace}     — execution
+#   /mcp/agent/{namespace}   — agent webhooks/chat/view
 
 {
     email admin@mcpworks.io
-
-    # On-demand TLS for namespace subdomains
-    # Individual certs are issued as subdomains are accessed
-    on_demand_tls {
-        ask http://api:8000/v1/internal/verify-domain
-    }
 }
 
-# Main API endpoint
+# Main API endpoint — handles ALL traffic (REST + MCP)
 api.mcpworks.io {
     # ORDER-015: Use readiness check for upstream health
     reverse_proxy api:8000 {
@@ -40,71 +37,39 @@ api.mcpworks.io {
     }
 }
 
-# Namespace Management Interface (*.create.mcpworks.io)
-*.create.mcpworks.io {
-    tls {
-        on_demand
-    }
+# ──────────────────────────────────────────────────────────────
+# DEPRECATED: Wildcard subdomain blocks (transition period)
+#
+# These exist for backward compatibility with clients still using
+# subdomain-based URLs like {ns}.create.mcpworks.io.
+# Set ROUTING_MODE=both in the API to enable.
+# Remove after transition period (90 days from 2026-03-30).
+# ──────────────────────────────────────────────────────────────
 
-    reverse_proxy api:8000
-
-    # Security headers
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-        -Server
-    }
-
-    log {
-        output stdout
-        format json
-    }
-}
-
-# Namespace Execution Interface (*.run.mcpworks.io)
-*.run.mcpworks.io {
-    tls {
-        on_demand
-    }
-
-    reverse_proxy api:8000
-
-    # Security headers
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-        -Server
-    }
-
-    log {
-        output stdout
-        format json
-    }
-}
-
-# Agent Webhook Interface (*.agent.mcpworks.io)
-# All traffic routed to API; API handles webhook forwarding to agent containers
-*.agent.mcpworks.io {
-    tls {
-        on_demand
-    }
-
-    reverse_proxy api:8000
-
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-        -Server
-    }
-
-    log {
-        output stdout
-        format json
-    }
-}
+# (Commented out — uncomment if ROUTING_MODE=both is needed)
+#
+# # On-demand TLS for wildcard subdomains (requires DNS-01 or on_demand)
+# # on_demand_tls {
+# #     ask http://api:8000/v1/internal/verify-domain
+# # }
+#
+# *.create.mcpworks.io {
+#     tls { on_demand }
+#     reverse_proxy api:8000
+#     header { X-Content-Type-Options nosniff; X-Frame-Options DENY; -Server }
+# }
+#
+# *.run.mcpworks.io {
+#     tls { on_demand }
+#     reverse_proxy api:8000
+#     header { X-Content-Type-Options nosniff; X-Frame-Options DENY; -Server }
+# }
+#
+# *.agent.mcpworks.io {
+#     tls { on_demand }
+#     reverse_proxy api:8000
+#     header { X-Content-Type-Options nosniff; X-Frame-Options DENY; -Server }
+# }
 
 # Health check endpoint (no SSL required)
 :80 {

@@ -406,7 +406,7 @@ make_function(
 | `No code provided` | Empty code in execute/make_function | Provide code or use a template |
 | `Invalid tool name format` | Tool mode name missing `.` | Use `service.function` format |
 | `Authentication failed` | Bad or missing API key | Check Authorization header |
-| `INVALID_HOST` | Wrong subdomain format | Use `{ns}.{create|run}.{BASE_DOMAIN}` |
+| `INVALID_ENDPOINT` | Invalid endpoint type | Use `/mcp/{create|run|agent}/{namespace}` |
 
 ---
 

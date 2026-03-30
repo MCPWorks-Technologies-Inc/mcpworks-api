@@ -8,6 +8,7 @@ from mcpworks_api.middleware.billing import (
 from mcpworks_api.middleware.correlation import CorrelationIdMiddleware
 from mcpworks_api.middleware.error_handler import register_exception_handlers
 from mcpworks_api.middleware.request_logging import RequestLoggingMiddleware
+from mcpworks_api.middleware.routing import PathRoutingMiddleware
 from mcpworks_api.middleware.subdomain import (
     EndpointType,
     SubdomainMiddleware,
@@ -21,7 +22,9 @@ __all__ = [
     "CorrelationIdMiddleware",
     "RequestLoggingMiddleware",
     "register_exception_handlers",
-    # Subdomain middleware (A0)
+    # Path-based routing middleware (015)
+    "PathRoutingMiddleware",
+    # Subdomain middleware (A0, legacy)
     "SubdomainMiddleware",
     "EndpointType",
     "get_namespace",

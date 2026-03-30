@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - REST API for account management, authentication (JWT + OAuth2), and usage tracking
 - Subscription-based billing via Stripe
 - Docker Compose self-hosting with bundled PostgreSQL and Redis
-- Caddy reverse proxy with automatic TLS and wildcard subdomain routing
+- Caddy reverse proxy with automatic TLS and path-based routing
 - Envelope encryption (AES-256-GCM) for stored secrets
 - Credential scanning for user-submitted code
 - Comprehensive spec-driven development documentation

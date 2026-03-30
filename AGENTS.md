@@ -9,7 +9,7 @@ This file provides guidance to AI coding assistants (Claude Code, Copilot, Curso
 **License:** BSL 1.1 (open-source, self-hostable)
 
 **Architecture:** RESTful API + MCP namespace endpoints (direct HTTPS, no proxy)
-- Namespace endpoints: `{ns}.create.mcpworks.io` (manage) / `{ns}.run.mcpworks.io` (execute)
+- MCP endpoints: `/mcp/create/{ns}` (manage) / `/mcp/run/{ns}` (execute) / `/mcp/agent/{ns}` (agents)
 - API endpoints: `https://api.mcpworks.io/v1/`
 - Function execution: Code Sandbox (nsjail) with Python/TypeScript support
 - Agent runtime: Autonomous agents with scheduling, state, webhooks, BYOAI
