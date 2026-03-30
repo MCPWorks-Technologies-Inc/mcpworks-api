@@ -96,7 +96,7 @@ Free-tier accounts with no API activity for 180 consecutive days may have functi
 
 ## 4. Namespace Rules
 
-Your namespace (`{namespace}.create.mcpworks.io` and `{namespace}.run.mcpworks.io`) is your identity on the platform. The following naming rules apply:
+Your namespace (`/mcp/create/{namespace}` and `/mcp/run/{namespace}`) is your identity on the platform. The following naming rules apply:
 
 - **No impersonation.** Namespaces that impersonate other companies, products, or individuals are prohibited. Examples: `stripe`, `openai`, `anthropic`, `google-cloud` — unless you are that entity.
 - **No trademark infringement.** Namespaces that use trademarks you do not own or have authorization to use. We will honor valid trademark claims submitted to legal@mcpworks.io.

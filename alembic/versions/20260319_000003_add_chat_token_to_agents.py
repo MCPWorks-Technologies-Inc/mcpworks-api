@@ -1,7 +1,7 @@
 """Add chat_token to agents.
 
 Public chat endpoint authentication via obfuscated URL token.
-Pattern: POST https://{agent}.agent.mcpworks.io/chat/{token}
+Pattern: POST /mcp/agent/{agent}/chat/{token}
 
 Revision ID: 20260319_000003
 Revises: 20260319_000002

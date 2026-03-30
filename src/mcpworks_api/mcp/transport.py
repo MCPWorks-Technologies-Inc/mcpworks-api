@@ -268,7 +268,7 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
     endpoint_type = getattr(request.state, "endpoint_type", None)
     if not namespace or not endpoint_type:
         raise ValueError(
-            "Missing namespace or endpoint type. Use {namespace}.{create|run|agent}.<domain>"
+            "Missing namespace or endpoint type. Use /mcp/{create|run|agent}/{namespace}"
         )
 
     args = arguments or {}
@@ -320,26 +320,56 @@ async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextCon
 
 
 # ---------------------------------------------------------------------------
-# ASGI middleware – intercepts /mcp before Starlette routing (avoids 307 redirect)
+# ASGI middleware – intercepts MCP protocol requests before Starlette routing
 # ---------------------------------------------------------------------------
-class MCPTransportMiddleware:
-    """ASGI middleware that intercepts ``/mcp`` requests for MCP transport.
+_MCP_ENDPOINTS = frozenset({"create", "run", "agent"})
 
-    Added as the innermost middleware so that SubdomainMiddleware, RateLimit,
-    and Billing have already run.  Handles POST/GET/DELETE at ``/mcp``
-    directly via the SDK session manager, bypassing Starlette's ``Mount``
-    redirect from ``/mcp`` → ``/mcp/``.
+
+def _is_mcp_protocol_path(path: str, method: str = "") -> bool:
+    """Check if path is an MCP protocol endpoint (not an agent sub-route).
+
+    Matches:
+      /mcp, /mcp/                    — legacy subdomain mode (POST/DELETE only)
+      /mcp/{endpoint}/{namespace}    — path-based routing (3 segments under /mcp/)
+
+    Does NOT match:
+      GET /mcp                       — discovery endpoint (handled by FastAPI)
+      /mcp/agent/{ns}/webhook/...    — agent webhook (4+ segments)
+      /mcp/agent/{ns}/chat/...       — agent chat (4+ segments)
+      /mcp/agent/{ns}/view/...       — agent scratchpad (4+ segments)
+    """
+    if path in ("/mcp", "/mcp/"):
+        # Let GET /mcp fall through to discovery endpoint
+        if method.upper() == "GET":
+            return False
+        return True
+    if not path.startswith("/mcp/"):
+        return False
+    segments = path.rstrip("/").split("/")
+    # /mcp/{endpoint}/{namespace} → ["", "mcp", endpoint, namespace]
+    return len(segments) == 4 and segments[2] in _MCP_ENDPOINTS
+
+
+class MCPTransportMiddleware:
+    """ASGI middleware that intercepts MCP protocol requests.
+
+    Added as the innermost middleware so that routing, RateLimit,
+    and Billing have already run.  Handles POST/GET/DELETE at MCP
+    endpoints directly via the SDK session manager.
+
+    Supports both subdomain-mode (/mcp) and path-mode (/mcp/{endpoint}/{ns}).
     """
 
     def __init__(self, app: Any) -> None:
         self.app = app
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
-        if scope["type"] == "http" and scope.get("path", "") in ("/mcp", "/mcp/"):
+        if scope["type"] == "http" and _is_mcp_protocol_path(
+            scope.get("path", ""), scope.get("method", "")
+        ):
             request = Request(scope, receive, send)
             token = _current_request.set(request)
             try:
-                # Session manager expects root-relative path
                 inner_scope = dict(scope)
                 inner_scope["path"] = "/"
                 await session_manager.handle_request(inner_scope, receive, send)

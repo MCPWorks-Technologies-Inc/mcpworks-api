@@ -57,7 +57,7 @@ Function authors need their code to call external APIs (OpenAI, Stripe, database
 
 **Workflow:**
 1. Developer configures `.mcp.json` with the `X-MCPWorks-Env` header containing their base64-encoded env vars
-2. Claude Code connects to `acme.run.mcpworks.io` and sends the header on every request
+2. Claude Code connects to `/mcp/run/acme` and sends the header on every request
 3. AI assistant calls `tools/list`, sees "Required env: OPENAI_API_KEY" in the tool description
 4. AI assistant calls `tools.search` with arguments
 5. Server extracts env vars from header, filters to only `OPENAI_API_KEY` (what the function declared), writes to tmpfs
@@ -552,7 +552,7 @@ Support `X-MCPWorks-Env-{NAME}: {value}` as an alternative to the single base64 
   "mcpServers": {
     "acme": {
       "type": "http",
-      "url": "https://acme.run.mcpworks.io/mcp",
+      "url": "https://api.mcpworks.io/mcp/run/acme",
       "headers": {
         "Authorization": "Bearer ${MCPWORKS_API_KEY}",
         "X-MCPWorks-Env": "${MCPWORKS_ACME_ENV}"

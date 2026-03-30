@@ -107,14 +107,20 @@ class AgentBot(discord.Client):
 
         from mcpworks_api.config import get_settings
 
-        url = f"{get_settings().internal_api_url}/chat/{chat_token}"
+        settings = get_settings()
+        if settings.routing_mode in ("path", "both"):
+            url = f"{settings.internal_api_url}/mcp/agent/{agent_name}/chat/{chat_token}"
+            headers = {}
+        else:
+            url = f"{settings.internal_api_url}/chat/{chat_token}"
+            headers = {"Host": url_builder.agent_url(agent_name).split("://", 1)[1]}
         message = f"[Discord message from {discord_context['author']}]: {user_message}"
 
         async with httpx.AsyncClient(timeout=600.0) as client:
             resp = await client.post(
                 url,
                 json={"message": message},
-                headers={"Host": url_builder.agent_url(agent_name).split("://", 1)[1]},
+                headers=headers,
             )
 
         if resp.status_code != 200:

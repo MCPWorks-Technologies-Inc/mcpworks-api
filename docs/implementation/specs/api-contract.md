@@ -34,7 +34,7 @@ Authorization: Bearer {api_key_or_access_token}
 
 ### 1.3 Environment Variable Passthrough
 
-Functions that call external APIs can receive secrets via the `X-MCPWorks-Env` header on **run** endpoint requests (`*.run.mcpworks.io`). Values are never stored, logged, or persisted — they exist only for the duration of execution.
+Functions that call external APIs can receive secrets via the `X-MCPWorks-Env` header on **run** endpoint requests (`/mcp/run/{namespace}`). Values are never stored, logged, or persisted — they exist only for the duration of execution.
 
 ```
 X-MCPWorks-Env: base64:{base64-encoded JSON object}

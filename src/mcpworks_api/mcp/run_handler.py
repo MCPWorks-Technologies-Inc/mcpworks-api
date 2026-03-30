@@ -37,7 +37,7 @@ logger = structlog.get_logger(__name__)
 
 
 class RunMCPHandler:
-    """Handler for *.run.mcpworks.io endpoints.
+    """Handler for /mcp/run/{namespace} endpoints.
 
     Provides function execution by:
     1. Dynamically generating tools from database functions

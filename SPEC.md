@@ -50,7 +50,7 @@ The **mcpworks-api** is the backend service powering the MCPWorks namespace-base
          ┌───────────┴───────────┐
          ▼                       ▼
 ┌─────────────────────┐  ┌─────────────────────┐
-│ {ns}.create.mcpworks│  │ {ns}.run.mcpworks.io│
+│ /mcp/create/{ns}    │  │ /mcp/run/{ns}       │
 │ Management (CRUD)   │  │ Execution           │
 └─────────┬───────────┘  └─────────┬───────────┘
           │                        │
@@ -66,7 +66,7 @@ The **mcpworks-api** is the backend service powering the MCPWorks namespace-base
 │                          ▼                              │
 │  ┌─────────────────────────────────────────────────┐   │
 │  │ Middleware Stack                                 │   │
-│  │ MCPTransport → Billing → RateLimit → Subdomain  │   │
+│  │ MCPTransport → Billing → RateLimit → PathRouting│   │
 │  └─────────────────────────────────────────────────┘   │
 └────────┬───────────┬───────────┬─────────────┬──────────┘
          │           │           │             │
@@ -81,10 +81,10 @@ The **mcpworks-api** is the backend service powering the MCPWorks namespace-base
 
 | Pattern | Purpose |
 |---------|---------|
-| `{namespace}.create.mcpworks.io` | Management interface — CRUD functions, services, agents |
-| `{namespace}.run.mcpworks.io` | Execution interface — call functions, run code |
-| `{agent}.agent.mcpworks.io` | Agent webhook ingress |
-| `api.mcpworks.io` | REST API — auth, billing, admin |
+| `/mcp/create/{namespace}` | Management interface — CRUD functions, services, agents |
+| `/mcp/run/{namespace}` | Execution interface — call functions, run code |
+| `/mcp/agent/{namespace}` | Agent MCP + webhook ingress |
+| `/v1/*` | REST API — auth, billing, admin |
 
 ### Function Backends
 
@@ -98,10 +98,10 @@ The **mcpworks-api** is the backend service powering the MCPWorks namespace-base
 
 1. **CorrelationIdMiddleware** — assigns request trace ID
 2. **RequestLoggingMiddleware** — structured JSON logging (structlog)
-3. **SubdomainMiddleware** — parses `{ns}.{type}.mcpworks.io` → namespace + endpoint type
+3. **PathRoutingMiddleware** — parses `/mcp/{type}/{ns}` → namespace + endpoint type
 4. **RateLimitMiddleware** — auth rate limits, per-IP throttling
 5. **BillingMiddleware** — monthly quota, per-minute rate, concurrency enforcement
-6. **MCPTransportMiddleware** — intercepts `/mcp` → JSON-RPC 2.0 dispatch
+6. **MCPTransportMiddleware** — intercepts `/mcp/{endpoint}/{ns}` → JSON-RPC 2.0 dispatch
 
 ---
 
@@ -276,7 +276,7 @@ Per PRICING.md v7.0.0. All accounts have agent functionality.
 
 AI assistants connect via JSON-RPC 2.0 over HTTPS. Two endpoint types:
 
-### Create Interface (`{ns}.create.mcpworks.io/mcp`)
+### Create Interface (`/mcp/create/{ns}`)
 
 Management tools for building and configuring.
 
@@ -310,7 +310,7 @@ Management tools for building and configuring.
 
 **Tool Scopes:** Each tool requires `read` or `write` scope on the API key.
 
-### Run Interface (`{ns}.run.mcpworks.io/mcp`)
+### Run Interface (`/mcp/run/{ns}`)
 
 Execution tools, dynamically generated from namespace functions.
 
@@ -433,7 +433,7 @@ Checkout automatically maps to agent tiers (e.g., `pro` → `pro-agent`).
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/webhook/{path}` | Incoming webhook (routed by `{agent}.agent.mcpworks.io`) |
+| POST | `/mcp/agent/{agent}/webhook/{path}` | Incoming webhook |
 
 ### Health
 

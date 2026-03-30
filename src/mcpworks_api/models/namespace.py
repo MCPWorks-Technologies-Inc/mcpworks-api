@@ -32,7 +32,7 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     """Namespace model for organizing functions and services.
 
     Namespaces provide:
-    - Unique DNS subdomain ({namespace}.create.mcpworks.io, {namespace}.run.mcpworks.io)
+    - Unique MCP endpoint (/mcp/create/{namespace}, /mcp/run/{namespace})
     - Resource isolation between accounts
     - Network security controls (IP allowlisting)
     - Organizational boundary for services and functions

@@ -1117,7 +1117,7 @@ function showGettingStarted() {
       <div id="tut-step-1" class="tut-step tut-active">
         <div class="tut-step-header"><span class="tut-num">1</span> Create a namespace</div>
         <div class="tut-step-body">
-          <div style="color:var(--text-2);font-size:13px;margin-bottom:12px">A namespace groups your services and functions under a unique subdomain.</div>
+          <div style="color:var(--text-2);font-size:13px;margin-bottom:12px">A namespace groups your services and functions under a unique endpoint.</div>
           <div id="tut-step-1-error" class="error-msg hidden" style="margin-bottom:10px"></div>
           <div style="display:flex;gap:10px;margin-bottom:10px">
             <div style="flex:1"><input id="tut-ns-name" type="text" placeholder="my-namespace" style="width:100%"></div>
@@ -1218,10 +1218,11 @@ function renderMcpConfigTabs(nsName, apiKey, envKeys, idPrefix, agentName) {
   const keyPlaceholder = hasKey ? apiKey : 'YOUR_API_KEY';
   const createKey = `mcpworks-${nsName}`;
   const runKey = `mcpworks-${nsName}-run`;
-  const createUrl = `https://${nsName}.create.mcpworks.io/mcp`;
-  const runUrl = `https://${nsName}.run.mcpworks.io/mcp`;
+  const apiBase = window.location.origin;
+  const createUrl = `${apiBase}/mcp/create/${nsName}`;
+  const runUrl = `${apiBase}/mcp/run/${nsName}`;
   const agentKey = agentName ? `mcpworks-${agentName}-agent` : null;
-  const agentUrl = agentName ? `https://${agentName}.agent.mcpworks.io/mcp` : null;
+  const agentUrl = agentName ? `${apiBase}/mcp/agent/${agentName}` : null;
   const buildCfg = (urlField) => {
     const c = { mcpServers: {} };
     c.mcpServers[createKey] = { type: 'http', [urlField]: createUrl, headers: { Authorization: `Bearer ${keyPlaceholder}` } };
@@ -2062,7 +2063,7 @@ function renderScratchpadInfo(agent) {
     return;
   }
 
-  const viewUrl = `https://${agent.name}.agent.mcpworks.io/view/${agent.scratchpad_token || '...'}/`;
+  const viewUrl = `${window.location.origin}/mcp/agent/${agent.name}/view/${agent.scratchpad_token || '...'}/`;
   const sizeKb = (agent.scratchpad_size_bytes / 1024).toFixed(1);
   const expiresAt = agent.scratchpad_expires_at ? new Date(agent.scratchpad_expires_at) : null;
 
@@ -2249,7 +2250,7 @@ async function loadAgentWebhooks(agentId) {
     el.innerHTML = hooks.map(h => `<div class="item-row">
       <div class="item-row-main">
         <div class="item-row-label"><code style="font-size:12px">/${esc(h.path)}</code> &rarr; ${esc(h.handler_function_name)}</div>
-        <div class="item-row-meta">${maskedUrl('https://' + esc(agentId) + '.agent.mcpworks.io/webhook/' + esc(h.path), 'Webhook URL')} &middot; ${h.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'}</div>
+        <div class="item-row-meta">${maskedUrl(window.location.origin + '/mcp/agent/' + esc(agentId) + '/webhook/' + esc(h.path), 'Webhook URL')} &middot; ${h.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--text-3)">disabled</span>'}</div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="deleteAgentWebhook('${esc(agentId)}','${esc(h.id)}')">delete</button>
     </div>`).join('');
@@ -2747,7 +2748,7 @@ async function confirmDeleteNamespace() {
 <div id="createNsModal" class="modal-backdrop" onclick="if(event.target===this)closeCreateNsModal()">
   <div class="modal-box">
     <h3 style="color:var(--text-1)">Create Namespace</h3>
-    <div class="modal-warn">A namespace groups your services and functions under a unique subdomain.</div>
+    <div class="modal-warn">A namespace groups your services and functions under a unique endpoint.</div>
     <div id="createNsError" class="error-msg hidden" style="margin-bottom:12px"></div>
     <label>Name</label>
     <input id="createNsName" type="text" placeholder="my-namespace" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')confirmCreateNamespace()">

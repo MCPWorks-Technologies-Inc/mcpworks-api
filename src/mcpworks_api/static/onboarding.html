@@ -556,14 +556,14 @@
                     mcpServers: {
                         [`${namespace}-create`]: {
                             type: "http",
-                            url: `https://${namespace}.create.mcpworks.io/mcp`,
+                            url: `${window.location.origin}/mcp/create/${namespace}`,
                             headers: {
                                 Authorization: `Bearer ${state.apiKey}`
                             }
                         },
                         [`${namespace}-run`]: {
                             type: "http",
-                            url: `https://${namespace}.run.mcpworks.io/mcp`,
+                            url: `${window.location.origin}/mcp/run/${namespace}`,
                             headers: {
                                 Authorization: `Bearer ${state.apiKey}`
                             }
