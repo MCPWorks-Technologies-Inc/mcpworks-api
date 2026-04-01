@@ -1,14 +1,14 @@
 """Unit tests for MCPTransportMiddleware path matching logic.
 
-Tests the _is_mcp_protocol_path function directly by extracting it
-without importing the full transport module (which requires the MCP SDK).
+Tests the _is_mcp_protocol_path function directly. Uses importlib.reload
+to re-import transport with mocked MCP SDK dependencies, avoiding
+Prometheus duplicate registration issues.
 """
 
+import importlib
 import sys
 from unittest.mock import MagicMock
 
-# The transport module requires `mcp` SDK. Mock it so we can import just
-# the path-matching helper without the full dependency chain.
 _MOCK_MODULES = [
     "mcp",
     "mcp.server",
@@ -21,13 +21,9 @@ for mod_name in _MOCK_MODULES:
     sys.modules[mod_name] = MagicMock()
 
 try:
-    # Force re-import so the mock modules are used
-    if "mcpworks_api.mcp.transport" in sys.modules:
-        del sys.modules["mcpworks_api.mcp.transport"]
-    if "mcpworks_api.mcp" in sys.modules:
-        del sys.modules["mcpworks_api.mcp"]
-
-    from mcpworks_api.mcp.transport import _is_mcp_protocol_path
+    import mcpworks_api.mcp.transport as _transport_mod
+    _transport_mod = importlib.reload(_transport_mod)
+    _is_mcp_protocol_path = _transport_mod._is_mcp_protocol_path
 finally:
     for mod_name in _MOCK_MODULES:
         if _saved[mod_name] is None:
