@@ -123,6 +123,9 @@ async def run_orchestration(
     async with get_db_context() as db:
         tools = await build_tool_definitions(agent.namespace_id, db, agent_mode=True)
         agent_state = await AgentService(db).get_all_state(agent.id)
+        from mcpworks_api.core.ai_tools import get_procedure_summaries
+
+        procedure_summaries = await get_procedure_summaries(agent.namespace_id, db)
 
     mcp_pool: McpServerPool | None = None
     mcp_server_names = agent.mcp_server_names or []
@@ -184,7 +187,9 @@ async def run_orchestration(
 
     from mcpworks_api.core.conversation_memory import load_history
 
-    effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
+    effective_system_prompt = augment_system_prompt(
+        agent.system_prompt, tools, procedure_summaries=procedure_summaries
+    )
 
     summary, _ = load_history(agent_state)
     if summary:

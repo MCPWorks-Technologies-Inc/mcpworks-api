@@ -976,7 +976,11 @@ class AgentService:
         public_only: bool = False,
     ) -> str:
         from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
-        from mcpworks_api.core.ai_tools import augment_system_prompt, build_tool_definitions
+        from mcpworks_api.core.ai_tools import (
+            augment_system_prompt,
+            build_tool_definitions,
+            get_procedure_summaries,
+        )
         from mcpworks_api.core.mcp_client import McpServerPool
 
         agent = await self.get_agent(account_id, agent_name)
@@ -989,6 +993,7 @@ class AgentService:
             agent.namespace_id, self.db, public_only=public_only, agent_mode=True
         )
         agent_state = await self.get_all_state(agent.id)
+        procedure_summaries = await get_procedure_summaries(agent.namespace_id, self.db)
 
         mcp_pool: McpServerPool | None = None
         if agent.mcp_servers:
@@ -1008,7 +1013,9 @@ class AgentService:
         )
         from mcpworks_api.core.telemetry import make_event, telemetry_bus
 
-        effective_system_prompt = augment_system_prompt(agent.system_prompt, tools)
+        effective_system_prompt = augment_system_prompt(
+            agent.system_prompt, tools, procedure_summaries=procedure_summaries
+        )
 
         # Load conversation history and prepend to messages
         summary, history_turns = load_history(agent_state)

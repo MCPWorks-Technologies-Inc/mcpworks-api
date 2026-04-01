@@ -1,5 +1,7 @@
 """Build tool definitions for AI orchestration from namespace functions."""
 
+from __future__ import annotations
+
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,24 +219,124 @@ def format_available_tools(tools: list[dict]) -> str:
     return ", ".join(names[:15]) + f" (and {len(names) - 15} more)"
 
 
-def augment_system_prompt(system_prompt: str | None, tools: list[dict]) -> str:
+async def get_procedure_summaries(
+    namespace_id: uuid.UUID,
+    db: AsyncSession,
+) -> list[dict]:
+    """Return procedure summaries for a namespace with covered function refs.
+
+    Each summary: {service, name, description, step_count, covered_functions}
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from mcpworks_api.models.namespace_service import NamespaceService
+    from mcpworks_api.models.procedure import Procedure
+
+    result = await db.execute(
+        select(Procedure)
+        .join(NamespaceService, Procedure.service_id == NamespaceService.id)
+        .where(
+            Procedure.namespace_id == namespace_id,
+            Procedure.is_deleted.is_(False),
+        )
+        .options(
+            selectinload(Procedure.versions),
+            selectinload(Procedure.service),
+        )
+    )
+    procedures = result.scalars().all()
+
+    summaries = []
+    for proc in procedures:
+        version = proc.get_active_version_obj()
+        if not version:
+            continue
+        service_name = proc.service.name if proc.service else "unknown"
+        covered = []
+        for step in version.steps or []:
+            ref = step.get("function_ref", "")
+            if ref:
+                covered.append(ref)
+        summaries.append(
+            {
+                "service": service_name,
+                "name": proc.name,
+                "description": proc.description or "",
+                "step_count": len(version.steps or []),
+                "covered_functions": covered,
+            }
+        )
+    return summaries
+
+
+def _build_covered_function_set(
+    procedure_summaries: list[dict],
+) -> dict[str, str]:
+    """Map tool names covered by procedures to their procedure name.
+
+    Returns {tool_name: "service / procedure_name"} for annotation.
+    """
+    covered: dict[str, str] = {}
+    for ps in procedure_summaries:
+        proc_label = f"{ps['service']} / {ps['name']}"
+        for ref in ps.get("covered_functions", []):
+            tool_name = ref.replace(".", "__")
+            covered[tool_name] = proc_label
+    return covered
+
+
+def augment_system_prompt(
+    system_prompt: str | None,
+    tools: list[dict],
+    procedure_summaries: list[dict] | None = None,
+) -> str:
     """Append available tool names to the system prompt.
 
     AI models may not connect natural function references in the system prompt
     (e.g. 'leads.harvest-leads') to the actual tool names in the tool
     definitions (e.g. 'leads__harvest-leads'). This bridges the gap by
     listing exact callable tool names at the end of the system prompt.
+
+    If procedure_summaries are provided, procedures are listed prominently
+    BEFORE tools with a MUST-USE directive.
     """
+    procedure_summaries = procedure_summaries or []
+    covered = _build_covered_function_set(procedure_summaries)
+
     ns_tools = [t for t in tools if t["name"] not in PLATFORM_TOOL_NAMES]
     platform = [t for t in tools if t["name"] in PLATFORM_TOOL_NAMES]
 
     lines = []
+
+    if procedure_summaries:
+        lines.append("## Procedures (USE THESE FIRST)")
+        lines.append(
+            "IMPORTANT: When a procedure exists for the task you are about to do, "
+            "you MUST use `run_procedure` instead of calling the underlying functions "
+            "directly. Procedures enforce verified step-by-step execution. Calling "
+            "raw functions that a procedure covers is a violation — the results "
+            "cannot be trusted without procedure enforcement."
+        )
+        lines.append("")
+        for ps in procedure_summaries:
+            desc = ps.get("description", "")
+            steps = ps.get("step_count", 0)
+            lines.append(
+                f"- `run_procedure(service='{ps['service']}', "
+                f"name='{ps['name']}')` — {desc} ({steps} steps)"
+            )
+        lines.append("")
+
     if ns_tools:
         lines.append("## Your callable tools")
         lines.append("Use these EXACT names when making tool calls:")
         for t in ns_tools:
             desc = t.get("description", "")
-            lines.append(f"- `{t['name']}` — {desc}")
+            hint = ""
+            if t["name"] in covered:
+                hint = f" ⚠️ USE PROCEDURE: {covered[t['name']]}"
+            lines.append(f"- `{t['name']}` — {desc}{hint}")
     if platform:
         lines.append("")
         lines.append("## Platform tools")

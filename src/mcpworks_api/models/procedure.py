@@ -1,7 +1,13 @@
 """Procedure models for sequential, auditable execution pipelines."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mcpworks_api.models.namespace_service import NamespaceService
 
 from sqlalchemy import (
     Boolean,
@@ -47,13 +53,18 @@ class Procedure(Base, UUIDMixin, TimestampMixin):
         Boolean, nullable=False, default=False, server_default="false"
     )
 
-    versions: Mapped[list["ProcedureVersion"]] = relationship(
+    service: Mapped[NamespaceService] = relationship(
+        "NamespaceService",
+        foreign_keys=[service_id],
+        lazy="raise",
+    )
+    versions: Mapped[list[ProcedureVersion]] = relationship(
         "ProcedureVersion",
         back_populates="procedure",
         cascade="all, delete-orphan",
         order_by="ProcedureVersion.version",
     )
-    executions: Mapped[list["ProcedureExecution"]] = relationship(
+    executions: Mapped[list[ProcedureExecution]] = relationship(
         "ProcedureExecution",
         back_populates="procedure",
         cascade="all, delete-orphan",
@@ -72,7 +83,7 @@ class Procedure(Base, UUIDMixin, TimestampMixin):
         Index("ix_procedures_service_id", "service_id"),
     )
 
-    def get_active_version_obj(self) -> "ProcedureVersion | None":
+    def get_active_version_obj(self) -> ProcedureVersion | None:
         for v in self.versions:
             if v.version == self.active_version:
                 return v
@@ -94,7 +105,7 @@ class ProcedureVersion(Base, UUIDMixin):
         DateTime(timezone=True), nullable=False, server_default="now()"
     )
 
-    procedure: Mapped["Procedure"] = relationship("Procedure", back_populates="versions")
+    procedure: Mapped[Procedure] = relationship("Procedure", back_populates="versions")
 
     __table_args__ = (
         UniqueConstraint("procedure_id", "version", name="uq_procedure_version"),
@@ -155,7 +166,7 @@ class ProcedureExecution(Base, UUIDMixin):
         DateTime(timezone=True), nullable=False, server_default="now()"
     )
 
-    procedure: Mapped["Procedure"] = relationship("Procedure", back_populates="executions")
+    procedure: Mapped[Procedure] = relationship("Procedure", back_populates="executions")
 
     __table_args__ = (
         Index("ix_procedure_executions_procedure_id", "procedure_id"),
