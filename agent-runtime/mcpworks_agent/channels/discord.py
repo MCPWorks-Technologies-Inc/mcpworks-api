@@ -39,6 +39,7 @@ class DiscordChannel:
         self.bot_token = config.get("bot_token") or DISCORD_BOT_TOKEN
         self.channel_ids: list[str] = config.get("channel_ids", [])
         self.command_prefix: str = config.get("command_prefix", "!")
+        self.mention_only: bool = config.get("mention_only", False)
         self._client: Any = None
 
         if not self.bot_token:
@@ -76,12 +77,19 @@ class DiscordChannel:
             if self.channel_ids and str(message.channel.id) not in self.channel_ids:
                 return
 
+            if self.mention_only and client.user not in message.mentions:
+                return
+
+            content = message.content
+            if self.mention_only and client.user:
+                content = content.replace(f"<@{client.user.id}>", "").strip()
+
             message_data = {
                 "id": str(message.id),
                 "channel_id": str(message.channel.id),
                 "author_id": str(message.author.id),
                 "author_name": str(message.author),
-                "content": message.content,
+                "content": content,
                 "guild_id": str(message.guild.id) if message.guild else None,
             }
 
