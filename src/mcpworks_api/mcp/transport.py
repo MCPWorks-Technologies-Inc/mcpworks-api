@@ -36,33 +36,46 @@ logger = structlog.get_logger(__name__)
 # ORDER-017: Token savings measurement — Prometheus instrumentation
 # ---------------------------------------------------------------------------
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import REGISTRY, Counter, Histogram
 
-    mcp_tool_calls_total = Counter(
+    def _get_or_create(cls, name, *args, **kwargs):
+        """Return existing collector or create new one (safe for re-import)."""
+        try:
+            return cls(name, *args, **kwargs)
+        except ValueError:
+            return REGISTRY._names_to_collectors.get(name, cls(name, *args, **kwargs))
+
+    mcp_tool_calls_total = _get_or_create(
+        Counter,
         "mcpworks_mcp_tool_calls_total",
         "Total MCP tool calls",
         ["endpoint_type", "tool_name"],
     )
-    mcp_response_bytes = Histogram(
+    mcp_response_bytes = _get_or_create(
+        Histogram,
         "mcpworks_mcp_response_bytes",
         "MCP tool response size in bytes (proxy for token usage)",
         ["endpoint_type", "tool_name"],
         buckets=[100, 250, 500, 1000, 2500, 5000, 10000, 50000],
     )
-    env_passthrough_requests_total = Counter(
+    env_passthrough_requests_total = _get_or_create(
+        Counter,
         "mcpworks_env_passthrough_requests_total",
         "Requests with X-MCPWorks-Env header present",
     )
-    env_passthrough_vars_count = Histogram(
+    env_passthrough_vars_count = _get_or_create(
+        Histogram,
         "mcpworks_env_passthrough_vars_count",
         "Number of env vars per request",
         buckets=[0, 1, 2, 5, 10, 20, 50, 64],
     )
-    env_passthrough_errors_total = Counter(
+    env_passthrough_errors_total = _get_or_create(
+        Counter,
         "mcpworks_env_passthrough_errors_total",
         "Env passthrough validation errors",
         ["error_type"],
     )
+    del _get_or_create
 except ImportError:
     mcp_tool_calls_total = None  # type: ignore[assignment]
     mcp_response_bytes = None  # type: ignore[assignment]
