@@ -531,6 +531,7 @@ async def _dispatch_tool(
                 service_name=service_name,
                 trigger_type=trigger_type,
                 account=account,
+                tier=tier,
                 input_context=tool_input.get("input_context"),
             )
             return json.dumps(

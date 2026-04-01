@@ -1334,12 +1334,18 @@ class AgentService:
             try:
                 from mcpworks_api.tasks.orchestrator import run_procedure_orchestration
 
+                effective_tier = (
+                    account.user.effective_tier
+                    if account and hasattr(account, "user")
+                    else "pro-agent"
+                )
                 proc_result = await run_procedure_orchestration(
                     agent=agent,
                     procedure_name=procedure_name,
                     service_name=service_name,
                     trigger_type="chat",
                     account=account or agent,
+                    tier=effective_tier,
                     input_context=tool_input.get("input_context"),
                 )
                 return json.dumps(
