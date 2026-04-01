@@ -22,6 +22,7 @@ for mod_name in _MOCK_MODULES:
 
 try:
     import mcpworks_api.mcp.transport as _transport_mod
+
     _transport_mod = importlib.reload(_transport_mod)
     _is_mcp_protocol_path = _transport_mod._is_mcp_protocol_path
 finally:
