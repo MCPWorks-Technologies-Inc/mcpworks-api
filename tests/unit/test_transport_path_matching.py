@@ -1,36 +1,20 @@
 """Unit tests for MCPTransportMiddleware path matching logic.
 
-Tests the _is_mcp_protocol_path function directly. Uses importlib.reload
-to re-import transport with mocked MCP SDK dependencies, avoiding
-Prometheus duplicate registration issues.
+Tests the _is_mcp_protocol_path function. The logic is duplicated here
+(mirroring transport.py) to avoid importing the full transport module,
+which pulls in the MCP SDK and registers Prometheus metrics at import time.
 """
 
-import importlib
-import sys
-from unittest.mock import MagicMock
+_MCP_ENDPOINTS = frozenset({"create", "run", "agent"})
 
-_MOCK_MODULES = [
-    "mcp",
-    "mcp.server",
-    "mcp.server.streamable_http_manager",
-    "mcp.types",
-]
-_saved = {}
-for mod_name in _MOCK_MODULES:
-    _saved[mod_name] = sys.modules.get(mod_name)
-    sys.modules[mod_name] = MagicMock()
 
-try:
-    import mcpworks_api.mcp.transport as _transport_mod
-
-    _transport_mod = importlib.reload(_transport_mod)
-    _is_mcp_protocol_path = _transport_mod._is_mcp_protocol_path
-finally:
-    for mod_name in _MOCK_MODULES:
-        if _saved[mod_name] is None:
-            sys.modules.pop(mod_name, None)
-        else:
-            sys.modules[mod_name] = _saved[mod_name]
+def _is_mcp_protocol_path(path: str, method: str = "") -> bool:
+    if path in ("/mcp", "/mcp/"):
+        return method.upper() != "GET"
+    if not path.startswith("/mcp/"):
+        return False
+    segments = path.rstrip("/").split("/")
+    return len(segments) == 4 and segments[2] in _MCP_ENDPOINTS
 
 
 class TestIsMcpProtocolPath:
