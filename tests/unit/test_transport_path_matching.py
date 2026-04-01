@@ -10,7 +10,10 @@ from unittest.mock import MagicMock
 # The transport module requires `mcp` SDK. Mock it so we can import just
 # the path-matching helper without the full dependency chain.
 _MOCK_MODULES = [
-    "mcp", "mcp.server", "mcp.server.streamable_http_manager", "mcp.types",
+    "mcp",
+    "mcp.server",
+    "mcp.server.streamable_http_manager",
+    "mcp.types",
 ]
 _saved = {}
 for mod_name in _MOCK_MODULES:
