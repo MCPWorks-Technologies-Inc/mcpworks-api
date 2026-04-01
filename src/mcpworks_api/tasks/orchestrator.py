@@ -537,9 +537,7 @@ async def _dispatch_tool(
             return json.dumps(
                 {
                     "success": proc_result.success,
-                    "steps_completed": len(proc_result.step_results)
-                    if proc_result.step_results
-                    else 0,
+                    "steps_completed": len(proc_result.functions_called),
                     "final_text": (proc_result.final_text or "")[:500],
                 }
             )
