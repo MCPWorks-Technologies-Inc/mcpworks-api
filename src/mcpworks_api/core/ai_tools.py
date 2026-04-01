@@ -118,6 +118,37 @@ PLATFORM_TOOLS: list[dict] = [
             "required": ["query"],
         },
     },
+    {
+        "name": "run_procedure",
+        "description": (
+            "Execute a procedure step-by-step with enforced function calls. "
+            "The orchestrator steps through each defined step, calling the required "
+            "function and capturing its result as proof before advancing. "
+            "ALWAYS use this instead of calling functions directly when a matching "
+            "procedure exists. "
+            "Example: run_procedure(service='social', name='post-bluesky-thread', "
+            "input_context={'post1_text': '...', 'post2_text': '...'}) "
+            'Returns {"success": true, "steps_completed": 3, "final_text": "..."}.'
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name containing the procedure",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Procedure name",
+                },
+                "input_context": {
+                    "type": "object",
+                    "description": "Optional initial context available to step 1",
+                },
+            },
+            "required": ["service", "name"],
+        },
+    },
 ]
 
 PLATFORM_TOOL_NAMES = frozenset(t["name"] for t in PLATFORM_TOOLS)

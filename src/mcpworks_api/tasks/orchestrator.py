@@ -519,6 +519,32 @@ async def _dispatch_tool(
             }
         )
 
+    if tool_name == "run_procedure":
+        service_name = tool_input.get("service", "")
+        procedure_name = tool_input.get("name", "")
+        if not service_name or not procedure_name:
+            return json.dumps({"error": "run_procedure requires 'service' and 'name'"})
+        try:
+            proc_result = await run_procedure_orchestration(
+                agent=agent,
+                procedure_name=procedure_name,
+                service_name=service_name,
+                trigger_type=trigger_type,
+                account=account,
+                input_context=tool_input.get("input_context"),
+            )
+            return json.dumps(
+                {
+                    "success": proc_result.success,
+                    "steps_completed": len(proc_result.step_results)
+                    if proc_result.step_results
+                    else 0,
+                    "final_text": (proc_result.final_text or "")[:500],
+                }
+            )
+        except Exception as e:
+            return json.dumps({"error": f"Procedure failed: {str(e)[:300]}"})
+
     if tool_name in PLATFORM_TOOL_NAMES:
         return await _execute_platform_tool(
             tool_name, tool_input, agent, account, tier, agent_state=agent_state

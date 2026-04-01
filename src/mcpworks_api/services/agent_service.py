@@ -1326,6 +1326,33 @@ class AgentService:
                     "total_searched": len(agent_state or {}),
                 }
             )
+        elif tool_name == "run_procedure":
+            service_name = tool_input.get("service", "")
+            procedure_name = tool_input.get("name", "")
+            if not service_name or not procedure_name:
+                return json.dumps({"error": "run_procedure requires 'service' and 'name'"})
+            try:
+                from mcpworks_api.tasks.orchestrator import run_procedure_orchestration
+
+                proc_result = await run_procedure_orchestration(
+                    agent=agent,
+                    procedure_name=procedure_name,
+                    service_name=service_name,
+                    trigger_type="chat",
+                    account=account or agent,
+                    input_context=tool_input.get("input_context"),
+                )
+                return json.dumps(
+                    {
+                        "success": proc_result.success,
+                        "steps_completed": len(proc_result.step_results)
+                        if proc_result.step_results
+                        else 0,
+                        "final_text": (proc_result.final_text or "")[:500],
+                    }
+                )
+            except Exception as e:
+                return json.dumps({"error": f"Procedure failed: {str(e)[:300]}"})
         elif is_mcp_tool(tool_name):
             if mcp_pool is None:
                 return json.dumps({"error": "MCP server pool not available"})
