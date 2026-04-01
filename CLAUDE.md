@@ -699,6 +699,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - PostgreSQL 15+ (existing, security events via fire_security_event) (014-agent-security-hardening)
 - Python 3.11+ (existing codebase) + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, structlog (013-add-procedures-framework)
 - PostgreSQL 15+ (existing — new tables for procedures, versions, executions) (013-add-procedures-framework)
+- Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), httpx, structlog (017-fix-procedure-execution)
+- PostgreSQL 15+ (existing), Redis 7+ (existing) (017-fix-procedure-execution)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
