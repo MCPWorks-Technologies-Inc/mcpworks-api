@@ -173,6 +173,28 @@ RESTRICTED_AGENT_TOOLS = frozenset(
 )
 
 
+async def get_function_input_schema(
+    namespace_id: uuid.UUID,
+    db: AsyncSession,
+    function_ref: str,
+) -> dict | None:
+    """Get a function's input_schema by its service.function reference."""
+    parts = function_ref.split(".", 1)
+    if len(parts) != 2:
+        return None
+    service_name, function_name = parts
+    try:
+        function_service = FunctionService(db)
+        _, version = await function_service.get_for_execution(
+            namespace_id=namespace_id,
+            service_name=service_name,
+            function_name=function_name,
+        )
+        return version.input_schema if version else None
+    except Exception:
+        return None
+
+
 async def build_tool_definitions(
     namespace_id: uuid.UUID,
     db: AsyncSession,

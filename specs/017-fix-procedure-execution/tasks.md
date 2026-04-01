@@ -25,7 +25,7 @@
 
 **Purpose**: Add the helper function needed by US1 before modifying the orchestrator.
 
-- [ ] T001 Add `get_function_input_schema` helper to fetch a function's input_schema by service.function reference in `src/mcpworks_api/core/ai_tools.py`
+- [x] T001 Add `get_function_input_schema` helper to fetch a function's input_schema by service.function reference in `src/mcpworks_api/core/ai_tools.py`
 
 **Checkpoint**: Helper available for use in procedure step prompt restructuring.
 
@@ -45,10 +45,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Restructure step system prompt in `run_procedure_orchestration` in `src/mcpworks_api/tasks/orchestrator.py` — include function input_schema, format context as named variables, strengthen tool call instruction (lines ~980-996)
-- [ ] T006 [US1] Filter tools to single required function: change `tools` parameter passed to `chat_with_tools` at step execution to contain only the step's target function tool definition in `src/mcpworks_api/tasks/orchestrator.py` (line ~1004)
-- [ ] T007 [US1] Fetch function input_schema before each step by calling `get_function_input_schema` with the step's `function_ref` in `src/mcpworks_api/tasks/orchestrator.py` (add inside the step loop, before prompt construction)
-- [ ] T008 [US1] Add retry enhancement: on attempt > 0, append previous failure context and explicit parameter mapping hint to step system prompt in `src/mcpworks_api/tasks/orchestrator.py`
+- [x] T005 [US1] Restructure step system prompt in `run_procedure_orchestration` in `src/mcpworks_api/tasks/orchestrator.py` — include function input_schema, format context as named variables, strengthen tool call instruction (lines ~980-996)
+- [x] T006 [US1] Filter tools to single required function: change `tools` parameter passed to `chat_with_tools` at step execution to contain only the step's target function tool definition in `src/mcpworks_api/tasks/orchestrator.py` (line ~1004)
+- [x] T007 [US1] Fetch function input_schema before each step by calling `get_function_input_schema` with the step's `function_ref` in `src/mcpworks_api/tasks/orchestrator.py` (add inside the step loop, before prompt construction)
+- [x] T008 [US1] Add retry enhancement: on attempt > 0, append previous failure context and explicit parameter mapping hint to step system prompt in `src/mcpworks_api/tasks/orchestrator.py`
 - [ ] T009 [US1] Production validation: deploy and test `run_procedure` with `post-bluesky-single` procedure from agent chat — verify both steps complete on first attempt
 
 **Checkpoint**: Procedure `post-bluesky-single` works end-to-end via `run_procedure` from chat. Discord report sent automatically.
@@ -67,7 +67,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T011 [P] [US2] Fix `compact_history` in `src/mcpworks_api/core/conversation_memory.py` line 186: change `messages=[{"role": "user", "content": compaction_prompt}]` to `message=compaction_prompt`
+- [x] T011 [P] [US2] Fix `compact_history` in `src/mcpworks_api/core/conversation_memory.py` line 186: change `messages=[{"role": "user", "content": compaction_prompt}]` to `message=compaction_prompt`
 - [ ] T012 [US2] Production validation: trigger agent chat, check logs for absence of `conversation_memory_compaction_failed` errors
 
 **Checkpoint**: Conversation memory compaction runs silently. No more `TypeError: chat() got an unexpected keyword argument 'messages'` in production logs.
@@ -76,8 +76,8 @@
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T013 Run full unit test suite (`pytest tests/unit/ -q`) to verify no regressions
-- [ ] T014 Run `ruff format` and `ruff check` on all modified files
+- [x] T013 Run full unit test suite (`pytest tests/unit/ -q`) to verify no regressions
+- [x] T014 Run `ruff format` and `ruff check` on all modified files
 - [ ] T015 Production validation: test `post-bluesky-thread` procedure (3 steps: post root, reply, Discord report) via `run_procedure` from agent chat
 
 ---

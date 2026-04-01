@@ -949,6 +949,13 @@ async def run_procedure_orchestration(
         svc_name, fn_name = function_ref.split(".", 1)
         tool_name = f"{svc_name}__{fn_name}"
 
+        step_tools = [t for t in tools if t["name"] == tool_name]
+        fn_schema: dict | None = None
+        async with get_db_context() as step_db:
+            from mcpworks_api.core.ai_tools import get_function_input_schema
+
+            fn_schema = await get_function_input_schema(agent.namespace_id, step_db, function_ref)
+
         step_result: dict = {
             "step_number": step_num,
             "name": step_name,
@@ -977,16 +984,39 @@ async def run_procedure_orchestration(
                 step_result["attempts"].append(attempt_record)
                 break
 
-            ctx_str = json.dumps(accumulated_context, default=str) if accumulated_context else "{}"
+            ctx_lines = []
+            input_ctx = accumulated_context.get("input")
+            if input_ctx and isinstance(input_ctx, dict):
+                for k, v in input_ctx.items():
+                    ctx_lines.append(f"  {k} = {json.dumps(v, default=str)}")
+            for ctx_key, ctx_val in accumulated_context.items():
+                if ctx_key == "input":
+                    continue
+                step_res = ctx_val.get("result") if isinstance(ctx_val, dict) else ctx_val
+                ctx_lines.append(f"  {ctx_key}_result = {json.dumps(step_res, default=str)}")
+            ctx_formatted = "\n".join(ctx_lines) if ctx_lines else "  (none)"
+
+            schema_str = json.dumps(fn_schema, indent=2) if fn_schema else "{}"
+
             system_prompt = (
                 f"You are executing step {step_num} of a procedure.\n\n"
                 f"## Step: {step_name}\n"
                 f"## Instructions\n{instructions}\n\n"
-                f"## Required Function\n"
-                f"You MUST call the function `{tool_name}` to complete this step.\n"
-                f"Do NOT respond with text only — you must make a tool call to `{tool_name}`.\n\n"
-                f"## Context from prior steps\n{ctx_str}\n"
+                f"## Required Function: `{tool_name}`\n"
+                f"Parameter schema:\n```json\n{schema_str}\n```\n\n"
+                f"## Available Data\n{ctx_formatted}\n\n"
+                f"## RULES\n"
+                f"- You MUST make a tool call to `{tool_name}`. Do NOT respond with text.\n"
+                f"- Use the available data above to fill the function parameters.\n"
+                f"- Do NOT fabricate data not present in the available data section.\n"
             )
+
+            if attempt > 0:
+                system_prompt += (
+                    f"\n## PREVIOUS ATTEMPT FAILED\n"
+                    f"You must call `{tool_name}` with the correct parameters. "
+                    f"Do not respond with text. Make the tool call now.\n"
+                )
 
             messages: list[dict] = [
                 {
@@ -1001,7 +1031,7 @@ async def run_procedure_orchestration(
                     model=agent.ai_model or "",
                     api_key=api_key,
                     messages=messages,
-                    tools=tools,
+                    tools=step_tools or tools,
                     system_prompt=system_prompt,
                 )
             except AIClientError as e:

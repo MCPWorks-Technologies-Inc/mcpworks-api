@@ -187,7 +187,7 @@ async def compact_history(
             engine=ai_engine,
             model=ai_model,
             api_key=api_key,
-            messages=[{"role": "user", "content": compaction_prompt}],
+            message=compaction_prompt,
             system_prompt="You are a concise conversation summarizer. Output only the summary.",
         )
     except Exception:
