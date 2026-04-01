@@ -54,17 +54,25 @@ class AgentBot(discord.Client):
         if channel_id not in self.channel_map:
             return
 
-        self._current_channel_id = channel_id
         agent_info = self.channel_map[channel_id]
+
+        if agent_info.get("mention_only") and self.user not in message.mentions:
+            return
+
+        self._current_channel_id = channel_id
         agent_name = agent_info["agent_name"]
         account_id = agent_info["account_id"]
+
+        user_message = message.content
+        if agent_info.get("mention_only") and self.user:
+            user_message = user_message.replace(f"<@{self.user.id}>", "").strip()
 
         logger.info(
             "discord_message_received",
             agent_name=agent_name,
             channel_id=channel_id,
             author=str(message.author),
-            message_length=len(message.content),
+            message_length=len(user_message),
         )
 
         async with message.channel.typing():
@@ -72,7 +80,7 @@ class AgentBot(discord.Client):
                 response = await self._route_to_agent(
                     account_id=account_id,
                     agent_name=agent_name,
-                    user_message=message.content,
+                    user_message=user_message,
                     discord_context={
                         "author": str(message.author),
                         "author_id": str(message.author.id),
@@ -207,6 +215,7 @@ async def _load_discord_channels() -> dict[str, list[dict]]:
                     "channel_id": channel_id_int,
                     "webhook_url": config.get("webhook_url"),
                     "chat_token": agent.chat_token,
+                    "mention_only": config.get("mention_only", False),
                 }
             )
 
