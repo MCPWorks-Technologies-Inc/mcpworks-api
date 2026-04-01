@@ -5,6 +5,9 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+pytest.importorskip("mcp", reason="mcp package not installed")
+
 from fastapi import HTTPException
 
 from mcpworks_api.mcp.protocol import JSONRPCRequest

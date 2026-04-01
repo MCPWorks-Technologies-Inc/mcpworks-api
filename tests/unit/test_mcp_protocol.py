@@ -1,6 +1,10 @@
 """Tests for MCP protocol helpers."""
 
-from mcpworks_api.mcp.protocol import (
+import pytest
+
+mcp = pytest.importorskip("mcp", reason="mcp package not installed")
+
+from mcpworks_api.mcp.protocol import (  # noqa: E402
     JSONRPCError,
     JSONRPCRequest,
     JSONRPCResponse,
