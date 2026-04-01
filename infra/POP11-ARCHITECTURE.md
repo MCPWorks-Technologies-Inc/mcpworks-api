@@ -85,6 +85,12 @@ Config: `/opt/mcpworks/` (docker-compose.yml, .env, keys/, secrets/)
 Source: `/opt/mcpworks/src/` (synced by GH Actions runner)
 Runner: `/home/user/actions-runner/` (systemd service)
 
+**Docker DNS:** `/etc/docker/daemon.json` overrides DNS to `8.8.8.8` and `1.1.1.1`.
+The ISP's IPv4 nameservers (from DHCP) are unreliable — they time out intermittently,
+which causes Docker build failures (pip can't resolve pypi.org). Host resolv.conf falls
+back to IPv6 DNS, but Docker BuildKit only uses IPv4. This was root-caused on 2026-04-01
+after repeated deploy failures.
+
 ## Deployment (CI/CD)
 
 **Model:** Pull-based via self-hosted GitHub Actions runner on server0.

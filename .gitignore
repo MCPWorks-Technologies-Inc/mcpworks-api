@@ -119,6 +119,8 @@ admin-login-form.png
 docs/demo-recording-script.md
 docs/demo-video-script-5min.md
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# Beads / Dolt / Ralph (removed from project)
+.beads/
 .beads-credential-key
+.dolt/
+.ralph/
