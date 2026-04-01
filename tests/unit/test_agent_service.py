@@ -172,19 +172,24 @@ class TestStartAgent:
             container.start.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_missing_container_sets_error(self, service, mock_db, mock_docker):
+    async def test_start_missing_container_recreates(self, service, mock_db, mock_docker):
         agent = _make_agent(status="stopped", replicas=[])
         replica = _make_replica(status="stopped")
+        new_container = MagicMock()
+        new_container.id = "new-container-id"
+        new_container.short_id = "new-cont"
         with (
             patch.object(service, "get_agent", new=AsyncMock(return_value=agent)),
             patch.object(service, "_get_replicas", new=AsyncMock(return_value=[replica])),
         ):
             mock_docker.containers.get.side_effect = DockerNotFound("gone")
+            mock_docker.containers.run.return_value = new_container
             mock_db.refresh = AsyncMock(side_effect=lambda _a, *_args, **_kwargs: None)
 
             await service.start_agent(uuid.uuid4(), "test-agent")
-            assert replica.status == "error"
-            assert replica.container_id is None
+            assert replica.status == "running"
+            assert replica.container_id == "new-container-id"
+            mock_docker.containers.run.assert_called_once()
 
 
 class TestStopAgent:
