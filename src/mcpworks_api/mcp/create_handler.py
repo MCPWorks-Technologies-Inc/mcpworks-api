@@ -166,6 +166,9 @@ class CreateMCPHandler:
         "get_token_savings_report": "read",
         "suggest_optimizations": "read",
         "get_function_mcp_stats": "read",
+        "configure_agent_access": "write",
+        "list_agent_access_rules": "read",
+        "remove_agent_access_rule": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -519,6 +522,9 @@ class CreateMCPHandler:
             "get_token_savings_report": self._get_token_savings_report,
             "suggest_optimizations": self._suggest_optimizations,
             "get_function_mcp_stats": self._get_function_mcp_stats,
+            "configure_agent_access": self._configure_agent_access,
+            "list_agent_access_rules": self._list_agent_access_rules,
+            "remove_agent_access_rule": self._remove_agent_access_rule,
         }
 
         handler = handlers.get(name)
@@ -1435,6 +1441,23 @@ class CreateMCPHandler:
             ]
         )
 
+    async def _check_agent_state_access(self, agent_name: str, key: str) -> None:
+        """Check agent state access rules before state operations."""
+        from mcpworks_api.core.agent_access import AgentAccessDeniedError, check_state_access
+
+        service = AgentService(self.db)
+        agent = await service.get_by_name(self.account.id, agent_name)
+        if not agent.access_rules:
+            return
+        allowed, rule_id = check_state_access(agent.access_rules, key)
+        if not allowed:
+            raise AgentAccessDeniedError(
+                agent=agent_name,
+                resource=key,
+                rule_id=rule_id or "unknown",
+                resource_type="state key",
+            )
+
     async def _set_agent_state(
         self,
         agent_name: str,
@@ -1442,6 +1465,7 @@ class CreateMCPHandler:
         value: Any,
     ) -> MCPToolResult:
         """Set a persistent state key for an agent."""
+        await self._check_agent_state_access(agent_name, key)
         service = AgentService(self.db)
         state_entry = await service.set_state(
             account_id=self.account.id,
@@ -1462,6 +1486,7 @@ class CreateMCPHandler:
 
     async def _get_agent_state(self, agent_name: str, key: str) -> MCPToolResult:
         """Get a persistent state value for an agent."""
+        await self._check_agent_state_access(agent_name, key)
         service = AgentService(self.db)
         value, state_entry = await service.get_state(self.account.id, agent_name, key)
         return MCPToolResult(
@@ -1476,16 +1501,25 @@ class CreateMCPHandler:
 
     async def _delete_agent_state(self, agent_name: str, key: str) -> MCPToolResult:
         """Delete a persistent state key for an agent."""
+        await self._check_agent_state_access(agent_name, key)
         service = AgentService(self.db)
         await service.delete_state(self.account.id, agent_name, key)
         return MCPToolResult(content=[MCPContent(text=json.dumps({"key": key, "deleted": True}))])
 
     async def _list_agent_state_keys(self, agent_name: str) -> MCPToolResult:
-        """List all state keys for an agent."""
+        """List all state keys for an agent, filtered by access rules."""
+        from mcpworks_api.core.agent_access import filter_state_keys
+
         service = AgentService(self.db)
         result = await service.list_state_keys(
             self.account.id, agent_name, self.account.user.effective_tier
         )
+        agent = await service.get_by_name(self.account.id, agent_name)
+        if agent.access_rules:
+            keys = result.get("keys", [])
+            filtered = filter_state_keys(agent.access_rules, keys)
+            result["keys"] = filtered
+            result["count"] = len(filtered)
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _configure_agent_ai(
@@ -3056,3 +3090,102 @@ class CreateMCPHandler:
         namespace = await self._get_current_namespace_read()
         result = await analytics.get_function_stats(self.db, namespace.id, period)
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _configure_agent_access(
+        self,
+        agent_name: str,
+        rule: dict,
+    ) -> MCPToolResult:
+        import secrets
+
+        VALID_TYPES = {
+            "allow_services",
+            "deny_services",
+            "allow_functions",
+            "deny_functions",
+            "allow_keys",
+            "deny_keys",
+        }
+        rule_type = rule.get("type")
+        if rule_type not in VALID_TYPES:
+            raise ValueError(
+                f"Invalid rule type: {rule_type}. Must be one of: {', '.join(sorted(VALID_TYPES))}"
+            )
+        patterns = rule.get("patterns")
+        if not patterns or not isinstance(patterns, list):
+            raise ValueError("Rule must include 'patterns' as a non-empty list of strings")
+
+        service = AgentService(self.db)
+        agent = await service.get_by_name(self.account.id, agent_name)
+
+        access_rules = dict(agent.access_rules or {})
+        rule_id = f"r-{secrets.token_hex(4)}"
+        new_rule = {"id": rule_id, "type": rule_type, "patterns": patterns}
+
+        if rule_type in ("allow_keys", "deny_keys"):
+            state_rules = list(access_rules.get("state_rules", []))
+            state_rules.append(new_rule)
+            access_rules["state_rules"] = state_rules
+        else:
+            function_rules = list(access_rules.get("function_rules", []))
+            function_rules.append(new_rule)
+            access_rules["function_rules"] = function_rules
+
+        agent.access_rules = access_rules
+        await self.db.flush()
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"agent": agent_name, "rule_added": new_rule}))]
+        )
+
+    async def _list_agent_access_rules(self, agent_name: str) -> MCPToolResult:
+        service = AgentService(self.db)
+        agent = await service.get_by_name(self.account.id, agent_name)
+        access_rules = agent.access_rules or {}
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent": agent_name,
+                            "function_rules": access_rules.get("function_rules", []),
+                            "state_rules": access_rules.get("state_rules", []),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _remove_agent_access_rule(self, agent_name: str, rule_id: str) -> MCPToolResult:
+        service = AgentService(self.db)
+        agent = await service.get_by_name(self.account.id, agent_name)
+        access_rules = dict(agent.access_rules or {})
+
+        found = False
+        for key in ("function_rules", "state_rules"):
+            rules = list(access_rules.get(key, []))
+            new_rules = [r for r in rules if r.get("id") != rule_id]
+            if len(new_rules) < len(rules):
+                found = True
+                access_rules[key] = new_rules
+
+        if not found:
+            raise ValueError(f"Rule '{rule_id}' not found on agent '{agent_name}'")
+
+        agent.access_rules = access_rules
+        await self.db.flush()
+        total = len(access_rules.get("function_rules", [])) + len(
+            access_rules.get("state_rules", [])
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "agent": agent_name,
+                            "rule_removed": rule_id,
+                            "remaining_rules": total,
+                        }
+                    )
+                )
+            ]
+        )
