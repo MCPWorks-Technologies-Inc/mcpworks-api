@@ -1483,6 +1483,105 @@ AGENT_TOOLS: dict[str, ToolDef] = {
             "required": ["agent_name", "action"],
         },
     ),
+    "configure_agent_access": ToolDef(
+        name="configure_agent_access",
+        brief="Add a function or state access rule for an agent.",
+        description=(
+            "Add a per-agent access rule that restricts which functions or state keys "
+            "the agent can use. Rule types: "
+            "'allow_services' (whitelist services), "
+            "'deny_services' (block services), "
+            "'allow_functions' (whitelist specific functions by service.function pattern), "
+            "'deny_functions' (block specific functions by service.function pattern), "
+            "'allow_keys' (whitelist state keys), "
+            "'deny_keys' (block state keys). "
+            "Patterns support fnmatch-style globs (e.g., 'admin.delete_*'). "
+            "Deny rules always take precedence over allow rules. "
+            "When no rules exist, the agent has unrestricted access. "
+            "Example: configure_agent_access(agent_name='social-bot', "
+            "rule={'type': 'allow_services', 'patterns': ['social', 'content']})."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent_name": {
+                    "type": "string",
+                    "description": "Name of the agent to configure access rules for.",
+                },
+                "rule": {
+                    "type": "object",
+                    "description": (
+                        "Access rule definition. Must include 'type' and 'patterns'. "
+                        "type: allow_services|deny_services|allow_functions|deny_functions|allow_keys|deny_keys. "
+                        "patterns: list of fnmatch glob patterns."
+                    ),
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": [
+                                "allow_services",
+                                "deny_services",
+                                "allow_functions",
+                                "deny_functions",
+                                "allow_keys",
+                                "deny_keys",
+                            ],
+                        },
+                        "patterns": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["type", "patterns"],
+                },
+            },
+            "required": ["agent_name", "rule"],
+        },
+    ),
+    "list_agent_access_rules": ToolDef(
+        name="list_agent_access_rules",
+        brief="List all access rules configured for an agent.",
+        description=(
+            "List all function and state access rules configured for an agent. "
+            "Returns function_rules and state_rules with their IDs, types, and patterns. "
+            "Rule IDs can be used with remove_agent_access_rule to remove specific rules. "
+            "Example: list_agent_access_rules(agent_name='social-bot')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent_name": {
+                    "type": "string",
+                    "description": "Name of the agent to list access rules for.",
+                },
+            },
+            "required": ["agent_name"],
+        },
+    ),
+    "remove_agent_access_rule": ToolDef(
+        name="remove_agent_access_rule",
+        brief="Remove an access rule from an agent by ID.",
+        description=(
+            "Remove a specific function or state access rule from an agent by its rule ID. "
+            "Rule IDs are returned when rules are added via configure_agent_access "
+            "and visible in list_agent_access_rules. "
+            "Example: remove_agent_access_rule(agent_name='social-bot', rule_id='r-a1b2c3d4')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent_name": {
+                    "type": "string",
+                    "description": "Name of the agent to remove a rule from.",
+                },
+                "rule_id": {
+                    "type": "string",
+                    "description": "ID of the rule to remove (e.g., 'r-a1b2c3d4').",
+                },
+            },
+            "required": ["agent_name", "rule_id"],
+        },
+    ),
 }
 
 

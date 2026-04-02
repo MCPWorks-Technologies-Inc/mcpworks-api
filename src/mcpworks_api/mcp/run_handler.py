@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mcpworks_api import url_builder
 from mcpworks_api.backends import get_backend
 from mcpworks_api.backends.sandbox import TIER_CONFIG, resolve_execution_tier
+from mcpworks_api.core.agent_access import AgentAccessDeniedError
 from mcpworks_api.core.exceptions import NotFoundError
 from mcpworks_api.mcp.env_passthrough import check_required_env, filter_env_for_function
 from mcpworks_api.mcp.protocol import (
@@ -301,6 +302,8 @@ class RunMCPHandler:
         service_name, function_name = name.split(".", 1)
         namespace = await self._get_namespace()
 
+        await self._check_agent_function_access(namespace, service_name, function_name)
+
         function, version = await self.function_service.get_for_execution(
             namespace_id=namespace.id,
             service_name=service_name,
@@ -421,6 +424,32 @@ class RunMCPHandler:
             for s in servers
             if s.tool_count > 0
         ]
+
+    async def _check_agent_function_access(
+        self, namespace: Namespace, service_name: str, function_name: str
+    ) -> None:
+        """Check agent access rules before function dispatch."""
+        from sqlalchemy import select
+
+        from mcpworks_api.core.agent_access import AgentAccessDeniedError, check_function_access
+        from mcpworks_api.models.agent import Agent
+
+        result = await self.db.execute(
+            select(Agent.access_rules, Agent.name)
+            .where(Agent.namespace_id == namespace.id)
+            .limit(1)
+        )
+        row = result.first()
+        if not row or not row.access_rules:
+            return
+
+        allowed, rule_id = check_function_access(row.access_rules, service_name, function_name)
+        if not allowed:
+            raise AgentAccessDeniedError(
+                agent=row.name,
+                resource=f"{service_name}.{function_name}",
+                rule_id=rule_id or "unknown",
+            )
 
     async def _load_agent_context(self, namespace: Namespace) -> dict[str, Any] | None:
         """Load agent state as context dict for code-mode cross-function calls.
@@ -756,6 +785,12 @@ class RunMCPHandler:
         try:
             result = await self.dispatch_tool(call_params.name, call_params.arguments)
             return make_success_response(result.model_dump(), request_id)
+        except AgentAccessDeniedError as e:
+            return make_error_response(
+                MCPErrorCodes.INVALID_PARAMS,
+                str(e),
+                request_id=request_id,
+            )
         except ValueError as e:
             return make_error_response(
                 MCPErrorCodes.INVALID_PARAMS,

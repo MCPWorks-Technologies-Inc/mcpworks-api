@@ -701,6 +701,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - PostgreSQL 15+ (existing — new tables for procedures, versions, executions) (013-add-procedures-framework)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), httpx, structlog (017-fix-procedure-execution)
 - PostgreSQL 15+ (existing), Redis 7+ (existing) (017-fix-procedure-execution)
+- PostgreSQL 15+ (new JSONB column on agents table) (018-agent-access-control)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
