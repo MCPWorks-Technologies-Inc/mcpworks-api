@@ -1,6 +1,5 @@
 """Tests for per-agent access control rule evaluation."""
 
-
 from mcpworks_api.core.agent_access import (
     check_function_access,
     check_state_access,
