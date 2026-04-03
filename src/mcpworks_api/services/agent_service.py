@@ -977,6 +977,7 @@ class AgentService:
     ) -> str:
         from mcpworks_api.core.ai_client import AIClientError, chat_with_tools
         from mcpworks_api.core.ai_tools import (
+            _build_covered_function_set,
             augment_system_prompt,
             build_tool_definitions,
             get_procedure_summaries,
@@ -994,6 +995,7 @@ class AgentService:
         )
         agent_state = await self.get_all_state(agent.id)
         procedure_summaries = await get_procedure_summaries(agent.namespace_id, self.db)
+        procedure_covered = _build_covered_function_set(procedure_summaries)
 
         mcp_pool: McpServerPool | None = None
         if agent.mcp_servers:
@@ -1121,6 +1123,7 @@ class AgentService:
                         agent_state,
                         mcp_pool,
                         available_tools=tools,
+                        procedure_covered=procedure_covered,
                     )
                     _emit("tool_result", name=tool_name, result_preview=result_str[:200])
                     logger.info(
@@ -1263,6 +1266,7 @@ class AgentService:
         agent_state: dict | None,
         mcp_pool: Any,
         available_tools: list[dict] | None = None,
+        procedure_covered: dict[str, str] | None = None,
     ) -> str:
         from mcpworks_api.core.ai_tools import format_available_tools, parse_tool_name
         from mcpworks_api.core.mcp_client import is_mcp_tool
@@ -1373,6 +1377,19 @@ class AgentService:
                     }
                 )
             service_name, function_name = parsed
+
+            if procedure_covered and tool_name in procedure_covered:
+                proc_label = procedure_covered[tool_name]
+                svc, proc_name = proc_label.split(" / ", 1)
+                return json.dumps(
+                    {
+                        "error": f"Direct call to '{tool_name}' is blocked — "
+                        f"this function is covered by procedure '{proc_label}'. "
+                        f"You MUST use run_procedure(service='{svc}', "
+                        f"name='{proc_name}') instead.",
+                    }
+                )
+
             from mcpworks_api.tasks.orchestrator import _execute_namespace_function
 
             return await _execute_namespace_function(

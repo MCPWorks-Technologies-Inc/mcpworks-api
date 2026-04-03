@@ -123,9 +123,10 @@ async def run_orchestration(
     async with get_db_context() as db:
         tools = await build_tool_definitions(agent.namespace_id, db, agent_mode=True)
         agent_state = await AgentService(db).get_all_state(agent.id)
-        from mcpworks_api.core.ai_tools import get_procedure_summaries
+        from mcpworks_api.core.ai_tools import _build_covered_function_set, get_procedure_summaries
 
         procedure_summaries = await get_procedure_summaries(agent.namespace_id, db)
+        procedure_covered = _build_covered_function_set(procedure_summaries)
 
     mcp_pool: McpServerPool | None = None
     mcp_server_names = agent.mcp_server_names or []
@@ -409,6 +410,7 @@ async def run_orchestration(
                     agent_state=agent_state,
                     trigger_type=trigger_type,
                     available_tools=tools,
+                    procedure_covered=procedure_covered,
                 )
                 _emit(
                     "tool_result",
@@ -502,6 +504,7 @@ async def _dispatch_tool(
     agent_state: dict | None = None,
     trigger_type: str = "manual",
     available_tools: list[dict] | None = None,
+    procedure_covered: dict[str, str] | None = None,
 ) -> str:
     """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
     from mcpworks_api.core.tool_permissions import ToolTier, is_tool_allowed
@@ -566,6 +569,19 @@ async def _dispatch_tool(
         )
 
     service_name, function_name = parsed
+
+    if procedure_covered and tool_name in procedure_covered:
+        proc_label = procedure_covered[tool_name]
+        svc, proc_name = proc_label.split(" / ", 1)
+        return json.dumps(
+            {
+                "error": f"Direct call to '{tool_name}' is blocked — "
+                f"this function is covered by procedure '{proc_label}'. "
+                f"You MUST use run_procedure(service='{svc}', "
+                f"name='{proc_name}') instead.",
+            }
+        )
+
     return await _execute_namespace_function(
         service_name,
         function_name,

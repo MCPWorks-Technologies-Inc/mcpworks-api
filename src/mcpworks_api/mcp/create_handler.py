@@ -1446,7 +1446,7 @@ class CreateMCPHandler:
         from mcpworks_api.core.agent_access import AgentAccessDeniedError, check_state_access
 
         service = AgentService(self.db)
-        agent = await service.get_by_name(self.account.id, agent_name)
+        agent = await service.get_agent(self.account.id, agent_name)
         if not agent.access_rules:
             return
         allowed, rule_id = check_state_access(agent.access_rules, key)
@@ -1514,7 +1514,7 @@ class CreateMCPHandler:
         result = await service.list_state_keys(
             self.account.id, agent_name, self.account.user.effective_tier
         )
-        agent = await service.get_by_name(self.account.id, agent_name)
+        agent = await service.get_agent(self.account.id, agent_name)
         if agent.access_rules:
             keys = result.get("keys", [])
             filtered = filter_state_keys(agent.access_rules, keys)
@@ -3116,7 +3116,7 @@ class CreateMCPHandler:
             raise ValueError("Rule must include 'patterns' as a non-empty list of strings")
 
         service = AgentService(self.db)
-        agent = await service.get_by_name(self.account.id, agent_name)
+        agent = await service.get_agent(self.account.id, agent_name)
 
         access_rules = dict(agent.access_rules or {})
         rule_id = f"r-{secrets.token_hex(4)}"
@@ -3139,7 +3139,7 @@ class CreateMCPHandler:
 
     async def _list_agent_access_rules(self, agent_name: str) -> MCPToolResult:
         service = AgentService(self.db)
-        agent = await service.get_by_name(self.account.id, agent_name)
+        agent = await service.get_agent(self.account.id, agent_name)
         access_rules = agent.access_rules or {}
         return MCPToolResult(
             content=[
@@ -3157,7 +3157,7 @@ class CreateMCPHandler:
 
     async def _remove_agent_access_rule(self, agent_name: str, rule_id: str) -> MCPToolResult:
         service = AgentService(self.db)
-        agent = await service.get_by_name(self.account.id, agent_name)
+        agent = await service.get_agent(self.account.id, agent_name)
         access_rules = dict(agent.access_rules or {})
 
         found = False
