@@ -1,9 +1,9 @@
 # 016: Procedure-First Enforcement
 
-**Status:** Draft
+**Status:** Implemented (2026-04-02)
 **Author:** Simon Carr / Claude
 **Date:** 2026-04-01
-**Affects:** orchestrator, ai_tools, tool_registry, agent chat
+**Affects:** orchestrator, agent_service, ai_tools
 
 ---
 
@@ -220,21 +220,46 @@ Procedure section in system prompt: ~100-200 tokens (scales with procedure count
 
 ---
 
-## Implementation Order
+## What Actually Shipped (2026-04-02)
 
-1. **System prompt injection** — highest impact, zero migration needed
-2. **Covered function detection** — query procedures, annotate tool list
-3. **`procedure_only` flag** — migration + model change + tool registry
-4. **Orchestrator enforcement** — reject/warn on direct calls
-5. **Namespace enforcement level** — configurable per-namespace
+The spec proposed a graduated approach (hint → warn → enforce) with a `procedure_only` flag. Implementation went further — **hard runtime enforcement for ALL covered functions**, no flag or per-namespace config needed.
 
-Step 1 alone solves 80% of the problem. Steps 2-5 are defense in depth.
+### Implemented
+
+1. **System prompt injection** (spec step 1) — `augment_system_prompt` lists procedures with "USE THESE FIRST" and annotates covered functions with "⚠️ USE PROCEDURE". Shipped 2026-04-01.
+
+2. **Covered function detection** (spec step 2) — `_build_covered_function_set()` in `core/ai_tools.py` maps tool names to their covering procedure. Used for both prompt annotation and runtime enforcement.
+
+3. **Hard runtime enforcement** (replaces spec steps 3-5) — `_dispatch_tool` in `orchestrator.py` and `_dispatch_chat_tool` in `agent_service.py` check if a namespace function is covered by a procedure. If so, the call returns a hard error directing the agent to `run_procedure`. No `procedure_only` flag needed — coverage is automatic from procedure step definitions. No enforcement levels — it's always enforced.
+
+4. **Procedure execution exempt** — calls originating from within procedure step execution do NOT pass `procedure_covered`, so procedures can still call their underlying functions.
+
+### Not Implemented (unnecessary)
+
+- `procedure_only` column on functions — not needed, coverage is derived from procedures
+- `procedure_enforcement` column on namespaces — not needed, enforcement is always on
+- hint/warn/enforce levels — prompt hints kept for AI guidance, but enforcement is hard regardless
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `core/ai_tools.py` | `augment_system_prompt` — procedures section + covered annotations. `_build_covered_function_set` + `get_procedure_summaries` |
+| `tasks/orchestrator.py` | `_dispatch_tool` — `procedure_covered` param, blocks direct calls to covered functions |
+| `services/agent_service.py` | `_dispatch_chat_tool` — same enforcement for chat path |
+| `tests/unit/test_procedure_enforcement.py` | 6 unit tests for covered-function mapping and error format |
+
+### Tests
+
+6 unit tests in `test_procedure_enforcement.py`:
+- `test_empty_summaries` / `test_single_procedure_single_function` / `test_multiple_procedures_multiple_functions` / `test_uncovered_function_not_in_set` — covered function mapping
+- `test_error_message_contains_procedure_name` / `test_uncovered_function_not_blocked` — enforcement error format
 
 ---
 
 ## Approval
 
-- [ ] Spec reviewed
-- [ ] System prompt approach approved
+- [x] Spec reviewed
+- [x] Implemented and deployed 2026-04-02
 - [ ] Enforcement levels approved
 - [ ] Migration plan approved

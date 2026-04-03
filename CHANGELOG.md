@@ -5,6 +5,21 @@ All notable changes to MCPWorks API will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Per-Agent Access Control** — restrict which functions and state keys each agent can access using glob-pattern rules with deny-takes-precedence semantics. Three MCP tools: `configure_agent_access`, `list_agent_access_rules`, `remove_agent_access_rule`. Backwards compatible. (PR #35)
+- **Runtime Procedure Enforcement** — agents cannot directly call namespace functions covered by procedures. `_dispatch_tool` and `_dispatch_chat_tool` return hard errors directing the agent to `run_procedure`. Procedure execution itself is exempt.
+- **Procedures Framework** — auditable multi-step execution pipelines with per-step validation, retry policies, and failure handling. AI generates function arguments per step but cannot skip steps or fabricate results.
+- **Agent Clusters** — run multiple replicas of an agent with load balancing and auto-recovery.
+- **Discord mention_only** — Discord channel integration supports mention-only mode.
+- **Path-Based Routing** — migrated from wildcard subdomain routing to `/mcp/{create|run|agent}/{namespace}` paths. Self-hosting now works with `docker compose up` and a bare IP address. (PR #32)
+
+### Fixed
+- `AgentService.get_by_name` → `get_agent` in access control handlers (5 calls in create_handler.py broke state operations and access rule management after PR #35)
+- Agent replicas stuck in error state when container is lost
+- Procedure step execution and conversation memory compaction
+
 ## [0.2.0] - 2026-03-26
 
 ### Added
