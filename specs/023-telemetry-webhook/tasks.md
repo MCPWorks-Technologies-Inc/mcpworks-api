@@ -18,8 +18,8 @@
 
 **Purpose**: Database migration and model changes
 
-- [ ] T001 Add telemetry webhook columns (`telemetry_webhook_url`, `telemetry_webhook_secret_encrypted`, `telemetry_webhook_secret_dek`, `telemetry_config` JSONB) to Namespace model in src/mcpworks_api/models/namespace.py
-- [ ] T002 Create Alembic migration for telemetry webhook columns in alembic/versions/20260408_000002_add_telemetry_webhook_columns.py
+- [x] T001 Add telemetry webhook columns (`telemetry_webhook_url`, `telemetry_webhook_secret_encrypted`, `telemetry_webhook_secret_dek`, `telemetry_config` JSONB) to Namespace model in src/mcpworks_api/models/namespace.py
+- [x] T002 Create Alembic migration for telemetry webhook columns in alembic/versions/20260408_000002_add_telemetry_webhook_columns.py
 
 ---
 
@@ -29,9 +29,9 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Create telemetry service with `emit_telemetry_event()` function — builds JSON payload from execution metadata, sends async HTTP POST via httpx, fire-and-forget via `asyncio.create_task()` in src/mcpworks_api/services/telemetry.py
-- [ ] T004 Implement `sign_payload()` function — HMAC-SHA256 of raw JSON bytes, returns `sha256=<hex>` string in src/mcpworks_api/services/telemetry.py
-- [ ] T005 Implement `validate_webhook_url()` function — HTTPS required, HTTP allowed only for localhost/127.0.0.1, reject private IPs (10.x, 172.16-31.x, 192.168.x) in src/mcpworks_api/services/telemetry.py
+- [x] T003 Create telemetry service with `emit_telemetry_event()` function — builds JSON payload from execution metadata, sends async HTTP POST via httpx, fire-and-forget via `asyncio.create_task()` in src/mcpworks_api/services/telemetry.py
+- [x] T004 Implement `sign_payload()` function — HMAC-SHA256 of raw JSON bytes, returns `sha256=<hex>` string in src/mcpworks_api/services/telemetry.py
+- [x] T005 Implement `validate_webhook_url()` function — HTTPS required, HTTP allowed only for localhost/127.0.0.1, reject private IPs (10.x, 172.16-31.x, 192.168.x) in src/mcpworks_api/services/telemetry.py
 
 **Checkpoint**: Telemetry service exists with delivery, signing, and URL validation
 
@@ -45,9 +45,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Wire `emit_telemetry_event()` into tools-mode execution path (`dispatch_tool`) in src/mcpworks_api/mcp/run_handler.py — call after `_persist_execution_record`, pass execution metadata (function name, execution_id, execution_time_ms, success, backend, version, timestamp)
-- [ ] T007 [US1] Wire `emit_telemetry_event()` into code-mode execution path (`_execute_code_mode`) in src/mcpworks_api/mcp/run_handler.py — call after analytics recording, pass code-mode execution metadata
-- [ ] T008 [US1] Load webhook config (URL + decrypted secret) from namespace in `emit_telemetry_event()` — skip entirely if `telemetry_webhook_url` is NULL (zero overhead) in src/mcpworks_api/services/telemetry.py
+- [x] T006 [US1] Wire `emit_telemetry_event()` into tools-mode execution path (`dispatch_tool`) in src/mcpworks_api/mcp/run_handler.py — call after `_persist_execution_record`, pass execution metadata (function name, execution_id, execution_time_ms, success, backend, version, timestamp)
+- [x] T007 [US1] Wire `emit_telemetry_event()` into code-mode execution path (`_execute_code_mode`) in src/mcpworks_api/mcp/run_handler.py — call after analytics recording, pass code-mode execution metadata
+- [x] T008 [US1] Load webhook config (URL + decrypted secret) from namespace in `emit_telemetry_event()` — skip entirely if `telemetry_webhook_url` is NULL (zero overhead) in src/mcpworks_api/services/telemetry.py
 
 **Checkpoint**: Functions with a webhook configured send metadata to the endpoint; functions without webhook have zero overhead
 
@@ -61,8 +61,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Add `X-MCPWorks-Signature` header to webhook HTTP POST when secret is configured — compute `sha256=<hex>` from raw JSON bytes using the decrypted secret in src/mcpworks_api/services/telemetry.py
-- [ ] T010 [US2] Skip signature header when no secret is configured in src/mcpworks_api/services/telemetry.py
+- [x] T009 [US2] Add `X-MCPWorks-Signature` header to webhook HTTP POST when secret is configured — compute `sha256=<hex>` from raw JSON bytes using the decrypted secret in src/mcpworks_api/services/telemetry.py
+- [x] T010 [US2] Skip signature header when no secret is configured in src/mcpworks_api/services/telemetry.py
 
 **Checkpoint**: Signed payloads are verifiable; unsigned payloads have no signature header
 
@@ -76,9 +76,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T011 [US3] Add `configure_telemetry_webhook` MCP tool to create handler — accepts url, secret (optional), batch_enabled, batch_interval_seconds; validates URL; encrypts secret via `encrypt_value()` in src/mcpworks_api/mcp/create_handler.py
-- [ ] T012 [US3] Add `configure_telemetry_webhook` tool definition to tool registry in src/mcpworks_api/mcp/tool_registry.py
-- [ ] T013 [US3] Add REST endpoints PUT/GET/DELETE `/v1/namespaces/{namespace}/telemetry-webhook` in src/mcpworks_api/api/v1/namespaces.py — GET returns url + has_secret (never the secret itself) + batch config; PUT validates and stores; DELETE clears all webhook columns
+- [x] T011 [US3] Add `configure_telemetry_webhook` MCP tool to create handler — accepts url, secret (optional), batch_enabled, batch_interval_seconds; validates URL; encrypts secret via `encrypt_value()` in src/mcpworks_api/mcp/create_handler.py
+- [x] T012 [US3] Add `configure_telemetry_webhook` tool definition to tool registry in src/mcpworks_api/mcp/tool_registry.py
+- [x] T013 [US3] Add REST endpoints PUT/GET/DELETE `/v1/namespaces/{namespace}/telemetry-webhook` in src/mcpworks_api/api/v1/namespaces.py — GET returns url + has_secret (never the secret itself) + batch config; PUT validates and stores; DELETE clears all webhook columns
 
 **Checkpoint**: Webhook can be configured, inspected, and removed via both MCP and REST
 
@@ -92,10 +92,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T014 [US4] Implement `buffer_telemetry_event()` — LPUSH event JSON to Redis list keyed by namespace ID in src/mcpworks_api/services/telemetry.py
-- [ ] T015 [US4] Implement `flush_telemetry_batches()` — periodic task that LRANGE+LTRIM each namespace's buffer, delivers array payload to webhook in src/mcpworks_api/services/telemetry.py
-- [ ] T016 [US4] Register batch flush as APScheduler periodic task in src/mcpworks_api/main.py or existing scheduler setup
-- [ ] T017 [US4] Update `emit_telemetry_event()` to check `telemetry_config.batch_enabled` — if true, buffer to Redis; if false or Redis unavailable, deliver individually in src/mcpworks_api/services/telemetry.py
+- [x] T014 [US4] Implement `buffer_telemetry_event()` — LPUSH event JSON to Redis list keyed by namespace ID in src/mcpworks_api/services/telemetry.py
+- [x] T015 [US4] Implement `flush_telemetry_batches()` — periodic task that LRANGE+LTRIM each namespace's buffer, delivers array payload to webhook in src/mcpworks_api/services/telemetry.py
+- [x] T016 [US4] Register batch flush as periodic background task in src/mcpworks_api/main.py lifespan
+- [x] T017 [US4] Update `emit_telemetry_event()` to check `telemetry_config.batch_enabled` — if true, buffer to Redis; if false or Redis unavailable, deliver individually in src/mcpworks_api/services/telemetry.py
 
 **Checkpoint**: Batched events delivered at configured interval; falls back to individual delivery when Redis unavailable
 
@@ -109,11 +109,11 @@
 
 ### Implementation for User Story 5
 
-- [ ] T018 [P] [US5] Write unit tests for `emit_telemetry_event()` — mock httpx, verify POST with correct payload, verify fire-and-forget error handling (endpoint down), verify skip when no URL configured in tests/unit/test_telemetry.py
-- [ ] T019 [P] [US5] Write unit tests for `sign_payload()` — verify HMAC-SHA256 output matches known test vectors, verify no signature when secret is None in tests/unit/test_telemetry.py
-- [ ] T020 [P] [US5] Write unit tests for `validate_webhook_url()` — test HTTPS accepted, HTTP rejected (except localhost), private IPs rejected, malformed URLs rejected in tests/unit/test_telemetry.py
-- [ ] T021 [P] [US5] Write unit tests for batching — mock Redis, verify buffer/flush cycle, verify fallback to individual delivery when Redis unavailable in tests/unit/test_telemetry.py
-- [ ] T022 [US5] Run full test suite `pytest tests/unit/ -q` and verify no regressions
+- [x] T018 [P] [US5] Write unit tests for `emit_telemetry_event()` — mock httpx, verify POST with correct payload, verify fire-and-forget error handling (endpoint down), verify skip when no URL configured in tests/unit/test_telemetry.py
+- [x] T019 [P] [US5] Write unit tests for `sign_payload()` — verify HMAC-SHA256 output matches known test vectors, verify no signature when secret is None in tests/unit/test_telemetry.py
+- [x] T020 [P] [US5] Write unit tests for `validate_webhook_url()` — test HTTPS accepted, HTTP rejected (except localhost), private IPs rejected, malformed URLs rejected in tests/unit/test_telemetry.py
+- [x] T021 [P] [US5] Write unit tests for batching — mock Redis, verify buffer/flush cycle, verify fallback to individual delivery when Redis unavailable in tests/unit/test_telemetry.py
+- [x] T022 [US5] Run full test suite `pytest tests/unit/ -q` and verify no regressions
 
 **Checkpoint**: All telemetry tests pass, no regressions
 
@@ -121,8 +121,8 @@
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T023 Run `ruff format` and `ruff check --fix` on all modified files
-- [ ] T024 Run full unit test suite `pytest tests/unit/ -q` — all tests pass
+- [x] T023 Run `ruff format` and `ruff check --fix` on all modified files
+- [x] T024 Run full unit test suite `pytest tests/unit/ -q` — all tests pass
 - [ ] T025 Commit all changes and push branch
 
 ---

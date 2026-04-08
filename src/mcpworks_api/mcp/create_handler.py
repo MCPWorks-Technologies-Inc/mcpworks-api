@@ -175,6 +175,7 @@ class CreateMCPHandler:
         "list_security_scanners": "read",
         "update_security_scanner": "write",
         "remove_security_scanner": "write",
+        "configure_telemetry_webhook": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -537,6 +538,7 @@ class CreateMCPHandler:
             "list_security_scanners": self._list_security_scanners,
             "update_security_scanner": self._update_security_scanner,
             "remove_security_scanner": self._remove_security_scanner,
+            "configure_telemetry_webhook": self._configure_telemetry_webhook,
         }
 
         handler = handlers.get(name)
@@ -3352,6 +3354,68 @@ class CreateMCPHandler:
             content=[
                 MCPContent(
                     text=json.dumps({"scanner_removed": scanner_id, "remaining": len(new_scanners)})
+                )
+            ]
+        )
+
+    async def _configure_telemetry_webhook(
+        self,
+        url: str | None = None,
+        secret: str | None = None,
+        batch_enabled: bool | None = None,
+        batch_interval_seconds: int | None = None,
+        remove: bool = False,
+    ) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+
+        if remove:
+            ns.telemetry_webhook_url = None
+            ns.telemetry_webhook_secret_encrypted = None
+            ns.telemetry_webhook_secret_dek = None
+            ns.telemetry_config = None
+            await self.db.flush()
+            return MCPToolResult(content=[MCPContent(text=json.dumps({"webhook_removed": True}))])
+
+        if url is not None:
+            from mcpworks_api.services.telemetry import validate_webhook_url
+
+            error = validate_webhook_url(url)
+            if error:
+                raise ValueError(f"Invalid webhook URL: {error}")
+            ns.telemetry_webhook_url = url
+
+        if secret is not None:
+            from mcpworks_api.core.encryption import encrypt_value
+
+            enc, dek = encrypt_value(secret)
+            ns.telemetry_webhook_secret_encrypted = enc
+            ns.telemetry_webhook_secret_dek = dek
+
+        config = dict(ns.telemetry_config or {})
+        if batch_enabled is not None:
+            config["batch_enabled"] = batch_enabled
+        if batch_interval_seconds is not None:
+            config["batch_interval_seconds"] = max(1, min(60, batch_interval_seconds))
+        if config:
+            ns.telemetry_config = config
+
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "url": ns.telemetry_webhook_url,
+                            "has_secret": ns.telemetry_webhook_secret_encrypted is not None,
+                            "batch_enabled": (ns.telemetry_config or {}).get(
+                                "batch_enabled", False
+                            ),
+                            "batch_interval_seconds": (ns.telemetry_config or {}).get(
+                                "batch_interval_seconds", 10
+                            ),
+                        }
+                    )
                 )
             ]
         )

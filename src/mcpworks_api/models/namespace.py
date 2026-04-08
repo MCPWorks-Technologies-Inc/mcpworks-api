@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
 )
@@ -76,6 +77,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
     )
 
     scanner_pipeline: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    telemetry_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    telemetry_webhook_secret_encrypted: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    telemetry_webhook_secret_dek: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    telemetry_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     allowlist_changes_today: Mapped[int] = mapped_column(
         Integer,

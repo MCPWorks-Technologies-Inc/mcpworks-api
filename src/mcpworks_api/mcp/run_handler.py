@@ -404,6 +404,21 @@ class RunMCPHandler:
             )
         )
 
+        from mcpworks_api.services.telemetry import emit_telemetry_event
+
+        asyncio.create_task(
+            emit_telemetry_event(
+                namespace_id=namespace.id,
+                namespace_name=self.namespace_name,
+                function_name=name,
+                execution_id=execution_id,
+                execution_time_ms=execution_time_ms,
+                success=result.success,
+                backend=version.backend,
+                version=version.version,
+            )
+        )
+
         if result.success:
             content_text = json.dumps(result.output)
             content_text = await self._run_output_pipeline(
@@ -695,6 +710,20 @@ class RunMCPHandler:
 
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
+        )
+
+        from mcpworks_api.services.telemetry import emit_telemetry_event
+
+        asyncio.create_task(
+            emit_telemetry_event(
+                namespace_id=namespace.id,
+                namespace_name=self.namespace_name,
+                function_name="execute_python",
+                execution_id=execution_id,
+                execution_time_ms=execution_time_ms,
+                success=result.success if result else False,
+                backend="code_sandbox",
+            )
         )
 
         # FINDING-04: Prefer call_log from output.json (read by trusted execute.py)

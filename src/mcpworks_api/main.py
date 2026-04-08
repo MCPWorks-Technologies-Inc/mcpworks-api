@@ -54,9 +54,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             with contextlib.suppress(Exception):
                 await cleanup_analytics_data()
 
+    async def _telemetry_batch_loop() -> None:
+        from mcpworks_api.services.telemetry import flush_telemetry_batches
+
+        while True:
+            await asyncio.sleep(10)
+            with contextlib.suppress(Exception):
+                await flush_telemetry_batches()
+
     scheduler_task = asyncio.create_task(run_scheduler_loop())
     discord_task = asyncio.create_task(run_discord_gateway())
     cleanup_task = asyncio.create_task(_daily_cleanup_loop())
+    telemetry_batch_task = asyncio.create_task(_telemetry_batch_loop())
 
     async with session_manager.run():
         yield
@@ -65,12 +74,15 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_task.cancel()
     discord_task.cancel()
     cleanup_task.cancel()
+    telemetry_batch_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await scheduler_task
     with contextlib.suppress(asyncio.CancelledError):
         await discord_task
     with contextlib.suppress(asyncio.CancelledError):
         await cleanup_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await telemetry_batch_task
 
     await close_db()
     await close_redis()
