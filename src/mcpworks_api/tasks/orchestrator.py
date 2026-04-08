@@ -1028,10 +1028,12 @@ async def run_procedure_orchestration(
             )
 
             if attempt > 0:
+                prev_error = step_result["attempts"][-1].get("error", "Unknown error")
                 system_prompt += (
                     f"\n## PREVIOUS ATTEMPT FAILED\n"
-                    f"You must call `{tool_name}` with the correct parameters. "
-                    f"Do not respond with text. Make the tool call now.\n"
+                    f"Error from attempt {attempt}: {prev_error}\n\n"
+                    f"You must adapt your parameters to fix this error. "
+                    f"Call `{tool_name}` with corrected parameters now.\n"
                 )
 
             messages: list[dict] = [
