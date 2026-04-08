@@ -19,6 +19,7 @@ Deploy it on your own infrastructure, write a function, and it runs.
 - [Versioning](#versioning)
 - [Environment Variables](#environment-variables)
 - [Agents](#agents)
+- [Secure Credential Storage](#secure-credential-storage)
 - [Billing & Tiers](#billing--tiers)
 - [Sandbox Limits](#sandbox-limits)
 - [Code Mode Deep Dive](#code-mode-deep-dive)
@@ -696,6 +697,68 @@ Agents operate under restricted permissions during orchestration to prevent unin
 Detected secrets are replaced with `[REDACTED_*]` markers (e.g., `[REDACTED_STRIPE_KEY]`, `[REDACTED_JWT]`). The original output is never exposed to the AI engine.
 
 A security event is logged each time a secret is detected, including the redaction type and the function that produced the output.
+
+---
+
+## Secure Credential Storage
+
+Agent state (`set_agent_state` / `get_agent_state`) provides encrypted storage for API keys, OAuth tokens, and other secrets that your functions need at runtime.
+
+### How it works
+
+```python
+def handler(input_data, context):
+    # Credentials injected server-side from encrypted agent state
+    api_key = context["state"].get("stripe_api_key")
+    # Use the credential — it never appears in AI context or function params
+    stripe.api_key = api_key
+    return stripe.Customer.list(limit=10)
+```
+
+The credential flow:
+
+1. **Store** — user calls `set_agent_state(agent_name, key="stripe_api_key", value="sk_live_...")` via the create endpoint
+2. **Encrypt** — value is encrypted with AES-256-GCM using envelope encryption (unique DEK per value, wrapped by a KEK)
+3. **Execute** — when a function runs, all state values are decrypted server-side and injected into the sandbox as `context.state`
+4. **Isolate** — the credential never appears in the AI prompt, function input parameters, or MCP tool call arguments
+
+### Security properties
+
+| Property | Status |
+|----------|--------|
+| Encrypted at rest | AES-256-GCM with envelope encryption (per-value DEK) |
+| Encrypted in transit | TLS (HTTPS) |
+| Never in AI context | Values injected server-side, not through LLM prompts |
+| Account-scoped | Agent A in account X cannot access agent B in account Y |
+| Per-agent access control | Access rules restrict which agents can read which keys (spec 018) |
+| Output scanning | Function outputs are scanned for leaked credentials before reaching the AI |
+
+### What this is NOT
+
+Agent state is encrypted credential storage, not a secrets management platform. Be aware of these limitations:
+
+- **All state values are available to all functions within the same agent.** There is no per-function scoping — any function that runs in the agent's context can read any of that agent's state values.
+- **State key names are stored in plaintext.** Only values are encrypted. Avoid putting sensitive information in key names.
+- **No key rotation tooling.** Rotating the encryption KEK requires re-encrypting all values manually.
+- **No access audit log.** State reads are not individually logged (security events cover agent operations at a higher level).
+
+### Recommended pattern
+
+Store third-party API credentials in agent state rather than passing them as function parameters or environment variables:
+
+```
+# Good: credentials in agent state (encrypted, never in AI context)
+set_agent_state(agent_name="my-bot", key="bluesky_handle", value="mybot.bsky.social")
+set_agent_state(agent_name="my-bot", key="bluesky_app_password", value="xxxx-xxxx-xxxx")
+
+# Then in your function:
+def handler(input_data, context):
+    handle = context["state"]["bluesky_handle"]
+    password = context["state"]["bluesky_app_password"]
+    # ... use credentials
+```
+
+This keeps credentials out of the AI conversation entirely. The LLM never sees the raw API key — it just calls the function, and the function reads credentials from state.
 
 ---
 

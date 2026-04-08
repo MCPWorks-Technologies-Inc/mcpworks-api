@@ -55,6 +55,7 @@ The AI writes Python or TypeScript. MCPWorks executes it in an isolated sandbox 
 |---------|-------------|
 | **Secure Sandbox** | nsjail isolation: Linux namespaces, cgroups, seccomp. User code runs with zero privileges. |
 | **Token Efficiency** | 70-98% fewer tokens per operation. Data stays in sandbox, only results return. |
+| **Encrypted Credential Storage** | Agent state stores API keys and secrets with AES-256-GCM envelope encryption. Injected server-side — never in the AI prompt. |
 | **Agent Runtime** | Autonomous agents with scheduling, persistent state, webhooks, and AI orchestration. BYOAI — use any provider. |
 | **Function Hosting** | Organize Python/TypeScript functions into services. Each namespace gets its own MCP endpoint. |
 | **Access Control** | Per-agent function and state restrictions with glob patterns. Deny-takes-precedence. |
