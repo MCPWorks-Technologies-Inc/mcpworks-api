@@ -1,8 +1,8 @@
 # Agent Governance Toolkit Integration - Specification
 
-**Version:** 1.0.0
+**Version:** 0.1.0 (Draft)
 **Created:** 2026-04-08
-**Status:** Implemented
+**Status:** Draft
 **Spec Author:** Simon Carr
 **Reviewers:** --
 
@@ -433,21 +433,18 @@ Compliance endpoint is a REST API call, not an MCP tool — token efficiency is 
 
 ## 13. Approval
 
-**Status:** Implemented
+**Status:** Draft
 
 **Approvals:**
-- [x] CTO (Simon Carr)
+- [ ] CTO (Simon Carr)
 - [ ] Security Review
 
-**Approved Date:** 2026-04-09
-**Next Review:** 2026-04-22
+**Approved Date:** --
+**Next Review:** 2026-04-15 (or when Agent OS SDK API is confirmed)
 
 ---
 
 ## Changelog
-
-**v1.0.0 (2026-04-09):**
-- Implemented: Agent OS scanner, trust scoring, compliance endpoint
 
 **v0.1.0 (2026-04-08):**
 - Initial draft — Agent OS, Agent Compliance, Agent Mesh trust scoring integration

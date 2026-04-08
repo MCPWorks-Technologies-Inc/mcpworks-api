@@ -53,6 +53,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+governance = [
+    "agent-os-kernel[full]>=0.1.0",
+    "agent-compliance>=0.1.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -160,6 +164,8 @@ module = [
     "prometheus_fastapi_instrumentator.*",
     "mcp.*",
     "jsonschema.*",
+    "agent_os.*",
+    "agent_compliance.*",
 ]
 ignore_missing_imports = true
 

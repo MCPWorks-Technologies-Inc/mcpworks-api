@@ -1,0 +1,112 @@
+openapi: "3.0.3"
+info:
+  title: MCPWorks Compliance API
+  version: "1.0.0"
+
+paths:
+  /v1/namespaces/{namespace}/compliance:
+    get:
+      operationId: getNamespaceCompliance
+      summary: Get OWASP Agentic Top 10 compliance report for a namespace
+      description: |
+        Evaluates the namespace's current security configuration against
+        the OWASP Agentic AI Top 10 risk framework and returns a graded
+        compliance report with coverage details and remediation guidance.
+      tags:
+        - Compliance
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Namespace name
+        - name: detail
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [summary, full]
+            default: summary
+          description: "summary returns grades only; full includes remediation steps"
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Compliance report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceReport"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Namespace not found
+
+components:
+  schemas:
+    ComplianceReport:
+      type: object
+      required:
+        - namespace
+        - framework
+        - grade
+        - coverage_pct
+        - evaluated_at
+        - risks
+      properties:
+        namespace:
+          type: string
+        framework:
+          type: string
+          example: "owasp-agentic-top-10"
+        grade:
+          type: string
+          enum: [A, B, C, D, F]
+        coverage_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+        evaluated_at:
+          type: string
+          format: date-time
+        risks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskAssessment"
+
+    RiskAssessment:
+      type: object
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+          example: "OWASP-AT-01"
+        name:
+          type: string
+          example: "Agent Goal Hijack"
+        status:
+          type: string
+          enum: [covered, partial, gap]
+        control:
+          type: string
+          nullable: true
+          description: MCPWorks control that addresses this risk
+        remediation:
+          type: string
+          nullable: true
+          description: Suggested action to close the gap (only in detail=full)
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key

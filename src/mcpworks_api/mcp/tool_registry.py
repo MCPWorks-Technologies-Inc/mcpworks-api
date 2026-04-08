@@ -1485,35 +1485,33 @@ AGENT_TOOLS: dict[str, ToolDef] = {
     ),
     "configure_agent_access": ToolDef(
         name="configure_agent_access",
-        brief="Add a function or state access rule for an agent.",
+        brief="Add access rules or set trust score for an agent.",
         description=(
-            "Add a per-agent access rule that restricts which functions or state keys "
-            "the agent can use. Rule types: "
-            "'allow_services' (whitelist services), "
-            "'deny_services' (block services), "
-            "'allow_functions' (whitelist specific functions by service.function pattern), "
-            "'deny_functions' (block specific functions by service.function pattern), "
-            "'allow_keys' (whitelist state keys), "
-            "'deny_keys' (block state keys). "
-            "Patterns support fnmatch-style globs (e.g., 'admin.delete_*'). "
-            "Deny rules always take precedence over allow rules. "
-            "When no rules exist, the agent has unrestricted access. "
-            "Example: configure_agent_access(agent_name='social-bot', "
-            "rule={'type': 'allow_services', 'patterns': ['social', 'content']})."
+            "Add a per-agent access rule or set the agent's trust score. "
+            "Provide 'rule' to add access rules, or 'trust_score' to set the score directly. "
+            "Rule types: "
+            "'allow_services', 'deny_services', 'allow_functions', 'deny_functions', "
+            "'allow_keys', 'deny_keys'. "
+            "Function rules support optional 'min_trust_score' (0-1000) to gate access "
+            "based on the agent's behavioral trust score. "
+            "Trust scores degrade automatically on security events and recover slowly "
+            "on successful executions. Default score is 500. "
+            "Example rule: configure_agent_access(agent_name='bot', "
+            "rule={'type': 'allow_functions', 'patterns': ['svc.*'], 'min_trust_score': 400}). "
+            "Example trust: configure_agent_access(agent_name='bot', trust_score=500)."
         ),
         input_schema={
             "type": "object",
             "properties": {
                 "agent_name": {
                     "type": "string",
-                    "description": "Name of the agent to configure access rules for.",
+                    "description": "Name of the agent to configure.",
                 },
                 "rule": {
                     "type": "object",
                     "description": (
                         "Access rule definition. Must include 'type' and 'patterns'. "
-                        "type: allow_services|deny_services|allow_functions|deny_functions|allow_keys|deny_keys. "
-                        "patterns: list of fnmatch glob patterns."
+                        "Optional 'min_trust_score' for trust-gated access."
                     ),
                     "properties": {
                         "type": {
@@ -1531,11 +1529,23 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                             "type": "array",
                             "items": {"type": "string"},
                         },
+                        "min_trust_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1000,
+                            "description": "Minimum trust score required to use matched functions.",
+                        },
                     },
                     "required": ["type", "patterns"],
                 },
+                "trust_score": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "description": "Set the agent's trust score directly (admin override).",
+                },
             },
-            "required": ["agent_name", "rule"],
+            "required": ["agent_name"],
         },
     ),
     "list_agent_access_rules": ToolDef(

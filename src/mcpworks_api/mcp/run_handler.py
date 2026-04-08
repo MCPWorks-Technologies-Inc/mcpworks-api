@@ -420,6 +420,9 @@ class RunMCPHandler:
         )
 
         if result.success:
+            asyncio.create_task(self._recover_agent_trust(namespace))
+
+        if result.success:
             content_text = json.dumps(result.output)
             content_text = await self._run_output_pipeline(
                 content_text,
@@ -568,7 +571,7 @@ class RunMCPHandler:
         from mcpworks_api.models.agent import Agent
 
         result = await self.db.execute(
-            select(Agent.access_rules, Agent.name)
+            select(Agent.access_rules, Agent.name, Agent.trust_score)
             .where(Agent.namespace_id == namespace.id)
             .limit(1)
         )
@@ -576,13 +579,32 @@ class RunMCPHandler:
         if not row or not row.access_rules:
             return
 
-        allowed, rule_id = check_function_access(row.access_rules, service_name, function_name)
+        allowed, rule_id = check_function_access(
+            row.access_rules, service_name, function_name, trust_score=row.trust_score
+        )
         if not allowed:
             raise AgentAccessDeniedError(
                 agent=row.name,
                 resource=f"{service_name}.{function_name}",
                 rule_id=rule_id or "unknown",
             )
+
+    async def _recover_agent_trust(self, namespace: Namespace) -> None:
+        """Increment trust score for the namespace's agent after successful execution."""
+        try:
+            from sqlalchemy import select
+
+            from mcpworks_api.models.agent import Agent
+            from mcpworks_api.services.trust_score import recover_trust_score
+
+            result = await self.db.execute(
+                select(Agent.id).where(Agent.namespace_id == namespace.id).limit(1)
+            )
+            row = result.first()
+            if row:
+                await recover_trust_score(self.db, row.id)
+        except Exception:
+            pass
 
     async def _load_agent_context(self, namespace: Namespace) -> dict[str, Any] | None:
         """Load agent state as context dict for code-mode cross-function calls.

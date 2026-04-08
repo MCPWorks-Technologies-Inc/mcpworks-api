@@ -3108,8 +3108,38 @@ class CreateMCPHandler:
     async def _configure_agent_access(
         self,
         agent_name: str,
-        rule: dict,
+        rule: dict | None = None,
+        trust_score: int | None = None,
     ) -> MCPToolResult:
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+
+        if trust_score is not None:
+            if not (0 <= trust_score <= 1000):
+                raise ValueError("trust_score must be between 0 and 1000")
+            old_score = agent.trust_score
+            agent.trust_score = trust_score
+            from datetime import datetime
+
+            agent.trust_score_updated_at = datetime.now(UTC)
+            await self.db.flush()
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps(
+                            {
+                                "agent": agent_name,
+                                "trust_score": trust_score,
+                                "previous_score": old_score,
+                            }
+                        )
+                    )
+                ]
+            )
+
+        if rule is None:
+            raise ValueError("Either 'rule' or 'trust_score' must be provided")
+
         import secrets
 
         VALID_TYPES = {
@@ -3129,12 +3159,12 @@ class CreateMCPHandler:
         if not patterns or not isinstance(patterns, list):
             raise ValueError("Rule must include 'patterns' as a non-empty list of strings")
 
-        service = AgentService(self.db)
-        agent = await service.get_agent(self.account.id, agent_name)
-
         access_rules = dict(agent.access_rules or {})
         rule_id = f"r-{secrets.token_hex(4)}"
         new_rule = {"id": rule_id, "type": rule_type, "patterns": patterns}
+        min_trust = rule.get("min_trust_score")
+        if min_trust is not None:
+            new_rule["min_trust_score"] = int(min_trust)
 
         if rule_type in ("allow_keys", "deny_keys"):
             state_rules = list(access_rules.get("state_rules", []))

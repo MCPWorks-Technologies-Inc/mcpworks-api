@@ -9,6 +9,7 @@ from mcpworks_api.api.v1.agents import router as agents_router
 from mcpworks_api.api.v1.analytics import router as analytics_router
 from mcpworks_api.api.v1.audit import router as audit_router
 from mcpworks_api.api.v1.auth import router as auth_router
+from mcpworks_api.api.v1.compliance import router as compliance_router
 from mcpworks_api.api.v1.demo import router as demo_router
 from mcpworks_api.api.v1.executions import router as executions_router
 from mcpworks_api.api.v1.health import router as health_router
@@ -48,6 +49,7 @@ router.include_router(admin_router)  # Admin dashboard
 router.include_router(demo_router)  # Demo booking form
 router.include_router(analytics_router)  # Token savings & MCP analytics
 router.include_router(executions_router)  # Execution debugging
+router.include_router(compliance_router)  # OWASP compliance reporting
 router.include_router(mcp_router)  # A0: MCP JSON-RPC endpoints
 
 __all__ = ["router"]
