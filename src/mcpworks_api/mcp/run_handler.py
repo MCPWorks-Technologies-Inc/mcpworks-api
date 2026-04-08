@@ -391,10 +391,14 @@ class RunMCPHandler:
 
         if result.success:
             content_text = json.dumps(result.output)
-            if getattr(function, "output_trust", "prompt") == "data":
-                from mcpworks_api.core.trust_boundary import wrap_function_output
-
-                content_text = wrap_function_output(content_text)
+            content_text = await self._run_output_pipeline(
+                content_text,
+                namespace,
+                service_name,
+                function_name,
+                execution_id,
+                getattr(function, "output_trust", "prompt"),
+            )
         else:
             content_text = json.dumps(
                 {
@@ -495,6 +499,34 @@ class RunMCPHandler:
             for s in servers
             if s.tool_count > 0
         ]
+
+    async def _run_output_pipeline(
+        self,
+        content: str,
+        namespace,
+        service_name: str,
+        function_name: str,
+        execution_id: str,
+        output_trust: str,
+    ) -> str:
+        from mcpworks_api.core.scanner_pipeline import evaluate_pipeline
+        from mcpworks_api.core.scanners.base import ScanContext
+
+        context = ScanContext(
+            direction="output",
+            namespace=self.namespace_name,
+            service=service_name,
+            function=function_name,
+            execution_id=execution_id,
+            output_trust=output_trust,
+        )
+
+        pipeline_config = getattr(namespace, "scanner_pipeline", None)
+        pipeline_result = await evaluate_pipeline(content, context, pipeline_config)
+
+        if pipeline_result.modified_content is not None:
+            return pipeline_result.modified_content
+        return content
 
     async def _check_agent_function_access(
         self, namespace: Namespace, service_name: str, function_name: str
@@ -664,11 +696,15 @@ class RunMCPHandler:
         if result.success:
             content_text = json.dumps(result.output)
             if has_data_trust:
-                from mcpworks_api.core.trust_boundary import wrap_function_output
-                from mcpworks_api.sandbox.injection_scan import scan_for_injections
-
-                if scan_for_injections(content_text):
-                    content_text = wrap_function_output(content_text)
+                namespace = await self._get_namespace()
+                content_text = await self._run_output_pipeline(
+                    content_text,
+                    namespace,
+                    "code_mode",
+                    "execute",
+                    str(uuid.uuid4()),
+                    "data",
+                )
         else:
             content_text = json.dumps(
                 {

@@ -14,7 +14,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -74,6 +74,8 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    scanner_pipeline: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     allowlist_changes_today: Mapped[int] = mapped_column(
         Integer,
