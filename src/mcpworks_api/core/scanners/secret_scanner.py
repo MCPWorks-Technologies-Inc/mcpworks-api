@@ -27,7 +27,9 @@ class SecretScanner(BaseScanner):
         )
 
     async def scan_and_transform(
-        self, content: str, context: ScanContext  # noqa: ARG002
+        self,
+        content: str,
+        context: ScanContext,  # noqa: ARG002
     ) -> tuple[str, ScanVerdict]:
         cleaned, count = scrub_secrets(content)
         if count > 0:
