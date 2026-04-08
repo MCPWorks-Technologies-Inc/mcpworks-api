@@ -2382,6 +2382,60 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
             "required": ["execution_id"],
         },
     ),
+    "add_security_scanner": ToolDef(
+        name="add_security_scanner",
+        brief="Add a security scanner to the namespace's scanner pipeline.",
+        description=(
+            "Add a scanner to the namespace's security pipeline. Scanners evaluate function "
+            "inputs/outputs for prompt injection, secrets, and other threats. "
+            "Three types: 'builtin' (pattern_scanner, secret_scanner, trust_boundary), "
+            "'webhook' (POST to external URL), 'python' (importable Python callable). "
+            "Example: add_security_scanner(type='webhook', name='my-guard', direction='output', "
+            "config={'url': 'https://guard.internal/scan', 'timeout_ms': 2000})."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["builtin", "webhook", "python"]},
+                "name": {"type": "string", "description": "Human-readable scanner name."},
+                "direction": {"type": "string", "enum": ["input", "output", "both"]},
+                "config": {"type": "object", "description": "Type-specific config."},
+            },
+            "required": ["type", "name", "direction", "config"],
+        },
+    ),
+    "list_security_scanners": ToolDef(
+        name="list_security_scanners",
+        brief="List all scanners in the namespace's security pipeline.",
+        description="List all configured security scanners for this namespace, including their type, direction, order, and enabled status.",
+        input_schema={"type": "object", "properties": {}},
+    ),
+    "update_security_scanner": ToolDef(
+        name="update_security_scanner",
+        brief="Update a security scanner's config or enabled status.",
+        description="Update an existing scanner in the pipeline. Use to enable/disable scanners or change their config.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "scanner_id": {"type": "string", "description": "Scanner ID (e.g., 's-a1b2c3d4')."},
+                "enabled": {"type": "boolean", "description": "Enable or disable the scanner."},
+                "config": {"type": "object", "description": "Updated config (merged)."},
+            },
+            "required": ["scanner_id"],
+        },
+    ),
+    "remove_security_scanner": ToolDef(
+        name="remove_security_scanner",
+        brief="Remove a scanner from the namespace's security pipeline.",
+        description="Remove a scanner by ID. Use list_security_scanners to find scanner IDs.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "scanner_id": {"type": "string", "description": "Scanner ID to remove."},
+            },
+            "required": ["scanner_id"],
+        },
+    ),
 }
 
 

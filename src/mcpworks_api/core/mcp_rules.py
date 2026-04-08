@@ -77,12 +77,12 @@ def evaluate_response_rules(
     server_name: str,
     settings: dict[str, Any] | None = None,
 ) -> str:
+    from mcpworks_api.core.scanners.pattern_scanner import scan_for_injections
     from mcpworks_api.core.trust_boundary import (
         apply_injection_flags,
         redact_injection,
         wrap_mcp_response,
     )
-    from mcpworks_api.sandbox.injection_scan import scan_for_injections
 
     injections_found = 0
     output = response_text

@@ -171,6 +171,10 @@ class CreateMCPHandler:
         "remove_agent_access_rule": "write",
         "list_executions": "read",
         "describe_execution": "read",
+        "add_security_scanner": "write",
+        "list_security_scanners": "read",
+        "update_security_scanner": "write",
+        "remove_security_scanner": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -529,6 +533,10 @@ class CreateMCPHandler:
             "remove_agent_access_rule": self._remove_agent_access_rule,
             "list_executions": self._list_executions,
             "describe_execution": self._describe_execution,
+            "add_security_scanner": self._add_security_scanner,
+            "list_security_scanners": self._list_security_scanners,
+            "update_security_scanner": self._update_security_scanner,
+            "remove_security_scanner": self._remove_security_scanner,
         }
 
         handler = handlers.get(name)
@@ -819,7 +827,7 @@ class CreateMCPHandler:
             validated_optional_env = optional_env
 
         if output_trust is None:
-            from mcpworks_api.sandbox.injection_scan import suggest_trust_level
+            from mcpworks_api.core.scanners.pattern_scanner import suggest_trust_level
 
             suggested, reason = suggest_trust_level(code, required_env)
             raise ValueError(
@@ -3229,3 +3237,115 @@ class CreateMCPHandler:
         if not result:
             raise ValueError(f"Execution '{execution_id}' not found")
         return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _add_security_scanner(
+        self, type: str, name: str, direction: str, config: dict
+    ) -> MCPToolResult:
+        import secrets as secrets_mod
+
+        valid_types = {"builtin", "webhook", "python"}
+        if type not in valid_types:
+            raise ValueError(
+                f"Invalid scanner type: {type}. Must be one of: {', '.join(sorted(valid_types))}"
+            )
+        if direction not in ("input", "output", "both"):
+            raise ValueError("direction must be 'input', 'output', or 'both'")
+
+        ns = await self._get_current_namespace()
+        pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
+        scanners = list(pipeline.get("scanners", []))
+
+        scanner_id = f"s-{secrets_mod.token_hex(4)}"
+        max_order = max((s.get("order", 0) for s in scanners), default=0)
+        entry = {
+            "id": scanner_id,
+            "type": type,
+            "name": name,
+            "direction": direction,
+            "order": max_order + 1,
+            "enabled": True,
+            "config": config,
+        }
+        scanners.append(entry)
+        pipeline["scanners"] = scanners
+        ns.scanner_pipeline = pipeline
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "scanner_added": {
+                                "id": scanner_id,
+                                "type": type,
+                                "name": name,
+                                "direction": direction,
+                                "order": entry["order"],
+                            }
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_security_scanners(self) -> MCPToolResult:
+        ns = await self._get_current_namespace_read()
+        pipeline = ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []}
+        summary = {
+            "fallback_policy": pipeline.get("fallback_policy", "fail_open"),
+            "scanners": [
+                {
+                    "id": s["id"],
+                    "type": s["type"],
+                    "name": s["name"],
+                    "direction": s["direction"],
+                    "order": s.get("order", 0),
+                    "enabled": s.get("enabled", True),
+                }
+                for s in pipeline.get("scanners", [])
+            ],
+        }
+        return MCPToolResult(content=[MCPContent(text=json.dumps(summary))])
+
+    async def _update_security_scanner(
+        self, scanner_id: str, enabled: bool | None = None, config: dict | None = None
+    ) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+        pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
+        scanners = list(pipeline.get("scanners", []))
+
+        found = False
+        for s in scanners:
+            if s.get("id") == scanner_id:
+                if enabled is not None:
+                    s["enabled"] = enabled
+                if config:
+                    s["config"] = {**s.get("config", {}), **config}
+                found = True
+                break
+
+        if not found:
+            raise ValueError(f"Scanner '{scanner_id}' not found")
+
+        pipeline["scanners"] = scanners
+        ns.scanner_pipeline = pipeline
+        await self.db.flush()
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"scanner_updated": scanner_id}))])
+
+    async def _remove_security_scanner(self, scanner_id: str) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+        pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
+        scanners = list(pipeline.get("scanners", []))
+        new_scanners = [s for s in scanners if s.get("id") != scanner_id]
+        if len(new_scanners) == len(scanners):
+            raise ValueError(f"Scanner '{scanner_id}' not found")
+        pipeline["scanners"] = new_scanners
+        ns.scanner_pipeline = pipeline
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({"scanner_removed": scanner_id, "remaining": len(new_scanners)})
+                )
+            ]
+        )
