@@ -37,6 +37,7 @@
  * syscall number (from asm/unistd_64.h).  Verified via Docker smoketest.
  * ═══════════════════════════════════════════════════════════════════════ */
 #define fstat 5
+#define lstat 6
 #define uname 63
 
 ALLOW {
@@ -49,6 +50,7 @@ ALLOW {
   close,
   close_range,         /* Bulk close fds (glibc 2.34+, Linux 5.9+) */
   fstat,               /* Stat open fd (CPython uses directly; #define above) */
+  lstat,               /* Stat symlink (os.lstat, pathlib; #define above) */
   newfstatat,          /* Stat files by path (glibc 2.41 prefers this) */
   fstatfs,
   statfs,
