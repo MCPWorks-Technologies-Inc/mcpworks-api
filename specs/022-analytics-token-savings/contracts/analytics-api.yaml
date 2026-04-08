@@ -1,0 +1,312 @@
+openapi: 3.0.3
+info:
+  title: MCPWorks Analytics API
+  version: 1.0.0
+  description: Token savings and MCP proxy analytics endpoints
+
+paths:
+  /v1/analytics/token-savings:
+    get:
+      summary: Get namespace token savings report
+      tags: [analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        '200':
+          description: Token savings report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenSavingsResponse'
+        '401':
+          description: Not authenticated
+        '404':
+          description: Namespace not found or not accessible
+
+  /v1/analytics/server-stats/{server_name}:
+    get:
+      summary: Get per-server MCP proxy stats
+      tags: [analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: server_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: namespace
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        '200':
+          description: Server stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerStatsResponse'
+
+  /v1/analytics/function-stats:
+    get:
+      summary: Get per-function MCP proxy usage stats
+      tags: [analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        '200':
+          description: Function stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionMcpStatsResponse'
+
+  /v1/analytics/suggestions:
+    get:
+      summary: Get optimization suggestions for MCP server usage
+      tags: [analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: server
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Optimization suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionResponse'
+
+  /v1/admin/analytics/token-savings:
+    get:
+      summary: Get platform-wide aggregate token savings (admin only)
+      tags: [admin, analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 30d
+      responses:
+        '200':
+          description: Platform aggregate token savings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTokenSavingsResponse'
+        '403':
+          description: Admin access required
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TokenSavingsResponse:
+      type: object
+      properties:
+        period:
+          type: string
+        total_executions:
+          type: integer
+        input_bytes:
+          type: integer
+        input_tokens_est:
+          type: integer
+        mcp_data_processed_bytes:
+          type: integer
+        mcp_data_processed_tokens_est:
+          type: integer
+        result_returned_bytes:
+          type: integer
+        result_returned_tokens_est:
+          type: integer
+        tokens_saved_est:
+          type: integer
+        savings_percent:
+          type: number
+        top_consumers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopConsumer'
+
+    TopConsumer:
+      type: object
+      properties:
+        server:
+          type: string
+        tool:
+          type: string
+        bytes:
+          type: integer
+
+    PlatformTokenSavingsResponse:
+      type: object
+      properties:
+        period:
+          type: string
+        total_executions:
+          type: integer
+        active_namespaces:
+          type: integer
+        input_bytes:
+          type: integer
+        input_tokens_est:
+          type: integer
+        mcp_data_processed_bytes:
+          type: integer
+        mcp_data_processed_tokens_est:
+          type: integer
+        result_returned_bytes:
+          type: integer
+        result_returned_tokens_est:
+          type: integer
+        tokens_saved_est:
+          type: integer
+        savings_percent:
+          type: number
+        top_namespaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopNamespace'
+
+    TopNamespace:
+      type: object
+      properties:
+        namespace_id:
+          type: string
+        tokens_saved:
+          type: integer
+        executions:
+          type: integer
+
+    ServerStatsResponse:
+      type: object
+      properties:
+        server:
+          type: string
+        period:
+          type: string
+        total_calls:
+          type: integer
+        total_errors:
+          type: integer
+        error_rate:
+          type: number
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolStats'
+
+    ToolStats:
+      type: object
+      properties:
+        name:
+          type: string
+        calls:
+          type: integer
+        avg_latency_ms:
+          type: number
+        avg_response_bytes:
+          type: number
+        avg_response_tokens_est:
+          type: number
+        error_count:
+          type: integer
+        timeout_count:
+          type: integer
+        truncation_count:
+          type: integer
+        injections_detected:
+          type: integer
+
+    FunctionMcpStatsResponse:
+      type: object
+      properties:
+        period:
+          type: string
+        executions:
+          type: integer
+        avg_mcp_calls_per_execution:
+          type: number
+        avg_mcp_bytes_per_execution:
+          type: number
+        avg_result_bytes:
+          type: number
+        avg_tokens_saved:
+          type: number
+
+    SuggestionResponse:
+      type: object
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Suggestion'
+
+    Suggestion:
+      type: object
+      properties:
+        type:
+          type: string
+        server:
+          type: string
+        tool:
+          type: string
+          nullable: true
+        reason:
+          type: string
+        action:
+          type: string
+        estimated_savings_percent:
+          type: number
+          nullable: true
+        estimated_impact:
+          type: string
+          nullable: true
