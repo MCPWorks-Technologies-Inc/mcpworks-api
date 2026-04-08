@@ -3308,7 +3308,11 @@ class CreateMCPHandler:
         return MCPToolResult(content=[MCPContent(text=json.dumps(summary))])
 
     async def _update_security_scanner(
-        self, scanner_id: str, enabled: bool | None = None, config: dict | None = None
+        self,
+        scanner_id: str,
+        enabled: bool | None = None,
+        config: dict | None = None,
+        order: int | None = None,
     ) -> MCPToolResult:
         ns = await self._get_current_namespace()
         pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
@@ -3321,6 +3325,8 @@ class CreateMCPHandler:
                     s["enabled"] = enabled
                 if config:
                     s["config"] = {**s.get("config", {}), **config}
+                if order is not None:
+                    s["order"] = order
                 found = True
                 break
 

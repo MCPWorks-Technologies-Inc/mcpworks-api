@@ -2412,14 +2412,15 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
     ),
     "update_security_scanner": ToolDef(
         name="update_security_scanner",
-        brief="Update a security scanner's config or enabled status.",
-        description="Update an existing scanner in the pipeline. Use to enable/disable scanners or change their config.",
+        brief="Update a security scanner's config, enabled status, or execution order.",
+        description="Update an existing scanner in the pipeline. Use to enable/disable scanners, change their config, or reorder them. Lower order numbers run first.",
         input_schema={
             "type": "object",
             "properties": {
                 "scanner_id": {"type": "string", "description": "Scanner ID (e.g., 's-a1b2c3d4')."},
                 "enabled": {"type": "boolean", "description": "Enable or disable the scanner."},
                 "config": {"type": "object", "description": "Updated config (merged)."},
+                "order": {"type": "integer", "description": "Execution order (lower runs first)."},
             },
             "required": ["scanner_id"],
         },
