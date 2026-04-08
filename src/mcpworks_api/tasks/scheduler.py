@@ -134,6 +134,13 @@ async def _execute_function_direct(
         agent_state = await agent_service.get_all_state(agent.id)
         context = {"state": agent_state}
 
+        extra_files: dict[str, str] = {}
+        if version.code and "from functions" in version.code:
+            from mcpworks_api.mcp.code_mode import generate_functions_package
+
+            all_functions = await function_service.list_all_for_namespace(namespace_id=namespace.id)
+            extra_files = generate_functions_package(all_functions, namespace.name)
+
         execution_id = str(uuid_mod.uuid4())
         start_time = datetime.now(UTC)
 
@@ -146,6 +153,7 @@ async def _execute_function_direct(
                 execution_id=execution_id,
                 context=context,
                 namespace=namespace.name,
+                extra_files=extra_files if extra_files else None,
             )
         except Exception as e:
             await _record_failure(db, run_id, schedule, str(e))
