@@ -110,6 +110,12 @@ class Agent(Base, UUIDMixin, TimestampMixin):
     scratchpad_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    trust_score: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=500, server_default="500"
+    )
+    trust_score_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     runs: Mapped[list["AgentRun"]] = relationship(
         "AgentRun",

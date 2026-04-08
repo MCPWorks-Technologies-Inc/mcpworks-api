@@ -79,6 +79,18 @@ def _resolve_scanner(entry: dict[str, Any]) -> BaseScanner | None:
             scanner_name=scanner_name,
         )
 
+    if scanner_type == "agent_os":
+        try:
+            from mcpworks_api.core.scanners.agent_os_scanner import AgentOSScanner
+        except Exception:
+            logger.warning(
+                "scanner_unavailable",
+                type="agent_os",
+                hint="pip install agent-os-kernel[full]",
+            )
+            return None
+        return AgentOSScanner(config=entry.get("config", {}))
+
     if scanner_type == "python":
         from mcpworks_api.core.scanners.python_scanner import PythonScanner
 

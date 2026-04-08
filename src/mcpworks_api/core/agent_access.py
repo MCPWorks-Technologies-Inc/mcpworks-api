@@ -32,10 +32,12 @@ def check_function_access(
     access_rules: dict[str, Any] | None,
     service_name: str,
     function_name: str,
+    trust_score: int | None = None,
 ) -> tuple[bool, str | None]:
     """Check if an agent is allowed to call a function.
 
     Returns (allowed, blocking_rule_id).
+    When trust_score is provided, also checks min_trust_score on matching allow rules.
     """
     if not access_rules:
         return True, None
@@ -89,16 +91,31 @@ def check_function_access(
 
     if allow_function_rules:
         func_allowed = False
+        matching_rule = None
         for rule in allow_function_rules:
             for pattern in rule.get("patterns", []):
                 if fnmatch(qualified, pattern):
                     func_allowed = True
+                    matching_rule = rule
                     break
             if func_allowed:
                 break
         if not func_allowed:
             rule_id = allow_function_rules[0].get("id") if allow_function_rules else None
             return False, rule_id
+
+        if trust_score is not None and matching_rule:
+            min_trust = matching_rule.get("min_trust_score", 0)
+            if trust_score < min_trust:
+                logger.info(
+                    "agent_access_denied",
+                    function=qualified,
+                    rule_id=matching_rule.get("id"),
+                    rule_type="trust_score_gate",
+                    trust_score=trust_score,
+                    min_trust_score=min_trust,
+                )
+                return False, matching_rule.get("id")
 
     return True, None
 

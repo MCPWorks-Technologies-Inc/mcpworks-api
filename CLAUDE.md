@@ -708,6 +708,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - PostgreSQL 15+ (existing `mcp_execution_stats` and `mcp_proxy_calls` tables) (022-analytics-token-savings)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), httpx (async HTTP client), Pydantic v2, structlog (023-telemetry-webhook)
 - PostgreSQL 15+ (webhook config on namespaces table), Redis 7+ (optional batching buffer) (023-telemetry-webhook)
+- Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), `agent-governance-toolkit` (optional, MIT) (024-agent-governance-toolkit)
+- PostgreSQL 15+ (new columns on `agents` table), existing scanner pipeline JSONB config (024-agent-governance-toolkit)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
