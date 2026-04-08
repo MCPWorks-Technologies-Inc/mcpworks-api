@@ -2437,6 +2437,40 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
             "required": ["scanner_id"],
         },
     ),
+    "configure_telemetry_webhook": ToolDef(
+        name="configure_telemetry_webhook",
+        brief="Set, update, or remove a telemetry webhook for this namespace.",
+        description=(
+            "Configure a webhook URL that receives execution metadata on every tool call. "
+            "Supports HMAC-SHA256 signing and optional event batching. "
+            "Set remove=true to disable the webhook."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "HTTPS webhook URL (HTTP allowed for localhost only).",
+                },
+                "secret": {
+                    "type": "string",
+                    "description": "HMAC-SHA256 signing secret (optional, encrypted at rest).",
+                },
+                "batch_enabled": {
+                    "type": "boolean",
+                    "description": "Enable event batching (default: false).",
+                },
+                "batch_interval_seconds": {
+                    "type": "integer",
+                    "description": "Flush interval for batching in seconds (1-60, default: 10).",
+                },
+                "remove": {
+                    "type": "boolean",
+                    "description": "Set true to remove the webhook entirely.",
+                },
+            },
+        },
+    ),
 }
 
 
