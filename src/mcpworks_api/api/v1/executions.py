@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mcpworks_api.api.deps import get_current_user, get_db
+from mcpworks_api.core.database import get_db
 from mcpworks_api.core.exceptions import NotFoundError
+from mcpworks_api.dependencies import require_active_status
 from mcpworks_api.models.user import User
 from mcpworks_api.schemas.execution import ExecutionDetail, ExecutionListResponse
 from mcpworks_api.services.execution import ExecutionService
@@ -18,6 +20,17 @@ from mcpworks_api.services.namespace import NamespaceServiceManager
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/executions", tags=["executions"])
+
+
+async def get_current_user(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_active_status),
+) -> User:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 
 @router.get("", response_model=ExecutionListResponse)
