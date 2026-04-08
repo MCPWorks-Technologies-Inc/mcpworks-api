@@ -11,6 +11,10 @@ cat > "$HOOK_PATH" << 'HOOK'
 # Checks formatting on staged Python files. Skips if ruff is not installed.
 
 if ! command -v ruff &>/dev/null; then
+    echo "hint: ruff is not installed. Install it for automatic format/lint checks:"
+    echo "  pip install ruff"
+    echo "(not required, but recommended for a smoother dev experience)"
+    echo ""
     exit 0
 fi
 
