@@ -169,6 +169,8 @@ class CreateMCPHandler:
         "configure_agent_access": "write",
         "list_agent_access_rules": "read",
         "remove_agent_access_rule": "write",
+        "list_executions": "read",
+        "describe_execution": "read",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -525,6 +527,8 @@ class CreateMCPHandler:
             "configure_agent_access": self._configure_agent_access,
             "list_agent_access_rules": self._list_agent_access_rules,
             "remove_agent_access_rule": self._remove_agent_access_rule,
+            "list_executions": self._list_executions,
+            "describe_execution": self._describe_execution,
         }
 
         handler = handlers.get(name)
@@ -3189,3 +3193,39 @@ class CreateMCPHandler:
                 )
             ]
         )
+
+    async def _list_executions(
+        self,
+        service: str | None = None,
+        function: str | None = None,
+        status: str | None = None,
+        limit: int = 20,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.execution import ExecutionService
+
+        ns = await self._get_current_namespace_read()
+        exec_service = ExecutionService(self.db)
+        result = await exec_service.list_executions(
+            namespace_id=ns.id,
+            service=service,
+            function=function,
+            status=status,
+            limit=min(limit, 100),
+        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _describe_execution(self, execution_id: str) -> MCPToolResult:
+        import uuid as uuid_mod
+
+        from mcpworks_api.services.execution import ExecutionService
+
+        ns = await self._get_current_namespace_read()
+        exec_service = ExecutionService(self.db)
+        try:
+            eid = uuid_mod.UUID(execution_id)
+        except ValueError:
+            raise ValueError(f"Invalid execution ID: {execution_id}")
+        result = await exec_service.get_execution(ns.id, eid)
+        if not result:
+            raise ValueError(f"Execution '{execution_id}' not found")
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])

@@ -376,6 +376,19 @@ class RunMCPHandler:
             success=result.success,
         )
 
+        await self._persist_execution_record(
+            execution_id=execution_id,
+            namespace=namespace,
+            service_name=service_name,
+            function_name=function_name,
+            function=function,
+            version=version,
+            arguments=arguments,
+            result=result,
+            execution_time_ms=execution_time_ms,
+            start_time=start_time,
+        )
+
         if result.success:
             content_text = json.dumps(result.output)
             if getattr(function, "output_trust", "prompt") == "data":
@@ -403,6 +416,64 @@ class RunMCPHandler:
                 "execution_id": execution_id,
             },
         )
+
+    async def _persist_execution_record(
+        self,
+        execution_id: str,
+        namespace,
+        service_name: str,
+        function_name: str,
+        function,
+        version,
+        arguments: dict[str, Any],
+        result,
+        execution_time_ms: int,
+        start_time: datetime,
+    ) -> None:
+        """Persist an execution record for debugging queries. Fire-and-forget."""
+        try:
+            from mcpworks_api.models.execution import (
+                Execution,
+                ExecutionStatus,
+                _scrub_error_message,
+            )
+
+            _STDOUT_MAX = 4096
+
+            backend_meta: dict[str, Any] = {}
+            if result.stdout:
+                backend_meta["stdout"] = result.stdout[:_STDOUT_MAX]
+            if result.stderr:
+                backend_meta["stderr"] = result.stderr[:_STDOUT_MAX]
+
+            execution = Execution(
+                id=uuid.UUID(execution_id),
+                namespace_id=namespace.id,
+                service_name=service_name,
+                function_name=function_name,
+                user_id=self.account.user_id,
+                function_id=function.id,
+                function_version_num=version.version,
+                backend=version.backend,
+                workflow_id=execution_id,
+                status=ExecutionStatus.COMPLETED.value
+                if result.success
+                else ExecutionStatus.FAILED.value,
+                input_data=arguments,
+                result_data=result.output if result.success else None,
+                error_message=_scrub_error_message(result.error or "") if result.error else None,
+                error_code=result.error_type,
+                started_at=start_time,
+                completed_at=datetime.now(UTC),
+                execution_time_ms=execution_time_ms,
+                backend_metadata=backend_meta or None,
+            )
+            self.db.add(execution)
+            await self.db.flush()
+        except Exception:
+            logger.warning(
+                "execution_record_persist_failed", execution_id=execution_id, exc_info=True
+            )
 
     async def _load_mcp_server_tools(self, namespace_id: uuid.UUID) -> list[dict[str, Any]]:
         from sqlalchemy import select

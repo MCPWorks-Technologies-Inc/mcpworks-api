@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,6 +56,17 @@ class Execution(Base, UUIDMixin, TimestampMixin):
     """
 
     __tablename__ = "executions"
+
+    namespace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("namespaces.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    service_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    function_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # User who initiated the execution
     user_id: Mapped[uuid.UUID] = mapped_column(
