@@ -13,7 +13,7 @@
 
 **Purpose**: Database migration and model extension
 
-- [ ] T001 Add `namespace_id` (UUID FK), `service_name` (String), `function_name` (String), `execution_time_ms` (Integer) columns to executions table via Alembic migration. Add indexes: ix_executions_namespace_id, ix_executions_ns_function, ix_executions_ns_status, ix_executions_ns_created in alembic/versions/
+- [x] T001 Add `namespace_id` (UUID FK), `service_name` (String), `function_name` (String), `execution_time_ms` (Integer) columns to executions table via Alembic migration. Add indexes: ix_executions_namespace_id, ix_executions_ns_function, ix_executions_ns_status, ix_executions_ns_created in alembic/versions/
 
 ---
 
@@ -21,9 +21,9 @@
 
 **Purpose**: Model changes and service layer that all stories depend on
 
-- [ ] T002 Add `namespace_id`, `service_name`, `function_name`, `execution_time_ms` mapped columns to Execution model in src/mcpworks_api/models/execution.py
-- [ ] T003 Create ExecutionService class in src/mcpworks_api/services/execution.py with `list_executions(namespace_id, service, function, status, since, until, limit, offset)` and `get_execution(namespace_id, execution_id)` query methods
-- [ ] T004 Create Pydantic response schemas `ExecutionSummary`, `ExecutionDetail`, `ExecutionListResponse` in src/mcpworks_api/schemas/execution.py
+- [x] T002 Add `namespace_id`, `service_name`, `function_name`, `execution_time_ms` mapped columns to Execution model in src/mcpworks_api/models/execution.py
+- [x] T003 Create ExecutionService class in src/mcpworks_api/services/execution.py with `list_executions(namespace_id, service, function, status, since, until, limit, offset)` and `get_execution(namespace_id, execution_id)` query methods
+- [x] T004 Create Pydantic response schemas `ExecutionSummary`, `ExecutionDetail`, `ExecutionListResponse` in src/mcpworks_api/schemas/execution.py
 
 **Checkpoint**: Model and service ready — endpoint implementation can begin
 
@@ -37,11 +37,11 @@
 
 ### Implementation
 
-- [ ] T005 [US1] Wire execution record creation into `RunMCPHandler.dispatch_tool()` in src/mcpworks_api/mcp/run_handler.py — create Execution record before backend.execute(), update with result/error after, persist stdout/stderr (truncated 4KB) in backend_metadata
-- [ ] T006 [US1] Create REST endpoint `GET /v1/executions` with query params (namespace, service, function, status, since, until, limit, offset) in src/mcpworks_api/api/v1/executions.py
-- [ ] T007 [US2] Create REST endpoint `GET /v1/executions/{execution_id}` returning full detail (input, output, error, stdout, stderr) in src/mcpworks_api/api/v1/executions.py
-- [ ] T008 [US1] Register the executions router in src/mcpworks_api/main.py
-- [ ] T009 [US1] Write unit tests for ExecutionService query methods (filter by status, function, time range, pagination) in tests/unit/test_execution_service.py
+- [x] T005 [US1] Wire execution record creation into `RunMCPHandler.dispatch_tool()` in src/mcpworks_api/mcp/run_handler.py — create Execution record before backend.execute(), update with result/error after, persist stdout/stderr (truncated 4KB) in backend_metadata
+- [x] T006 [US1] Create REST endpoint `GET /v1/executions` with query params (namespace, service, function, status, since, until, limit, offset) in src/mcpworks_api/api/v1/executions.py
+- [x] T007 [US2] Create REST endpoint `GET /v1/executions/{execution_id}` returning full detail (input, output, error, stdout, stderr) in src/mcpworks_api/api/v1/executions.py
+- [x] T008 [US1] Register the executions router in src/mcpworks_api/main.py
+- [x] T009 [US1] Write unit tests for ExecutionService query methods (filter by status, function, time range, pagination) in tests/unit/test_execution_service.py
 
 **Checkpoint**: Function executions are persisted and queryable via REST API
 
@@ -55,7 +55,7 @@
 
 ### Implementation
 
-- [ ] T010 [US3] Create REST endpoint `GET /v1/procedures/{procedure_id}/executions/{execution_id}` returning full step detail with all attempt errors in src/mcpworks_api/api/v1/procedures.py (extend existing router)
+- [x] T010 [US3] Create REST endpoint `GET /v1/procedures/{procedure_id}/executions/{execution_id}` returning full step detail with all attempt errors in src/mcpworks_api/api/v1/procedures.py (extend existing router)
 
 **Checkpoint**: Procedure failures are fully debuggable via REST API
 
@@ -69,9 +69,9 @@
 
 ### Implementation
 
-- [ ] T011 [P] [US4] Register `list_executions` tool definition in src/mcpworks_api/mcp/tool_registry.py
-- [ ] T012 [P] [US4] Register `describe_execution` tool definition in src/mcpworks_api/mcp/tool_registry.py
-- [ ] T013 [US4] Implement `_list_executions` and `_describe_execution` handlers in src/mcpworks_api/mcp/create_handler.py, wire into TOOL_SCOPES and dispatch map
+- [x] T011 [P] [US4] Register `list_executions` tool definition in src/mcpworks_api/mcp/tool_registry.py
+- [x] T012 [P] [US4] Register `describe_execution` tool definition in src/mcpworks_api/mcp/tool_registry.py
+- [x] T013 [US4] Implement `_list_executions` and `_describe_execution` handlers in src/mcpworks_api/mcp/create_handler.py, wire into TOOL_SCOPES and dispatch map
 
 **Checkpoint**: Debugging available without leaving MCP client
 
@@ -79,8 +79,8 @@
 
 ## Phase 6: Polish
 
-- [ ] T014 Run full unit test suite `pytest tests/unit/ -q` and verify no regressions
-- [ ] T015 Run `ruff format src/ tests/ && ruff check --fix src/ tests/`
+- [x] T014 Run full unit test suite `pytest tests/unit/ -q` and verify no regressions
+- [x] T015 Run `ruff format src/ tests/ && ruff check --fix src/ tests/`
 
 ---
 

@@ -2329,6 +2329,59 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
             },
         },
     ),
+    "list_executions": ToolDef(
+        name="list_executions",
+        brief="List recent function execution history with optional filters.",
+        description=(
+            "List recent function executions for this namespace. "
+            "Filter by service name, function name, or status (completed, failed, timed_out). "
+            "Returns execution summaries with status, timing, and error messages. "
+            "Example: list_executions(service='social', function='post-to-bluesky', status='failed')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Filter by service name.",
+                },
+                "function": {
+                    "type": "string",
+                    "description": "Filter by function name.",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["completed", "failed", "timed_out"],
+                    "description": "Filter by execution status.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (default 20, max 100).",
+                    "default": 20,
+                },
+            },
+        },
+    ),
+    "describe_execution": ToolDef(
+        name="describe_execution",
+        brief="Get full detail for a specific execution including input, output, and errors.",
+        description=(
+            "Get complete execution detail by ID. Returns input data, output/error, "
+            "stdout/stderr, function version, timing, and backend metadata. "
+            "Use list_executions to find execution IDs. "
+            "Example: describe_execution(execution_id='abc-123-def')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "execution_id": {
+                    "type": "string",
+                    "description": "Execution UUID.",
+                },
+            },
+            "required": ["execution_id"],
+        },
+    ),
 }
 
 
