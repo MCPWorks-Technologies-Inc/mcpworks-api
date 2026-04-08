@@ -705,6 +705,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - PostgreSQL 15+ (extend existing executions table) (020-execution-debugging)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx (webhook calls), structlog (021-security-scanner-pipeline)
 - PostgreSQL 15+ (JSONB on namespaces for pipeline config; scan results in executions.backend_metadata) (021-security-scanner-pipeline)
+- PostgreSQL 15+ (existing `mcp_execution_stats` and `mcp_proxy_calls` tables) (022-analytics-token-savings)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
