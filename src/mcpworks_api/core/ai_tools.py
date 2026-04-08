@@ -309,7 +309,7 @@ async def get_procedure_summaries(
         covered = []
         for step in version.steps or []:
             ref = step.get("function_ref", "")
-            if ref:
+            if ref and step.get("failure_policy", "required") == "required":
                 covered.append(ref)
         summaries.append(
             {
