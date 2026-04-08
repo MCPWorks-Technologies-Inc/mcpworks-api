@@ -32,11 +32,15 @@ class TopConsumer(BaseModel):
 
 class TokenSavingsResponse(BaseModel):
     period: str
-    mcp_data_processed_bytes: int
-    mcp_data_processed_tokens_est: int
-    result_returned_bytes: int
-    result_returned_tokens_est: int
-    savings_percent: float
+    total_executions: int = 0
+    input_bytes: int = 0
+    input_tokens_est: int = 0
+    mcp_data_processed_bytes: int = 0
+    mcp_data_processed_tokens_est: int = 0
+    result_returned_bytes: int = 0
+    result_returned_tokens_est: int = 0
+    tokens_saved_est: int = 0
+    savings_percent: float = 0.0
     top_consumers: list[TopConsumer] = Field(default_factory=list)
 
 
@@ -52,6 +56,27 @@ class Suggestion(BaseModel):
 
 class SuggestionResponse(BaseModel):
     suggestions: list[Suggestion] = Field(default_factory=list)
+
+
+class TopNamespace(BaseModel):
+    namespace_id: str
+    tokens_saved: int
+    executions: int
+
+
+class PlatformTokenSavingsResponse(BaseModel):
+    period: str
+    total_executions: int = 0
+    active_namespaces: int = 0
+    input_bytes: int = 0
+    input_tokens_est: int = 0
+    mcp_data_processed_bytes: int = 0
+    mcp_data_processed_tokens_est: int = 0
+    result_returned_bytes: int = 0
+    result_returned_tokens_est: int = 0
+    tokens_saved_est: int = 0
+    savings_percent: float = 0.0
+    top_namespaces: list[TopNamespace] = Field(default_factory=list)
 
 
 class FunctionMcpStatsResponse(BaseModel):

@@ -62,21 +62,23 @@ async def record_execution_stats(
     mcp_calls_count: int,
     mcp_bytes_total: int,
     result_bytes: int,
+    input_bytes: int = 0,
 ) -> None:
     from mcpworks_api.core.database import get_db_context
 
-    if mcp_calls_count == 0:
-        return
+    total_processed = max(mcp_bytes_total, input_bytes)
+    tokens_saved = max(0, (total_processed - result_bytes)) // 4
 
     try:
         async with get_db_context() as db:
             stat = McpExecutionStat(
                 namespace_id=namespace_id,
                 execution_id=execution_id,
+                input_bytes=input_bytes,
                 mcp_calls_count=mcp_calls_count,
                 mcp_bytes_total=mcp_bytes_total,
                 result_bytes=result_bytes,
-                tokens_saved_est=max(0, (mcp_bytes_total - result_bytes)) // 4,
+                tokens_saved_est=tokens_saved,
             )
             db.add(stat)
             await db.commit()
@@ -159,8 +161,11 @@ async def get_token_savings(
     since = datetime.now(UTC) - delta
 
     exec_stmt = select(
+        func.sum(McpExecutionStat.input_bytes).label("total_input_bytes"),
         func.sum(McpExecutionStat.mcp_bytes_total).label("total_mcp_bytes"),
         func.sum(McpExecutionStat.result_bytes).label("total_result_bytes"),
+        func.sum(McpExecutionStat.tokens_saved_est).label("total_tokens_saved"),
+        func.count().label("total_executions"),
     ).where(
         McpExecutionStat.namespace_id == namespace_id,
         McpExecutionStat.executed_at >= since,
@@ -168,9 +173,11 @@ async def get_token_savings(
     exec_result = await db.execute(exec_stmt)
     exec_row = exec_result.one()
 
+    input_bytes = exec_row.total_input_bytes or 0
     mcp_bytes = exec_row.total_mcp_bytes or 0
     result_bytes = exec_row.total_result_bytes or 0
-    savings = round((1 - result_bytes / mcp_bytes) * 100, 1) if mcp_bytes > 0 else 0
+    total_processed = max(mcp_bytes, input_bytes)
+    savings = round((1 - result_bytes / total_processed) * 100, 1) if total_processed > 0 else 0
 
     top_stmt = (
         select(
@@ -194,10 +201,14 @@ async def get_token_savings(
 
     return {
         "period": period,
+        "total_executions": exec_row.total_executions or 0,
+        "input_bytes": input_bytes,
+        "input_tokens_est": input_bytes // 4,
         "mcp_data_processed_bytes": mcp_bytes,
         "mcp_data_processed_tokens_est": mcp_bytes // 4,
         "result_returned_bytes": result_bytes,
         "result_returned_tokens_est": result_bytes // 4,
+        "tokens_saved_est": exec_row.total_tokens_saved or 0,
         "savings_percent": savings,
         "top_consumers": top_consumers,
     }
@@ -341,6 +352,68 @@ async def suggest_optimizations(
             )
 
     return suggestions
+
+
+async def get_platform_token_savings(
+    db: AsyncSession,
+    period: str = "30d",
+) -> dict[str, Any]:
+    delta = PERIOD_MAP.get(period, PERIOD_MAP["30d"])
+    since = datetime.now(UTC) - delta
+
+    stmt = select(
+        func.count().label("total_executions"),
+        func.sum(McpExecutionStat.input_bytes).label("total_input_bytes"),
+        func.sum(McpExecutionStat.mcp_bytes_total).label("total_mcp_bytes"),
+        func.sum(McpExecutionStat.result_bytes).label("total_result_bytes"),
+        func.sum(McpExecutionStat.tokens_saved_est).label("total_tokens_saved"),
+        func.count(func.distinct(McpExecutionStat.namespace_id)).label("active_namespaces"),
+    ).where(McpExecutionStat.executed_at >= since)
+
+    result = await db.execute(stmt)
+    row = result.one()
+
+    input_bytes = row.total_input_bytes or 0
+    mcp_bytes = row.total_mcp_bytes or 0
+    result_bytes = row.total_result_bytes or 0
+    total_processed = max(mcp_bytes, input_bytes)
+    savings_pct = round((1 - result_bytes / total_processed) * 100, 1) if total_processed > 0 else 0
+
+    top_ns_stmt = (
+        select(
+            McpExecutionStat.namespace_id,
+            func.sum(McpExecutionStat.tokens_saved_est).label("tokens_saved"),
+            func.count().label("executions"),
+        )
+        .where(McpExecutionStat.executed_at >= since)
+        .group_by(McpExecutionStat.namespace_id)
+        .order_by(func.sum(McpExecutionStat.tokens_saved_est).desc())
+        .limit(10)
+    )
+    top_result = await db.execute(top_ns_stmt)
+    top_namespaces = [
+        {
+            "namespace_id": str(r.namespace_id),
+            "tokens_saved": r.tokens_saved or 0,
+            "executions": r.executions,
+        }
+        for r in top_result.all()
+    ]
+
+    return {
+        "period": period,
+        "total_executions": row.total_executions or 0,
+        "active_namespaces": row.active_namespaces or 0,
+        "input_bytes": input_bytes,
+        "input_tokens_est": input_bytes // 4,
+        "mcp_data_processed_bytes": mcp_bytes,
+        "mcp_data_processed_tokens_est": mcp_bytes // 4,
+        "result_returned_bytes": result_bytes,
+        "result_returned_tokens_est": result_bytes // 4,
+        "tokens_saved_est": row.total_tokens_saved or 0,
+        "savings_percent": savings_pct,
+        "top_namespaces": top_namespaces,
+    }
 
 
 def sqlalchemy_integer():

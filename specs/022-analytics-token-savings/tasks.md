@@ -19,8 +19,8 @@
 
 **Purpose**: Database migration and model changes that all stories depend on
 
-- [ ] T001 Add `input_bytes` column to McpExecutionStat model in src/mcpworks_api/models/mcp_execution_stat.py
-- [ ] T002 Create Alembic migration for input_bytes column in alembic/versions/20260408_000001_add_input_bytes_to_execution_stats.py
+- [x] T001 Add `input_bytes` column to McpExecutionStat model in src/mcpworks_api/models/mcp_execution_stat.py
+- [x] T002 Create Alembic migration for input_bytes column in alembic/versions/20260408_000001_add_input_bytes_to_execution_stats.py
 
 ---
 
@@ -30,10 +30,10 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Update `record_execution_stats()` to accept `input_bytes` parameter and remove the `mcp_calls_count == 0` early-return guard in src/mcpworks_api/services/analytics.py
-- [ ] T004 Update token savings calculation in `record_execution_stats()` to use `max(mcp_bytes, input_bytes)` as the processed-data baseline in src/mcpworks_api/services/analytics.py
-- [ ] T005 Update `get_token_savings()` query to include `input_bytes` aggregation and new response fields (total_executions, input_bytes, tokens_saved_est) in src/mcpworks_api/services/analytics.py
-- [ ] T006 Update `TokenSavingsResponse` schema to include new fields (total_executions, input_bytes, input_tokens_est, tokens_saved_est) in src/mcpworks_api/schemas/analytics.py
+- [x] T003 Update `record_execution_stats()` to accept `input_bytes` parameter and remove the `mcp_calls_count == 0` early-return guard in src/mcpworks_api/services/analytics.py
+- [x] T004 Update token savings calculation in `record_execution_stats()` to use `max(mcp_bytes, input_bytes)` as the processed-data baseline in src/mcpworks_api/services/analytics.py
+- [x] T005 Update `get_token_savings()` query to include `input_bytes` aggregation and new response fields (total_executions, input_bytes, tokens_saved_est) in src/mcpworks_api/services/analytics.py
+- [x] T006 Update `TokenSavingsResponse` schema to include new fields (total_executions, input_bytes, input_tokens_est, tokens_saved_est) in src/mcpworks_api/schemas/analytics.py
 
 **Checkpoint**: Foundation ready — analytics service correctly records and queries all execution types
 
@@ -47,8 +47,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] Wire `record_execution_stats()` into tools-mode execution path (dispatch_tool) in src/mcpworks_api/mcp/run_handler.py — measure input_bytes from `json.dumps(arguments)`, result_bytes from `json.dumps(result.output)`
-- [ ] T008 [US2] Update code-mode execution path (_execute_code_mode) to always record analytics (remove `mcp_calls_count > 0` guard) and measure input_bytes from code size in src/mcpworks_api/mcp/run_handler.py
+- [x] T007 [US2] Wire `record_execution_stats()` into tools-mode execution path (dispatch_tool) in src/mcpworks_api/mcp/run_handler.py — measure input_bytes from `json.dumps(arguments)`, result_bytes from `json.dumps(result.output)`
+- [x] T008 [US2] Update code-mode execution path (_execute_code_mode) to always record analytics (remove `mcp_calls_count > 0` guard) and measure input_bytes from code size in src/mcpworks_api/mcp/run_handler.py
 
 **Checkpoint**: All executions now produce analytics records — verify by running a function and checking mcp_execution_stats table
 
@@ -62,7 +62,7 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Verify existing MCP tool `get_token_savings_report` returns updated response format with new fields (total_executions, input_bytes, tokens_saved_est) — no code changes needed if Foundational phase is correct; validate with manual test
+- [x] T009 [US1] Verify existing MCP tool `get_token_savings_report` returns updated response format with new fields (total_executions, input_bytes, tokens_saved_est) — no code changes needed if Foundational phase is correct; validate with manual test
 
 **Checkpoint**: Token savings report shows accurate data for all execution types
 
@@ -76,8 +76,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Create analytics REST API router with token-savings, server-stats, function-stats, and suggestions endpoints in src/mcpworks_api/api/v1/analytics.py
-- [ ] T011 [US3] Register analytics router in src/mcpworks_api/api/v1/__init__.py
+- [x] T010 [US3] Create analytics REST API router with token-savings, server-stats, function-stats, and suggestions endpoints in src/mcpworks_api/api/v1/analytics.py
+- [x] T011 [US3] Register analytics router in src/mcpworks_api/api/v1/__init__.py
 
 **Checkpoint**: All four REST analytics endpoints return correct data when called with valid auth
 
@@ -91,9 +91,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T012 [US4] Add `PlatformTokenSavingsResponse` schema in src/mcpworks_api/schemas/analytics.py
-- [ ] T013 [US4] Implement `get_platform_token_savings()` function in src/mcpworks_api/services/analytics.py — aggregate across all namespaces with top-10 breakdown
-- [ ] T014 [US4] Add admin analytics endpoint `GET /v1/admin/analytics/token-savings` in src/mcpworks_api/api/v1/admin.py
+- [x] T012 [US4] Add `PlatformTokenSavingsResponse` schema in src/mcpworks_api/schemas/analytics.py
+- [x] T013 [US4] Implement `get_platform_token_savings()` function in src/mcpworks_api/services/analytics.py — aggregate across all namespaces with top-10 breakdown
+- [x] T014 [US4] Add admin analytics endpoint `GET /v1/admin/analytics/token-savings` in src/mcpworks_api/api/v1/admin.py
 
 **Checkpoint**: Admin aggregate endpoint returns platform-wide savings data
 
@@ -107,12 +107,12 @@
 
 ### Implementation for User Story 5
 
-- [ ] T015 [P] [US5] Write unit tests for `record_proxy_call()` and `record_execution_stats()` in tests/unit/test_analytics.py — test with mock DB, verify input_bytes is stored, verify fire-and-forget error handling
-- [ ] T016 [P] [US5] Write unit tests for `get_token_savings()` in tests/unit/test_analytics.py — test period filtering, zero-data edge case, savings percentage calculation, new response fields
-- [ ] T017 [P] [US5] Write unit tests for `get_server_stats()` and `get_function_stats()` in tests/unit/test_analytics.py — test aggregation queries with mock data
-- [ ] T018 [P] [US5] Write unit tests for `suggest_optimizations()` in tests/unit/test_analytics.py — test threshold triggers (large response, high error rate, timeouts, truncations, unused tools)
-- [ ] T019 [P] [US5] Write unit tests for `get_platform_token_savings()` in tests/unit/test_analytics.py — test cross-namespace aggregation, top-namespaces ranking, empty-data edge case
-- [ ] T020 [US5] Run full test suite `pytest tests/unit/ -q` and verify no regressions
+- [x] T015 [P] [US5] Write unit tests for `record_proxy_call()` and `record_execution_stats()` in tests/unit/test_analytics.py — test with mock DB, verify input_bytes is stored, verify fire-and-forget error handling
+- [x] T016 [P] [US5] Write unit tests for `get_token_savings()` in tests/unit/test_analytics.py — test period filtering, zero-data edge case, savings percentage calculation, new response fields
+- [x] T017 [P] [US5] Write unit tests for `get_server_stats()` and `get_function_stats()` in tests/unit/test_analytics.py — test aggregation queries with mock data
+- [x] T018 [P] [US5] Write unit tests for `suggest_optimizations()` in tests/unit/test_analytics.py — test threshold triggers (large response, high error rate, timeouts, truncations, unused tools)
+- [x] T019 [P] [US5] Write unit tests for `get_platform_token_savings()` in tests/unit/test_analytics.py — test cross-namespace aggregation, top-namespaces ranking, empty-data edge case
+- [x] T020 [US5] Run full test suite `pytest tests/unit/ -q` and verify no regressions
 
 **Checkpoint**: All analytics tests pass, no regressions in existing test suite
 
@@ -122,9 +122,9 @@
 
 **Purpose**: Final validation and cleanup
 
-- [ ] T021 Run `ruff format` and `ruff check --fix` on all modified files
-- [ ] T022 Run full unit test suite `pytest tests/unit/ -q` — all tests pass
-- [ ] T023 Verify quickstart.md examples match actual API responses
+- [x] T021 Run `ruff format` and `ruff check --fix` on all modified files
+- [x] T022 Run full unit test suite `pytest tests/unit/ -q` — all tests pass
+- [x] T023 Verify quickstart.md examples match actual API responses
 - [ ] T024 Commit all changes and push branch
 
 ---

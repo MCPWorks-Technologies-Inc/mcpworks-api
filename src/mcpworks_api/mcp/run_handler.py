@@ -389,6 +389,21 @@ class RunMCPHandler:
             start_time=start_time,
         )
 
+        input_size = len(json.dumps(arguments)) if arguments else 0
+        result_size = len(json.dumps(result.output)) if result.success and result.output else 0
+        from mcpworks_api.services.analytics import record_execution_stats
+
+        asyncio.create_task(
+            record_execution_stats(
+                namespace_id=namespace.id,
+                execution_id=execution_id,
+                mcp_calls_count=0,
+                mcp_bytes_total=0,
+                result_bytes=result_size,
+                input_bytes=input_size,
+            )
+        )
+
         if result.success:
             content_text = json.dumps(result.output)
             content_text = await self._run_output_pipeline(
@@ -652,26 +667,31 @@ class RunMCPHandler:
                 namespace=self.namespace_name,
             )
         finally:
+            mcp_calls = 0
+            mcp_bytes = 0
             if exec_token:
                 exec_ctx = resolve_execution(exec_token)
-                if exec_ctx and exec_ctx.mcp_calls_count > 0:
-                    from mcpworks_api.services.analytics import (
-                        record_execution_stats as analytics_record_execution,
-                    )
-
-                    result_size = (
-                        len(json.dumps(result.output or "")) if result and result.output else 0
-                    )
-                    asyncio.create_task(
-                        analytics_record_execution(
-                            namespace_id=namespace.id,
-                            execution_id=execution_id,
-                            mcp_calls_count=exec_ctx.mcp_calls_count,
-                            mcp_bytes_total=exec_ctx.mcp_bytes_total,
-                            result_bytes=result_size,
-                        )
-                    )
+                if exec_ctx:
+                    mcp_calls = exec_ctx.mcp_calls_count
+                    mcp_bytes = exec_ctx.mcp_bytes_total
                 unregister_execution(exec_token)
+
+            from mcpworks_api.services.analytics import (
+                record_execution_stats as analytics_record_execution,
+            )
+
+            input_size = len(code.encode("utf-8")) if code else 0
+            result_size = len(json.dumps(result.output or "")) if result and result.output else 0
+            asyncio.create_task(
+                analytics_record_execution(
+                    namespace_id=namespace.id,
+                    execution_id=execution_id,
+                    mcp_calls_count=mcp_calls,
+                    mcp_bytes_total=mcp_bytes,
+                    result_bytes=result_size,
+                    input_bytes=input_size,
+                )
+            )
 
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
