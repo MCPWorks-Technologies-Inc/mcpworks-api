@@ -1,8 +1,8 @@
-# Agent Governance Toolkit Integration - Specification
+# Agent Governance: Trust Scoring & OWASP Compliance - Specification
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Created:** 2026-04-08
-**Status:** Implemented
+**Status:** Implemented (Agent OS scanner removed — external toolkit was fabricated)
 **Spec Author:** Simon Carr
 **Reviewers:** --
 

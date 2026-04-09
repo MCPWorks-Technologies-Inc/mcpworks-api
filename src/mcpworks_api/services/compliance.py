@@ -10,7 +10,7 @@ OWASP_RISKS = [
         "id": "OWASP-AT-01",
         "name": "Agent Goal Hijack",
         "check": "input_scanner",
-        "remediation": "Add a scanner with direction 'input' or 'both' (e.g., pattern_scanner or agent_os) to detect prompt injection.",
+        "remediation": "Add a scanner with direction 'input' or 'both' (e.g., pattern_scanner) to detect prompt injection.",
     },
     {
         "id": "OWASP-AT-02",
@@ -143,17 +143,6 @@ def _compute_grade(coverage_pct: int) -> str:
     if coverage_pct >= 60:
         return "D"
     return "F"
-
-
-def _try_governance_verifier_grade(coverage_pct: int) -> str | None:  # noqa: ARG001
-    try:
-        from agent_compliance.verify import GovernanceVerifier
-
-        verifier = GovernanceVerifier()
-        attestation = verifier.verify()
-        return attestation.compliance_grade()
-    except Exception:
-        return None
 
 
 def evaluate_compliance(

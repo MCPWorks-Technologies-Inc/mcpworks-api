@@ -41,7 +41,12 @@ class TestComplianceEvaluation:
                     "direction": "output",
                     "enabled": True,
                 },
-                {"type": "agent_os", "direction": "both", "enabled": True},
+                {
+                    "type": "builtin",
+                    "name": "pattern_scanner",
+                    "direction": "input",
+                    "enabled": True,
+                },
             ]
         }
         report = evaluate_compliance(
