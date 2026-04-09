@@ -50,6 +50,7 @@ dependencies = [
     "discord.py>=2.3.0",
     "aiosmtplib>=3.0.0",
     "pyyaml>=6.0.0",
+    "sse-starlette>=1.6.0",
 ]
 
 [project.optional-dependencies]
@@ -177,9 +178,7 @@ disable_error_code = ["attr-defined", "arg-type"]
 
 [[tool.mypy.overrides]]
 module = [
-    "mcpworks_api.services.credit",
     "mcpworks_api.services.execution",
-    "mcpworks_api.services.router",
     "mcpworks_api.services.auth",
     "mcpworks_api.api.v1.users",
 ]
