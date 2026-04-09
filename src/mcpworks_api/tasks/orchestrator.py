@@ -1028,13 +1028,24 @@ async def run_procedure_orchestration(
             )
 
             if attempt > 0:
-                prev_error = step_result["attempts"][-1].get("error", "Unknown error")
-                system_prompt += (
-                    f"\n## PREVIOUS ATTEMPT FAILED\n"
-                    f"Error from attempt {attempt}: {prev_error}\n\n"
+                prev = step_result["attempts"][-1]
+                prev_error = prev.get("error", "Unknown error")
+                prev_input = prev.get("tool_input")
+                retry_lines = [
+                    f"\n## PREVIOUS ATTEMPT FAILED (attempt {attempt})\n",
+                    f"Error: {prev_error}\n",
+                ]
+                if prev_input:
+                    retry_lines.append(
+                        f"Parameters you sent: ```json\n"
+                        f"{json.dumps(prev_input, default=str)}\n```\n"
+                    )
+                retry_lines.append(
                     f"You must adapt your parameters to fix this error. "
+                    f"Do NOT repeat the same parameters. "
                     f"Call `{tool_name}` with corrected parameters now.\n"
                 )
+                system_prompt += "\n".join(retry_lines)
 
             messages: list[dict] = [
                 {
@@ -1085,6 +1096,8 @@ async def run_procedure_orchestration(
                         f"Called '{called_tool}' instead of required '{tool_name}'"
                     )
                     continue
+
+                attempt_record["tool_input"] = tool_input
 
                 result_str = await _dispatch_tool(
                     called_tool,
