@@ -455,7 +455,10 @@ async def run_orchestration(
                 truncated_input = tool_input
                 input_str = json.dumps(tool_input, default=str)
                 if len(input_str) > MAX_TOOL_INPUT_BYTES:
-                    truncated_input = {"_truncated": True, "preview": input_str[:MAX_TOOL_INPUT_BYTES]}
+                    truncated_input = {
+                        "_truncated": True,
+                        "preview": input_str[:MAX_TOOL_INPUT_BYTES],
+                    }
 
                 tool_call_records.append(
                     {
@@ -467,9 +470,7 @@ async def run_orchestration(
                         "source": source,
                         "status": tc_status,
                         "error_message": (
-                            _scrub_error_message(result_str[:MAX_ERROR_CHARS])
-                            if is_error
-                            else None
+                            _scrub_error_message(result_str[:MAX_ERROR_CHARS]) if is_error else None
                         ),
                     }
                 )

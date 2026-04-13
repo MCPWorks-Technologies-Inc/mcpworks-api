@@ -82,9 +82,7 @@ def get_stats_snapshot() -> dict[str, Any]:
                 tier = sample.labels.get("tier", "unknown")
                 status = sample.labels.get("status", "unknown")
                 count = int(sample.value)
-                by_tier.setdefault(tier, {})[status] = (
-                    by_tier.get(tier, {}).get(status, 0) + count
-                )
+                by_tier.setdefault(tier, {})[status] = by_tier.get(tier, {}).get(status, 0) + count
                 total_count += count
 
     for metric in sandbox_execution_errors_total.collect():

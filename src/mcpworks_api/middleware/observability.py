@@ -197,9 +197,9 @@ def record_function_call(
     function_calls_total.labels(
         namespace=namespace, service=service, function=function, status=status
     ).inc()
-    function_duration_seconds.labels(namespace=namespace, service=service, function=function).observe(
-        duration_seconds
-    )
+    function_duration_seconds.labels(
+        namespace=namespace, service=service, function=function
+    ).observe(duration_seconds)
 
 
 def record_auth_attempt(method: str, status: str) -> None:
