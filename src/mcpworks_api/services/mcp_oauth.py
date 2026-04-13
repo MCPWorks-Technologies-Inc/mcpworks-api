@@ -119,6 +119,12 @@ async def initiate_device_flow(
     async with get_redis_context() as redis:
         await redis.set(key, json.dumps(device_state), ex=ttl)
 
+    from mcpworks_api.middleware.observability import (
+        record_oauth_auth_required,
+        record_oauth_device_flow,
+    )
+
+    record_oauth_device_flow(str(server.namespace_id), server.name, "initiated")
     logger.info(
         "oauth_device_flow_initiated",
         server=server.name,
@@ -126,6 +132,7 @@ async def initiate_device_flow(
         verification_uri=device_state["verification_uri"],
     )
 
+    record_oauth_auth_required(str(server.namespace_id), server.name, "device")
     return {
         "auth_required": True,
         "provider": server.name,
@@ -273,8 +280,14 @@ async def refresh_token_if_needed(
             if error == "invalid_grant":
                 clear_tokens(server)
                 await db.flush()
+                from mcpworks_api.middleware.observability import record_oauth_token_refresh
+
+                record_oauth_token_refresh(str(server.namespace_id), server.name, "revoked")
                 logger.warning("oauth_refresh_token_revoked", server=server.name)
                 return None
+            from mcpworks_api.middleware.observability import record_oauth_token_refresh as _rec
+
+            _rec(str(server.namespace_id), server.name, "failed")
             logger.warning("oauth_refresh_failed", server=server.name, error=error)
             return None
 
@@ -284,6 +297,9 @@ async def refresh_token_if_needed(
         encrypt_and_store_tokens(server, new_tokens)
         await db.flush()
 
+        from mcpworks_api.middleware.observability import record_oauth_token_refresh
+
+        record_oauth_token_refresh(str(server.namespace_id), server.name, "success")
         logger.info("oauth_token_refreshed", server=server.name)
         return {"Authorization": f"Bearer {new_tokens['access_token']}"}
     finally:

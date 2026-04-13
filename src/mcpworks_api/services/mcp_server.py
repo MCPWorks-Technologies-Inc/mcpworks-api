@@ -39,6 +39,8 @@ class McpServerService:
         headers: dict[str, str] | None = None,
         command: str | None = None,
         args: list[str] | None = None,
+        auth_type: str = "bearer",
+        oauth_config: dict | None = None,
     ) -> NamespaceMcpServer:
         existing = await self._get_by_name_optional(namespace_id, name)
         if existing:
@@ -82,6 +84,11 @@ class McpServerService:
             for t in tool_schemas
         }
 
+        oauth_config_enc = None
+        oauth_config_dek_val = None
+        if auth_type == "oauth2" and oauth_config:
+            oauth_config_enc, oauth_config_dek_val = encrypt_value(oauth_config)
+
         server = NamespaceMcpServer(
             namespace_id=namespace_id,
             name=name,
@@ -97,6 +104,9 @@ class McpServerService:
             tool_schemas=tool_schemas,
             tool_count=tool_count,
             last_connected_at=datetime.now(UTC),
+            auth_type=auth_type,
+            oauth_config_encrypted=oauth_config_enc,
+            oauth_config_dek=oauth_config_dek_val,
         )
         self.db.add(server)
         await self.db.flush()
