@@ -62,7 +62,59 @@ async def proxy_mcp_call(
     settings.update(server.settings or {})
 
     headers = None
-    if server.headers_encrypted:
+    if server.auth_type == "oauth2":
+        try:
+            from mcpworks_api.services.mcp_oauth import get_oauth_headers, get_oauth_status
+
+            oauth_status = get_oauth_status(server)
+            if oauth_status in ("not_configured", "pending_authorization", "expired"):
+                from mcpworks_api.services.mcp_oauth import (
+                    initiate_auth_code_flow,
+                    initiate_device_flow,
+                )
+
+                config_raw = None
+                if server.oauth_config_encrypted:
+                    from mcpworks_api.services.mcp_oauth import decrypt_oauth_config
+
+                    config_raw = decrypt_oauth_config(server)
+
+                flow = (config_raw or {}).get("flow", "device")
+                if flow == "device":
+                    auth_response = await initiate_device_flow(server)
+                    import asyncio as _aio
+
+                    from mcpworks_api.tasks.device_flow_poller import poll_device_code
+
+                    _aio.create_task(poll_device_code(ctx.namespace_id, server_name))
+                else:
+                    from mcpworks_api.config import get_settings
+
+                    s = get_settings()
+                    redirect_uri = f"{s.base_scheme}://api.{s.base_domain}/v1/oauth/mcp-callback"
+                    auth_response = await initiate_auth_code_flow(server, redirect_uri)
+
+                return ProxyResult(result=auth_response, error_type="AuthRequired")
+
+            oauth_headers = await get_oauth_headers(server, db)
+            if oauth_headers is None:
+                from mcpworks_api.services.mcp_oauth import initiate_device_flow
+
+                auth_response = await initiate_device_flow(server)
+                import asyncio as _aio2
+
+                from mcpworks_api.tasks.device_flow_poller import poll_device_code
+
+                _aio2.create_task(poll_device_code(ctx.namespace_id, server_name))
+                return ProxyResult(result=auth_response, error_type="AuthRequired")
+            headers = oauth_headers
+        except Exception:
+            logger.exception("oauth_header_resolution_failed", server=server_name)
+            return ProxyResult(
+                error=f"Failed to resolve OAuth credentials for MCP server '{server_name}'",
+                error_type="OAuthError",
+            )
+    elif server.headers_encrypted:
         try:
             headers = decrypt_value(server.headers_encrypted, server.headers_dek_encrypted)
         except Exception:
