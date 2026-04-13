@@ -74,6 +74,8 @@ async def register(
 
     auth_service = AuthService(db)
 
+    from mcpworks_api.middleware.observability import record_auth_attempt
+
     try:
         user, access_token, refresh_token, expires_in = await auth_service.register_user(
             email=body.email,
@@ -85,11 +87,13 @@ async def register(
         )
         await db.commit()
     except EmailExistsError as e:
+        record_auth_attempt("register", "failure")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=e.to_dict(),
         )
 
+    record_auth_attempt("register", "success")
     return {
         "user": {
             "id": str(user.id),
@@ -183,6 +187,8 @@ async def exchange_token(
 
     auth_service = AuthService(db)
 
+    from mcpworks_api.middleware.observability import record_auth_attempt
+
     try:
         access_token, refresh_token, expires_in = await auth_service.exchange_api_key_for_tokens(
             raw_key=body.api_key,
@@ -190,17 +196,20 @@ async def exchange_token(
             user_agent=user_agent,
         )
     except InvalidApiKeyError as e:
+        record_auth_attempt("apikey", "failure")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=e.to_dict(),
         )
     except RateLimitExceededError as e:
+        record_auth_attempt("apikey", "rate_limited")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=e.to_dict(),
             headers={"Retry-After": str(e.retry_after)},
         )
 
+    record_auth_attempt("apikey", "success")
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,

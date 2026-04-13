@@ -729,7 +729,7 @@ async def _execute_namespace_function(
     try:
         if db is not None:
             function_service = FunctionService(db)
-            _, version = await function_service.get_for_execution(
+            func, version = await function_service.get_for_execution(
                 namespace_id=agent.namespace_id,
                 service_name=service_name,
                 function_name=function_name,
@@ -737,7 +737,7 @@ async def _execute_namespace_function(
         else:
             async with get_db_context() as new_db:
                 function_service = FunctionService(new_db)
-                _, version = await function_service.get_for_execution(
+                func, version = await function_service.get_for_execution(
                     namespace_id=agent.namespace_id,
                     service_name=service_name,
                     function_name=function_name,
@@ -752,6 +752,7 @@ async def _execute_namespace_function(
             context["agent_run_id"] = agent_run_id
 
         execution_id = str(uuid_mod.uuid4())
+        exec_start = datetime.now(UTC)
         result = await backend.execute(
             code=version.code,
             config=version.config,
@@ -761,6 +762,57 @@ async def _execute_namespace_function(
             context=context,
             namespace=agent.name,
         )
+        exec_end = datetime.now(UTC)
+        exec_time_ms = int((exec_end - exec_start).total_seconds() * 1000)
+
+        from mcpworks_api.middleware.observability import record_function_call
+
+        record_function_call(
+            namespace=agent.name,
+            service=service_name,
+            function=function_name,
+            status="success" if result.success else "error",
+            duration_seconds=exec_time_ms / 1000.0,
+        )
+
+        try:
+            from mcpworks_api.models.execution import (
+                Execution,
+                ExecutionStatus,
+                _scrub_error_message,
+            )
+
+            async with get_db_context() as exec_db:
+                execution = Execution(
+                    id=uuid_mod.UUID(execution_id),
+                    namespace_id=agent.namespace_id,
+                    service_name=service_name,
+                    function_name=function_name,
+                    user_id=account.user_id,
+                    function_id=func.id,
+                    function_version_num=version.version,
+                    backend=version.backend,
+                    workflow_id=execution_id,
+                    status=ExecutionStatus.COMPLETED.value
+                    if result.success
+                    else ExecutionStatus.FAILED.value,
+                    input_data=input_data,
+                    result_data=result.output if result.success else None,
+                    error_message=_scrub_error_message(result.error or "")
+                    if result.error
+                    else None,
+                    started_at=exec_start,
+                    completed_at=exec_end,
+                    execution_time_ms=exec_time_ms,
+                    agent_run_id=uuid_mod.UUID(agent_run_id) if agent_run_id else None,
+                )
+                exec_db.add(execution)
+        except Exception:
+            logger.warning(
+                "orchestration_execution_record_failed",
+                execution_id=execution_id,
+                exc_info=True,
+            )
 
         if result.success:
             try:
