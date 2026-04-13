@@ -252,6 +252,7 @@ async def refresh_token_if_needed(
                 still_locked = await redis.get(lock_key)
             if not still_locked:
                 break
+        await db.refresh(server)
         tokens = decrypt_oauth_tokens(server)
         if tokens:
             return {"Authorization": f"Bearer {tokens['access_token']}"}
