@@ -270,6 +270,165 @@ For managed PostgreSQL with SSL, the database module auto-enables SSL for non-lo
 
 For managed Redis with TLS, use `rediss://` (double s) in `REDIS_URL`.
 
+## Observability
+
+MCPWorks exposes a Prometheus-compatible metrics endpoint at `/metrics`. Connect Prometheus and Grafana for full operational visibility.
+
+### Prometheus Setup
+
+Add MCPWorks as a scrape target in your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: "mcpworks"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["api.example.com"]
+    scheme: https
+```
+
+For self-hosted compose deployments where Prometheus runs on the same network, scrape the API container directly:
+
+```yaml
+scrape_configs:
+  - job_name: "mcpworks"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["mcpworks-api:8000"]
+    metrics_path: /metrics
+```
+
+### Available Metrics
+
+#### HTTP (automatic via FastAPI instrumentator)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `http_requests_total` | Counter | method, endpoint, status | Total HTTP requests |
+| `http_request_duration_seconds` | Histogram | method, endpoint | Request latency |
+| `http_requests_inprogress` | Gauge | method, endpoint | In-flight requests |
+
+#### Sandbox Execution
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `sandbox_executions_total` | Counter | tier, status, namespace | Total sandbox executions |
+| `sandbox_execution_duration_seconds` | Histogram | tier, status | Sandbox execution latency |
+| `sandbox_executions_in_progress` | Gauge | tier | Active sandbox executions |
+| `sandbox_execution_errors_total` | Counter | tier, error_type | Sandbox errors by type |
+| `sandbox_violations_total` | Counter | tier | Seccomp/resource violations |
+
+#### Agent Orchestration
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `mcpworks_agent_runs_total` | Counter | namespace, trigger_type, status | Agent orchestration runs |
+| `mcpworks_agent_run_duration_seconds` | Histogram | namespace, trigger_type | Agent run duration |
+| `mcpworks_agent_run_iterations_total` | Counter | namespace | AI loop iterations |
+| `mcpworks_agent_tool_calls_total` | Counter | namespace, tool_name, source, status | Tool calls during orchestration |
+| `mcpworks_agent_tool_call_duration_seconds` | Histogram | namespace, source | Per-tool-call latency |
+| `mcpworks_agents_running` | Gauge | namespace | Active orchestrations |
+
+#### MCP Proxy
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `mcpworks_mcp_proxy_calls_total` | Counter | namespace, server_name, tool_name, status | Proxy calls to external MCP servers |
+| `mcpworks_mcp_proxy_latency_seconds` | Histogram | namespace, server_name | Proxy call latency |
+| `mcpworks_mcp_proxy_response_bytes` | Histogram | namespace, server_name | Proxy response size |
+| `mcpworks_mcp_proxy_injections_total` | Counter | namespace, server_name | Prompt injection detections |
+| `mcpworks_mcp_proxy_truncations_total` | Counter | namespace, server_name | Truncated responses |
+
+#### Per-Function
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `mcpworks_function_calls_total` | Counter | namespace, service, function, status | Function executions by name |
+| `mcpworks_function_duration_seconds` | Histogram | namespace, service, function | Function execution duration |
+
+#### MCP Transport (tool-level)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `mcpworks_mcp_tool_calls_total` | Counter | endpoint_type, tool_name | MCP tool invocations |
+| `mcpworks_mcp_response_bytes` | Histogram | endpoint_type, tool_name | MCP response size (token proxy) |
+
+#### Auth, Billing, Security, Webhooks
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `mcpworks_auth_attempts_total` | Counter | method, status | Auth attempts (login, register, apikey, oauth) |
+| `mcpworks_billing_quota_checks_total` | Counter | namespace, result | Billing quota checks (allowed/blocked) |
+| `mcpworks_security_events_total` | Counter | event_type, severity | Security events by type and severity |
+| `mcpworks_webhook_deliveries_total` | Counter | namespace, status | Telemetry webhook deliveries |
+| `mcpworks_webhook_delivery_latency_seconds` | Histogram | namespace | Webhook delivery latency |
+
+### Grafana Example Queries
+
+**Request error rate (5xx)**:
+```promql
+sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
+```
+
+**Sandbox execution p95 latency by tier**:
+```promql
+histogram_quantile(0.95, rate(sandbox_execution_duration_seconds_bucket[5m]))
+```
+
+**Agent run failure rate**:
+```promql
+sum(rate(mcpworks_agent_runs_total{status="failed"}[5m])) / sum(rate(mcpworks_agent_runs_total[5m]))
+```
+
+**Top 10 functions by error rate**:
+```promql
+topk(10,
+  sum by (namespace, service, function) (rate(mcpworks_function_calls_total{status="error"}[1h]))
+  / sum by (namespace, service, function) (rate(mcpworks_function_calls_total[1h]))
+)
+```
+
+**MCP proxy latency p99 by server**:
+```promql
+histogram_quantile(0.99, sum by (le, server_name) (rate(mcpworks_mcp_proxy_latency_seconds_bucket[5m])))
+```
+
+**Auth failure spike alert** (Grafana alert rule):
+```promql
+sum(rate(mcpworks_auth_attempts_total{status="failure"}[5m])) > 0.5
+```
+
+### Structured Logging
+
+All API logs are JSON-formatted via structlog. Each log line includes:
+- `correlation_id` — unique per-request, propagated via `X-Request-ID` header
+- `timestamp` — ISO 8601
+- `level` — debug, info, warning, error
+- `event` — structured event name
+
+Pipe container logs to your preferred log aggregation tool (Loki, Elasticsearch, CloudWatch):
+
+```bash
+docker logs mcpworks-api --follow | jq .
+```
+
+### Health Endpoints
+
+| Endpoint | Purpose | Use For |
+|----------|---------|---------|
+| `GET /v1/health` | Always returns `{"status": "healthy"}` | Load balancer health check |
+| `GET /v1/health/live` | Always returns `{"status": "alive"}` | Kubernetes liveness probe |
+| `GET /v1/health/ready` | Checks DB, Redis, sandbox | Kubernetes readiness probe |
+
+### Audit Log
+
+Security events (auth failures, sandbox violations, quota blocks, agent anomalies) are persisted to the `security_events` table with hashed IPs and PII-scrubbed details. Query via the admin API:
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  https://api.example.com/v1/audit/logs?severity=critical&limit=20
+```
+
 ## Database Migrations
 
 Migrations run automatically on container startup — the startup script (`scripts/start.sh`) runs `alembic upgrade head` before starting the API server. No manual intervention is needed for upgrades — pull the latest code, rebuild, and restart:

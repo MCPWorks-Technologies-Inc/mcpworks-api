@@ -447,3 +447,9 @@ make_function(
 Public registration is disabled by default. Set `ALLOW_REGISTRATION=true` in `.env` to enable `POST /v1/auth/register`.
 
 API keys can also be exchanged for JWTs via `POST /v1/auth/token`.
+
+## Observability
+
+Prometheus metrics at `GET /metrics`. Health checks at `/v1/health`, `/v1/health/live`, `/v1/health/ready`. Security audit log at `GET /v1/audit/logs` (admin only). All logs are structured JSON with `X-Request-ID` correlation.
+
+Key metric families: `http_requests_total`, `sandbox_executions_total`, `mcpworks_agent_runs_total`, `mcpworks_agent_tool_calls_total`, `mcpworks_mcp_proxy_calls_total`, `mcpworks_function_calls_total`, `mcpworks_auth_attempts_total`, `mcpworks_security_events_total`. Full list in [SELF-HOSTING.md](SELF-HOSTING.md#available-metrics).
