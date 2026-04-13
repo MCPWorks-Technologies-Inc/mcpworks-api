@@ -10,7 +10,7 @@ Deploy MCPWorks on your own Linux server with `docker compose up`.
 | Docker | 24.0+ | With Docker Compose v2 |
 | RAM | 4 GB | 8 GB recommended for agent workloads |
 | Disk | 20 GB | Plus storage for PostgreSQL data |
-| Domain | A domain you control | With DNS access for wildcard records |
+| Domain | A domain you control | With DNS access for wildcard records (subdomain routing) or a single A record (path routing) |
 | Ports | 80, 443 open | For Caddy TLS certificate issuance |
 
 ## Quick Start
@@ -39,6 +39,9 @@ ENCRYPTION_KEK_B64=$(python3 -c "import os,base64; print(base64.b64encode(os.ura
 
 # Admin account (must match ADMIN_EMAILS)
 ADMIN_EMAILS=["admin@example.com"]
+
+# Let's Encrypt notifications
+ACME_EMAIL=admin@example.com
 ```
 
 ### 3. Generate JWT keys
@@ -51,7 +54,13 @@ openssl ec -in keys/private.pem -pubout -out keys/public.pem
 
 ### 4. Configure DNS
 
-Point these records to your server's IP:
+**Path-based routing** (default, `ROUTING_MODE=path`) — only one record needed:
+
+| Record | Type | Value |
+|--------|------|-------|
+| `api.example.com` | A | your server IP |
+
+**Subdomain routing** (`ROUTING_MODE=subdomain`) — requires wildcard records:
 
 | Record | Type | Value |
 |--------|------|-------|
@@ -60,7 +69,7 @@ Point these records to your server's IP:
 | `*.run.example.com` | A | your server IP |
 | `*.agent.example.com` | A | your server IP |
 
-Caddy obtains TLS certificates automatically via Let's Encrypt. Set `ACME_EMAIL` in your `.env` for certificate expiry notifications.
+Caddy obtains TLS certificates automatically via Let's Encrypt. Wildcard subdomain certificates use on-demand TLS — Caddy verifies each subdomain against the API's internal domain verification endpoint before issuing.
 
 ### 5. Start services
 
@@ -74,10 +83,16 @@ This starts four services:
 |---------|-----------|---------|
 | PostgreSQL 15 | mcpworks-postgres | Primary database |
 | Redis 7 | mcpworks-redis | Cache and rate limiting |
-| API | mcpworks-api | MCPWorks backend |
+| API | mcpworks-api | MCPWorks backend (runs migrations on startup) |
 | Caddy 2 | mcpworks-caddy | TLS termination and reverse proxy |
 
-First startup takes 5-10 minutes (Docker builds the API image including nsjail compilation).
+First startup takes 10-20 minutes — Docker builds a multi-stage image that compiles nsjail from source, pre-installs sandbox packages (Python + Node.js), and sets up the execution environment.
+
+On startup, the API container automatically:
+1. Waits for database connectivity
+2. Runs all pending Alembic migrations
+3. Initializes the nsjail sandbox environment (if not in dev mode)
+4. Starts the uvicorn server
 
 ### 6. Verify
 
@@ -96,7 +111,7 @@ docker compose -f docker-compose.self-hosted.yml exec \
   api python3 scripts/seed_admin.py
 ```
 
-The email must be in your `ADMIN_EMAILS` list for admin panel access.
+The email must be in your `ADMIN_EMAILS` list for admin panel access. Change the password immediately after first login.
 
 ### 8. Connect from Claude Desktop
 
@@ -128,17 +143,26 @@ Add to your Claude Desktop MCP config (`claude_desktop_config.json`):
 | `ENCRYPTION_KEK_B64` | Base64-encoded 32-byte key for envelope encryption | (generate as shown above) |
 | `BASE_DOMAIN` | Your domain | `example.com` |
 
+### Recommended Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ACME_EMAIL` | `admin@localhost` | Email for Let's Encrypt certificate notifications |
+| `ADMIN_EMAILS` | `[]` | JSON array of admin email addresses |
+| `ALLOW_REGISTRATION` | `false` | Enable public user registration |
+
 ### Optional Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BASE_SCHEME` | `https` | URL scheme (`http` for local dev without TLS) |
 | `ROUTING_MODE` | `path` | `path` (recommended), `subdomain`, or `both` |
-| `ALLOW_REGISTRATION` | `false` | Enable public user registration |
 | `APP_ENV` | `production` | Environment name |
 | `LOG_LEVEL` | `INFO` | Logging level |
 | `CORS_ORIGINS` | derived from `BASE_DOMAIN` | Allowed CORS origins (JSON array) |
-| `SANDBOX_DEV_MODE` | `false` | Use subprocess instead of nsjail (no isolation, dev only) |
+| `SANDBOX_DEV_MODE` | `true` | `false` for production nsjail isolation, `true` for subprocess fallback (dev only) |
+| `UVICORN_WORKERS` | `1` | Number of uvicorn worker processes |
+| `APP_PORT` | `8000` | API listen port inside the container |
 
 ### Email (optional)
 
@@ -166,22 +190,27 @@ Without Stripe configured, all users operate without execution limits. The billi
 
 ## Sandbox Security Modes
 
-MCPWorks executes user-submitted code in a sandbox. Two modes are available:
+MCPWorks executes user-submitted code (Python and TypeScript) in a sandbox. Two modes are available:
 
 ### nsjail (production)
 
-The default. Provides full Linux namespace isolation:
+Set `SANDBOX_DEV_MODE=false` in your `.env`. Provides full Linux namespace isolation:
 - Separate PID, network, mount, and user namespaces
 - Seccomp syscall filtering (allowlist-only)
 - Memory and CPU limits via cgroups
 - No filesystem access outside the sandbox
 - `execve` blocked — user code cannot spawn processes
+- Pre-installed Python and Node.js packages available inside the sandbox
 
 **Requirements:** Linux kernel 5.10+, the container runs with `privileged: true` and `CAP_SYS_ADMIN`. User code runs as UID 65534 (nobody) inside nsjail with all capabilities dropped.
 
+**Network isolation by tier:**
+- **Free tier:** nsjail creates an empty network namespace — zero connectivity
+- **Paid tiers:** A veth pair with NAT provides internet access while blocking internal networks (169.254.0.0/16, 172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16)
+
 ### SANDBOX_DEV_MODE (development only)
 
-Set `SANDBOX_DEV_MODE=true` to use a subprocess fallback instead of nsjail. This works on macOS and Windows but provides **no code isolation**. User code runs with the same permissions as the API process.
+Set `SANDBOX_DEV_MODE=true` (the default) to use a subprocess fallback instead of nsjail. This works on macOS and Windows but provides **no code isolation**. User code runs with the same permissions as the API process.
 
 **Use only for local development and evaluation. Never use in production.**
 
@@ -209,11 +238,24 @@ https://my-namespace.create.example.com/mcp
 https://my-namespace.run.example.com/mcp
 ```
 
-Requires wildcard DNS records for `*.create`, `*.run`, and `*.agent`.
+Requires wildcard DNS records for `*.create`, `*.run`, and `*.agent`. Caddy uses on-demand TLS to issue certificates for each subdomain as it is first accessed.
 
 ### Both
 
 `ROUTING_MODE=both` — accepts both patterns. Useful during migration.
+
+## Agent Runtime (optional)
+
+The docker-compose file mounts the Docker socket (`/var/run/docker.sock`) into the API container to support the agent runtime feature. Agents run as separate containers on the `mcpworks-agents` bridge network.
+
+If you don't use agents, you can remove the Docker socket mount from `docker-compose.self-hosted.yml`:
+
+```yaml
+# Remove this line from the api service volumes:
+- /var/run/docker.sock:/var/run/docker.sock
+```
+
+If you do use agents, ensure the Docker daemon is accessible and the `mcpworks-agents` network can be created.
 
 ## Using External Services
 
@@ -230,7 +272,7 @@ For managed Redis with TLS, use `rediss://` (double s) in `REDIS_URL`.
 
 ## Database Migrations
 
-Migrations run automatically on container startup via Alembic. No manual intervention is needed for upgrades — pull the latest code, rebuild, and restart:
+Migrations run automatically on container startup — the startup script (`scripts/start.sh`) runs `alembic upgrade head` before starting the API server. No manual intervention is needed for upgrades — pull the latest code, rebuild, and restart:
 
 ```bash
 git pull
@@ -246,7 +288,7 @@ docker compose -f docker-compose.self-hosted.yml up -d --build api
 curl https://api.example.com/v1/health
 ```
 
-Migrations run automatically. Check container logs if health check fails:
+Migrations run automatically on startup. Check container logs if health check fails:
 
 ```bash
 docker logs mcpworks-api --tail 50
@@ -266,6 +308,7 @@ Common causes:
 - Missing `ENCRYPTION_KEK_B64` — generate one (see step 2)
 - JWT keys not found — verify `keys/private.pem` and `keys/public.pem` exist
 - Database connection refused — ensure PostgreSQL is healthy: `docker logs mcpworks-postgres`
+- Missing migrations — the startup script runs them automatically, but check logs for Alembic errors
 
 ### Caddy fails to obtain TLS certificates
 
@@ -273,6 +316,7 @@ Common causes:
 - Verify DNS records are pointing to your server
 - Check Caddy logs: `docker logs mcpworks-caddy`
 - Set `ACME_EMAIL` in `.env` for Let's Encrypt account registration
+- For subdomain routing: on-demand TLS requires the API to be healthy (Caddy verifies domains against the API)
 
 ### Sandbox violations (exit code 159)
 
@@ -288,6 +332,10 @@ The audit log shows the blocked syscall number. Report it as an issue if it's bl
 
 Ensure the scheduled function's `orchestration_mode` is not `direct` if the function code uses `from functions import ...`. Use `execute_only` or `reason_first` mode instead.
 
+### Slow first build
+
+The first Docker build compiles nsjail from source and installs sandbox packages for both Python and Node.js. This typically takes 10-20 minutes depending on hardware. Subsequent rebuilds are faster due to Docker layer caching.
+
 ### Local development without a domain
 
 For local testing without DNS:
@@ -296,9 +344,18 @@ For local testing without DNS:
 BASE_DOMAIN=localhost
 BASE_SCHEME=http
 ROUTING_MODE=path
+SANDBOX_DEV_MODE=true
 ```
 
-Remove the `caddy` service from compose and access the API directly on port 8000:
+Remove the `caddy` service from compose and access the API directly on port 8000. You'll need to expose port 8000 on the api service:
+
+```yaml
+# In docker-compose.self-hosted.yml, change api service:
+ports:
+  - "8000:8000"
+```
+
+Then:
 
 ```bash
 curl http://localhost:8000/v1/health

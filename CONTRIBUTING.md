@@ -45,14 +45,17 @@ uvicorn mcpworks_api.main:app --reload --port 8000
 ### Running Tests
 
 ```bash
-# Run all tests
-pytest tests/ -v
+# Run unit tests (fast, no database needed)
+pytest tests/unit/ -q
+
+# Run integration tests (requires running Postgres — used in CI)
+pytest tests/integration/ -v
 
 # Run with coverage
-pytest tests/ -v --cov=src
+pytest tests/unit/ -v --cov=src
 
 # Run a specific test file
-pytest tests/test_example.py -v
+pytest tests/unit/test_example.py -v
 ```
 
 ### Linting and Formatting

@@ -1,6 +1,6 @@
 # MCPWorks Platform Guide
 
-MCPWorks is a code execution platform for AI assistants. You create Python functions through the MCP protocol, and AI agents (Claude Code, Codex, GitHub Copilot) can discover and execute them in secure sandboxes.
+MCPWorks is a code execution platform for AI assistants. You create Python and TypeScript functions through the MCP protocol, and AI agents (Claude Code, Codex, GitHub Copilot) can discover and execute them in secure sandboxes.
 
 Deploy it on your own infrastructure, write a function, and it runs.
 
@@ -48,13 +48,15 @@ Services group related functions within a namespace. Think of them as folders. A
 
 ### Functions
 
-A function is a unit of executable Python code with:
+A function is a unit of executable code with:
 
-- **Code** — the Python source
+- **Code** — the source (Python or TypeScript)
 - **Input schema** — JSON Schema describing expected parameters
 - **Output schema** — JSON Schema describing the return value
-- **Backend** — execution engine (`code_sandbox` for Python)
-- **Requirements** — Python packages needed (from the allow-list)
+- **Output trust** — `prompt` (trusted computed output) or `data` (untrusted external content)
+- **Backend** — execution engine (`code_sandbox`)
+- **Language** — `python` (default) or `typescript`
+- **Requirements** — packages needed (from the allow-list)
 - **Tags** — optional labels for filtering
 
 ### Versions
@@ -63,7 +65,7 @@ Every code change creates a new immutable version. You can restore any previous 
 
 ### Backends
 
-Currently supported: `code_sandbox` (secure Python execution via nsjail). Future backends include `nanobot` and `github_repo`.
+Currently supported: `code_sandbox` (secure Python and TypeScript execution via nsjail).
 
 ---
 
@@ -158,14 +160,16 @@ Create a new function in a service.
 |-----------|------|----------|-------------|
 | `service` | string | Yes | Service name |
 | `name` | string | Yes | Function name |
-| `backend` | string | Yes | Execution backend: `code_sandbox`, `nanobot`, `github_repo` |
-| `code` | string | No | Python source code |
+| `backend` | string | Yes | Execution backend: `code_sandbox` |
+| `output_trust` | string | Yes | `prompt` (trusted computed output) or `data` (untrusted external content — wrapped with trust boundary markers) |
+| `language` | string | No | `python` (default) or `typescript`. Cannot be changed after creation. |
+| `code` | string | No | Source code (Python or TypeScript depending on `language`) |
 | `config` | object | No | Backend-specific configuration |
 | `input_schema` | object | No | JSON Schema for input parameters |
 | `output_schema` | object | No | JSON Schema for output |
 | `description` | string | No | Human-readable description |
 | `tags` | string[] | No | Tags for filtering |
-| `requirements` | string[] | No | Python packages from the allow-list |
+| `requirements` | string[] | No | Packages from the allow-list (Python or Node.js depending on language) |
 | `required_env` | string[] | No | Environment variables required for execution (e.g., `["OPENAI_API_KEY"]`) |
 | `optional_env` | string[] | No | Optional environment variables the function can use |
 | `template` | string | No | Clone from a template (overrides code/schemas/requirements) |
@@ -183,7 +187,7 @@ Update a function. Creates a new version if code, config, schemas, or requiremen
 | `service` | string | Yes | Service name |
 | `name` | string | Yes | Function name |
 | `backend` | string | No | New execution backend |
-| `code` | string | No | New Python source code |
+| `code` | string | No | New source code |
 | `config` | object | No | New backend configuration |
 | `input_schema` | object | No | New input schema |
 | `output_schema` | object | No | New output schema |
@@ -229,7 +233,7 @@ Returns full details: code, schemas, all versions, backend, requirements, and me
 
 #### `list_packages`
 
-List all available Python packages for sandbox functions, grouped by category. No parameters.
+List all available packages for sandbox functions, grouped by category. No parameters.
 
 Returns packages organized by category (http, data_formats, validation, text, datetime, data_science, visualization, ai, cloud, file_formats, security, database, utilities).
 
@@ -261,13 +265,13 @@ Best for: AI agents that need to call specific functions by name with structured
 
 ### Code Mode (default, `?mode=code`)
 
-A single `execute` tool is exposed. The AI writes Python code that imports and calls your functions from a generated `functions` package.
+A single `execute` tool is exposed. The AI writes Python or TypeScript code that imports and calls your functions from a generated `functions` package.
 
 **The `execute` tool:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `code` | string | Yes | Python code to execute |
+| `code` | string | Yes | Python or TypeScript code to execute |
 
 Best for: Complex workflows, chaining multiple functions, data transformation between calls.
 
@@ -277,7 +281,11 @@ See [Code Mode Deep Dive](#code-mode-deep-dive) for details.
 
 ## Writing Function Code
 
-Functions run in a Python sandbox. Your code receives input and must produce output using one of three conventions:
+Functions run in a sandboxed environment. Python and TypeScript are supported. Your code receives input and must produce output using one of these conventions:
+
+### Python
+
+Python functions use one of three conventions:
 
 ### Convention 1: `main(input_data)` function (recommended)
 
@@ -332,9 +340,11 @@ Example:
 
 ## Available Packages
 
-All packages are pre-installed in the sandbox image. No `pip install` at runtime — this gives instant cold starts and prevents supply-chain attacks.
+All packages are pre-installed in the sandbox image. No `pip install` or `npm install` at runtime — this gives instant cold starts and prevents supply-chain attacks.
 
 Specify required packages in the `requirements` field when creating a function. Use `list_packages` to see the full list.
+
+### Python Packages
 
 ### HTTP & Networking
 | Package | Description |
@@ -534,6 +544,7 @@ make_function(
   service="ai",
   name="summarize",
   backend="code_sandbox",
+  output_trust="prompt",
   required_env=["OPENAI_API_KEY"],
   optional_env=["OPENAI_ORG_ID"],
   code="import openai\ndef main(input_data):\n    import os\n    client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])\n    ...",
@@ -895,6 +906,7 @@ make_function(
   service="math",
   name="is-prime",
   backend="code_sandbox",
+  output_trust="prompt",
   code="def main(input_data):\n    n = input_data.get('number', 2)\n    if n < 2:\n        return {'is_prime': False, 'number': n}\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return {'is_prime': False, 'number': n}\n    return {'is_prime': True, 'number': n}",
   input_schema={
     "type": "object",
