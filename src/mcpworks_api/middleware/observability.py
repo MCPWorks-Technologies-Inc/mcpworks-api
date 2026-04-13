@@ -129,6 +129,26 @@ webhook_delivery_latency_seconds = Histogram(
 
 
 # ---------------------------------------------------------------------------
+# OAuth
+# ---------------------------------------------------------------------------
+oauth_token_refreshes_total = Counter(
+    "mcpworks_oauth_token_refreshes_total",
+    "OAuth token refresh attempts",
+    ["namespace", "server", "status"],
+)
+oauth_device_flows_total = Counter(
+    "mcpworks_oauth_device_flows_total",
+    "OAuth device flow initiations",
+    ["namespace", "server", "status"],
+)
+oauth_auth_required_total = Counter(
+    "mcpworks_oauth_auth_required_total",
+    "AUTH_REQUIRED responses returned to callers",
+    ["namespace", "server", "flow"],
+)
+
+
+# ---------------------------------------------------------------------------
 # Helper functions — one-line calls from existing code paths
 # ---------------------------------------------------------------------------
 def record_agent_run(
@@ -221,3 +241,15 @@ def record_webhook_delivery(
 ) -> None:
     webhook_deliveries_total.labels(namespace=namespace, status=status).inc()
     webhook_delivery_latency_seconds.labels(namespace=namespace).observe(latency_seconds)
+
+
+def record_oauth_token_refresh(namespace: str, server: str, status: str) -> None:
+    oauth_token_refreshes_total.labels(namespace=namespace, server=server, status=status).inc()
+
+
+def record_oauth_device_flow(namespace: str, server: str, status: str) -> None:
+    oauth_device_flows_total.labels(namespace=namespace, server=server, status=status).inc()
+
+
+def record_oauth_auth_required(namespace: str, server: str, flow: str) -> None:
+    oauth_auth_required_total.labels(namespace=namespace, server=server, flow=flow).inc()

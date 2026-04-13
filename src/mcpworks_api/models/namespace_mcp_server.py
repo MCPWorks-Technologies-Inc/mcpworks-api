@@ -13,9 +13,11 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
+
+AUTH_TYPES = ("bearer", "oauth2", "none")
 
 DEFAULT_SETTINGS = {
     "response_limit_bytes": 1048576,
@@ -55,6 +57,17 @@ class NamespaceMcpServer(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
+    auth_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="bearer", server_default="bearer"
+    )
+    oauth_config_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    oauth_config_dek: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    oauth_tokens_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    oauth_tokens_dek: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    oauth_tokens_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     namespace = relationship("Namespace", back_populates="mcp_servers")
 
     __table_args__ = (
@@ -65,6 +78,12 @@ class NamespaceMcpServer(Base, UUIDMixin, TimestampMixin):
         merged = dict(DEFAULT_SETTINGS)
         merged.update(self.settings or {})
         return merged
+
+    @validates("auth_type")
+    def validate_auth_type(self, key: str, value: str) -> str:
+        if value not in AUTH_TYPES:
+            raise ValueError(f"Invalid auth_type: {value}. Must be one of: {AUTH_TYPES}")
+        return value
 
     def __repr__(self) -> str:
         return f"<NamespaceMcpServer(namespace_id={self.namespace_id}, name={self.name})>"

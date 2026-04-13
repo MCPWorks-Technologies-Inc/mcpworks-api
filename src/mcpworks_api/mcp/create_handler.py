@@ -2773,6 +2773,8 @@ class CreateMCPHandler:
         headers: dict | None = None,
         command: str | None = None,
         args: list | None = None,
+        auth_type: str = "bearer",
+        oauth_config: dict | None = None,
     ) -> MCPToolResult:
         from mcpworks_api.services.mcp_server import McpServerService
 
@@ -2787,22 +2789,21 @@ class CreateMCPHandler:
             headers=headers,
             command=command,
             args=args,
+            auth_type=auth_type,
+            oauth_config=oauth_config,
         )
-        return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "name": server.name,
-                            "url": server.url,
-                            "transport": server.transport,
-                            "tool_count": server.tool_count,
-                            "tools": [t["name"] for t in (server.tool_schemas or [])],
-                        }
-                    )
-                )
-            ]
-        )
+        result = {
+            "name": server.name,
+            "url": server.url,
+            "transport": server.transport,
+            "auth_type": server.auth_type,
+            "tool_count": server.tool_count,
+            "tools": [t["name"] for t in (server.tool_schemas or [])],
+        }
+        if server.auth_type == "oauth2":
+            result["oauth_status"] = "pending_authorization"
+            result["note"] = "OAuth configured. Call any tool to start the authorization flow."
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _remove_mcp_server(self, name: str) -> MCPToolResult:
         from mcpworks_api.services.mcp_server import McpServerService
@@ -2848,32 +2849,41 @@ class CreateMCPHandler:
         ns = await self._get_current_namespace_read()
         svc = McpServerService(self.db)
         server = await svc.get_by_name(ns.id, name)
-        return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "name": server.name,
-                            "url": server.url,
-                            "transport": server.transport,
-                            "command": server.command,
-                            "args": server.command_args,
-                            "enabled": server.enabled,
-                            "tool_count": server.tool_count,
-                            "last_connected": server.last_connected_at.isoformat()
-                            if server.last_connected_at
-                            else None,
-                            "settings": server.get_settings(),
-                            "env_vars": list((server.env_vars or {}).keys()),
-                            "tools": [
-                                {"name": t["name"], "description": t.get("description", "")}
-                                for t in (server.tool_schemas or [])
-                            ],
-                        }
-                    )
-                )
-            ]
-        )
+        result = {
+            "name": server.name,
+            "url": server.url,
+            "transport": server.transport,
+            "command": server.command,
+            "args": server.command_args,
+            "enabled": server.enabled,
+            "auth_type": server.auth_type,
+            "tool_count": server.tool_count,
+            "last_connected": server.last_connected_at.isoformat()
+            if server.last_connected_at
+            else None,
+            "settings": server.get_settings(),
+            "env_vars": list((server.env_vars or {}).keys()),
+            "tools": [
+                {"name": t["name"], "description": t.get("description", "")}
+                for t in (server.tool_schemas or [])
+            ],
+        }
+        if server.auth_type == "oauth2":
+            from mcpworks_api.services.mcp_oauth import decrypt_oauth_config, get_oauth_status
+
+            result["oauth_status"] = get_oauth_status(server)
+            result["oauth_expires_at"] = (
+                server.oauth_tokens_expires_at.isoformat()
+                if server.oauth_tokens_expires_at
+                else None
+            )
+            try:
+                config = decrypt_oauth_config(server)
+                result["oauth_scopes"] = config.get("scopes", [])
+                result["oauth_flow"] = config.get("flow", "device")
+            except Exception:
+                result["oauth_scopes"] = []
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _refresh_mcp_server(self, name: str) -> MCPToolResult:
         from mcpworks_api.services.mcp_server import McpServerService

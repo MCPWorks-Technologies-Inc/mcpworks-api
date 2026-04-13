@@ -1937,6 +1937,24 @@ MCP_SERVER_TOOLS: dict[str, ToolDef] = {
                     "items": {"type": "string"},
                     "description": "Arguments for the stdio command. Example: ['-y', '@modelcontextprotocol/server-filesystem', '/data']",
                 },
+                "auth_type": {
+                    "type": "string",
+                    "enum": ["bearer", "oauth2", "none"],
+                    "description": "Authentication type. 'bearer' (default): static token via auth_token. 'oauth2': OAuth 2.0 with device flow or authorization code. 'none': no auth headers.",
+                    "default": "bearer",
+                },
+                "oauth_config": {
+                    "type": "object",
+                    "description": (
+                        "OAuth 2.0 configuration (required when auth_type='oauth2'). "
+                        "Fields: client_id, client_secret, scopes (array), flow ('device' or 'authorization_code'), "
+                        "device_authorization_endpoint (for device flow), token_endpoint, auth_endpoint (for auth code flow). "
+                        'Example: {"client_id": "123.apps.googleusercontent.com", "client_secret": "GOCSPX-...", '
+                        '"scopes": ["https://www.googleapis.com/auth/gmail.readonly"], '
+                        '"device_authorization_endpoint": "https://oauth2.googleapis.com/device/code", '
+                        '"token_endpoint": "https://oauth2.googleapis.com/token", "flow": "device"}'
+                    ),
+                },
             },
             "required": ["name"],
         },

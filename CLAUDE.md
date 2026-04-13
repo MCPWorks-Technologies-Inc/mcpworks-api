@@ -138,6 +138,8 @@ specs/                  # Speckit artifacts per feature
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), httpx (async HTTP client), Pydantic v2, structlog (023-telemetry-webhook)
 - PostgreSQL 15+ (webhook config on namespaces table), Redis 7+ (optional batching buffer) (023-telemetry-webhook)
 - PostgreSQL 15+ (new trust_score columns on `agents` table) (024-trust-scoring-and-compliance)
+- Python 3.11+ (existing codebase) + FastAPI 0.109+ (existing), Authlib 1.3+ (existing), httpx (existing), SQLAlchemy 2.0+ (existing) (026-oauth-mcp-proxy)
+- PostgreSQL 15+ (5 new columns on `namespace_mcp_servers`), Redis 7+ (ephemeral device flow state) (026-oauth-mcp-proxy)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
