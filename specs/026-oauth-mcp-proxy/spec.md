@@ -185,6 +185,20 @@ In code-mode, MCP server tools are already proxied through the sandbox. The prox
 | `oauth_state:{state_token}` | 600s | CSRF protection for callback |
 | `oauth_refresh:{namespace_id}:{server_name}` | 30s | Refresh lock to prevent concurrent refreshes |
 
+## Resolved Questions
+
+### Q4: Per-user vs per-namespace tokens → Per-namespace
+
+**Decision**: Tokens are scoped per-namespace, not per-user.
+
+**Rationale**: The namespace is the identity boundary on mcpworks. When you register `google_workspace` on a namespace and authorize it, you're granting the namespace — and everything operating within it (users, agents, cron triggers) — access to that external service. This is the same model as a service account: the credential belongs to the workspace, not an individual.
+
+Per-user tokens would create problems for agent autonomy: when an agent runs on a cron trigger at 3am, whose token does it use? The namespace owner's? A "service user"? Per-namespace sidesteps this entirely — the agent has the same credentials regardless of trigger source.
+
+If an organization needs per-person access control within Google Workspace, that's Google's IAM — delegate to the provider, don't replicate it in the proxy layer.
+
+**Required disclosure**: When a namespace owner completes OAuth consent, the callback success page and the `AUTH_REQUIRED` response must clearly state: "You are granting this namespace access to [provider]. All users and agents with access to this namespace can use these credentials." Informed consent, not a surprise.
+
 ## Open Questions
 
 1. **Should the callback redirect back to the AI conversation?** Hard to do generically (Claude Desktop, Cursor, web chat all have different UIs). Probably just show "Authorization successful. You can close this tab." and let the user tell the AI to retry.
@@ -192,5 +206,3 @@ In code-mode, MCP server tools are already proxied through the sandbox. The prox
 2. **What happens if the user never completes consent?** The `AUTH_REQUIRED` response has `expires_in: 600` (the state token TTL). After that, the AI would need to generate a fresh auth URL. No cleanup needed — state expires from Redis naturally.
 
 3. **Should we support OAuth 2.0 device flow as an alternative?** This would let CLI-only users authorize without a browser redirect. Lower priority but worth considering for the spec.
-
-4. **Per-user vs per-namespace tokens?** Currently scoped per-namespace (the namespace owner authorizes). If multiple users share a namespace, they share the same Google credentials. Is this correct, or should tokens be per-user-per-server?
