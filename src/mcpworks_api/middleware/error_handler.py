@@ -27,14 +27,27 @@ def register_exception_handlers(app: FastAPI) -> None:
         If detail is a dict (from our exceptions), return it directly.
         Otherwise wrap in standard format.
         """
+        if exc.status_code >= 500:
+            logger.error(
+                "http_exception",
+                status=exc.status_code,
+                path=_request.url.path,
+                method=_request.method,
+            )
+        elif exc.status_code >= 400:
+            logger.warning(
+                "http_exception",
+                status=exc.status_code,
+                path=_request.url.path,
+                method=_request.method,
+            )
+
         if isinstance(exc.detail, dict):
-            # Our exceptions return dict with error/message/details
             return JSONResponse(
                 status_code=exc.status_code,
                 content=exc.detail,
                 headers=getattr(exc, "headers", None),
             )
-        # Standard HTTPException with string detail
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -68,6 +81,14 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         Converts to standardized error format.
         """
+        field_names = [".".join(str(p) for p in e["loc"]) for e in exc.errors()]
+        logger.warning(
+            "validation_error",
+            path=_request.url.path,
+            method=_request.method,
+            error_count=len(exc.errors()),
+            fields=field_names,
+        )
         return JSONResponse(
             status_code=422,
             content={

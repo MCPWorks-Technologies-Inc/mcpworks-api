@@ -33,9 +33,21 @@ async def record_proxy_call(
     error_type: str | None = None,
     truncated: bool = False,
     injections_found: int = 0,
+    namespace_name: str = "unknown",
 ) -> None:
     from mcpworks_api.core.database import get_db_context
+    from mcpworks_api.middleware.observability import record_mcp_proxy_call
 
+    record_mcp_proxy_call(
+        namespace=namespace_name,
+        server_name=server_name,
+        tool_name=tool_name,
+        status=status,
+        latency_seconds=latency_ms / 1000.0,
+        response_bytes=response_bytes,
+        truncated=truncated,
+        injections_found=injections_found,
+    )
     try:
         async with get_db_context() as db:
             call = McpProxyCall(

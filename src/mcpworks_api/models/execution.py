@@ -144,6 +144,13 @@ class Execution(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # A0 Extension: Backend-specific metadata
     backend_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,

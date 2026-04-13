@@ -31,6 +31,11 @@ from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
 from mcpworks_api.core.mcp_client import McpServerPool, is_mcp_tool
 from mcpworks_api.core.telemetry import make_event, telemetry_bus
+from mcpworks_api.middleware.observability import (
+    agents_running,
+    record_agent_run,
+    record_agent_tool_call,
+)
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import Agent, AgentChannel, AgentRun
 from mcpworks_api.services.agent_service import AgentService
@@ -207,12 +212,14 @@ async def run_orchestration(
 
     messages: list[dict] = [{"role": "user", "content": trigger_context}]
     functions_called: list[str] = []
+    tool_call_records: list[dict] = []
     total_tokens = 0
     iterations = 0
     consecutive_failures = 0
     max_consecutive_failures = 3
     agent_id_str = str(agent.id)
     run_id = str(uuid_mod.uuid4())
+    namespace_name = agent.name
 
     def _emit(etype: str, **kw: object) -> None:
         telemetry_bus.emit(agent_id_str, make_event(etype, agent_id_str, run_id, **kw))
@@ -235,6 +242,7 @@ async def run_orchestration(
             total_tokens=context_tokens,
         )
 
+    agents_running.labels(namespace=namespace_name).inc()
     try:
         while iterations < limits["max_iterations"]:
             if total_tokens >= limits["max_ai_tokens"]:
@@ -294,7 +302,9 @@ async def run_orchestration(
                     functions_called=functions_called,
                     total_tokens=total_tokens,
                 )
-                await _post_orchestration(agent, trigger_type, result)
+                await _post_orchestration(
+                    agent, trigger_type, result, tool_call_records=tool_call_records
+                )
                 return result
 
             messages.append({"role": "assistant", "content": content_blocks})
@@ -411,18 +421,58 @@ async def run_orchestration(
                     trigger_type=trigger_type,
                     available_tools=tools,
                     procedure_covered=procedure_covered,
+                    agent_run_id=run_id,
                 )
+                tc_duration_ms = _elapsed_ms(tc_start)
                 _emit(
                     "tool_result",
                     name=tool_name,
                     result_preview=result_str[:200],
-                    duration_ms=_elapsed_ms(tc_start),
+                    duration_ms=tc_duration_ms,
                 )
 
                 is_error = '"error"' in result_str[:50]
+                tc_status = "error" if is_error else "success"
                 if not is_error:
                     functions_called.append(tool_name)
                     iteration_had_success = True
+
+                record_agent_tool_call(
+                    namespace=namespace_name,
+                    tool_name=tool_name,
+                    source=source,
+                    status=tc_status,
+                    duration_seconds=tc_duration_ms / 1000.0,
+                )
+
+                from mcpworks_api.models.agent_tool_call import (
+                    MAX_ERROR_CHARS,
+                    MAX_RESULT_PREVIEW_CHARS,
+                    MAX_TOOL_INPUT_BYTES,
+                )
+                from mcpworks_api.models.execution import _scrub_error_message
+
+                truncated_input = tool_input
+                input_str = json.dumps(tool_input, default=str)
+                if len(input_str) > MAX_TOOL_INPUT_BYTES:
+                    truncated_input = {"_truncated": True, "preview": input_str[:MAX_TOOL_INPUT_BYTES]}
+
+                tool_call_records.append(
+                    {
+                        "sequence_number": len(tool_call_records),
+                        "tool_name": tool_name,
+                        "tool_input": truncated_input,
+                        "result_preview": result_str[:MAX_RESULT_PREVIEW_CHARS],
+                        "duration_ms": tc_duration_ms,
+                        "source": source,
+                        "status": tc_status,
+                        "error_message": (
+                            _scrub_error_message(result_str[:MAX_ERROR_CHARS])
+                            if is_error
+                            else None
+                        ),
+                    }
+                )
 
                 tool_results.append(_tool_result(tool_id, tool_name, result_str))
 
@@ -470,7 +520,7 @@ async def run_orchestration(
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
         )
-        await _record_run(agent, trigger_type, result)
+        await _record_run(agent, trigger_type, result, tool_call_records=tool_call_records)
         return result
     except Exception as e:
         _emit("error", message=str(e)[:300], phase="orchestration")
@@ -484,9 +534,10 @@ async def run_orchestration(
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
         )
-        await _record_run(agent, trigger_type, result)
+        await _record_run(agent, trigger_type, result, tool_call_records=tool_call_records)
         return result
     finally:
+        agents_running.labels(namespace=namespace_name).dec()
         if mcp_pool is not None:
             try:
                 await mcp_pool.__aexit__(None, None, None)
@@ -505,6 +556,7 @@ async def _dispatch_tool(
     trigger_type: str = "manual",
     available_tools: list[dict] | None = None,
     procedure_covered: dict[str, str] | None = None,
+    agent_run_id: str | None = None,
 ) -> str:
     """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
     from mcpworks_api.core.tool_permissions import ToolTier, is_tool_allowed
@@ -589,6 +641,7 @@ async def _dispatch_tool(
         agent,
         account,
         agent_state=agent_state,
+        agent_run_id=agent_run_id,
     )
 
 
@@ -670,6 +723,7 @@ async def _execute_namespace_function(
     account: Account,
     agent_state: dict | None = None,
     db: AsyncSession | None = None,
+    agent_run_id: str | None = None,
 ) -> str:
     """Execute a namespace function via the sandbox backend."""
     try:
@@ -694,6 +748,8 @@ async def _execute_namespace_function(
             return json.dumps({"error": f"Backend not available: {version.backend}"})
 
         context = {"state": agent_state or {}}
+        if agent_run_id:
+            context["agent_run_id"] = agent_run_id
 
         execution_id = str(uuid_mod.uuid4())
         result = await backend.execute(
@@ -807,6 +863,7 @@ async def _post_orchestration(
     agent: Agent,
     trigger_type: str,
     result: OrchestrationResult,
+    tool_call_records: list[dict] | None = None,
 ) -> None:
     """Handle post-orchestration tasks: auto_channel, run recording."""
     if result.success and agent.auto_channel and result.final_text:
@@ -815,23 +872,34 @@ async def _post_orchestration(
         except Exception:
             logger.exception("auto_channel_send_failed", agent_name=agent.name)
 
-    await _record_run(agent, trigger_type, result)
+    await _record_run(agent, trigger_type, result, tool_call_records=tool_call_records)
 
 
 async def _record_run(
     agent: Agent,
     trigger_type: str,
     result: OrchestrationResult,
+    tool_call_records: list[dict] | None = None,
 ) -> None:
-    """Record an orchestration run as an AgentRun."""
+    """Record an orchestration run as an AgentRun with tool call audit trail."""
+    status = "completed" if result.success else "failed"
+    record_agent_run(
+        namespace=agent.name,
+        trigger_type=trigger_type,
+        status=status,
+        duration_seconds=(result.duration_ms or 0) / 1000.0,
+        iterations=result.iterations or 0,
+    )
     try:
+        from mcpworks_api.models.agent_tool_call import AgentToolCall
+
         async with get_db_context() as db:
             run = AgentRun(
                 agent_id=agent.id,
                 trigger_type="ai",
                 trigger_detail=f"orchestration:{trigger_type}",
                 function_name=", ".join(result.functions_called[:10]) or None,
-                status="completed" if result.success else "failed",
+                status=status,
                 started_at=datetime.now(UTC),
                 completed_at=datetime.now(UTC),
                 duration_ms=result.duration_ms,
@@ -839,6 +907,16 @@ async def _record_run(
                 error=result.error[:1000] if result.error else None,
             )
             db.add(run)
+            await db.flush()
+
+            if tool_call_records:
+                for tc in tool_call_records:
+                    db.add(
+                        AgentToolCall(
+                            agent_run_id=run.id,
+                            **tc,
+                        )
+                    )
     except Exception:
         logger.exception("orchestration_run_record_failed", agent_name=agent.name)
 

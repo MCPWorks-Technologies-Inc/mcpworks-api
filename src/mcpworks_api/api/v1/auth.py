@@ -130,6 +130,8 @@ async def login(
 
     auth_service = AuthService(db)
 
+    from mcpworks_api.middleware.observability import record_auth_attempt
+
     try:
         access_token, refresh_token, expires_in = await auth_service.login_user(
             email=body.email,
@@ -139,11 +141,13 @@ async def login(
         )
         await db.commit()
     except InvalidCredentialsError as e:
+        record_auth_attempt("login", "failure")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=e.to_dict(),
         )
 
+    record_auth_attempt("login", "success")
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
