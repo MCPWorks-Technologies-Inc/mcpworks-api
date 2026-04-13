@@ -39,11 +39,11 @@
 
 **Purpose**: Address gaps identified during retroactive spec writing
 
-- [ ] T018 [US2] Pass `namespace_name` to `record_proxy_call()` from all 4 call sites in `core/mcp_proxy.py` — currently records `namespace="unknown"` because callers don't pass it. Namespace name is available via `ctx` (the ExecutionContext has `namespace_id` but may need name resolution or caching).
-- [ ] T019 [US3] Wire `agent_run_id` from backend execution context into Execution record creation — the FK column exists but is not populated because agent-triggered executions don't go through the MCP run handler's `_persist_execution_record`. Need to either: (a) create Execution records in `_execute_namespace_function`, or (b) pass `agent_run_id` through the backend and capture it in whichever code path creates the Execution.
-- [ ] T020 [US2] Instrument `register()`, `token()` (API key exchange), and OAuth endpoints with `record_auth_attempt()` in `api/v1/auth.py` and `api/v1/oauth.py`
-- [ ] T021 [US2] Wire `record_function_call()` into the sandbox backend execution path — the counter `mcpworks_function_calls_total` is defined but never incremented. Needs to be called from the code path that executes functions (either `_execute_namespace_function` in orchestrator or the sandbox backend's `execute()` method).
-- [ ] T022 Remove redundant `_stats` dict and `get_stats_snapshot()` from `middleware/execution_metrics.py` — verify no admin endpoint or health check depends on it first. The Prometheus counters already track the same data.
+- [x] T018 [US2] Pass `namespace_name` to `record_proxy_call()` from all 4 call sites in `core/mcp_proxy.py` — ctx.namespace_name already available on ExecutionContext.
+- [x] T019 [US3] Create Execution records in `_execute_namespace_function` with `agent_run_id` FK populated — mirrors the run handler pattern but for agent-triggered executions.
+- [x] T020 [US2] Instrument `register()`, `token()` (API key exchange), and OAuth callback with `record_auth_attempt()` in `api/v1/auth.py` and `api/v1/oauth.py`
+- [x] T021 [US2] Wire `record_function_call()` into `_execute_namespace_function` alongside Execution record creation in `tasks/orchestrator.py`
+- [x] T022 Remove redundant `_stats` dict from `middleware/execution_metrics.py` — rewrote `get_stats_snapshot()` to read from Prometheus collectors directly. Admin endpoints preserved with same API shape.
 
 ---
 
