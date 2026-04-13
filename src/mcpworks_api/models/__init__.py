@@ -11,6 +11,7 @@ from mcpworks_api.models.agent import (
     AgentWebhook,
     ScheduledJob,
 )
+from mcpworks_api.models.agent_tool_call import AgentToolCall
 from mcpworks_api.models.api_key import APIKey
 from mcpworks_api.models.audit_log import AuditAction, AuditLog
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -53,6 +54,7 @@ __all__ = [
     "AgentState",
     "AgentChannel",
     "AgentReplica",
+    "AgentToolCall",
     "ScheduledJob",
     "AGENT_TIER_CONFIG",
     # User

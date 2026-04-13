@@ -93,6 +93,7 @@ async def proxy_mcp_call(
                     response_bytes=0,
                     status="blocked",
                     truncated=False,
+                    namespace_name=ctx.namespace_name,
                 )
             )
             return ProxyResult(
@@ -192,6 +193,7 @@ async def proxy_mcp_call(
                     response_bytes=response_size,
                     status="success",
                     truncated=truncated,
+                    namespace_name=ctx.namespace_name,
                 )
             )
 
@@ -210,6 +212,7 @@ async def proxy_mcp_call(
                     response_bytes=0,
                     status="timeout",
                     truncated=False,
+                    namespace_name=ctx.namespace_name,
                 )
             )
             return ProxyResult(
@@ -262,6 +265,7 @@ async def proxy_mcp_call(
             response_bytes=0,
             status="error",
             truncated=False,
+            namespace_name=ctx.namespace_name,
         )
     )
     return ProxyResult(

@@ -214,6 +214,13 @@ class AgentRun(Base, UUIDMixin):
     )
 
     agent: Mapped["Agent"] = relationship("Agent", back_populates="runs")
+    tool_calls: Mapped[list["AgentToolCall"]] = relationship(  # noqa: F821
+        "AgentToolCall",
+        back_populates="agent_run",
+        cascade="all, delete-orphan",
+        order_by="AgentToolCall.sequence_number",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("ix_agent_runs_agent_created", "agent_id", "created_at"),

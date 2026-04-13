@@ -109,10 +109,13 @@ async def oauth_callback(
             },
         )
 
+    from mcpworks_api.middleware.observability import record_auth_attempt
+
     try:
         token = await client.authorize_access_token(request)
     except Exception as e:
         logger.warning("oauth_callback_failed", provider=provider, error=str(e))
+        record_auth_attempt(f"oauth_{provider}", "failure")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "OAUTH_FAILED", "message": "OAuth authorization failed"},
@@ -145,6 +148,7 @@ async def oauth_callback(
         user_agent=user_agent,
     )
     await db.commit()
+    record_auth_attempt(f"oauth_{provider}", "success")
 
     cookie_redirect_uri = request.cookies.get("oauth_redirect_uri")
     if cookie_redirect_uri:

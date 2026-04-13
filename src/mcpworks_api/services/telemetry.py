@@ -92,8 +92,13 @@ async def _deliver_webhook(
     url: str,
     payload_bytes: bytes,
     secret: str | None = None,
+    namespace_name: str = "unknown",
 ) -> None:
+    import time
+
     import httpx
+
+    from mcpworks_api.middleware.observability import record_webhook_delivery
 
     headers: dict[str, str] = {
         "Content-Type": "application/json",
@@ -102,15 +107,20 @@ async def _deliver_webhook(
     if secret:
         headers[_SIGNATURE_HEADER] = sign_payload(payload_bytes, secret)
 
+    start = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, content=payload_bytes, headers=headers)
+            latency = time.monotonic() - start
+            record_webhook_delivery(namespace_name, "delivered", latency)
             logger.debug(
                 "telemetry_webhook_delivered",
                 url=url[:80],
                 status=resp.status_code,
             )
     except Exception:
+        latency = time.monotonic() - start
+        record_webhook_delivery(namespace_name, "failed", latency)
         logger.debug("telemetry_webhook_failed", url=url[:80], exc_info=True)
 
 
