@@ -19,9 +19,7 @@ async def prune_observability_data() -> None:
     try:
         async with get_db_context() as db:
             run_cutoff = datetime.now(UTC) - timedelta(days=AGENT_RUN_RETENTION_DAYS)
-            result = await db.execute(
-                delete(AgentRun).where(AgentRun.created_at < run_cutoff)
-            )
+            result = await db.execute(delete(AgentRun).where(AgentRun.created_at < run_cutoff))
             runs_deleted = result.rowcount
 
             fire_cutoff = datetime.now(UTC) - timedelta(days=SCHEDULE_FIRE_RETENTION_DAYS)

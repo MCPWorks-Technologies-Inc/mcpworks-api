@@ -53,18 +53,14 @@ class ObservabilityService:
 
     async def get_run(self, run_id: uuid.UUID) -> AgentRun | None:
         stmt = (
-            select(AgentRun)
-            .options(selectinload(AgentRun.tool_calls))
-            .where(AgentRun.id == run_id)
+            select(AgentRun).options(selectinload(AgentRun.tool_calls)).where(AgentRun.id == run_id)
         )
         result = await self._db.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_run_executions(self, run_id: uuid.UUID) -> list[Execution]:
         stmt = (
-            select(Execution)
-            .where(Execution.agent_run_id == run_id)
-            .order_by(Execution.created_at)
+            select(Execution).where(Execution.agent_run_id == run_id).order_by(Execution.created_at)
         )
         result = await self._db.execute(stmt)
         return list(result.scalars().all())

@@ -347,9 +347,7 @@ async def emit_orchestration_run_event(
             payload_bytes = json.dumps(payload).encode()
 
             asyncio.create_task(
-                _deliver_webhook(
-                    row.telemetry_webhook_url, payload_bytes, secret, namespace_name
-                )
+                _deliver_webhook(row.telemetry_webhook_url, payload_bytes, secret, namespace_name)
             )
     except Exception:
         logger.debug("orchestration_run_telemetry_failed", namespace=namespace_name, exc_info=True)

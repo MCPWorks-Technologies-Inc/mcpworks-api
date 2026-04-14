@@ -321,8 +321,12 @@ async def run_orchestration(
                     total_tokens=total_tokens,
                 )
                 await _post_orchestration(
-                    agent, trigger_type, result, tool_call_records=tool_call_records,
-                    schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+                    agent,
+                    trigger_type,
+                    result,
+                    tool_call_records=tool_call_records,
+                    schedule_id=schedule_id,
+                    orchestration_mode=orchestration_mode,
                     run_id=run_id,
                 )
                 return result
@@ -548,8 +552,12 @@ async def run_orchestration(
             limits_configured=limits,
         )
         await _record_run(
-            agent, trigger_type, result, tool_call_records=tool_call_records,
-            schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+            agent,
+            trigger_type,
+            result,
+            tool_call_records=tool_call_records,
+            schedule_id=schedule_id,
+            orchestration_mode=orchestration_mode,
             run_id=run_id,
         )
         return result
@@ -568,8 +576,12 @@ async def run_orchestration(
             limits_configured=limits,
         )
         await _record_run(
-            agent, trigger_type, result, tool_call_records=tool_call_records,
-            schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+            agent,
+            trigger_type,
+            result,
+            tool_call_records=tool_call_records,
+            schedule_id=schedule_id,
+            orchestration_mode=orchestration_mode,
             run_id=run_id,
         )
         return result
@@ -965,8 +977,12 @@ async def _post_orchestration(
             logger.exception("auto_channel_send_failed", agent_name=agent.name)
 
     await _record_run(
-        agent, trigger_type, result, tool_call_records=tool_call_records,
-        schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+        agent,
+        trigger_type,
+        result,
+        tool_call_records=tool_call_records,
+        schedule_id=schedule_id,
+        orchestration_mode=orchestration_mode,
         run_id=run_id,
     )
 

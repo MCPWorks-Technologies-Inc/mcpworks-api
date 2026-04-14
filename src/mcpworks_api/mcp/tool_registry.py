@@ -2527,7 +2527,14 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
                 },
                 "outcome": {
                     "type": "string",
-                    "enum": ["completed", "no_action", "limit_hit", "error", "timeout", "cancelled"],
+                    "enum": [
+                        "completed",
+                        "no_action",
+                        "limit_hit",
+                        "error",
+                        "timeout",
+                        "cancelled",
+                    ],
                     "description": "Filter by run outcome.",
                 },
                 "limit": {

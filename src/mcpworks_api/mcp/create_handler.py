@@ -3471,8 +3471,11 @@ class CreateMCPHandler:
         )
 
     async def _list_orchestration_runs(
-        self, agent: str, trigger_type: str | None = None,
-        outcome: str | None = None, limit: int = 10,
+        self,
+        agent: str,
+        trigger_type: str | None = None,
+        outcome: str | None = None,
+        limit: int = 10,
     ) -> MCPToolResult:
         from mcpworks_api.services.observability_service import ObservabilityService
 
@@ -3487,22 +3490,22 @@ class CreateMCPHandler:
         )
         items = []
         for r in runs:
-            items.append({
-                "id": str(r.id),
-                "trigger_type": r.trigger_type,
-                "trigger_detail": r.trigger_detail,
-                "orchestration_mode": r.orchestration_mode,
-                "outcome": r.outcome,
-                "status": r.status,
-                "functions_called_count": r.functions_called_count,
-                "started_at": r.started_at.isoformat() if r.started_at else None,
-                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
-                "duration_ms": r.duration_ms,
-                "error": r.error,
-            })
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps({"runs": items, "total": total}))]
-        )
+            items.append(
+                {
+                    "id": str(r.id),
+                    "trigger_type": r.trigger_type,
+                    "trigger_detail": r.trigger_detail,
+                    "orchestration_mode": r.orchestration_mode,
+                    "outcome": r.outcome,
+                    "status": r.status,
+                    "functions_called_count": r.functions_called_count,
+                    "started_at": r.started_at.isoformat() if r.started_at else None,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                    "duration_ms": r.duration_ms,
+                    "error": r.error,
+                }
+            )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"runs": items, "total": total}))])
 
     async def _describe_orchestration_run(self, run_id: str) -> MCPToolResult:
         import uuid as uuid_mod
@@ -3519,14 +3522,16 @@ class CreateMCPHandler:
             raise ValueError(f"Orchestration run '{run_id}' not found")
         steps = []
         for tc in run.tool_calls:
-            steps.append({
-                "sequence_number": tc.sequence_number,
-                "decision_type": tc.decision_type,
-                "tool_name": tc.tool_name,
-                "reason_category": tc.reason_category,
-                "duration_ms": tc.duration_ms,
-                "status": tc.status,
-            })
+            steps.append(
+                {
+                    "sequence_number": tc.sequence_number,
+                    "decision_type": tc.decision_type,
+                    "tool_name": tc.tool_name,
+                    "reason_category": tc.reason_category,
+                    "duration_ms": tc.duration_ms,
+                    "status": tc.status,
+                }
+            )
         execs = await svc.get_run_executions(rid)
         exec_refs = [
             {
@@ -3556,13 +3561,14 @@ class CreateMCPHandler:
             "steps": steps,
             "executions": exec_refs,
         }
-        return MCPToolResult(
-            content=[MCPContent(text=json.dumps(detail))]
-        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(detail))])
 
     async def _list_schedule_fires(
-        self, agent: str, schedule_id: str | None = None,
-        status: str | None = None, limit: int = 10,
+        self,
+        agent: str,
+        schedule_id: str | None = None,
+        status: str | None = None,
+        limit: int = 10,
     ) -> MCPToolResult:
         import uuid as uuid_mod
 
@@ -3580,15 +3586,17 @@ class CreateMCPHandler:
         )
         items = []
         for f in fires:
-            items.append({
-                "id": str(f.id),
-                "schedule_id": str(f.schedule_id),
-                "agent_id": str(f.agent_id),
-                "fired_at": f.fired_at.isoformat() if f.fired_at else None,
-                "status": f.status,
-                "agent_run_id": str(f.agent_run_id) if f.agent_run_id else None,
-                "error_detail": f.error_detail,
-            })
+            items.append(
+                {
+                    "id": str(f.id),
+                    "schedule_id": str(f.schedule_id),
+                    "agent_id": str(f.agent_id),
+                    "fired_at": f.fired_at.isoformat() if f.fired_at else None,
+                    "status": f.status,
+                    "agent_run_id": str(f.agent_run_id) if f.agent_run_id else None,
+                    "error_detail": f.error_detail,
+                }
+            )
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"fires": items, "total": total}))]
         )
