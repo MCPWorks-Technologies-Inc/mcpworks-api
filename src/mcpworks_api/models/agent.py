@@ -28,7 +28,8 @@ AGENT_STATUSES = ("creating", "running", "stopped", "error", "destroying", "degr
 REPLICA_STATUSES = ("creating", "running", "stopped", "error")
 SCHEDULE_MODES = ("single", "cluster")
 JOB_STATUSES = ("pending", "claimed", "running", "complete", "failed")
-RUN_STATUSES = ("running", "completed", "failed", "timeout")
+RUN_STATUSES = ("running", "completed", "failed", "timeout", "no_action", "limit_hit", "cancelled")
+RUN_OUTCOMES = ("completed", "no_action", "limit_hit", "error", "cancelled", "timeout")
 TRIGGER_TYPES = ("cron", "webhook", "manual", "ai", "heartbeat")
 CHANNEL_TYPES = ("discord", "slack", "whatsapp", "email")
 ORCHESTRATION_MODES = ("direct", "reason_first", "run_then_reason", "procedure")
@@ -209,6 +210,16 @@ class AgentRun(Base, UUIDMixin):
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    orchestration_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    limits_consumed: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    limits_configured: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_schedules.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    functions_called_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default="now()"
     )
@@ -221,10 +232,17 @@ class AgentRun(Base, UUIDMixin):
         order_by="AgentToolCall.sequence_number",
         lazy="selectin",
     )
+    schedule_fires: Mapped[list["ScheduleFire"]] = relationship(  # noqa: F821
+        "ScheduleFire",
+        back_populates="agent_run",
+        lazy="noload",
+    )
 
     __table_args__ = (
         Index("ix_agent_runs_agent_created", "agent_id", "created_at"),
         Index("ix_agent_runs_created", "created_at"),
+        Index("ix_agent_runs_outcome", "outcome"),
+        Index("ix_agent_runs_schedule", "schedule_id"),
     )
 
     @validates("trigger_type")
@@ -237,6 +255,12 @@ class AgentRun(Base, UUIDMixin):
     def validate_status(self, key: str, value: str) -> str:
         if value not in RUN_STATUSES:
             raise ValueError(f"Invalid run status: {value}")
+        return value
+
+    @validates("outcome")
+    def validate_outcome(self, key: str, value: str | None) -> str | None:
+        if value is not None and value not in RUN_OUTCOMES:
+            raise ValueError(f"Invalid run outcome: {value}")
         return value
 
 

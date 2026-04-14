@@ -129,6 +129,15 @@ webhook_delivery_latency_seconds = Histogram(
 
 
 # ---------------------------------------------------------------------------
+# Schedule fires
+# ---------------------------------------------------------------------------
+schedule_fires_total = Counter(
+    "mcpworks_schedule_fires_total",
+    "Cron schedule fire events",
+    ["namespace", "status"],
+)
+
+# ---------------------------------------------------------------------------
 # OAuth
 # ---------------------------------------------------------------------------
 oauth_token_refreshes_total = Counter(
@@ -253,3 +262,7 @@ def record_oauth_device_flow(namespace: str, server: str, status: str) -> None:
 
 def record_oauth_auth_required(namespace: str, server: str, flow: str) -> None:
     oauth_auth_required_total.labels(namespace=namespace, server=server, flow=flow).inc()
+
+
+def record_schedule_fire(namespace: str, status: str) -> None:
+    schedule_fires_total.labels(namespace=namespace, status=status).inc()

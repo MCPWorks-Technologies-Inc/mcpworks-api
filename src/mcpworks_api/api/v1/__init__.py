@@ -17,6 +17,7 @@ from mcpworks_api.api.v1.legal import router as legal_router
 from mcpworks_api.api.v1.llm import router as llm_router
 from mcpworks_api.api.v1.namespaces import router as namespaces_router
 from mcpworks_api.api.v1.oauth import router as oauth_router
+from mcpworks_api.api.v1.observability import router as observability_router
 from mcpworks_api.api.v1.procedures import router as procedures_router
 from mcpworks_api.api.v1.quickstart import router as quickstart_router
 from mcpworks_api.api.v1.shares import router as shares_router
@@ -49,6 +50,7 @@ router.include_router(admin_router)  # Admin dashboard
 router.include_router(demo_router)  # Demo booking form
 router.include_router(analytics_router)  # Token savings & MCP analytics
 router.include_router(executions_router)  # Execution debugging
+router.include_router(observability_router)  # Orchestration observability
 router.include_router(compliance_router)  # OWASP compliance reporting
 router.include_router(mcp_router)  # A0: MCP JSON-RPC endpoints
 

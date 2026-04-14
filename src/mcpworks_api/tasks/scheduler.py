@@ -24,6 +24,7 @@ from mcpworks_api.core.database import get_db_context
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import Agent, AgentReplica, AgentRun, AgentSchedule, ScheduledJob
 from mcpworks_api.models.namespace import Namespace
+from mcpworks_api.models.schedule_fire import ScheduleFire
 from mcpworks_api.services.agent_service import AgentService
 from mcpworks_api.services.function import FunctionService
 
@@ -201,7 +202,19 @@ async def _execute_scheduled_function(
     agent: Agent,
 ) -> None:
     """Execute a single scheduled function, respecting orchestration_mode."""
+    from mcpworks_api.middleware.observability import record_schedule_fire
     from mcpworks_api.tasks.orchestrator import run_orchestration
+
+    fire_id = uuid_mod.uuid4()
+    async with get_db_context() as db:
+        fire = ScheduleFire(
+            id=fire_id,
+            schedule_id=schedule.id,
+            agent_id=agent.id,
+            status="started",
+        )
+        db.add(fire)
+    record_schedule_fire(namespace=agent.name, status="started")
 
     orch_mode = getattr(schedule, "orchestration_mode", "direct") or "direct"
 
@@ -275,6 +288,8 @@ async def _execute_scheduled_function(
         trigger_data={"schedule_id": str(schedule.id), "function_name": schedule.function_name},
         tier=tier,
         account=account,
+        schedule_id=str(schedule.id),
+        orchestration_mode=orch_mode,
     )
 
     async with get_db_context() as db:
@@ -287,6 +302,16 @@ async def _execute_scheduled_function(
                 else schedule.consecutive_failures + 1,
                 last_run_at=datetime.now(UTC),
                 next_run_at=_compute_next_run(schedule.cron_expression, schedule.timezone),
+            )
+        )
+
+    async with get_db_context() as db:
+        await db.execute(
+            update(ScheduleFire)
+            .where(ScheduleFire.id == fire_id)
+            .values(
+                status="started" if orch_result.success else "error",
+                error_detail=orch_result.error[:500] if orch_result.error else None,
             )
         )
 

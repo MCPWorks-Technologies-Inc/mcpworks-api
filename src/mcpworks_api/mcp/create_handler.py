@@ -176,6 +176,9 @@ class CreateMCPHandler:
         "update_security_scanner": "write",
         "remove_security_scanner": "write",
         "configure_telemetry_webhook": "write",
+        "list_orchestration_runs": "read",
+        "describe_orchestration_run": "read",
+        "list_schedule_fires": "read",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -539,6 +542,9 @@ class CreateMCPHandler:
             "update_security_scanner": self._update_security_scanner,
             "remove_security_scanner": self._remove_security_scanner,
             "configure_telemetry_webhook": self._configure_telemetry_webhook,
+            "list_orchestration_runs": self._list_orchestration_runs,
+            "describe_orchestration_run": self._describe_orchestration_run,
+            "list_schedule_fires": self._list_schedule_fires,
         }
 
         handler = handlers.get(name)
@@ -3404,6 +3410,7 @@ class CreateMCPHandler:
         secret: str | None = None,
         batch_enabled: bool | None = None,
         batch_interval_seconds: int | None = None,
+        events: list[str] | None = None,
         remove: bool = False,
     ) -> MCPToolResult:
         ns = await self._get_current_namespace()
@@ -3436,6 +3443,9 @@ class CreateMCPHandler:
             config["batch_enabled"] = batch_enabled
         if batch_interval_seconds is not None:
             config["batch_interval_seconds"] = max(1, min(60, batch_interval_seconds))
+        if events is not None:
+            valid_events = {"tool_call", "orchestration_run"}
+            config["events"] = [e for e in events if e in valid_events]
         if config:
             ns.telemetry_config = config
 
@@ -3458,4 +3468,135 @@ class CreateMCPHandler:
                     )
                 )
             ]
+        )
+
+    async def _list_orchestration_runs(
+        self,
+        agent: str,
+        trigger_type: str | None = None,
+        outcome: str | None = None,
+        limit: int = 10,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.observability_service import ObservabilityService
+
+        service = AgentService(self.db)
+        agent_obj = await service.get_agent(self.account.id, agent)
+        svc = ObservabilityService(self.db)
+        runs, total = await svc.list_runs(
+            agent_id=agent_obj.id,
+            trigger_type=trigger_type,
+            outcome=outcome,
+            limit=min(limit, 50),
+        )
+        items = []
+        for r in runs:
+            items.append(
+                {
+                    "id": str(r.id),
+                    "trigger_type": r.trigger_type,
+                    "trigger_detail": r.trigger_detail,
+                    "orchestration_mode": r.orchestration_mode,
+                    "outcome": r.outcome,
+                    "status": r.status,
+                    "functions_called_count": r.functions_called_count,
+                    "started_at": r.started_at.isoformat() if r.started_at else None,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                    "duration_ms": r.duration_ms,
+                    "error": r.error,
+                }
+            )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"runs": items, "total": total}))])
+
+    async def _describe_orchestration_run(self, run_id: str) -> MCPToolResult:
+        import uuid as uuid_mod
+
+        from mcpworks_api.services.observability_service import ObservabilityService
+
+        svc = ObservabilityService(self.db)
+        try:
+            rid = uuid_mod.UUID(run_id)
+        except ValueError:
+            raise ValueError(f"Invalid run ID: {run_id}")
+        run = await svc.get_run(rid)
+        if not run:
+            raise ValueError(f"Orchestration run '{run_id}' not found")
+        steps = []
+        for tc in run.tool_calls:
+            steps.append(
+                {
+                    "sequence_number": tc.sequence_number,
+                    "decision_type": tc.decision_type,
+                    "tool_name": tc.tool_name,
+                    "reason_category": tc.reason_category,
+                    "duration_ms": tc.duration_ms,
+                    "status": tc.status,
+                }
+            )
+        execs = await svc.get_run_executions(rid)
+        exec_refs = [
+            {
+                "execution_id": str(e.id),
+                "function_name": e.function_name,
+                "status": e.status,
+                "duration_ms": e.execution_time_ms,
+            }
+            for e in execs
+        ]
+        detail = {
+            "id": str(run.id),
+            "agent_id": str(run.agent_id),
+            "trigger_type": run.trigger_type,
+            "trigger_detail": run.trigger_detail,
+            "orchestration_mode": run.orchestration_mode,
+            "outcome": run.outcome,
+            "status": run.status,
+            "functions_called_count": run.functions_called_count,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "duration_ms": run.duration_ms,
+            "limits_consumed": run.limits_consumed,
+            "limits_configured": run.limits_configured,
+            "result_summary": run.result_summary,
+            "error": run.error,
+            "steps": steps,
+            "executions": exec_refs,
+        }
+        return MCPToolResult(content=[MCPContent(text=json.dumps(detail))])
+
+    async def _list_schedule_fires(
+        self,
+        agent: str,
+        schedule_id: str | None = None,
+        status: str | None = None,
+        limit: int = 10,
+    ) -> MCPToolResult:
+        import uuid as uuid_mod
+
+        from mcpworks_api.services.observability_service import ObservabilityService
+
+        service = AgentService(self.db)
+        agent_obj = await service.get_agent(self.account.id, agent)
+        svc = ObservabilityService(self.db)
+        sched_uuid = uuid_mod.UUID(schedule_id) if schedule_id else None
+        fires, total = await svc.list_fires(
+            schedule_id=sched_uuid,
+            agent_id=agent_obj.id,
+            status=status,
+            limit=min(limit, 50),
+        )
+        items = []
+        for f in fires:
+            items.append(
+                {
+                    "id": str(f.id),
+                    "schedule_id": str(f.schedule_id),
+                    "agent_id": str(f.agent_id),
+                    "fired_at": f.fired_at.isoformat() if f.fired_at else None,
+                    "status": f.status,
+                    "agent_run_id": str(f.agent_run_id) if f.agent_run_id else None,
+                    "error_detail": f.error_detail,
+                }
+            )
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"fires": items, "total": total}))]
         )
