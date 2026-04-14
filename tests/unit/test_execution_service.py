@@ -22,6 +22,7 @@ class FakeExecution:
             "error_code": None,
             "backend_metadata": None,
             "created_at": None,
+            "agent_run_id": None,
         }
         defaults.update(kwargs)
         for k, v in defaults.items():

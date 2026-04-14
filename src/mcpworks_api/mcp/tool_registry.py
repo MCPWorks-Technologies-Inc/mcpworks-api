@@ -2469,8 +2469,9 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
         name="configure_telemetry_webhook",
         brief="Set, update, or remove a telemetry webhook for this namespace.",
         description=(
-            "Configure a webhook URL that receives execution metadata on every tool call. "
+            "Configure a webhook URL that receives execution metadata. "
             "Supports HMAC-SHA256 signing and optional event batching. "
+            "Set events=['tool_call','orchestration_run'] to receive run completion summaries. "
             "Set remove=true to disable the webhook."
         ),
         input_schema={
@@ -2492,11 +2493,101 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
                     "type": "integer",
                     "description": "Flush interval for batching in seconds (1-60, default: 10).",
                 },
+                "events": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["tool_call", "orchestration_run"]},
+                    "description": "Event types to receive (default: ['tool_call']).",
+                },
                 "remove": {
                     "type": "boolean",
                     "description": "Set true to remove the webhook entirely.",
                 },
             },
+        },
+    ),
+    "list_orchestration_runs": ToolDef(
+        name="list_orchestration_runs",
+        brief="List orchestration runs for an agent.",
+        description=(
+            "List orchestration runs for an agent with optional filters. Returns run ID, "
+            "trigger source, outcome, duration, and function call count. "
+            "Example: list_orchestration_runs(agent='social-bot', outcome='no_action')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string",
+                    "description": "Agent name.",
+                },
+                "trigger_type": {
+                    "type": "string",
+                    "enum": ["cron", "webhook", "manual", "ai", "heartbeat"],
+                    "description": "Filter by trigger type.",
+                },
+                "outcome": {
+                    "type": "string",
+                    "enum": ["completed", "no_action", "limit_hit", "error", "timeout", "cancelled"],
+                    "description": "Filter by run outcome.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (1-50, default: 10).",
+                },
+            },
+            "required": ["agent"],
+        },
+    ),
+    "describe_orchestration_run": ToolDef(
+        name="describe_orchestration_run",
+        brief="Get full detail of an orchestration run.",
+        description=(
+            "Get full detail of an orchestration run including decision steps, "
+            "limits consumed vs configured, and function executions. "
+            "Use list_orchestration_runs to find run IDs. "
+            "Example: describe_orchestration_run(run_id='abc-123-def')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "run_id": {
+                    "type": "string",
+                    "description": "Orchestration run UUID.",
+                },
+            },
+            "required": ["run_id"],
+        },
+    ),
+    "list_schedule_fires": ToolDef(
+        name="list_schedule_fires",
+        brief="List fire history for a cron schedule.",
+        description=(
+            "List fire history for a cron schedule showing when each fire occurred, "
+            "whether it produced a run, and error details for failed fires. "
+            "Example: list_schedule_fires(agent='social-bot', schedule_id='abc-123')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string",
+                    "description": "Agent name.",
+                },
+                "schedule_id": {
+                    "type": "string",
+                    "description": "Schedule UUID (optional if agent provided).",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["started", "error", "skipped"],
+                    "description": "Filter by fire status.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (1-50, default: 10).",
+                },
+            },
+            "required": ["agent"],
         },
     ),
 }

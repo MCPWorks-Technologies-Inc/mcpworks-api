@@ -101,6 +101,10 @@ class OrchestrationResult:
     duration_ms: int = 0
     error: str | None = None
     context_tokens: int = 0
+    outcome: str | None = None
+    limit_name: str | None = None
+    limits_consumed: dict | None = None
+    limits_configured: dict | None = None
 
 
 async def run_orchestration(
@@ -110,6 +114,8 @@ async def run_orchestration(
     trigger_data: dict,  # noqa: ARG001  — reserved for future use (logging, state)
     tier: str,
     account: Account,
+    schedule_id: str | None = None,
+    orchestration_mode: str | None = None,
 ) -> OrchestrationResult:
     """Execute the AI orchestration loop for an agent."""
     start_time = time.monotonic()
@@ -253,6 +259,7 @@ async def run_orchestration(
                     total_tokens,
                     start_time,
                     context_tokens,
+                    limits=limits,
                 )
             if _elapsed_seconds(start_time) >= limits["max_execution_seconds"]:
                 return _limit_result(
@@ -262,6 +269,7 @@ async def run_orchestration(
                     total_tokens,
                     start_time,
                     context_tokens,
+                    limits=limits,
                 )
 
             response = await chat_with_tools(
@@ -286,6 +294,13 @@ async def run_orchestration(
 
             if stop_reason != "tool_use":
                 final_text = _extract_text(content_blocks)
+                _consumed = {
+                    "iterations": iterations,
+                    "ai_tokens": total_tokens,
+                    "functions_called": len(functions_called),
+                    "execution_seconds": round(_elapsed_seconds(start_time), 1),
+                }
+                outcome = "completed" if functions_called else "no_action"
                 result = OrchestrationResult(
                     success=True,
                     final_text=final_text,
@@ -294,6 +309,9 @@ async def run_orchestration(
                     total_tokens=total_tokens,
                     duration_ms=_elapsed_ms(start_time),
                     context_tokens=context_tokens,
+                    outcome=outcome,
+                    limits_consumed=_consumed,
+                    limits_configured=limits,
                 )
                 _emit(
                     "completion",
@@ -303,7 +321,9 @@ async def run_orchestration(
                     total_tokens=total_tokens,
                 )
                 await _post_orchestration(
-                    agent, trigger_type, result, tool_call_records=tool_call_records
+                    agent, trigger_type, result, tool_call_records=tool_call_records,
+                    schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+                    run_id=run_id,
                 )
                 return result
 
@@ -469,6 +489,8 @@ async def run_orchestration(
                         "duration_ms": tc_duration_ms,
                         "source": source,
                         "status": tc_status,
+                        "decision_type": "call",
+                        "reason_category": "error" if is_error else "success",
                         "error_message": (
                             _scrub_error_message(result_str[:MAX_ERROR_CHARS]) if is_error else None
                         ),
@@ -493,6 +515,7 @@ async def run_orchestration(
                         total_tokens,
                         start_time,
                         context_tokens,
+                        limits=limits,
                     )
 
         return _limit_result(
@@ -502,6 +525,7 @@ async def run_orchestration(
             total_tokens,
             start_time,
             context_tokens,
+            limits=limits,
         )
 
     except AIClientError as e:
@@ -520,8 +544,14 @@ async def run_orchestration(
             total_tokens=total_tokens,
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
+            outcome="error",
+            limits_configured=limits,
         )
-        await _record_run(agent, trigger_type, result, tool_call_records=tool_call_records)
+        await _record_run(
+            agent, trigger_type, result, tool_call_records=tool_call_records,
+            schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+            run_id=run_id,
+        )
         return result
     except Exception as e:
         _emit("error", message=str(e)[:300], phase="orchestration")
@@ -534,8 +564,14 @@ async def run_orchestration(
             total_tokens=total_tokens,
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
+            outcome="error",
+            limits_configured=limits,
         )
-        await _record_run(agent, trigger_type, result, tool_call_records=tool_call_records)
+        await _record_run(
+            agent, trigger_type, result, tool_call_records=tool_call_records,
+            schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+            run_id=run_id,
+        )
         return result
     finally:
         agents_running.labels(namespace=namespace_name).dec()
@@ -917,6 +953,9 @@ async def _post_orchestration(
     trigger_type: str,
     result: OrchestrationResult,
     tool_call_records: list[dict] | None = None,
+    schedule_id: str | None = None,
+    orchestration_mode: str | None = None,
+    run_id: str | None = None,
 ) -> None:
     """Handle post-orchestration tasks: auto_channel, run recording."""
     if result.success and agent.auto_channel and result.final_text:
@@ -925,7 +964,32 @@ async def _post_orchestration(
         except Exception:
             logger.exception("auto_channel_send_failed", agent_name=agent.name)
 
-    await _record_run(agent, trigger_type, result, tool_call_records=tool_call_records)
+    await _record_run(
+        agent, trigger_type, result, tool_call_records=tool_call_records,
+        schedule_id=schedule_id, orchestration_mode=orchestration_mode,
+        run_id=run_id,
+    )
+
+    import asyncio as _aio
+
+    from mcpworks_api.services.telemetry import emit_orchestration_run_event
+
+    _aio.create_task(
+        emit_orchestration_run_event(
+            namespace_id=agent.namespace_id,
+            namespace_name=agent.name,
+            agent_name=agent.name,
+            run_id=run_id or "",
+            trigger_type=trigger_type,
+            orchestration_mode=orchestration_mode,
+            outcome=result.outcome,
+            duration_ms=result.duration_ms,
+            functions_called_count=len(result.functions_called),
+            limits_consumed=result.limits_consumed,
+            limits_configured=result.limits_configured,
+            error=result.error,
+        )
+    )
 
 
 async def _record_run(
@@ -933,9 +997,21 @@ async def _record_run(
     trigger_type: str,
     result: OrchestrationResult,
     tool_call_records: list[dict] | None = None,
+    schedule_id: str | None = None,
+    orchestration_mode: str | None = None,
+    run_id: str | None = None,
 ) -> None:
     """Record an orchestration run as an AgentRun with tool call audit trail."""
-    status = "completed" if result.success else "failed"
+    status_map = {
+        "completed": "completed",
+        "no_action": "no_action",
+        "limit_hit": "limit_hit",
+        "error": "failed",
+        "timeout": "timeout",
+        "cancelled": "cancelled",
+    }
+    outcome = result.outcome or ("completed" if result.success else "error")
+    status = status_map.get(outcome, "failed")
     record_agent_run(
         namespace=agent.name,
         trigger_type=trigger_type,
@@ -944,15 +1020,30 @@ async def _record_run(
         iterations=result.iterations or 0,
     )
     try:
+        import uuid as _uuid_mod
+
         from mcpworks_api.models.agent_tool_call import AgentToolCall
 
+        sched_uuid = _uuid_mod.UUID(schedule_id) if schedule_id else None
+        run_uuid = _uuid_mod.UUID(run_id) if run_id else None
+
         async with get_db_context() as db:
+            run_kwargs: dict = {}
+            if run_uuid:
+                run_kwargs["id"] = run_uuid
             run = AgentRun(
                 agent_id=agent.id,
+                **run_kwargs,
                 trigger_type="ai",
                 trigger_detail=f"orchestration:{trigger_type}",
                 function_name=", ".join(result.functions_called[:10]) or None,
                 status=status,
+                outcome=outcome,
+                orchestration_mode=orchestration_mode,
+                limits_consumed=result.limits_consumed,
+                limits_configured=result.limits_configured,
+                schedule_id=sched_uuid,
+                functions_called_count=len(result.functions_called),
                 started_at=datetime.now(UTC),
                 completed_at=datetime.now(UTC),
                 duration_ms=result.duration_ms,
@@ -1003,7 +1094,14 @@ def _limit_result(
     total_tokens: int,
     start_time: float,
     context_tokens: int = 0,
+    limits: dict | None = None,
 ) -> OrchestrationResult:
+    _consumed = {
+        "iterations": iterations,
+        "ai_tokens": total_tokens,
+        "functions_called": len(functions_called),
+        "execution_seconds": round(_elapsed_seconds(start_time), 1),
+    }
     return OrchestrationResult(
         success=False,
         final_text=None,
@@ -1013,6 +1111,9 @@ def _limit_result(
         duration_ms=_elapsed_ms(start_time),
         error=error,
         context_tokens=context_tokens,
+        outcome="limit_hit",
+        limits_consumed=_consumed,
+        limits_configured=limits,
     )
 
 

@@ -98,6 +98,7 @@ def _to_detail(e: Execution) -> dict[str, Any]:
             "stdout": meta.get("stdout"),
             "stderr": meta.get("stderr"),
             "created_at": e.created_at.isoformat() if e.created_at else None,
+            "agent_run_id": str(e.agent_run_id) if e.agent_run_id else None,
         }
     )
     return detail

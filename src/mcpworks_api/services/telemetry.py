@@ -277,3 +277,79 @@ async def flush_telemetry_batches() -> None:
 
     except Exception:
         logger.debug("telemetry_batch_flush_failed", exc_info=True)
+
+
+async def emit_orchestration_run_event(
+    namespace_id,
+    namespace_name: str,
+    agent_name: str,
+    run_id: str,
+    trigger_type: str,
+    orchestration_mode: str | None,
+    outcome: str | None,
+    duration_ms: int | None,
+    functions_called_count: int,
+    limits_consumed: dict | None,
+    limits_configured: dict | None,
+    error: str | None = None,
+) -> None:
+    from mcpworks_api.core.database import get_db_context
+    from mcpworks_api.core.encryption import decrypt_value
+    from mcpworks_api.models.namespace import Namespace
+
+    try:
+        async with get_db_context() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(
+                select(
+                    Namespace.telemetry_webhook_url,
+                    Namespace.telemetry_webhook_secret_encrypted,
+                    Namespace.telemetry_webhook_secret_dek,
+                    Namespace.telemetry_config,
+                ).where(Namespace.id == namespace_id)
+            )
+            row = result.first()
+
+            if not row or not row.telemetry_webhook_url:
+                return
+
+            config = row.telemetry_config or {}
+            events = config.get("events", ["tool_call"])
+            if "orchestration_run" not in events:
+                return
+
+            secret = None
+            if row.telemetry_webhook_secret_encrypted and row.telemetry_webhook_secret_dek:
+                try:
+                    secret = decrypt_value(
+                        row.telemetry_webhook_secret_encrypted,
+                        row.telemetry_webhook_secret_dek,
+                    )
+                except Exception:
+                    logger.warning("telemetry_secret_decrypt_failed", namespace=namespace_name)
+
+            payload = {
+                "event_type": "orchestration_run",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "namespace": namespace_name,
+                "agent": agent_name,
+                "run_id": run_id,
+                "trigger_type": trigger_type,
+                "orchestration_mode": orchestration_mode,
+                "outcome": outcome,
+                "duration_ms": duration_ms,
+                "functions_called_count": functions_called_count,
+                "limits_consumed": limits_consumed,
+                "limits_configured": limits_configured,
+                "error": error,
+            }
+            payload_bytes = json.dumps(payload).encode()
+
+            asyncio.create_task(
+                _deliver_webhook(
+                    row.telemetry_webhook_url, payload_bytes, secret, namespace_name
+                )
+            )
+    except Exception:
+        logger.debug("orchestration_run_telemetry_failed", namespace=namespace_name, exc_info=True)
