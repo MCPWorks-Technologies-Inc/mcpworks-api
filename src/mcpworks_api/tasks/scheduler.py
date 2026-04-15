@@ -218,19 +218,31 @@ async def _execute_scheduled_function(
 
     orch_mode = getattr(schedule, "orchestration_mode", "direct") or "direct"
 
+    async def _update_fire(
+        status: str, error_detail: str | None = None, run_id: str | None = None
+    ) -> None:
+        vals: dict = {"status": status, "error_detail": error_detail}
+        if run_id:
+            vals["agent_run_id"] = uuid_mod.UUID(run_id)
+        async with get_db_context() as db:
+            await db.execute(update(ScheduleFire).where(ScheduleFire.id == fire_id).values(**vals))
+
     if orch_mode == "procedure":
         procedure_name = getattr(schedule, "procedure_name", None)
         if not procedure_name:
             logger.error("schedule_procedure_no_name", schedule_id=str(schedule.id))
+            await _update_fire("error", "No procedure name configured")
             return
         if not agent.ai_engine:
             logger.error("schedule_procedure_no_ai", schedule_id=str(schedule.id))
+            await _update_fire("error", "No AI engine configured")
             return
 
         async with get_db_context() as db:
             account = await _get_schedule_account(agent, db)
         if not account:
             logger.error("schedule_account_not_found", agent_id=str(agent.id))
+            await _update_fire("error", "Account not found")
             return
 
         tier = account.user.effective_tier if account.user else "pro-agent"
@@ -248,6 +260,7 @@ async def _execute_scheduled_function(
             account=account,
             tier=tier,
         )
+        await _update_fire("completed")
         return
 
     if orch_mode != "direct" and not agent.ai_engine:
@@ -259,13 +272,18 @@ async def _execute_scheduled_function(
         orch_mode = "direct"
 
     if orch_mode == "direct":
-        await _execute_function_direct(schedule, agent)
+        try:
+            await _execute_function_direct(schedule, agent)
+            await _update_fire("completed")
+        except Exception as exc:
+            await _update_fire("error", str(exc)[:500])
         return
 
     async with get_db_context() as db:
         account = await _get_schedule_account(agent, db)
     if not account:
         logger.error("schedule_account_not_found", agent_id=str(agent.id))
+        await _update_fire("error", "Account not found")
         return
 
     tier = account.user.effective_tier if account.user else "pro-agent"
@@ -305,15 +323,11 @@ async def _execute_scheduled_function(
             )
         )
 
-    async with get_db_context() as db:
-        await db.execute(
-            update(ScheduleFire)
-            .where(ScheduleFire.id == fire_id)
-            .values(
-                status="started" if orch_result.success else "error",
-                error_detail=orch_result.error[:500] if orch_result.error else None,
-            )
-        )
+    await _update_fire(
+        "completed" if orch_result.success else "error",
+        orch_result.error[:500] if orch_result.error else None,
+        orch_result.run_id,
+    )
 
     logger.info(
         "schedule_orchestration_complete",

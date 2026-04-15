@@ -2586,7 +2586,7 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
                 },
                 "status": {
                     "type": "string",
-                    "enum": ["started", "error", "skipped"],
+                    "enum": ["started", "completed", "error", "skipped"],
                     "description": "Filter by fire status.",
                 },
                 "limit": {

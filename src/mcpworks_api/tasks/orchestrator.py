@@ -101,6 +101,7 @@ class OrchestrationResult:
     duration_ms: int = 0
     error: str | None = None
     context_tokens: int = 0
+    run_id: str | None = None
     outcome: str | None = None
     limit_name: str | None = None
     limits_consumed: dict | None = None
@@ -309,6 +310,7 @@ async def run_orchestration(
                     total_tokens=total_tokens,
                     duration_ms=_elapsed_ms(start_time),
                     context_tokens=context_tokens,
+                    run_id=run_id,
                     outcome=outcome,
                     limits_consumed=_consumed,
                     limits_configured=limits,
@@ -548,6 +550,7 @@ async def run_orchestration(
             total_tokens=total_tokens,
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
+            run_id=run_id,
             outcome="error",
             limits_configured=limits,
         )
@@ -572,6 +575,7 @@ async def run_orchestration(
             total_tokens=total_tokens,
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
+            run_id=run_id,
             outcome="error",
             limits_configured=limits,
         )

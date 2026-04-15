@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mcpworks_api.models.base import Base, UUIDMixin
 
-FIRE_STATUSES = ("started", "error", "skipped")
+FIRE_STATUSES = ("started", "completed", "error", "skipped")
 
 
 class ScheduleFire(Base, UUIDMixin):
