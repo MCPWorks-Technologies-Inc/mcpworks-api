@@ -1224,6 +1224,48 @@ async def run_procedure_orchestration(
 
             fn_schema = await get_function_input_schema(agent.namespace_id, step_db, function_ref)
 
+        input_mapping = step.get("input_mapping")
+        output_mapping = step.get("output_mapping")
+
+        pre_resolved: dict | None = None
+        if input_mapping and isinstance(input_mapping, dict):
+            from mcpworks_api.services.jsonpath import resolve_input_mapping
+
+            pre_resolved, mapping_errors = resolve_input_mapping(input_mapping, accumulated_context)
+            if mapping_errors:
+                step_result_entry: dict = {
+                    "step_number": step_num,
+                    "name": step_name,
+                    "status": "failed",
+                    "function_called": None,
+                    "result": None,
+                    "error": f"Input mapping failed: {'; '.join(mapping_errors)}",
+                    "attempt_count": 0,
+                    "attempts": [],
+                }
+                step_results.append(step_result_entry)
+                if failure_policy == "required":
+                    async with get_db_context() as db:
+                        exec_result = await db.execute(
+                            select(ProcedureExecution).where(ProcedureExecution.id == execution_id)
+                        )
+                        execution_obj = exec_result.scalar_one_or_none()
+                        if execution_obj:
+                            execution_obj.status = "failed"
+                            execution_obj.completed_at = datetime.now(UTC)
+                            execution_obj.step_results = step_results
+
+                    return OrchestrationResult(
+                        success=False,
+                        final_text=f"Procedure failed at step {step_num} ({step_name}): input mapping error",
+                        functions_called=functions_called,
+                        iterations=iterations,
+                        total_tokens=total_tokens,
+                        duration_ms=_elapsed_ms(start_time),
+                        error=f"Input mapping failed: {'; '.join(mapping_errors)}",
+                    )
+                continue
+
         step_result: dict = {
             "step_number": step_num,
             "name": step_name,
@@ -1253,10 +1295,14 @@ async def run_procedure_orchestration(
                 break
 
             ctx_lines = []
+            if pre_resolved:
+                for k, v in pre_resolved.items():
+                    ctx_lines.append(f"  {k} = {json.dumps(v, default=str)} (pre-resolved)")
             input_ctx = accumulated_context.get("input")
             if input_ctx and isinstance(input_ctx, dict):
                 for k, v in input_ctx.items():
-                    ctx_lines.append(f"  {k} = {json.dumps(v, default=str)}")
+                    if not pre_resolved or k not in pre_resolved:
+                        ctx_lines.append(f"  {k} = {json.dumps(v, default=str)}")
             for ctx_key, ctx_val in accumulated_context.items():
                 if ctx_key == "input":
                     continue
@@ -1266,12 +1312,22 @@ async def run_procedure_orchestration(
 
             schema_str = json.dumps(fn_schema, indent=2) if fn_schema else "{}"
 
+            mapping_hint = ""
+            if pre_resolved:
+                mapping_hint = (
+                    f"\n## Pre-Resolved Parameters\n"
+                    f"The following parameters have been pre-resolved from input mappings. "
+                    f"Use these exact values:\n```json\n"
+                    f"{json.dumps(pre_resolved, indent=2, default=str)}\n```\n"
+                )
+
             system_prompt = (
                 f"You are executing step {step_num} of a procedure.\n\n"
                 f"## Step: {step_name}\n"
                 f"## Instructions\n{instructions}\n\n"
                 f"## Required Function: `{tool_name}`\n"
                 f"Parameter schema:\n```json\n{schema_str}\n```\n\n"
+                f"{mapping_hint}"
                 f"## Available Data\n{ctx_formatted}\n\n"
                 f"## RULES\n"
                 f"- You MUST make a tool call to `{tool_name}`. Do NOT respond with text.\n"
@@ -1396,11 +1452,32 @@ async def run_procedure_orchestration(
 
         if step_succeeded:
             step_result["status"] = "success"
-            accumulated_context[f"step_{step_num}"] = {
-                "name": step_name,
-                "status": "success",
-                "result": step_result["result"],
-            }
+            step_output = step_result["result"]
+            if (
+                output_mapping
+                and isinstance(output_mapping, dict)
+                and isinstance(step_output, dict)
+            ):
+                from mcpworks_api.services.jsonpath import apply_output_mapping
+
+                extracted, out_errors = apply_output_mapping(output_mapping, step_output)
+                if out_errors:
+                    logger.warning(
+                        "procedure_output_mapping_partial",
+                        step=step_name,
+                        errors=out_errors,
+                    )
+                accumulated_context[f"step_{step_num}"] = {
+                    "name": step_name,
+                    "status": "success",
+                    "result": extracted if extracted else step_output,
+                }
+            else:
+                accumulated_context[f"step_{step_num}"] = {
+                    "name": step_name,
+                    "status": "success",
+                    "result": step_output,
+                }
         elif failure_policy == "skip":
             step_result["status"] = "skipped"
             accumulated_context[f"step_{step_num}"] = {
