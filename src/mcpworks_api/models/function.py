@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -106,6 +106,8 @@ class Function(Base, UUIDMixin, TimestampMixin):
         server_default="false",
         nullable=False,
     )
+
+    cache_policy: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

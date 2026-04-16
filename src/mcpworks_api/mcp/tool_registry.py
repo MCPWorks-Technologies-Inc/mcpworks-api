@@ -446,6 +446,38 @@ BASE_TOOLS: dict[str, ToolDef] = {
             "required": ["name"],
         },
     ),
+    "configure_cache": ToolDef(
+        name="configure_cache",
+        brief="Enable or disable result caching for a function.",
+        description=(
+            "Configure Redis-backed result caching for a function. "
+            "When enabled, identical inputs return cached results instantly "
+            "instead of re-executing in sandbox. Only successful results are cached. "
+            "Example: configure_cache(service='utils', function='convert', enabled=true, ttl_seconds=600)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name containing the function.",
+                },
+                "function": {
+                    "type": "string",
+                    "description": "Function name to configure caching for.",
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "description": "True to enable caching, false to disable.",
+                },
+                "ttl_seconds": {
+                    "type": "integer",
+                    "description": "Cache TTL in seconds (default: 300, max: 86400).",
+                },
+            },
+            "required": ["service", "function", "enabled"],
+        },
+    ),
     "configure_discovery": ToolDef(
         name="configure_discovery",
         brief="Toggle namespace visibility in MCP server card discovery.",
