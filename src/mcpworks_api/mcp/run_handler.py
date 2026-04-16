@@ -57,12 +57,14 @@ class RunMCPHandler:
         db: AsyncSession,
         api_key: APIKey,
         mode: str = "code",
+        tag_filter: set[str] | None = None,
     ):
         self.namespace_name = namespace
         self.account = account
         self.db = db
         self.mode = mode
         self.api_key = api_key
+        self.tag_filter: set[str] = tag_filter or set()
         self.namespace_service = NamespaceServiceManager(db)
         self.function_service = FunctionService(db)
         self._namespace: Namespace | None = None
@@ -148,6 +150,13 @@ class RunMCPHandler:
         tier_notice = self._tier_notice()
         namespace = await self._get_namespace_for_read()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
+
+        if self.tag_filter:
+            functions = [
+                (f, v)
+                for f, v in functions
+                if f.tags and {t.lower() for t in f.tags} & self.tag_filter
+            ]
 
         tools = []
         for func, version in functions:

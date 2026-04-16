@@ -287,11 +287,16 @@ async def handle_mcp_request(
             api_key=api_key,
         )
     else:  # endpoint_type == "run"
+        tags_raw = request.query_params.get("tags", "")
+        tag_filter = (
+            {t.strip().lower() for t in tags_raw.split(",") if t.strip()} if tags_raw else None
+        )
         handler = RunMCPHandler(
             namespace=namespace_name,
             account=account,
             db=db,
             api_key=api_key,
+            tag_filter=tag_filter,
         )
 
     # Handle request
