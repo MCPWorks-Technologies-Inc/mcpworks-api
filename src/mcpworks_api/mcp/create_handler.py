@@ -177,6 +177,7 @@ class CreateMCPHandler:
         "remove_security_scanner": "write",
         "configure_telemetry_webhook": "write",
         "configure_discovery": "write",
+        "configure_cache": "write",
         "list_orchestration_runs": "read",
         "describe_orchestration_run": "read",
         "list_schedule_fires": "read",
@@ -544,6 +545,7 @@ class CreateMCPHandler:
             "remove_security_scanner": self._remove_security_scanner,
             "configure_telemetry_webhook": self._configure_telemetry_webhook,
             "configure_discovery": self._configure_discovery,
+            "configure_cache": self._configure_cache,
             "list_orchestration_runs": self._list_orchestration_runs,
             "describe_orchestration_run": self._describe_orchestration_run,
             "list_schedule_fires": self._list_schedule_fires,
@@ -3484,6 +3486,58 @@ class CreateMCPHandler:
                             "namespace": ns.name,
                             "discoverable": ns.discoverable,
                             "server_card_url": f"https://{ns.name}.create.mcpworks.io/.well-known/mcp.json",
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_cache(
+        self,
+        service: str,
+        function: str,
+        enabled: bool,
+        ttl_seconds: int = 300,
+    ) -> MCPToolResult:
+        from sqlalchemy import select
+
+        from mcpworks_api.models.function import Function
+        from mcpworks_api.models.namespace_service import NamespaceService
+
+        ns = await self._get_current_namespace()
+        svc_result = await self.db.execute(
+            select(NamespaceService).where(
+                NamespaceService.namespace_id == ns.id,
+                NamespaceService.name == service,
+            )
+        )
+        svc = svc_result.scalar_one_or_none()
+        if not svc:
+            raise ValueError(f"Service '{service}' not found")
+
+        fn_result = await self.db.execute(
+            select(Function).where(
+                Function.service_id == svc.id,
+                Function.name == function,
+                Function.deleted_at.is_(None),
+            )
+        )
+        fn = fn_result.scalar_one_or_none()
+        if not fn:
+            raise ValueError(f"Function '{function}' not found in service '{service}'")
+
+        ttl_seconds = max(1, min(86400, ttl_seconds))
+        fn.cache_policy = {"enabled": enabled, "ttl_seconds": ttl_seconds} if enabled else None
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "function": f"{service}.{function}",
+                            "cache_enabled": enabled,
+                            "ttl_seconds": ttl_seconds if enabled else None,
                         }
                     )
                 )

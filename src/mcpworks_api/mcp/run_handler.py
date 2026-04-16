@@ -347,20 +347,66 @@ class RunMCPHandler:
 
         agent_context = await self._load_agent_context(namespace)
 
+        from mcpworks_api.services.result_cache import (
+            get_cache_policy,
+            get_cached_result,
+            make_cache_key,
+            set_cached_result,
+        )
+
+        cache_enabled, cache_ttl = get_cache_policy(function)
+        cache_bypass = arguments.pop("cache", None) is False if arguments else False
+        cache_hit = False
+        cache_key = None
+
+        if cache_enabled and not cache_bypass:
+            cache_key = make_cache_key(str(function.id), version.version, arguments)
+            cached = await get_cached_result(cache_key)
+            if cached is not None:
+                cache_hit = True
+                from mcpworks_api.backends.base import ExecutionResult
+
+                result = ExecutionResult(
+                    success=True,
+                    output=cached,
+                    stdout=None,
+                    stderr=None,
+                    error=None,
+                    error_type=None,
+                    execution_time_ms=0,
+                )
+                from mcpworks_api.middleware.execution_metrics import function_cache_total
+
+                function_cache_total.labels(
+                    namespace=self.namespace_name, function=name, result="hit"
+                ).inc()
+        elif cache_enabled:
+            cache_key = make_cache_key(str(function.id), version.version, arguments)
+
         execution_id = str(uuid.uuid4())
         start_time = datetime.now(UTC)
 
-        result = await backend.execute(
-            code=version.code,
-            config=version.config,
-            input_data=arguments,
-            account=self.account,
-            execution_id=execution_id,
-            sandbox_env=filtered_env,
-            context=agent_context,
-            language=getattr(version, "language", "python"),
-            namespace=self.namespace_name,
-        )
+        if not cache_hit:
+            result = await backend.execute(
+                code=version.code,
+                config=version.config,
+                input_data=arguments,
+                account=self.account,
+                execution_id=execution_id,
+                sandbox_env=filtered_env,
+                context=agent_context,
+                language=getattr(version, "language", "python"),
+                namespace=self.namespace_name,
+            )
+
+            if cache_enabled:
+                from mcpworks_api.middleware.execution_metrics import function_cache_total
+
+                function_cache_total.labels(
+                    namespace=self.namespace_name, function=name, result="miss"
+                ).inc()
+                if result.success and cache_key:
+                    asyncio.create_task(set_cached_result(cache_key, result.output, cache_ttl))
 
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
@@ -374,6 +420,7 @@ class RunMCPHandler:
             execution_time_ms=execution_time_ms,
             execution_id=execution_id,
             success=result.success,
+            cache_hit=cache_hit,
         )
 
         await self._persist_execution_record(

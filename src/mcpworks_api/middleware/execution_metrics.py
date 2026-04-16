@@ -6,6 +6,12 @@ from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram
 
+function_cache_total = Counter(
+    "mcpworks_function_cache_total",
+    "Function result cache hits and misses",
+    ["namespace", "function", "result"],
+)
+
 sandbox_executions_total = Counter(
     "sandbox_executions_total",
     "Total sandbox executions",
