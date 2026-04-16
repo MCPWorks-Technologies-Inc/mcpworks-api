@@ -176,6 +176,7 @@ class CreateMCPHandler:
         "update_security_scanner": "write",
         "remove_security_scanner": "write",
         "configure_telemetry_webhook": "write",
+        "configure_discovery": "write",
         "list_orchestration_runs": "read",
         "describe_orchestration_run": "read",
         "list_schedule_fires": "read",
@@ -542,6 +543,7 @@ class CreateMCPHandler:
             "update_security_scanner": self._update_security_scanner,
             "remove_security_scanner": self._remove_security_scanner,
             "configure_telemetry_webhook": self._configure_telemetry_webhook,
+            "configure_discovery": self._configure_discovery,
             "list_orchestration_runs": self._list_orchestration_runs,
             "describe_orchestration_run": self._describe_orchestration_run,
             "list_schedule_fires": self._list_schedule_fires,
@@ -3464,6 +3466,24 @@ class CreateMCPHandler:
                             "batch_interval_seconds": (ns.telemetry_config or {}).get(
                                 "batch_interval_seconds", 10
                             ),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_discovery(self, discoverable: bool) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+        ns.discoverable = discoverable
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "namespace": ns.name,
+                            "discoverable": ns.discoverable,
+                            "server_card_url": f"https://{ns.name}.create.mcpworks.io/.well-known/mcp.json",
                         }
                     )
                 )
