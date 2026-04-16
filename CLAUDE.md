@@ -142,6 +142,8 @@ specs/                  # Speckit artifacts per feature
 - PostgreSQL 15+ (5 new columns on `namespace_mcp_servers`), Redis 7+ (ephemeral device flow state) (026-oauth-mcp-proxy)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, structlog, croniter (027-orchestration-observability)
 - PostgreSQL 15+ (new `schedule_fires` table, schema changes to `agent_runs` and `agent_tool_calls`) (027-orchestration-observability)
+- Python 3.11+ (existing codebase) + FastAPI 0.109+ (existing), SQLAlchemy 2.0+ async (existing), Pydantic v2 (existing) (028-mcp-server-cards)
+- PostgreSQL 15+ (new `discoverable` boolean column on `namespaces` table) (028-mcp-server-cards)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe

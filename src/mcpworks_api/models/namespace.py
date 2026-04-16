@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -95,6 +96,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         Integer,
         default=0,
         server_default="0",
+        nullable=False,
+    )
+
+    discoverable: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
         nullable=False,
     )
 

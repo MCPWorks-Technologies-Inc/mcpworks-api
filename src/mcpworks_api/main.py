@@ -271,6 +271,11 @@ def create_app() -> FastAPI:
 
     app.include_router(agent_path_router)
 
+    # 028: MCP Server Card discovery (.well-known/mcp.json)
+    from mcpworks_api.api.v1.discovery import router as discovery_router
+
+    app.include_router(discovery_router)
+
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:
         setup_metrics(app)

@@ -446,6 +446,26 @@ BASE_TOOLS: dict[str, ToolDef] = {
             "required": ["name"],
         },
     ),
+    "configure_discovery": ToolDef(
+        name="configure_discovery",
+        brief="Toggle namespace visibility in MCP server card discovery.",
+        description=(
+            "Control whether this namespace appears in the platform-level "
+            "server card at /.well-known/mcp.json. Per-namespace cards are "
+            "always available regardless of this setting. "
+            "Example: configure_discovery(discoverable=true)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "discoverable": {
+                    "type": "boolean",
+                    "description": "True to list in platform discovery, false to hide.",
+                },
+            },
+            "required": ["discoverable"],
+        },
+    ),
 }
 
 
