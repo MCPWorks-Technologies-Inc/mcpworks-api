@@ -23,8 +23,8 @@ description: "Task list for 019-api-to-mcp implementation"
 
 **Purpose**: Test fixtures and dependency confirmation. No new runtime dependency (research R1).
 
-- [ ] T001 [P] Create `tests/fixtures/openapi_samples/` with three specs: an OpenAPI 3.0 spec (with `operationId`s, path+query params, a POST body), an OpenAPI 3.1 spec (with local `$ref` components), and a Swagger 2.0 spec (with `in: body` parameter and a missing `operationId`)
-- [ ] T002 [P] Confirm `pyyaml`, `jsonschema`, `httpx` are present in `pyproject.toml` and that no new runtime dependency is required (record in `research.md` if any gap found)
+- [x] T001 [P] Create `tests/fixtures/openapi_samples/` with three specs: an OpenAPI 3.0 spec (with `operationId`s, path+query params, a POST body), an OpenAPI 3.1 spec (with local `$ref` components), and a Swagger 2.0 spec (with `in: body` parameter and a missing `operationId`)
+- [x] T002 [P] Confirm `pyyaml`, `jsonschema`, `httpx` are present in `pyproject.toml` and that no new runtime dependency is required (record in `research.md` if any gap found)
 
 ---
 
@@ -36,21 +36,21 @@ description: "Task list for 019-api-to-mcp implementation"
 
 ### Data layer
 
-- [ ] T003 Create Alembic migration `alembic/versions/20260529_000001_add_api_to_mcp.py` (down_revision `20260401_000001`): tables `namespace_api_servers`, `api_endpoints`, `api_proxy_calls`, plus `agents.api_server_names` column and all indexes per data-model.md
-- [ ] T004 [P] Create `NamespaceApiServer` model in `src/mcpworks_api/models/namespace_api_server.py` (auth JSONB, `credentials_encrypted`/`credentials_dek_encrypted`, `default_headers_encrypted`/dek, settings, enabled, endpoint_count, last_refreshed_at)
-- [ ] T005 [P] Create `ApiEndpoint` model in `src/mcpworks_api/models/api_endpoint.py` (operation_id, method, path, param_schema, request_body_schema, response_schema, enabled, published, source)
-- [ ] T006 [P] Create `ApiProxyCall` model in `src/mcpworks_api/models/api_proxy_call.py` (namespace_id, api_server, operation_id, method, status_code, latency_ms, response_bytes, truncated, error_type, called_at)
-- [ ] T007 Add `api_server_names: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)` to `src/mcpworks_api/models/agent.py`
-- [ ] T008 Register the three new models in `src/mcpworks_api/models/__init__.py`
+- [x] T003 Create Alembic migration `alembic/versions/20260529_000001_add_api_to_mcp.py` (down_revision `20260401_000001`): tables `namespace_api_servers`, `api_endpoints`, `api_proxy_calls`, plus `agents.api_server_names` column and all indexes per data-model.md
+- [x] T004 [P] Create `NamespaceApiServer` model in `src/mcpworks_api/models/namespace_api_server.py` (auth JSONB, `credentials_encrypted`/`credentials_dek_encrypted`, `default_headers_encrypted`/dek, settings, enabled, endpoint_count, last_refreshed_at)
+- [x] T005 [P] Create `ApiEndpoint` model in `src/mcpworks_api/models/api_endpoint.py` (operation_id, method, path, param_schema, request_body_schema, response_schema, enabled, published, source)
+- [x] T006 [P] Create `ApiProxyCall` model in `src/mcpworks_api/models/api_proxy_call.py` (namespace_id, api_server, operation_id, method, status_code, latency_ms, response_bytes, truncated, error_type, called_at)
+- [x] T007 Add `api_server_names: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)` to `src/mcpworks_api/models/agent.py`
+- [x] T008 Register the three new models in `src/mcpworks_api/models/__init__.py`
 
 ### Security primitive
 
-- [ ] T009 [P] Implement SSRF gate in `src/mcpworks_api/core/ssrf.py`: resolve hostname to A/AAAA, reject if ANY address is private/link-local/loopback/unspecified/metadata (`169.254.169.254`) for IPv4 + IPv6 (incl. IPv4-mapped), scheme restricted to http/https, plus a pinned-request / no-auto-redirect helper for httpx (research R2)
-- [ ] T010 [P] Unit tests for SSRF in `tests/unit/test_ssrf.py`: each denied range, DNS-rebinding (resolved-IP validation), redirect-target rejection, IPv4-mapped IPv6, public host passes
+- [x] T009 [P] Implement SSRF gate in `src/mcpworks_api/core/ssrf.py`: resolve hostname to A/AAAA, reject if ANY address is private/link-local/loopback/unspecified/metadata (`169.254.169.254`) for IPv4 + IPv6 (incl. IPv4-mapped), scheme restricted to http/https, plus a pinned-request / no-auto-redirect helper for httpx (research R2)
+- [x] T010 [P] Unit tests for SSRF in `tests/unit/test_ssrf.py`: each denied range, DNS-rebinding (resolved-IP validation), redirect-target rejection, IPv4-mapped IPv6, public host passes
 
 ### Shared service + tools + proxy + sandbox
 
-- [ ] T011 [P] Create Pydantic schemas in `src/mcpworks_api/schemas/api_server.py` (add/describe/list requests + **credential-redacted** response models, endpoint summary, settings)
+- [x] T011 [P] Create Pydantic schemas in `src/mcpworks_api/schemas/api_server.py` (add/describe/list requests + **credential-redacted** response models, endpoint summary, settings)
 - [ ] T012 Implement `src/mcpworks_api/services/api_server.py` backbone: server CRUD (`add` manual path, `list`, `describe` with redaction, `remove`, `update_settings`), `list_endpoints` (with enabled/published filtering), encrypted stored-credential helpers (`set_api_credentials` via `core/encryption.encrypt_value`), `add_manual_endpoint`, `enable_endpoint`/`disable_endpoint` (depends T004–T008, T011)
 - [ ] T013 Register `API_SERVER_TOOLS` (tool defs + JSON input schemas per contracts/api-tools.md) in `src/mcpworks_api/mcp/tool_registry.py`
 - [ ] T014 Add `TOOL_SCOPES` entries and dispatch handlers (`_add_api_server`, `_list_api_servers`, `_describe_api_server`, `_remove_api_server`, `_update_api_settings`, `_set_api_credentials`, `_add_manual_endpoint`, `_list_endpoints`, `_enable_endpoint`, `_disable_endpoint`, `_configure_agent_api_access`) in `src/mcpworks_api/mcp/create_handler.py` (depends T012, T013)
@@ -69,8 +69,8 @@ description: "Task list for 019-api-to-mcp implementation"
 
 **Independent Test**: Register the `acme` OpenAPI fixture (mocked upstream), enable two endpoints, author a function that calls one and returns only extracted fields, invoke it, and assert the raw payload never leaves the sandbox.
 
-- [ ] T019 [P] [US1] Implement `src/mcpworks_api/core/openapi_import.py`: parse OpenAPI 3.0/3.1 + Swagger 2.0, local `$ref` deref only, `operationId` slug else `{method}_{slug(path)}` with deterministic collision suffixes, location-bucketed `param_schema` (path/query/header) + `request_body_schema`, 1000-endpoint safety ceiling (research R1/R3/R4/R6)
-- [ ] T020 [P] [US1] Unit tests in `tests/unit/test_openapi_import.py` against the three fixtures: operationId derivation, `$ref` resolution + fallback, Swagger 2.0 body param, ceiling truncation warning
+- [x] T019 [P] [US1] Implement `src/mcpworks_api/core/openapi_import.py`: parse OpenAPI 3.0/3.1 + Swagger 2.0, local `$ref` deref only, `operationId` slug else `{method}_{slug(path)}` with deterministic collision suffixes, location-bucketed `param_schema` (path/query/header) + `request_body_schema`, 1000-endpoint safety ceiling (research R1/R3/R4/R6)
+- [x] T020 [P] [US1] Unit tests in `tests/unit/test_openapi_import.py` against the three fixtures: operationId derivation, `$ref` resolution + fallback, Swagger 2.0 body param, ceiling truncation warning
 - [ ] T021 [US1] Extend `add_api_server` in `src/mcpworks_api/services/api_server.py` for `spec_source` `openapi_url`/`openapi_file`: fetch spec via SSRF-checked httpx, import endpoints as disabled, apply optional `enabled_endpoints`, set `endpoint_count`/`last_refreshed_at` (depends T012, T019)
 - [ ] T022 [US1] Implement `refresh_api_endpoints` in the service + its dispatch handler in `create_handler.py`: diff added/removed/changed, preserve `enabled`/`published` by `operation_id`, mark removed (depends T021, T014)
 - [ ] T023 [US1] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: register OpenAPI fixture → `enable_endpoint` → author composing function → call → assert only extracted fields returned and raw response absent from AI-visible output; refresh preserves enabled set (depends T021, T022, Phase 2)

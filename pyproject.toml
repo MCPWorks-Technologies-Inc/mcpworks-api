@@ -160,6 +160,7 @@ module = [
     "prometheus_fastapi_instrumentator.*",
     "mcp.*",
     "jsonschema.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 
