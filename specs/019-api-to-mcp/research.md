@@ -69,7 +69,7 @@
 
 **Rationale**: Preserves the clarified guarantee (FR-012/FR-040): sandbox code never supplies or sees credential values. Because 002 already scopes the transient env to the execution, the value lives only for the execution lifetime and is never persisted. If the `env_var` is absent, the proxy returns a structured `missing_credential` error.
 
-**Open implementation detail for Phase 2**: confirm whether the transient env is reachable from the proxy via the `ExecutionContext` directly or must be threaded through the registry at sandbox creation (002 integration point). Either way the value does not transit the sandbox→proxy request body. This is a wiring detail, not a design fork.
+**Resolved wiring**: the API process already holds the passthrough values at sandbox-creation time (it assembles the sandbox env from the 002 source). At creation, the registry stores **only the declared passthrough env_vars** for the server(s) the execution may use into a new `ExecutionContext.passthrough_env: dict[str, str]` field (scoped to the execution, in-memory, cleared on sandbox exit — same lifecycle as the bridge key). The proxy reads `ctx.passthrough_env[env_var]` server-side. The value never transits the sandbox→proxy body and is never persisted. This avoids any 002 change beyond reading the same source the sandbox env is built from.
 
 **Alternatives considered**: Per-call argument from sandbox (rejected in clarify session — breaks the no-credentials-in-sandbox guarantee).
 

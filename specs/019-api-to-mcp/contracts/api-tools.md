@@ -33,7 +33,7 @@ Register a REST API on the namespace and discover its endpoints.
   "enabled_endpoints": ["list_orders", "get_order"]
 }
 ```
-- `spec_source`: `openapi_url` | `openapi_file` | `manual`. For `manual`, omit spec fields and add endpoints with `add_manual_endpoint`.
+- `spec_source`: `openapi_url` | `openapi_file` | `manual`. For `manual`, omit spec fields and add endpoints with `add_manual_endpoint`. `openapi_file` carries the spec document inline as a JSON/YAML string (MCP tools accept no file handles); the importer detects format by content.
 - `auth[].value` is accepted only for `source:"stored"`, immediately encrypted into `credentials_encrypted`, and **stripped from all responses**. `passthrough` injections carry `env_var`, never `value`.
 - `enabled_endpoints` (optional): operation_ids to enable at add time. Omitted → all imported endpoints start disabled (curate later).
 

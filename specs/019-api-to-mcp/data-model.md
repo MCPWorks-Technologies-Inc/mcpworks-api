@@ -160,6 +160,6 @@ Namespace (1) ─── (0..N) ApiProxyCall   (telemetry, write-only from proxy)
 
 ## Reuse (no new structures)
 
-- **ExecutionContext** (`core/exec_token_registry.py`) — bridge-key → namespace resolution for the proxy; reused as-is. Passthrough env values are read via this context server-side (research R5).
+- **ExecutionContext** (`core/exec_token_registry.py`) — bridge-key → namespace resolution for the proxy. Extended with a `passthrough_env: dict[str, str]` field populated at sandbox creation (only the declared passthrough `env_var`s, cleared on sandbox exit); the proxy reads passthrough values from it server-side (research R5). No other change.
 - **Encryption** (`core/encryption.py`) — `encrypt_value`/`decrypt_value` for `credentials_encrypted` and `default_headers_encrypted`.
 - **009 injection rules** (`core/mcp_rules.py`) — applied to upstream responses; `output_trust` semantics carry over.

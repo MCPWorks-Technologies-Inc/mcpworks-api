@@ -76,7 +76,7 @@ From the sandbox's perspective, endpoints are callable primitives alongside nati
 - [ ] A user/Claude can author a function that composes one or more endpoints and exposes a single clean, token-efficient MCP tool.
 - [ ] Stored credentials are encrypted at rest and never exposed to sandbox code, tool output, or logs; passthrough credentials are injected at runtime and never persisted.
 - [ ] User-supplied base URLs cannot be used to reach private/link-local/loopback addresses (SSRF protection), including via DNS rebinding.
-- [ ] Per-call telemetry (namespace, server, operation, method, latency, bytes, status) is recorded in `api_proxy_call`.
+- [ ] Per-call telemetry (namespace, server, operation, method, latency, bytes, status) is recorded in `api_proxy_calls`.
 
 ### 1.5 Scope
 
@@ -92,7 +92,7 @@ From the sandbox's perspective, endpoints are callable primitives alongside nati
 - Agent integration: agents select which namespace API servers they can access by name (`api_server_names`, parallel to `mcp_server_names`).
 - SSRF denylist of private/link-local/loopback ranges with DNS-rebinding re-resolution.
 - Reuse of 009 prompt-injection rules on responses; `output_trust` semantics carry over.
-- Separate `api_proxy_call` telemetry table.
+- Separate `api_proxy_calls` telemetry table.
 
 **Out of Scope:**
 - OAuth2 client-credentials and other token-lifecycle auth flows (deferred to v2).
@@ -126,7 +126,7 @@ From the sandbox's perspective, endpoints are callable primitives alongside nati
    ```python
    from functions import api__acme__list_orders
    resp = api__acme__list_orders(query={"status": "open", "limit": 200})
-   result = [{"id": o["id"], "total": o["total"]} for o in resp["data"]]
+   result = [{"id": o["id"], "total": o["total"]} for o in resp["json"]["data"]]
    ```
 6. The function is callable as a single MCP tool. The 200-order payload stays in the sandbox; only `id`/`total` pairs return.
 
@@ -216,7 +216,7 @@ From the sandbox's perspective, endpoints are callable primitives alongside nati
 
 ### 3.1 API Server Registry
 
-- **FR-001 (Add API Server, Must):** MCP tool `add_api_server` registers a REST API on the namespace. Parameters: `name` (unique per namespace, DNS-safe), `base_url`, `spec_source` (`openapi_url` | `openapi_file` | `manual`), `openapi_url` or uploaded `openapi_file` (when applicable), `auth` (list of credential injection definitions), optional `default_headers`, optional `settings`, optional `enabled_endpoints` (list of `operation_id`s to enable). Behavior: validate base URL against SSRF denylist; if OpenAPI, fetch and parse into endpoints; encrypt stored credentials; persist config + endpoint schemas; return server name and the **discovered endpoint inventory** (operation_id, method, path, summary). Authorization: namespace owner.
+- **FR-001 (Add API Server, Must):** MCP tool `add_api_server` registers a REST API on the namespace. Parameters: `name` (unique per namespace, DNS-safe), `base_url`, `spec_source` (`openapi_url` | `openapi_file` | `manual`), `openapi_url` (for `openapi_url`) or `openapi_file` — the spec document passed inline as a JSON or YAML string (for `openapi_file`; MCP tools accept no file handles), `auth` (list of credential injection definitions), optional `default_headers`, optional `settings`, optional `enabled_endpoints` (list of `operation_id`s to enable). Behavior: validate base URL against SSRF denylist; if OpenAPI, fetch and parse into endpoints; encrypt stored credentials; persist config + endpoint schemas; return server name and the **discovered endpoint inventory** (operation_id, method, path, summary). Authorization: namespace owner.
 - **FR-001a (Curated Endpoint Selection, Must):** Endpoint exposure is **LLM-curated, not capped by a fixed number.** Discovered endpoints are cataloged but default to **disabled**. Only endpoints the LLM/user enables (via `enabled_endpoints` at add time, or `enable_endpoint`/`disable_endpoint` after) are generated as sandbox primitives and counted toward the catalog token cost. For a large spec, `add_api_server` returns the full inventory and prompts the LLM to choose which endpoints to enable. A high safety ceiling (default 1000 discovered endpoints) guards against pathological specs; beyond it, discovery truncates with a warning.
 - **FR-002 (Refresh Endpoints, Should):** MCP tool `refresh_api_endpoints` re-fetches the OpenAPI spec and diffs endpoints (added/removed/changed). Both the `enabled` and `published` flags are preserved by `operation_id` across refresh. Newly discovered endpoints default to disabled. Manual endpoints are untouched. Reports the diff. If fetch fails, cached endpoints are preserved. Authorization: namespace owner.
 - **FR-003 (List API Servers, Must):** MCP tool `list_api_servers` returns all configured API servers: name, base_url, spec_source, endpoint_count, enabled, last_refreshed_at. Credentials are never returned. Authorization: read.
@@ -267,7 +267,7 @@ From the sandbox's perspective, endpoints are callable primitives alongside nati
 
 ### 3.8 Telemetry
 
-- **FR-045 (api_proxy_call, Must):** Every proxied call records a row in `api_proxy_call`: namespace_id, api_server, operation_id, method, status_code, latency_ms, response_bytes, error (nullable), created_at. Credential values and request/response bodies are never recorded.
+- **FR-045 (api_proxy_calls, Must):** Every proxied call records a row in the `api_proxy_calls` table: namespace_id, api_server, operation_id, method, status_code, latency_ms, response_bytes, truncated, error_type (nullable), called_at. Credential values and request/response bodies are never recorded.
 
 ---
 
@@ -275,7 +275,7 @@ From the sandbox's perspective, endpoints are callable primitives alongside nati
 
 - **NamespaceApiServer:** A REST API registered on a namespace. Attributes: `namespace_id` (FK, CASCADE), `name` (unique per namespace, DNS-safe), `description`, `base_url`, `spec_source` (`openapi_url` | `openapi_file` | `manual`), `openapi_url` (nullable), `auth` (JSONB — credential-injection **definitions only**: name, location, key, format, source, env_var; never secret values), `credentials_encrypted` + `credentials_dek_encrypted` (separate encrypted column holding a name→secret map for `stored` injections, DEK/KEK), `default_headers_encrypted` + DEK, `settings` (JSONB), `enabled` (bool, LLM-tunable), `endpoint_count`, `last_refreshed_at`, timestamps. Unique(`namespace_id`, `name`).
 - **ApiEndpoint:** One endpoint of an API server. Attributes: `api_server_id` (FK, CASCADE), `operation_id` (stable handle → `api__{server}__{operation_id}`), `method`, `path` (with `{param}` templating), `summary`, `param_schema` (JSON Schema: path/query/header params), `request_body_schema` (nullable), `response_schema` (nullable), `enabled` (bool — generated as a sandbox primitive when true; default false for imported, true for manual), `published` (bool, default false — direct raw MCP tool exposure), `source` (imported | manual), timestamps. Unique(`api_server_id`, `operation_id`).
-- **api_proxy_call:** Telemetry for each proxied call. Attributes: `namespace_id`, `api_server`, `operation_id`, `method`, `status_code`, `latency_ms`, `response_bytes`, `error` (nullable), `created_at`.
+- **api_proxy_calls:** Telemetry for each proxied call. Attributes: `namespace_id`, `api_server`, `operation_id`, `method`, `status_code`, `latency_ms`, `response_bytes`, `truncated`, `error_type` (nullable), `called_at`.
 - **Agent (modified):** Adds `api_server_names` (ARRAY of VARCHAR) referencing NamespaceApiServer by name, parallel to existing `mcp_server_names`.
 
 ---
