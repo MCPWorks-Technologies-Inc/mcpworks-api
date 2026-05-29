@@ -56,6 +56,41 @@ async def record_proxy_call(
         logger.debug("analytics_record_failed", server=server_name, tool=tool_name)
 
 
+async def record_api_proxy_call(
+    namespace_id: uuid.UUID,
+    api_server: str,
+    operation_id: str,
+    method: str,
+    latency_ms: int,
+    response_bytes: int,
+    status_code: int | None = None,
+    error_type: str | None = None,
+    truncated: bool = False,
+) -> None:
+    """Record one API → MCP proxy call (feature 019). Never stores creds/bodies."""
+    from mcpworks_api.core.database import get_db_context
+    from mcpworks_api.models.api_proxy_call import ApiProxyCall
+
+    try:
+        async with get_db_context() as db:
+            db.add(
+                ApiProxyCall(
+                    namespace_id=namespace_id,
+                    api_server=api_server,
+                    operation_id=operation_id,
+                    method=method,
+                    status_code=status_code,
+                    latency_ms=latency_ms,
+                    response_bytes=response_bytes,
+                    truncated=truncated,
+                    error_type=error_type,
+                )
+            )
+            await db.commit()
+    except Exception:
+        logger.debug("api_analytics_record_failed", server=api_server, op=operation_id)
+
+
 async def record_execution_stats(
     namespace_id: uuid.UUID,
     execution_id: str,

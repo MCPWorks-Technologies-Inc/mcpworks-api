@@ -51,13 +51,13 @@ description: "Task list for 019-api-to-mcp implementation"
 ### Shared service + tools + proxy + sandbox
 
 - [x] T011 [P] Create Pydantic schemas in `src/mcpworks_api/schemas/api_server.py` (add/describe/list requests + **credential-redacted** response models, endpoint summary, settings)
-- [ ] T012 Implement `src/mcpworks_api/services/api_server.py` backbone: server CRUD (`add` manual path, `list`, `describe` with redaction, `remove`, `update_settings`), `list_endpoints` (with enabled/published filtering), encrypted stored-credential helpers (`set_api_credentials` via `core/encryption.encrypt_value`), `add_manual_endpoint`, `enable_endpoint`/`disable_endpoint` (depends T004–T008, T011)
-- [ ] T013 Register `API_SERVER_TOOLS` (tool defs + JSON input schemas per contracts/api-tools.md) in `src/mcpworks_api/mcp/tool_registry.py`
-- [ ] T014 Add `TOOL_SCOPES` entries and dispatch handlers (`_add_api_server`, `_list_api_servers`, `_describe_api_server`, `_remove_api_server`, `_update_api_settings`, `_set_api_credentials`, `_add_manual_endpoint`, `_list_endpoints`, `_enable_endpoint`, `_disable_endpoint`, `_configure_agent_api_access`) in `src/mcpworks_api/mcp/create_handler.py` (depends T012, T013)
-- [ ] T015 Implement `src/mcpworks_api/core/api_proxy.py` `proxy_api_call(ctx, server, operation_id, path, query, body, headers, db)`: resolve+namespace-scope server/endpoint, build `base_url`+templated path/query/body/default-headers, inject **stored** creds (decrypt), SSRF gate, httpx call with `timeout_seconds` and idempotent-only retry (never POST/PATCH), truncate at `response_limit_bytes`, record `ApiProxyCall` (depends T004–T006, T009)
-- [ ] T016 Create `POST /v1/internal/api-proxy` in `src/mcpworks_api/api/v1/api_proxy.py` (bridge key → `resolve_execution` → `proxy_api_call`, 403 on invalid/cross-namespace) and include the router in `src/mcpworks_api/main.py` (depends T015)
-- [ ] T017 Extend `src/mcpworks_api/mcp/code_mode.py`: add `_API_BRIDGE_TEMPLATE` (`functions/_api_bridge.py` → `_call_api_endpoint`), `_generate_api_wrapper`, `_generate_api_server_module`, extend `generate_functions_package(..., api_servers=None)` to emit `functions/_api/{server}.py`, and add an `[API: {server}]` section listing **enabled** endpoints to the catalog docstring (depends T016)
-- [ ] T018 Wire enabled API-server endpoints into every `generate_functions_package(...)` call site (sandbox package assembly) so primitives appear in executions (depends T017, T012)
+- [x] T012 Implement `src/mcpworks_api/services/api_server.py` backbone: server CRUD (`add` manual path, `list`, `describe` with redaction, `remove`, `update_settings`), `list_endpoints` (with enabled/published filtering), encrypted stored-credential helpers (`set_api_credentials` via `core/encryption.encrypt_value`), `add_manual_endpoint`, `enable_endpoint`/`disable_endpoint` (depends T004–T008, T011)
+- [x] T013 Register `API_SERVER_TOOLS` (tool defs + JSON input schemas per contracts/api-tools.md) in `src/mcpworks_api/mcp/tool_registry.py`
+- [x] T014 Add `TOOL_SCOPES` entries and dispatch handlers (`_add_api_server`, `_list_api_servers`, `_describe_api_server`, `_remove_api_server`, `_update_api_settings`, `_set_api_credentials`, `_add_manual_endpoint`, `_list_endpoints`, `_enable_endpoint`, `_disable_endpoint`, `_configure_agent_api_access`) in `src/mcpworks_api/mcp/create_handler.py` (depends T012, T013)
+- [x] T015 Implement `src/mcpworks_api/core/api_proxy.py` `proxy_api_call(ctx, server, operation_id, path, query, body, headers, db)`: resolve+namespace-scope server/endpoint, build `base_url`+templated path/query/body/default-headers, inject **stored** creds (decrypt), SSRF gate, httpx call with `timeout_seconds` and idempotent-only retry (never POST/PATCH), truncate at `response_limit_bytes`, record `ApiProxyCall` (depends T004–T006, T009)
+- [x] T016 Create `POST /v1/internal/api-proxy` in `src/mcpworks_api/api/v1/api_proxy.py` (bridge key → `resolve_execution` → `proxy_api_call`, 403 on invalid/cross-namespace) and include the router in `src/mcpworks_api/main.py` (depends T015)
+- [x] T017 Extend `src/mcpworks_api/mcp/code_mode.py`: add `_API_BRIDGE_TEMPLATE` (`functions/_api_bridge.py` → `_call_api_endpoint`), `_generate_api_wrapper`, `_generate_api_server_module`, extend `generate_functions_package(..., api_servers=None)` to emit `functions/_api/{server}.py`, and add an `[API: {server}]` section listing **enabled** endpoints to the catalog docstring (depends T016)
+- [x] T018 Wire enabled API-server endpoints into every `generate_functions_package(...)` call site (sandbox package assembly) so primitives appear in executions (depends T017, T012)
 
 **Checkpoint**: A manually-defined endpoint with a stored credential is callable from the sandbox as `api__{server}__{op}` and composable into a function; SSRF and telemetry active.
 
@@ -71,8 +71,8 @@ description: "Task list for 019-api-to-mcp implementation"
 
 - [x] T019 [P] [US1] Implement `src/mcpworks_api/core/openapi_import.py`: parse OpenAPI 3.0/3.1 + Swagger 2.0, local `$ref` deref only, `operationId` slug else `{method}_{slug(path)}` with deterministic collision suffixes, location-bucketed `param_schema` (path/query/header) + `request_body_schema`, 1000-endpoint safety ceiling (research R1/R3/R4/R6)
 - [x] T020 [P] [US1] Unit tests in `tests/unit/test_openapi_import.py` against the three fixtures: operationId derivation, `$ref` resolution + fallback, Swagger 2.0 body param, ceiling truncation warning
-- [ ] T021 [US1] Extend `add_api_server` in `src/mcpworks_api/services/api_server.py` for `spec_source` `openapi_url`/`openapi_file`: fetch spec via SSRF-checked httpx, import endpoints as disabled, apply optional `enabled_endpoints`, set `endpoint_count`/`last_refreshed_at` (depends T012, T019)
-- [ ] T022 [US1] Implement `refresh_api_endpoints` in the service + its dispatch handler in `create_handler.py`: diff added/removed/changed, preserve `enabled`/`published` by `operation_id`, mark removed (depends T021, T014)
+- [x] T021 [US1] Extend `add_api_server` in `src/mcpworks_api/services/api_server.py` for `spec_source` `openapi_url`/`openapi_file`: fetch spec via SSRF-checked httpx, import endpoints as disabled, apply optional `enabled_endpoints`, set `endpoint_count`/`last_refreshed_at` (depends T012, T019)
+- [x] T022 [US1] Implement `refresh_api_endpoints` in the service + its dispatch handler in `create_handler.py`: diff added/removed/changed, preserve `enabled`/`published` by `operation_id`, mark removed (depends T021, T014)
 - [ ] T023 [US1] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: register OpenAPI fixture → `enable_endpoint` → author composing function → call → assert only extracted fields returned and raw response absent from AI-visible output; refresh preserves enabled set (depends T021, T022, Phase 2)
 
 **Checkpoint**: The headline flow works end-to-end — this is the MVP.
@@ -85,7 +85,7 @@ description: "Task list for 019-api-to-mcp implementation"
 
 **Independent Test**: Register a server with a `passthrough` bearer injection bound to `ACME_TOKEN`; run a call in an execution that supplies `ACME_TOKEN`; assert the upstream request carried `Authorization: Bearer <token>`, the value is absent from DB and logs, and a missing var yields the structured `missing_credential` error.
 
-- [ ] T024 [US2] Add passthrough resolution to `src/mcpworks_api/core/api_proxy.py`: for each `passthrough` injection read its `env_var` from the execution's transient env server-side, format per template, inject; structured `missing_credential` error when absent (depends T015, research R5)
+- [x] T024 [US2] Add passthrough resolution to `src/mcpworks_api/core/api_proxy.py`: for each `passthrough` injection read its `env_var` from the execution's transient env server-side, format per template, inject; structured `missing_credential` error when absent (depends T015, research R5)
 - [ ] T025 [US2] Add `passthrough_env: dict[str, str]` to `ExecutionContext` (`src/mcpworks_api/core/exec_token_registry.py`); populate it at sandbox creation with only the declared passthrough `env_var`s from the same 002 source used to build the sandbox env; clear on sandbox exit. Proxy reads `ctx.passthrough_env[env_var]` server-side (never via the sandbox→proxy body) (depends T024)
 - [ ] T026 [P] [US2] Tests in `tests/unit/test_api_proxy.py` + `tests/integration/test_api_to_mcp_e2e.py`: passthrough injected from env, value never persisted/logged (assert against DB row + captured logs), missing var → structured error (depends T024, T025)
 
@@ -99,7 +99,7 @@ description: "Task list for 019-api-to-mcp implementation"
 
 **Independent Test**: `add_api_server` with `spec_source=manual`, `add_manual_endpoint` for `GET /v2/widgets/{id}`, then call `api__legacy__get_widget(path={"id":"w_123"})` from the sandbox.
 
-- [ ] T027 [US3] Harden the `spec_source=manual` flow and `add_manual_endpoint` validation in `src/mcpworks_api/services/api_server.py`: identifier-safe `operation_id`, valid method, location-bucketed `param_schema` validation (jsonschema), manual endpoints default `enabled=true`, mixed manual+imported coexistence (depends T012)
+- [x] T027 [US3] Harden the `spec_source=manual` flow and `add_manual_endpoint` validation in `src/mcpworks_api/services/api_server.py`: identifier-safe `operation_id`, valid method, location-bucketed `param_schema` validation (jsonschema), manual endpoints default `enabled=true`, mixed manual+imported coexistence (depends T012)
 - [ ] T028 [US3] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: manual server → `add_manual_endpoint` GET with path param → call from sandbox returns upstream JSON; reject invalid operation_id/method (depends T027, Phase 2)
 
 **Checkpoint**: APIs without specs are fully supported alongside imported ones.
@@ -112,7 +112,7 @@ description: "Task list for 019-api-to-mcp implementation"
 
 **Independent Test**: `publish_endpoint` for `get_order` → it appears as a direct MCP tool returning the raw response with the unfiltered-warning; `unpublish_endpoint` removes it.
 
-- [ ] T029 [US4] Implement `publish_endpoint`/`unpublish_endpoint` in the service + dispatch handlers in `src/mcpworks_api/mcp/create_handler.py` (toggle `ApiEndpoint.published`) (depends T012, T014)
+- [x] T029 [US4] Implement `publish_endpoint`/`unpublish_endpoint` in the service + dispatch handlers in `src/mcpworks_api/mcp/create_handler.py` (toggle `ApiEndpoint.published`) (depends T012, T014)
 - [ ] T030 [US4] Expose published endpoints as direct MCP tools in `src/mcpworks_api/mcp/run_handler.py` (and any code-mode catalog note) — raw response returned, unfiltered-warning surfaced (depends T017, T029)
 - [ ] T031 [US4] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: publish → tool listed + returns raw response → unpublish → tool gone (depends T029, T030)
 

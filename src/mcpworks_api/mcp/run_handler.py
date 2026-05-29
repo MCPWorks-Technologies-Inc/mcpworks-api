@@ -425,6 +425,56 @@ class RunMCPHandler:
             if s.tool_count > 0
         ]
 
+    async def _load_api_server_endpoints(self, namespace_id: uuid.UUID) -> list[dict[str, Any]]:
+        """Load enabled API-server endpoints for code-mode primitive generation (019)."""
+        from sqlalchemy import select
+
+        from mcpworks_api.models.api_endpoint import ApiEndpoint
+        from mcpworks_api.models.namespace_api_server import NamespaceApiServer
+
+        stmt = (
+            select(NamespaceApiServer)
+            .where(
+                NamespaceApiServer.namespace_id == namespace_id,
+                NamespaceApiServer.enabled.is_(True),
+            )
+            .order_by(NamespaceApiServer.name)
+        )
+        servers = (await self.db.execute(stmt)).scalars().all()
+        out: list[dict[str, Any]] = []
+        for server in servers:
+            eps = (
+                (
+                    await self.db.execute(
+                        select(ApiEndpoint)
+                        .where(
+                            ApiEndpoint.api_server_id == server.id,
+                            ApiEndpoint.enabled.is_(True),
+                        )
+                        .order_by(ApiEndpoint.operation_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not eps:
+                continue
+            out.append(
+                {
+                    "name": server.name,
+                    "endpoints": [
+                        {
+                            "operation_id": e.operation_id,
+                            "method": e.method,
+                            "path": e.path,
+                            "summary": e.summary,
+                        }
+                        for e in eps
+                    ],
+                }
+            )
+        return out
+
     async def _check_agent_function_access(
         self, namespace: Namespace, service_name: str, function_name: str
     ) -> None:
@@ -494,10 +544,15 @@ class RunMCPHandler:
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
         mcp_server_tools = await self._load_mcp_server_tools(namespace.id)
+        api_server_endpoints = await self._load_api_server_endpoints(namespace.id)
 
         run_url = url_builder.mcp_url(self.namespace_name, "run")
         extra_files = generate_functions_package(
-            functions, self.namespace_name, run_url=run_url, mcp_servers=mcp_server_tools
+            functions,
+            self.namespace_name,
+            run_url=run_url,
+            mcp_servers=mcp_server_tools,
+            api_servers=api_server_endpoints,
         )
 
         agent_context = await self._load_agent_context(namespace)

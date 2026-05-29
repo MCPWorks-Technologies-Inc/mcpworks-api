@@ -169,6 +169,21 @@ class CreateMCPHandler:
         "configure_agent_access": "write",
         "list_agent_access_rules": "read",
         "remove_agent_access_rule": "write",
+        # API → MCP (019)
+        "add_api_server": "write",
+        "refresh_api_endpoints": "write",
+        "list_api_servers": "read",
+        "describe_api_server": "read",
+        "list_endpoints": "read",
+        "add_manual_endpoint": "write",
+        "enable_endpoint": "write",
+        "disable_endpoint": "write",
+        "remove_api_server": "write",
+        "update_api_settings": "write",
+        "set_api_credentials": "write",
+        "publish_endpoint": "write",
+        "unpublish_endpoint": "write",
+        "configure_agent_api_access": "write",
     }
 
     _logger = structlog.get_logger(__name__)
@@ -274,6 +289,13 @@ class CreateMCPHandler:
         tools.extend(
             MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
             for tool_def in MCP_SERVER_TOOLS.values()
+        )
+
+        from mcpworks_api.mcp.tool_registry import API_SERVER_TOOLS
+
+        tools.extend(
+            MCPTool(**tool_def.render(verbosity="standard", **format_kwargs))
+            for tool_def in API_SERVER_TOOLS.values()
         )
 
         from mcpworks_api.mcp.tool_registry import ANALYTICS_TOOLS
@@ -525,6 +547,20 @@ class CreateMCPHandler:
             "configure_agent_access": self._configure_agent_access,
             "list_agent_access_rules": self._list_agent_access_rules,
             "remove_agent_access_rule": self._remove_agent_access_rule,
+            "add_api_server": self._add_api_server,
+            "refresh_api_endpoints": self._refresh_api_endpoints,
+            "list_api_servers": self._list_api_servers,
+            "describe_api_server": self._describe_api_server,
+            "list_endpoints": self._list_endpoints,
+            "add_manual_endpoint": self._add_manual_endpoint,
+            "enable_endpoint": self._enable_endpoint,
+            "disable_endpoint": self._disable_endpoint,
+            "remove_api_server": self._remove_api_server,
+            "update_api_settings": self._update_api_settings,
+            "set_api_credentials": self._set_api_credentials,
+            "publish_endpoint": self._publish_endpoint,
+            "unpublish_endpoint": self._unpublish_endpoint,
+            "configure_agent_api_access": self._configure_agent_api_access,
         }
 
         handler = handlers.get(name)
@@ -2967,6 +3003,306 @@ class CreateMCPHandler:
         await self.db.flush()
         return MCPToolResult(
             content=[MCPContent(text=json.dumps({"agent": agent_name, "mcp_servers": servers}))]
+        )
+
+    # ---------------------------------------------------------------- API → MCP (019)
+
+    @staticmethod
+    def _endpoint_summary(ep: Any) -> dict:
+        return {
+            "operation_id": ep.operation_id,
+            "method": ep.method,
+            "path": ep.path,
+            "summary": ep.summary,
+            "enabled": ep.enabled,
+            "published": ep.published,
+        }
+
+    async def _add_api_server(
+        self,
+        name: str,
+        base_url: str,
+        spec_source: str,
+        description: str | None = None,
+        openapi_url: str | None = None,
+        openapi_file: str | None = None,
+        auth: list | None = None,
+        default_headers: dict | None = None,
+        settings: dict | None = None,
+        enabled_endpoints: list | None = None,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        server, endpoints = await svc.add_server(
+            namespace_id=ns.id,
+            name=name,
+            base_url=base_url,
+            spec_source=spec_source,
+            description=description,
+            openapi_url=openapi_url,
+            openapi_file=openapi_file,
+            auth=auth,
+            default_headers=default_headers,
+            settings=settings,
+            enabled_endpoints=enabled_endpoints,
+        )
+        enabled_count = sum(1 for e in endpoints if e.enabled)
+        note = None
+        disabled = len(endpoints) - enabled_count
+        if disabled > 0:
+            note = f"{disabled} endpoint(s) discovered but disabled — enable with enable_endpoint."
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "server": server.name,
+                            "spec_source": server.spec_source,
+                            "endpoint_count": server.endpoint_count,
+                            "enabled_count": enabled_count,
+                            "endpoints": [self._endpoint_summary(e) for e in endpoints],
+                            "note": note,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _refresh_api_endpoints(self, server: str) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        added, removed, changed, unchanged, preserved = await svc.refresh_endpoints(ns.id, server)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "server": server,
+                            "added": added,
+                            "removed": removed,
+                            "changed": changed,
+                            "unchanged": unchanged,
+                            "preserved_enabled": preserved,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_api_servers(self) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = ApiServerService(self.db)
+        servers = await svc.list_servers(ns.id)
+        out = []
+        for s in servers:
+            enabled_count = await svc._enabled_count(s.id)
+            out.append(
+                {
+                    "name": s.name,
+                    "base_url": s.base_url,
+                    "spec_source": s.spec_source,
+                    "endpoint_count": s.endpoint_count,
+                    "enabled_count": enabled_count,
+                    "enabled": s.enabled,
+                    "last_refreshed_at": s.last_refreshed_at.isoformat()
+                    if s.last_refreshed_at
+                    else None,
+                }
+            )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"servers": out}))])
+
+    async def _describe_api_server(self, server: str) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = ApiServerService(self.db)
+        s = await svc.get_by_name(ns.id, server)
+        endpoints = await svc.list_endpoints(ns.id, server)
+        redacted_auth = [
+            {**{k: v for k, v in inj.items() if k != "value"}, "value": "***redacted***"}
+            for inj in (s.auth or [])
+        ]
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "name": s.name,
+                            "base_url": s.base_url,
+                            "spec_source": s.spec_source,
+                            "enabled": s.enabled,
+                            "settings": s.get_settings(),
+                            "auth": redacted_auth,
+                            "endpoints": [self._endpoint_summary(e) for e in endpoints],
+                            "last_refreshed_at": s.last_refreshed_at.isoformat()
+                            if s.last_refreshed_at
+                            else None,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_endpoints(self, server: str, filter: str = "all") -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace_read()
+        svc = ApiServerService(self.db)
+        endpoints = await svc.list_endpoints(ns.id, server, filter_=filter)
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "server": server,
+                            "endpoints": [self._endpoint_summary(e) for e in endpoints],
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _add_manual_endpoint(
+        self,
+        server: str,
+        operation_id: str,
+        method: str,
+        path: str,
+        summary: str | None = None,
+        param_schema: dict | None = None,
+        request_body_schema: dict | None = None,
+        response_schema: dict | None = None,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        ep = await svc.add_manual_endpoint(
+            namespace_id=ns.id,
+            name=server,
+            operation_id=operation_id,
+            method=method,
+            path=path,
+            summary=summary,
+            param_schema=param_schema,
+            request_body_schema=request_body_schema,
+            response_schema=response_schema,
+        )
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"server": server, **self._endpoint_summary(ep)}))]
+        )
+
+    async def _enable_endpoint(self, server: str, operation_ids: list[str]) -> MCPToolResult:
+        return await self._toggle_endpoints(server, operation_ids, enabled=True)
+
+    async def _disable_endpoint(self, server: str, operation_ids: list[str]) -> MCPToolResult:
+        return await self._toggle_endpoints(server, operation_ids, enabled=False)
+
+    async def _toggle_endpoints(
+        self, server: str, operation_ids: list[str], enabled: bool
+    ) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        changed = await svc.set_enabled(ns.id, server, operation_ids, enabled)
+        now_enabled = await svc._enabled_count((await svc.get_by_name(ns.id, server)).id)
+        key = "enabled" if enabled else "disabled"
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {"server": server, key: changed, "now_enabled_count": now_enabled}
+                    )
+                )
+            ]
+        )
+
+    async def _remove_api_server(self, server: str) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        n = await svc.remove_server(ns.id, server)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"removed": server, "endpoints_removed": n}))]
+        )
+
+    async def _update_api_settings(self, server: str, settings: dict) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        result = await svc.update_settings(ns.id, server, settings)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"server": server, "settings": result}))]
+        )
+
+    async def _set_api_credentials(self, server: str, name: str, value: str) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        await svc.set_credentials(ns.id, server, name, value)
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"server": server, "updated": name}))]
+        )
+
+    async def _publish_endpoint(self, server: str, operation_id: str) -> MCPToolResult:
+        return await self._set_publish(server, operation_id, True)
+
+    async def _unpublish_endpoint(self, server: str, operation_id: str) -> MCPToolResult:
+        return await self._set_publish(server, operation_id, False)
+
+    async def _set_publish(self, server: str, operation_id: str, published: bool) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        svc = ApiServerService(self.db)
+        await svc.set_published(ns.id, server, operation_id, published)
+        warning = (
+            "Raw response is returned unfiltered and counts against context. "
+            "Prefer a composing function for large responses."
+            if published
+            else None
+        )
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "server": server,
+                            "operation_id": operation_id,
+                            "published": published,
+                            "warning": warning,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_agent_api_access(
+        self, agent: str, api_servers: list[str]
+    ) -> MCPToolResult:
+        from mcpworks_api.services.api_server import ApiServerService
+
+        ns = await self._get_current_namespace()
+        api_svc = ApiServerService(self.db)
+        for server_name in api_servers:
+            await api_svc.get_by_name(ns.id, server_name)
+
+        agent_svc = AgentService(self.db)
+        agent_obj = await agent_svc.get_agent(self.account.id, agent)
+        agent_obj.api_server_names = api_servers if api_servers else None
+        await self.db.flush()
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"agent": agent, "api_server_names": api_servers}))]
         )
 
     async def _add_mcp_server_rule(
