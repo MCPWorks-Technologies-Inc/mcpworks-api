@@ -702,6 +702,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), httpx, structlog (017-fix-procedure-execution)
 - PostgreSQL 15+ (existing), Redis 7+ (existing) (017-fix-procedure-execution)
 - PostgreSQL 15+ (new JSONB column on agents table) (018-agent-access-control)
+- Python 3.11+ (existing codebase) + FastAPI 0.109+, SQLAlchemy 2.0 async, Pydantic v2, httpx (existing), structlog (existing), PyYAML (existing — OpenAPI YAML), jsonschema (existing — param-schema validation). New: a minimal in-house OpenAPI extractor (no new heavy dependency — see research.md). (019-api-to-mcp)
+- PostgreSQL (existing) — new tables `namespace_api_servers`, `api_endpoints`, `api_proxy_calls`. No Redis dependency (proxy is stateless per call; reuses in-memory `exec_token_registry`). (019-api-to-mcp)
 
 ## Recent Changes
 - 001-api-gateway-mvp: Added Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx, PyJWT, argon2-cffi, stripe
