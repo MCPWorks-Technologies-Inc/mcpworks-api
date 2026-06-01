@@ -108,3 +108,25 @@ async def test_assert_url_denied_host() -> None:
     resolver = await _resolver_to(["10.1.2.3"])
     with pytest.raises(SSRFError):
         await assert_url_allowed("https://internal.example.com/x", resolver=resolver)
+
+
+@pytest.mark.asyncio
+async def test_resolver_failure_raises_ssrf() -> None:
+    async def _boom(_host: str) -> list[str]:
+        raise OSError("name resolution failed")
+
+    with pytest.raises(SSRFError):
+        await resolve_and_validate("nope.example", resolver=_boom)
+
+
+@pytest.mark.asyncio
+async def test_empty_resolution_raises_ssrf() -> None:
+    resolver = await _resolver_to([])
+    with pytest.raises(SSRFError):
+        await resolve_and_validate("void.example", resolver=resolver)
+
+
+@pytest.mark.asyncio
+async def test_url_without_host_rejected() -> None:
+    with pytest.raises(SSRFError):
+        await assert_url_allowed("https:///nohost")

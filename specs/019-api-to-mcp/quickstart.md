@@ -84,7 +84,28 @@ Then `api__legacy__get_widget(path={"id":"w_123"})` in the sandbox. Manual endpo
 
 > "Publish acme's `get_order` directly."
 
-`publish_endpoint { "server": "acme", "operation_id": "get_order" }` → `get_order` becomes a direct MCP tool returning the raw response. Use only for small, clean responses; the functions-only path is preferred for anything list-shaped.
+`publish_endpoint { "server": "acme", "operation_id": "get_order" }` → the endpoint surfaces as a direct MCP tool named `api__acme__get_order` (in both code and `?mode=tools`) that returns the raw upstream response. Its arguments mirror the request shape — `path`, `query`, `body`, `headers`:
+
+```jsonc
+// tools/call
+{ "name": "api__acme__get_order", "arguments": { "path": { "id": "ord_1" } } }
+```
+
+Use only for small, clean responses; the functions-only path is preferred for anything list-shaped (the raw response counts against context). Published responses are run through the namespace's injection scanner before reaching the AI.
+
+`unpublish_endpoint { "server": "acme", "operation_id": "get_order" }` removes the direct tool.
+
+---
+
+## Recipe: let an agent use an API
+
+Agents reach API endpoints as **direct tools** (they don't run code-mode primitives). Scope which servers an agent may use:
+
+```
+configure_agent_api_access { "agent": "report-generator", "api_servers": ["acme"] }
+```
+
+During its runs the agent sees `acme`'s **enabled** endpoints as `api__acme__*` tools and calls them directly. Stored credentials are injected server-side; passthrough credentials for agents are not yet wired (v2).
 
 ---
 
@@ -93,4 +114,5 @@ Then `api__legacy__get_widget(path={"id":"w_123"})` in the sandbox. Manual endpo
 - **SSRF**: base URLs resolving to private/link-local/loopback/metadata (`169.254.169.254`, `10.x`, `127.x`, `::1`) are blocked at registration *and* at call time (defeats DNS rebinding); redirects to denied hosts are not followed.
 - **Credentials**: stored secrets live in a dedicated encrypted column and are redacted everywhere; passthrough values are read server-side only.
 - **Safety on mutations**: POST/PATCH are never auto-retried (no double-create).
+- **Injection scanning**: raw responses on the direct-tool path (published endpoints / agent tools) pass through the namespace's scanner pipeline before reaching the AI. The functions-only path is scanned at function-output instead.
 - **Telemetry**: each call records server/operation/method/latency/bytes/status in `api_proxy_calls` — never bodies or credentials.

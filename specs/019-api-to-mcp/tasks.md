@@ -126,8 +126,8 @@ description: "Task list for 019-api-to-mcp implementation"
 - [x] T033 Orchestrator integration: resolve `agent.api_server_names` so an agent's runs expose its API servers' enabled endpoints (parallel to `mcp_server_names` resolution) in the agent orchestrator (depends T007, T014)
 - [x] T034 [P] Apply 009 prompt-injection rules + `output_trust` wrapping to upstream responses in `src/mcpworks_api/core/api_proxy.py` (depends T015)
 - [x] T035 [P] Enforce max 20 API servers per namespace in `add_api_server` and surface the 1000-endpoint safety-ceiling warning in responses (depends T012, T021)
-- [ ] T036 [P] Update `quickstart.md` validation pass + add a short API→MCP section to `SPEC.md`/docs; verify catalog token cost per endpoint ≤ ~20 tokens
-- [ ] T037 Run `ruff format`, `ruff check --fix`, `mypy src/`; ensure coverage ≥ 80% overall and ≥ 95% on `core/api_proxy.py`, `core/ssrf.py`, and credential paths
+- [x] T036 [P] Update `quickstart.md` validation pass + add a short API→MCP section to `SPEC.md`/docs; verify catalog token cost per endpoint ≤ ~20 tokens
+- [x] T037 Run `ruff format`, `ruff check --fix`, `mypy src/`; ensure coverage ≥ 80% overall and ≥ 95% on `core/api_proxy.py`, `core/ssrf.py`, and credential paths
 
 ---
 
