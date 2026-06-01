@@ -639,6 +639,31 @@ class RunMCPHandler:
             )
         return out
 
+    async def _load_api_passthrough_env(
+        self, namespace_id: uuid.UUID, sandbox_env: dict[str, str]
+    ) -> dict[str, str]:
+        """Resolve declared passthrough credential env vars from the execution env (019, T025).
+
+        Returns only the env vars that enabled API servers' passthrough injections
+        declare, scoped to this execution. The proxy reads these server-side; they
+        never transit the sandbox→proxy request body.
+        """
+        from sqlalchemy import select
+
+        from mcpworks_api.models.namespace_api_server import NamespaceApiServer
+
+        stmt = select(NamespaceApiServer.auth).where(
+            NamespaceApiServer.namespace_id == namespace_id,
+            NamespaceApiServer.enabled.is_(True),
+        )
+        rows = (await self.db.execute(stmt)).scalars().all()
+        declared: set[str] = set()
+        for auth in rows:
+            for inj in auth or []:
+                if inj.get("source") == "passthrough" and inj.get("env_var"):
+                    declared.add(inj["env_var"])
+        return {k: sandbox_env[k] for k in declared if k in sandbox_env}
+
     async def _run_output_pipeline(
         self,
         content: str,
@@ -774,8 +799,14 @@ class RunMCPHandler:
             sandbox_env = {}
         has_ts = any(getattr(v, "language", "python") == "typescript" for _, v in functions)
         has_mcp = bool(mcp_server_tools)
-        if (has_ts or has_mcp) and self.api_key and getattr(self.api_key, "_raw_key", None):
+        has_api = bool(api_server_endpoints)
+        if (has_ts or has_mcp or has_api) and self.api_key and getattr(self.api_key, "_raw_key", None):
             sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key._raw_key
+
+        # 019/T025: resolve passthrough credential env vars server-side for the proxy.
+        api_passthrough_env: dict[str, str] = {}
+        if has_api:
+            api_passthrough_env = await self._load_api_passthrough_env(namespace.id, sandbox_env)
 
         backend = get_backend("code_sandbox")
         if not backend:
@@ -794,13 +825,14 @@ class RunMCPHandler:
 
         exec_token = None
         result = None
-        if has_mcp and self.api_key and getattr(self.api_key, "_raw_key", None):
+        if (has_mcp or has_api) and self.api_key and getattr(self.api_key, "_raw_key", None):
             exec_token = self.api_key._raw_key
             register_execution(
                 token=exec_token,
                 namespace_id=namespace.id,
                 namespace_name=self.namespace_name,
                 execution_id=execution_id,
+                passthrough_env=api_passthrough_env,
             )
 
         try:

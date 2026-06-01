@@ -3069,7 +3069,7 @@ class CreateMCPHandler:
 
         ns = await self._get_current_namespace()
         svc = ApiServerService(self.db)
-        server, endpoints = await svc.add_server(
+        server, endpoints, dropped = await svc.add_server(
             namespace_id=ns.id,
             name=name,
             base_url=base_url,
@@ -3083,10 +3083,17 @@ class CreateMCPHandler:
             enabled_endpoints=enabled_endpoints,
         )
         enabled_count = sum(1 for e in endpoints if e.enabled)
-        note = None
+        note_parts = []
         disabled = len(endpoints) - enabled_count
         if disabled > 0:
-            note = f"{disabled} endpoint(s) discovered but disabled — enable with enable_endpoint."
+            note_parts.append(
+                f"{disabled} endpoint(s) discovered but disabled — enable with enable_endpoint."
+            )
+        if dropped > 0:
+            note_parts.append(
+                f"{dropped} endpoint(s) exceeded the discovery ceiling and were dropped."
+            )
+        note = " ".join(note_parts) or None
         return MCPToolResult(
             content=[
                 MCPContent(

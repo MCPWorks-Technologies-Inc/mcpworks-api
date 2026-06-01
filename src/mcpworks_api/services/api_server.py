@@ -132,7 +132,7 @@ class ApiServerService:
         default_headers: dict[str, str] | None = None,
         settings: dict[str, Any] | None = None,
         enabled_endpoints: list[str] | None = None,
-    ) -> tuple[NamespaceApiServer, list[ApiEndpoint]]:
+    ) -> tuple[NamespaceApiServer, list[ApiEndpoint], int]:
         if not _NAME_RE.match(name):
             raise ValidationError(f"invalid server name '{name}' (must be DNS-safe)")
         if spec_source not in VALID_SPEC_SOURCES:
@@ -182,8 +182,9 @@ class ApiServerService:
         await self.db.flush()
 
         endpoints: list[ApiEndpoint] = []
+        dropped = 0
         if spec_source in ("openapi_url", "openapi_file"):
-            endpoints = await self._import_openapi(
+            endpoints, dropped = await self._import_openapi(
                 server, openapi_url=openapi_url, openapi_file=openapi_file
             )
             enable_set = set(enabled_endpoints or [])
@@ -195,7 +196,7 @@ class ApiServerService:
 
         await self.db.flush()
         await self.db.refresh(server)
-        return server, endpoints
+        return server, endpoints, dropped
 
     async def _fetch_spec_text(self, openapi_url: str) -> str:
         import httpx
@@ -218,7 +219,7 @@ class ApiServerService:
         *,
         openapi_url: str | None,
         openapi_file: str | None,
-    ) -> list[ApiEndpoint]:
+    ) -> tuple[list[ApiEndpoint], int]:
         if openapi_url:
             text = await self._fetch_spec_text(openapi_url)
         elif openapi_file:
@@ -249,7 +250,8 @@ class ApiServerService:
             self.db.add(ep)
             endpoints.append(ep)
         await self.db.flush()
-        return endpoints
+        dropped = result.total_discovered - len(result.endpoints)
+        return endpoints, dropped
 
     # ------------------------------------------------------------------ refresh
 

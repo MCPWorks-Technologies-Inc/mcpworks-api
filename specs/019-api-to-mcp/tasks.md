@@ -86,8 +86,8 @@ description: "Task list for 019-api-to-mcp implementation"
 **Independent Test**: Register a server with a `passthrough` bearer injection bound to `ACME_TOKEN`; run a call in an execution that supplies `ACME_TOKEN`; assert the upstream request carried `Authorization: Bearer <token>`, the value is absent from DB and logs, and a missing var yields the structured `missing_credential` error.
 
 - [x] T024 [US2] Add passthrough resolution to `src/mcpworks_api/core/api_proxy.py`: for each `passthrough` injection read its `env_var` from the execution's transient env server-side, format per template, inject; structured `missing_credential` error when absent (depends T015, research R5)
-- [ ] T025 [US2] Add `passthrough_env: dict[str, str]` to `ExecutionContext` (`src/mcpworks_api/core/exec_token_registry.py`); populate it at sandbox creation with only the declared passthrough `env_var`s from the same 002 source used to build the sandbox env; clear on sandbox exit. Proxy reads `ctx.passthrough_env[env_var]` server-side (never via the sandbox→proxy body) (depends T024)
-- [ ] T026 [P] [US2] Tests in `tests/unit/test_api_proxy.py` + `tests/integration/test_api_to_mcp_e2e.py`: passthrough injected from env, value never persisted/logged (assert against DB row + captured logs), missing var → structured error (depends T024, T025)
+- [x] T025 [US2] Add `passthrough_env: dict[str, str]` to `ExecutionContext` (`src/mcpworks_api/core/exec_token_registry.py`); populate it at sandbox creation with only the declared passthrough `env_var`s from the same 002 source used to build the sandbox env; clear on sandbox exit. Proxy reads `ctx.passthrough_env[env_var]` server-side (never via the sandbox→proxy body) (depends T024)
+- [x] T026 [P] [US2] Tests in `tests/unit/test_api_proxy.py` + `tests/integration/test_api_to_mcp_e2e.py`: passthrough injected from env, value never persisted/logged (assert against DB row + captured logs), missing var → structured error (depends T024, T025)
 
 **Checkpoint**: Both stored and passthrough credential models work; the no-credentials-in-sandbox guarantee holds.
 
@@ -122,10 +122,10 @@ description: "Task list for 019-api-to-mcp implementation"
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T032 [P] Tests for credential redaction (`describe_api_server`/`list_api_servers` never echo values) and `api_proxy_call` telemetry correctness in `tests/unit/test_api_server_service.py`
+- [x] T032 [P] Tests for credential redaction (`describe_api_server`/`list_api_servers` never echo values) and `api_proxy_call` telemetry correctness in `tests/unit/test_api_server_service.py`
 - [ ] T033 Orchestrator integration: resolve `agent.api_server_names` so an agent's runs expose its API servers' enabled endpoints (parallel to `mcp_server_names` resolution) in the agent orchestrator (depends T007, T014)
 - [ ] T034 [P] Apply 009 prompt-injection rules + `output_trust` wrapping to upstream responses in `src/mcpworks_api/core/api_proxy.py` (depends T015)
-- [ ] T035 [P] Enforce max 20 API servers per namespace in `add_api_server` and surface the 1000-endpoint safety-ceiling warning in responses (depends T012, T021)
+- [x] T035 [P] Enforce max 20 API servers per namespace in `add_api_server` and surface the 1000-endpoint safety-ceiling warning in responses (depends T012, T021)
 - [ ] T036 [P] Update `quickstart.md` validation pass + add a short API→MCP section to `SPEC.md`/docs; verify catalog token cost per endpoint ≤ ~20 tokens
 - [ ] T037 Run `ruff format`, `ruff check --fix`, `mypy src/`; ensure coverage ≥ 80% overall and ≥ 95% on `core/api_proxy.py`, `core/ssrf.py`, and credential paths
 
