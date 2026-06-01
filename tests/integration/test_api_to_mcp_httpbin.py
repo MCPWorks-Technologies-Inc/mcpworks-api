@@ -201,3 +201,72 @@ async def test_proxy_rejects_disabled_endpoint(db, namespace):
         assert result.error == "endpoint_disabled"
     finally:
         unregister_execution(token)
+
+
+async def test_published_direct_tool_path(db, namespace):
+    """T030/T034: publish an endpoint, then drive the direct-tool path (proxy_and_format)."""
+    from mcpworks_api.core.api_proxy import (
+        build_published_api_tool,
+        parse_api_tool_name,
+        proxy_and_format,
+    )
+
+    svc = ApiServerService(db)
+    await svc.add_server(
+        namespace_id=namespace.id,
+        name="httpbin",
+        base_url="https://httpbin.org",
+        spec_source="openapi_url",
+        openapi_url=HTTPBIN_SPEC_URL,
+        auth=[
+            {
+                "name": "token",
+                "location": "bearer",
+                "format": "Bearer {value}",
+                "source": "stored",
+                "value": "published_TOKEN",
+            }
+        ],
+    )
+    # Find /bearer, enable + publish it, and build its direct-tool definition.
+    endpoints = await svc.list_endpoints(namespace.id, "httpbin")
+    bearer = next(e for e in endpoints if e.method == "GET" and e.path == "/bearer")
+    await svc.set_enabled(namespace.id, "httpbin", [bearer.operation_id], enabled=True)
+    await svc.set_published(namespace.id, "httpbin", bearer.operation_id, True)
+
+    tool = build_published_api_tool(
+        "httpbin",
+        {
+            "operation_id": bearer.operation_id,
+            "method": bearer.method,
+            "path": bearer.path,
+            "summary": bearer.summary,
+            "param_schema": bearer.param_schema,
+            "request_body_schema": bearer.request_body_schema,
+        },
+    )
+    server, op = parse_api_tool_name(tool["name"])
+    assert (server, op) == ("httpbin", bearer.operation_id)
+
+    token = "bridge_" + uuid.uuid4().hex
+    register_execution(
+        token=token,
+        namespace_id=namespace.id,
+        namespace_name=namespace.name,
+        execution_id=str(uuid.uuid4()),
+    )
+    try:
+        ctx = resolve_execution(token)
+        ok, text = await proxy_and_format(
+            ctx, server, op, {"path": {}, "query": {}, "headers": {}}, db, namespace=namespace
+        )
+        assert ok is True
+        import json
+
+        payload = json.loads(text)
+        assert payload["status_code"] == 200
+        # Stored bearer credential injected server-side and accepted by httpbin.
+        assert payload["json"]["authenticated"] is True
+        assert payload["json"]["token"] == "published_TOKEN"
+    finally:
+        unregister_execution(token)

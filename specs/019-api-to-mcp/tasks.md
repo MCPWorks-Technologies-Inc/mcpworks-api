@@ -73,7 +73,7 @@ description: "Task list for 019-api-to-mcp implementation"
 - [x] T020 [P] [US1] Unit tests in `tests/unit/test_openapi_import.py` against the three fixtures: operationId derivation, `$ref` resolution + fallback, Swagger 2.0 body param, ceiling truncation warning
 - [x] T021 [US1] Extend `add_api_server` in `src/mcpworks_api/services/api_server.py` for `spec_source` `openapi_url`/`openapi_file`: fetch spec via SSRF-checked httpx, import endpoints as disabled, apply optional `enabled_endpoints`, set `endpoint_count`/`last_refreshed_at` (depends T012, T019)
 - [x] T022 [US1] Implement `refresh_api_endpoints` in the service + its dispatch handler in `create_handler.py`: diff added/removed/changed, preserve `enabled`/`published` by `operation_id`, mark removed (depends T021, T014)
-- [ ] T023 [US1] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: register OpenAPI fixture → `enable_endpoint` → author composing function → call → assert only extracted fields returned and raw response absent from AI-visible output; refresh preserves enabled set (depends T021, T022, Phase 2)
+- [x] T023 [US1] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: register OpenAPI fixture → `enable_endpoint` → author composing function → call → assert only extracted fields returned and raw response absent from AI-visible output; refresh preserves enabled set (depends T021, T022, Phase 2)
 
 **Checkpoint**: The headline flow works end-to-end — this is the MVP.
 
@@ -100,7 +100,7 @@ description: "Task list for 019-api-to-mcp implementation"
 **Independent Test**: `add_api_server` with `spec_source=manual`, `add_manual_endpoint` for `GET /v2/widgets/{id}`, then call `api__legacy__get_widget(path={"id":"w_123"})` from the sandbox.
 
 - [x] T027 [US3] Harden the `spec_source=manual` flow and `add_manual_endpoint` validation in `src/mcpworks_api/services/api_server.py`: identifier-safe `operation_id`, valid method, location-bucketed `param_schema` validation (jsonschema), manual endpoints default `enabled=true`, mixed manual+imported coexistence (depends T012)
-- [ ] T028 [US3] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: manual server → `add_manual_endpoint` GET with path param → call from sandbox returns upstream JSON; reject invalid operation_id/method (depends T027, Phase 2)
+- [x] T028 [US3] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: manual server → `add_manual_endpoint` GET with path param → call from sandbox returns upstream JSON; reject invalid operation_id/method (depends T027, Phase 2)
 
 **Checkpoint**: APIs without specs are fully supported alongside imported ones.
 
@@ -113,8 +113,8 @@ description: "Task list for 019-api-to-mcp implementation"
 **Independent Test**: `publish_endpoint` for `get_order` → it appears as a direct MCP tool returning the raw response with the unfiltered-warning; `unpublish_endpoint` removes it.
 
 - [x] T029 [US4] Implement `publish_endpoint`/`unpublish_endpoint` in the service + dispatch handlers in `src/mcpworks_api/mcp/create_handler.py` (toggle `ApiEndpoint.published`) (depends T012, T014)
-- [ ] T030 [US4] Expose published endpoints as direct MCP tools in `src/mcpworks_api/mcp/run_handler.py` (and any code-mode catalog note) — raw response returned, unfiltered-warning surfaced (depends T017, T029)
-- [ ] T031 [US4] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: publish → tool listed + returns raw response → unpublish → tool gone (depends T029, T030)
+- [x] T030 [US4] Expose published endpoints as direct MCP tools in `src/mcpworks_api/mcp/run_handler.py` (and any code-mode catalog note) — raw response returned, unfiltered-warning surfaced (depends T017, T029)
+- [x] T031 [US4] Integration test in `tests/integration/test_api_to_mcp_e2e.py`: publish → tool listed + returns raw response → unpublish → tool gone (depends T029, T030)
 
 **Checkpoint**: All four stories independently functional.
 
@@ -123,8 +123,8 @@ description: "Task list for 019-api-to-mcp implementation"
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [x] T032 [P] Tests for credential redaction (`describe_api_server`/`list_api_servers` never echo values) and `api_proxy_call` telemetry correctness in `tests/unit/test_api_server_service.py`
-- [ ] T033 Orchestrator integration: resolve `agent.api_server_names` so an agent's runs expose its API servers' enabled endpoints (parallel to `mcp_server_names` resolution) in the agent orchestrator (depends T007, T014)
-- [ ] T034 [P] Apply 009 prompt-injection rules + `output_trust` wrapping to upstream responses in `src/mcpworks_api/core/api_proxy.py` (depends T015)
+- [x] T033 Orchestrator integration: resolve `agent.api_server_names` so an agent's runs expose its API servers' enabled endpoints (parallel to `mcp_server_names` resolution) in the agent orchestrator (depends T007, T014)
+- [x] T034 [P] Apply 009 prompt-injection rules + `output_trust` wrapping to upstream responses in `src/mcpworks_api/core/api_proxy.py` (depends T015)
 - [x] T035 [P] Enforce max 20 API servers per namespace in `add_api_server` and surface the 1000-endpoint safety-ceiling warning in responses (depends T012, T021)
 - [ ] T036 [P] Update `quickstart.md` validation pass + add a short API→MCP section to `SPEC.md`/docs; verify catalog token cost per endpoint ≤ ~20 tokens
 - [ ] T037 Run `ruff format`, `ruff check --fix`, `mypy src/`; ensure coverage ≥ 80% overall and ≥ 95% on `core/api_proxy.py`, `core/ssrf.py`, and credential paths
