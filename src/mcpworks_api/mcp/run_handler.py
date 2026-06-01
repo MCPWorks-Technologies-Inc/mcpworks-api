@@ -57,12 +57,14 @@ class RunMCPHandler:
         db: AsyncSession,
         api_key: APIKey,
         mode: str = "code",
+        tag_filter: set[str] | None = None,
     ):
         self.namespace_name = namespace
         self.account = account
         self.db = db
         self.mode = mode
         self.api_key = api_key
+        self.tag_filter: set[str] = tag_filter or set()
         self.namespace_service = NamespaceServiceManager(db)
         self.function_service = FunctionService(db)
         self._namespace: Namespace | None = None
@@ -148,6 +150,13 @@ class RunMCPHandler:
         tier_notice = self._tier_notice()
         namespace = await self._get_namespace_for_read()
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
+
+        if self.tag_filter:
+            functions = [
+                (f, v)
+                for f, v in functions
+                if f.tags and {t.lower() for t in f.tags} & self.tag_filter
+            ]
 
         tools = []
         for func, version in functions:
@@ -347,20 +356,66 @@ class RunMCPHandler:
 
         agent_context = await self._load_agent_context(namespace)
 
+        from mcpworks_api.services.result_cache import (
+            get_cache_policy,
+            get_cached_result,
+            make_cache_key,
+            set_cached_result,
+        )
+
+        cache_enabled, cache_ttl = get_cache_policy(function)
+        cache_bypass = arguments.pop("cache", None) is False if arguments else False
+        cache_hit = False
+        cache_key = None
+
+        if cache_enabled and not cache_bypass:
+            cache_key = make_cache_key(str(function.id), version.version, arguments)
+            cached = await get_cached_result(cache_key)
+            if cached is not None:
+                cache_hit = True
+                from mcpworks_api.backends.base import ExecutionResult
+
+                result = ExecutionResult(
+                    success=True,
+                    output=cached,
+                    stdout=None,
+                    stderr=None,
+                    error=None,
+                    error_type=None,
+                    execution_time_ms=0,
+                )
+                from mcpworks_api.middleware.execution_metrics import function_cache_total
+
+                function_cache_total.labels(
+                    namespace=self.namespace_name, function=name, result="hit"
+                ).inc()
+        elif cache_enabled:
+            cache_key = make_cache_key(str(function.id), version.version, arguments)
+
         execution_id = str(uuid.uuid4())
         start_time = datetime.now(UTC)
 
-        result = await backend.execute(
-            code=version.code,
-            config=version.config,
-            input_data=arguments,
-            account=self.account,
-            execution_id=execution_id,
-            sandbox_env=filtered_env,
-            context=agent_context,
-            language=getattr(version, "language", "python"),
-            namespace=self.namespace_name,
-        )
+        if not cache_hit:
+            result = await backend.execute(
+                code=version.code,
+                config=version.config,
+                input_data=arguments,
+                account=self.account,
+                execution_id=execution_id,
+                sandbox_env=filtered_env,
+                context=agent_context,
+                language=getattr(version, "language", "python"),
+                namespace=self.namespace_name,
+            )
+
+            if cache_enabled:
+                from mcpworks_api.middleware.execution_metrics import function_cache_total
+
+                function_cache_total.labels(
+                    namespace=self.namespace_name, function=name, result="miss"
+                ).inc()
+                if result.success and cache_key:
+                    asyncio.create_task(set_cached_result(cache_key, result.output, cache_ttl))
 
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
@@ -374,14 +429,65 @@ class RunMCPHandler:
             execution_time_ms=execution_time_ms,
             execution_id=execution_id,
             success=result.success,
+            cache_hit=cache_hit,
+        )
+
+        await self._persist_execution_record(
+            execution_id=execution_id,
+            namespace=namespace,
+            service_name=service_name,
+            function_name=function_name,
+            function=function,
+            version=version,
+            arguments=arguments,
+            result=result,
+            execution_time_ms=execution_time_ms,
+            start_time=start_time,
+        )
+
+        input_size = len(json.dumps(arguments)) if arguments else 0
+        result_size = len(json.dumps(result.output)) if result.success and result.output else 0
+        from mcpworks_api.services.analytics import record_execution_stats
+
+        asyncio.create_task(
+            record_execution_stats(
+                namespace_id=namespace.id,
+                execution_id=execution_id,
+                mcp_calls_count=0,
+                mcp_bytes_total=0,
+                result_bytes=result_size,
+                input_bytes=input_size,
+            )
+        )
+
+        from mcpworks_api.services.telemetry import emit_telemetry_event
+
+        asyncio.create_task(
+            emit_telemetry_event(
+                namespace_id=namespace.id,
+                namespace_name=self.namespace_name,
+                function_name=name,
+                execution_id=execution_id,
+                execution_time_ms=execution_time_ms,
+                success=result.success,
+                backend=version.backend,
+                version=version.version,
+            )
         )
 
         if result.success:
-            content_text = json.dumps(result.output)
-            if getattr(function, "output_trust", "prompt") == "data":
-                from mcpworks_api.core.trust_boundary import wrap_function_output
+            asyncio.create_task(self._recover_agent_trust(namespace))
 
-                content_text = wrap_function_output(content_text)
+        if result.success:
+            content_text = json.dumps(result.output)
+            content_text = await self._run_output_pipeline(
+                content_text,
+                namespace,
+                service_name,
+                function_name,
+                execution_id,
+                getattr(function, "output_trust", "prompt"),
+            )
         else:
             content_text = json.dumps(
                 {
@@ -403,6 +509,64 @@ class RunMCPHandler:
                 "execution_id": execution_id,
             },
         )
+
+    async def _persist_execution_record(
+        self,
+        execution_id: str,
+        namespace,
+        service_name: str,
+        function_name: str,
+        function,
+        version,
+        arguments: dict[str, Any],
+        result,
+        execution_time_ms: int,
+        start_time: datetime,
+    ) -> None:
+        """Persist an execution record for debugging queries. Fire-and-forget."""
+        try:
+            from mcpworks_api.models.execution import (
+                Execution,
+                ExecutionStatus,
+                _scrub_error_message,
+            )
+
+            _STDOUT_MAX = 4096
+
+            backend_meta: dict[str, Any] = {}
+            if result.stdout:
+                backend_meta["stdout"] = result.stdout[:_STDOUT_MAX]
+            if result.stderr:
+                backend_meta["stderr"] = result.stderr[:_STDOUT_MAX]
+
+            execution = Execution(
+                id=uuid.UUID(execution_id),
+                namespace_id=namespace.id,
+                service_name=service_name,
+                function_name=function_name,
+                user_id=self.account.user_id,
+                function_id=function.id,
+                function_version_num=version.version,
+                backend=version.backend,
+                workflow_id=execution_id,
+                status=ExecutionStatus.COMPLETED.value
+                if result.success
+                else ExecutionStatus.FAILED.value,
+                input_data=arguments,
+                result_data=result.output if result.success else None,
+                error_message=_scrub_error_message(result.error or "") if result.error else None,
+                error_code=result.error_type,
+                started_at=start_time,
+                completed_at=datetime.now(UTC),
+                execution_time_ms=execution_time_ms,
+                backend_metadata=backend_meta or None,
+            )
+            self.db.add(execution)
+            await self.db.flush()
+        except Exception:
+            logger.warning(
+                "execution_record_persist_failed", execution_id=execution_id, exc_info=True
+            )
 
     async def _load_mcp_server_tools(self, namespace_id: uuid.UUID) -> list[dict[str, Any]]:
         from sqlalchemy import select
@@ -475,6 +639,34 @@ class RunMCPHandler:
             )
         return out
 
+    async def _run_output_pipeline(
+        self,
+        content: str,
+        namespace,
+        service_name: str,
+        function_name: str,
+        execution_id: str,
+        output_trust: str,
+    ) -> str:
+        from mcpworks_api.core.scanner_pipeline import evaluate_pipeline
+        from mcpworks_api.core.scanners.base import ScanContext
+
+        context = ScanContext(
+            direction="output",
+            namespace=self.namespace_name,
+            service=service_name,
+            function=function_name,
+            execution_id=execution_id,
+            output_trust=output_trust,
+        )
+
+        pipeline_config = getattr(namespace, "scanner_pipeline", None)
+        pipeline_result = await evaluate_pipeline(content, context, pipeline_config)
+
+        if pipeline_result.modified_content is not None:
+            return pipeline_result.modified_content
+        return content
+
     async def _check_agent_function_access(
         self, namespace: Namespace, service_name: str, function_name: str
     ) -> None:
@@ -485,7 +677,7 @@ class RunMCPHandler:
         from mcpworks_api.models.agent import Agent
 
         result = await self.db.execute(
-            select(Agent.access_rules, Agent.name)
+            select(Agent.access_rules, Agent.name, Agent.trust_score)
             .where(Agent.namespace_id == namespace.id)
             .limit(1)
         )
@@ -493,13 +685,32 @@ class RunMCPHandler:
         if not row or not row.access_rules:
             return
 
-        allowed, rule_id = check_function_access(row.access_rules, service_name, function_name)
+        allowed, rule_id = check_function_access(
+            row.access_rules, service_name, function_name, trust_score=row.trust_score
+        )
         if not allowed:
             raise AgentAccessDeniedError(
                 agent=row.name,
                 resource=f"{service_name}.{function_name}",
                 rule_id=rule_id or "unknown",
             )
+
+    async def _recover_agent_trust(self, namespace: Namespace) -> None:
+        """Increment trust score for the namespace's agent after successful execution."""
+        try:
+            from sqlalchemy import select
+
+            from mcpworks_api.models.agent import Agent
+            from mcpworks_api.services.trust_score import recover_trust_score
+
+            result = await self.db.execute(
+                select(Agent.id).where(Agent.namespace_id == namespace.id).limit(1)
+            )
+            row = result.first()
+            if row:
+                await recover_trust_score(self.db, row.id)
+        except Exception:
+            pass
 
     async def _load_agent_context(self, namespace: Namespace) -> dict[str, Any] | None:
         """Load agent state as context dict for code-mode cross-function calls.
@@ -604,29 +815,48 @@ class RunMCPHandler:
                 namespace=self.namespace_name,
             )
         finally:
+            mcp_calls = 0
+            mcp_bytes = 0
             if exec_token:
                 exec_ctx = resolve_execution(exec_token)
-                if exec_ctx and exec_ctx.mcp_calls_count > 0:
-                    from mcpworks_api.services.analytics import (
-                        record_execution_stats as analytics_record_execution,
-                    )
-
-                    result_size = (
-                        len(json.dumps(result.output or "")) if result and result.output else 0
-                    )
-                    asyncio.create_task(
-                        analytics_record_execution(
-                            namespace_id=namespace.id,
-                            execution_id=execution_id,
-                            mcp_calls_count=exec_ctx.mcp_calls_count,
-                            mcp_bytes_total=exec_ctx.mcp_bytes_total,
-                            result_bytes=result_size,
-                        )
-                    )
+                if exec_ctx:
+                    mcp_calls = exec_ctx.mcp_calls_count
+                    mcp_bytes = exec_ctx.mcp_bytes_total
                 unregister_execution(exec_token)
+
+            from mcpworks_api.services.analytics import (
+                record_execution_stats as analytics_record_execution,
+            )
+
+            input_size = len(code.encode("utf-8")) if code else 0
+            result_size = len(json.dumps(result.output or "")) if result and result.output else 0
+            asyncio.create_task(
+                analytics_record_execution(
+                    namespace_id=namespace.id,
+                    execution_id=execution_id,
+                    mcp_calls_count=mcp_calls,
+                    mcp_bytes_total=mcp_bytes,
+                    result_bytes=result_size,
+                    input_bytes=input_size,
+                )
+            )
 
         execution_time_ms = result.execution_time_ms or int(
             (datetime.now(UTC) - start_time).total_seconds() * 1000
+        )
+
+        from mcpworks_api.services.telemetry import emit_telemetry_event
+
+        asyncio.create_task(
+            emit_telemetry_event(
+                namespace_id=namespace.id,
+                namespace_name=self.namespace_name,
+                function_name="execute_python",
+                execution_id=execution_id,
+                execution_time_ms=execution_time_ms,
+                success=result.success if result else False,
+                backend="code_sandbox",
+            )
         )
 
         # FINDING-04: Prefer call_log from output.json (read by trusted execute.py)
@@ -648,11 +878,15 @@ class RunMCPHandler:
         if result.success:
             content_text = json.dumps(result.output)
             if has_data_trust:
-                from mcpworks_api.core.trust_boundary import wrap_function_output
-                from mcpworks_api.sandbox.injection_scan import scan_for_injections
-
-                if scan_for_injections(content_text):
-                    content_text = wrap_function_output(content_text)
+                namespace = await self._get_namespace()
+                content_text = await self._run_output_pipeline(
+                    content_text,
+                    namespace,
+                    "code_mode",
+                    "execute",
+                    str(uuid.uuid4()),
+                    "data",
+                )
         else:
             content_text = json.dumps(
                 {

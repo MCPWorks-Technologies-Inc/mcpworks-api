@@ -1,23 +1,16 @@
-"""Prompt injection scanner — pattern-based detection of common injection attacks.
+"""Pattern-based prompt injection scanner.
 
-Same architecture as credential_scan.py. Scans text and JSON structures
-for known prompt injection patterns. Returns structured matches with
-severity levels.
+Detects known injection patterns via regex with Unicode normalization
+and base64 decoding. Refactored from sandbox/injection_scan.py.
 """
+
+from __future__ import annotations
 
 import base64
 import re
 import unicodedata
-from dataclasses import dataclass
 
-
-@dataclass
-class InjectionMatch:
-    pattern_name: str
-    matched_text: str
-    severity: str
-    position: int
-
+from mcpworks_api.core.scanners.base import BaseScanner, ScanContext, ScanVerdict
 
 _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
@@ -109,9 +102,9 @@ _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ),
 ]
 
-MAX_MATCHES = 50
-MAX_MATCH_TEXT = 200
-
+_SEVERITY_SCORES = {"high": 0.9, "medium": 0.6, "low": 0.3}
+_MAX_MATCHES = 50
+_MAX_MATCH_TEXT = 200
 _ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\ufeff\u00ad\u2060]")
 _BASE64_BLOCK = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
 
@@ -136,49 +129,49 @@ def normalize_text(text: str) -> str:
     return result
 
 
-def scan_for_injections(text: str) -> list[InjectionMatch]:
+def scan_text(text: str) -> list[dict]:
     if not text:
         return []
 
     normalized = normalize_text(text)
-
-    matches: list[InjectionMatch] = []
+    matches: list[dict] = []
     for pattern_name, pattern, severity in _PATTERNS:
         for m in pattern.finditer(normalized):
-            if len(matches) >= MAX_MATCHES:
+            if len(matches) >= _MAX_MATCHES:
                 return matches
-            matched = m.group(0)[:MAX_MATCH_TEXT]
             matches.append(
-                InjectionMatch(
-                    pattern_name=pattern_name,
-                    matched_text=matched,
-                    severity=severity,
-                    position=m.start(),
-                )
+                {
+                    "pattern": pattern_name,
+                    "matched": m.group(0)[:_MAX_MATCH_TEXT],
+                    "severity": severity,
+                    "position": m.start(),
+                }
             )
     return matches
 
 
-def scan_json_for_injections(data: dict | list | str | None) -> list[InjectionMatch]:
-    if data is None:
-        return []
-    if isinstance(data, str):
-        return scan_for_injections(data)
-    if isinstance(data, list):
-        matches: list[InjectionMatch] = []
-        for item in data:
-            matches.extend(scan_json_for_injections(item))
-            if len(matches) >= MAX_MATCHES:
-                return matches[:MAX_MATCHES]
-        return matches
-    if isinstance(data, dict):
-        matches = []
-        for value in data.values():
-            matches.extend(scan_json_for_injections(value))
-            if len(matches) >= MAX_MATCHES:
-                return matches[:MAX_MATCHES]
-        return matches
-    return []
+class PatternScanner(BaseScanner):
+    name = "pattern_scanner"
+
+    async def scan(self, content: str, context: ScanContext) -> ScanVerdict:  # noqa: ARG002
+        matches = scan_text(content)
+        if not matches:
+            return ScanVerdict(
+                action="pass",
+                score=0.0,
+                reason="no injection patterns detected",
+                scanner_name=self.name,
+            )
+
+        highest_severity = max(matches, key=lambda m: _SEVERITY_SCORES.get(m["severity"], 0))
+        score = _SEVERITY_SCORES.get(highest_severity["severity"], 0.5)
+        patterns = ", ".join({m["pattern"] for m in matches})
+        return ScanVerdict(
+            action="flag",
+            score=score,
+            reason=f"injection patterns detected: {patterns}",
+            scanner_name=self.name,
+        )
 
 
 def suggest_trust_level(code: str | None, required_env: list[str] | None = None) -> tuple[str, str]:
@@ -193,3 +186,8 @@ def suggest_trust_level(code: str | None, required_env: list[str] | None = None)
     if code and re.search(r"\b(?:httpx|requests|urllib|aiohttp)\b", code):
         return "data", "function uses HTTP client library"
     return "prompt", "no external dependencies detected"
+
+
+def scan_for_injections(text: str) -> list[dict]:
+    """Compatibility alias for scan_text."""
+    return scan_text(text)

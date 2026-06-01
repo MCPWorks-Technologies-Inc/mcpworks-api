@@ -4,7 +4,7 @@ Creates namespace_api_servers, api_endpoints, api_proxy_calls, and the
 agents.api_server_names column.
 
 Revision ID: 20260529_000001
-Revises: 20260401_000001
+Revises: 20260415_000002
 Create Date: 2026-05-29
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 
 revision = "20260529_000001"
-down_revision = "20260401_000001"
+down_revision = "20260415_000002"
 branch_labels = None
 depends_on = None
 

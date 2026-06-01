@@ -71,18 +71,49 @@ class ProcedureService:
                 raise NotFoundError(f"Step {i + 1}: function '{ref}' not found in namespace")
 
         normalized_steps = []
+        step_names_so_far: list[str] = []
         for i, step in enumerate(steps):
-            normalized_steps.append(
-                {
-                    "step_number": i + 1,
-                    "name": step["name"],
-                    "function_ref": step["function_ref"],
-                    "instructions": step["instructions"],
-                    "failure_policy": step.get("failure_policy", "required"),
-                    "max_retries": step.get("max_retries", 1),
-                    "validation": step.get("validation"),
-                }
-            )
+            input_mapping = step.get("input_mapping")
+            output_mapping = step.get("output_mapping")
+
+            if input_mapping and isinstance(input_mapping, dict):
+                from mcpworks_api.services.jsonpath import validate_expression
+
+                for param, expr in input_mapping.items():
+                    error = validate_expression(expr)
+                    if error:
+                        raise ValueError(f"Step {i + 1}: input_mapping['{param}']: {error}")
+                    if expr.startswith("$.steps."):
+                        ref_step = expr.split(".")[2]
+                        if ref_step not in step_names_so_far:
+                            raise ValueError(
+                                f"Step {i + 1}: input_mapping['{param}'] references "
+                                f"step '{ref_step}' which has not executed yet"
+                            )
+
+            if output_mapping and isinstance(output_mapping, dict):
+                from mcpworks_api.services.jsonpath import validate_expression
+
+                for var, expr in output_mapping.items():
+                    error = validate_expression(expr)
+                    if error:
+                        raise ValueError(f"Step {i + 1}: output_mapping['{var}']: {error}")
+
+            step_names_so_far.append(step["name"])
+            normalized_step = {
+                "step_number": i + 1,
+                "name": step["name"],
+                "function_ref": step["function_ref"],
+                "instructions": step["instructions"],
+                "failure_policy": step.get("failure_policy", "required"),
+                "max_retries": step.get("max_retries", 1),
+                "validation": step.get("validation"),
+            }
+            if input_mapping:
+                normalized_step["input_mapping"] = input_mapping
+            if output_mapping:
+                normalized_step["output_mapping"] = output_mapping
+            normalized_steps.append(normalized_step)
 
         procedure = Procedure(
             namespace_id=namespace_id,
@@ -186,18 +217,49 @@ class ProcedureService:
 
         if steps is not None:
             normalized_steps = []
+            step_names_so_far: list[str] = []
             for i, step in enumerate(steps):
-                normalized_steps.append(
-                    {
-                        "step_number": i + 1,
-                        "name": step["name"],
-                        "function_ref": step["function_ref"],
-                        "instructions": step["instructions"],
-                        "failure_policy": step.get("failure_policy", "required"),
-                        "max_retries": step.get("max_retries", 1),
-                        "validation": step.get("validation"),
-                    }
-                )
+                input_mapping = step.get("input_mapping")
+                output_mapping = step.get("output_mapping")
+
+                if input_mapping and isinstance(input_mapping, dict):
+                    from mcpworks_api.services.jsonpath import validate_expression
+
+                    for param, expr in input_mapping.items():
+                        error = validate_expression(expr)
+                        if error:
+                            raise ValueError(f"Step {i + 1}: input_mapping['{param}']: {error}")
+                        if expr.startswith("$.steps."):
+                            ref_step = expr.split(".")[2]
+                            if ref_step not in step_names_so_far:
+                                raise ValueError(
+                                    f"Step {i + 1}: input_mapping['{param}'] references "
+                                    f"step '{ref_step}' which has not executed yet"
+                                )
+
+                if output_mapping and isinstance(output_mapping, dict):
+                    from mcpworks_api.services.jsonpath import validate_expression
+
+                    for var, expr in output_mapping.items():
+                        error = validate_expression(expr)
+                        if error:
+                            raise ValueError(f"Step {i + 1}: output_mapping['{var}']: {error}")
+
+                step_names_so_far.append(step["name"])
+                normalized_step = {
+                    "step_number": i + 1,
+                    "name": step["name"],
+                    "function_ref": step["function_ref"],
+                    "instructions": step["instructions"],
+                    "failure_policy": step.get("failure_policy", "required"),
+                    "max_retries": step.get("max_retries", 1),
+                    "validation": step.get("validation"),
+                }
+                if input_mapping:
+                    normalized_step["input_mapping"] = input_mapping
+                if output_mapping:
+                    normalized_step["output_mapping"] = output_mapping
+                normalized_steps.append(normalized_step)
 
             new_version_num = procedure.active_version + 1
             version = ProcedureVersion(

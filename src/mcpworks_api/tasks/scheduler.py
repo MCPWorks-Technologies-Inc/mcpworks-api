@@ -24,6 +24,7 @@ from mcpworks_api.core.database import get_db_context
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import Agent, AgentReplica, AgentRun, AgentSchedule, ScheduledJob
 from mcpworks_api.models.namespace import Namespace
+from mcpworks_api.models.schedule_fire import ScheduleFire
 from mcpworks_api.services.agent_service import AgentService
 from mcpworks_api.services.function import FunctionService
 
@@ -134,6 +135,13 @@ async def _execute_function_direct(
         agent_state = await agent_service.get_all_state(agent.id)
         context = {"state": agent_state}
 
+        extra_files: dict[str, str] = {}
+        if version.code and "from functions" in version.code:
+            from mcpworks_api.mcp.code_mode import generate_functions_package
+
+            all_functions = await function_service.list_all_for_namespace(namespace_id=namespace.id)
+            extra_files = generate_functions_package(all_functions, namespace.name)
+
         execution_id = str(uuid_mod.uuid4())
         start_time = datetime.now(UTC)
 
@@ -146,6 +154,7 @@ async def _execute_function_direct(
                 execution_id=execution_id,
                 context=context,
                 namespace=namespace.name,
+                extra_files=extra_files if extra_files else None,
             )
         except Exception as e:
             await _record_failure(db, run_id, schedule, str(e))
@@ -193,23 +202,47 @@ async def _execute_scheduled_function(
     agent: Agent,
 ) -> None:
     """Execute a single scheduled function, respecting orchestration_mode."""
+    from mcpworks_api.middleware.observability import record_schedule_fire
     from mcpworks_api.tasks.orchestrator import run_orchestration
 
+    fire_id = uuid_mod.uuid4()
+    async with get_db_context() as db:
+        fire = ScheduleFire(
+            id=fire_id,
+            schedule_id=schedule.id,
+            agent_id=agent.id,
+            status="started",
+        )
+        db.add(fire)
+    record_schedule_fire(namespace=agent.name, status="started")
+
     orch_mode = getattr(schedule, "orchestration_mode", "direct") or "direct"
+
+    async def _update_fire(
+        status: str, error_detail: str | None = None, run_id: str | None = None
+    ) -> None:
+        vals: dict = {"status": status, "error_detail": error_detail}
+        if run_id:
+            vals["agent_run_id"] = uuid_mod.UUID(run_id)
+        async with get_db_context() as db:
+            await db.execute(update(ScheduleFire).where(ScheduleFire.id == fire_id).values(**vals))
 
     if orch_mode == "procedure":
         procedure_name = getattr(schedule, "procedure_name", None)
         if not procedure_name:
             logger.error("schedule_procedure_no_name", schedule_id=str(schedule.id))
+            await _update_fire("error", "No procedure name configured")
             return
         if not agent.ai_engine:
             logger.error("schedule_procedure_no_ai", schedule_id=str(schedule.id))
+            await _update_fire("error", "No AI engine configured")
             return
 
         async with get_db_context() as db:
             account = await _get_schedule_account(agent, db)
         if not account:
             logger.error("schedule_account_not_found", agent_id=str(agent.id))
+            await _update_fire("error", "Account not found")
             return
 
         tier = account.user.effective_tier if account.user else "pro-agent"
@@ -227,6 +260,7 @@ async def _execute_scheduled_function(
             account=account,
             tier=tier,
         )
+        await _update_fire("completed")
         return
 
     if orch_mode != "direct" and not agent.ai_engine:
@@ -238,13 +272,18 @@ async def _execute_scheduled_function(
         orch_mode = "direct"
 
     if orch_mode == "direct":
-        await _execute_function_direct(schedule, agent)
+        try:
+            await _execute_function_direct(schedule, agent)
+            await _update_fire("completed")
+        except Exception as exc:
+            await _update_fire("error", str(exc)[:500])
         return
 
     async with get_db_context() as db:
         account = await _get_schedule_account(agent, db)
     if not account:
         logger.error("schedule_account_not_found", agent_id=str(agent.id))
+        await _update_fire("error", "Account not found")
         return
 
     tier = account.user.effective_tier if account.user else "pro-agent"
@@ -267,6 +306,8 @@ async def _execute_scheduled_function(
         trigger_data={"schedule_id": str(schedule.id), "function_name": schedule.function_name},
         tier=tier,
         account=account,
+        schedule_id=str(schedule.id),
+        orchestration_mode=orch_mode,
     )
 
     async with get_db_context() as db:
@@ -281,6 +322,12 @@ async def _execute_scheduled_function(
                 next_run_at=_compute_next_run(schedule.cron_expression, schedule.timezone),
             )
         )
+
+    await _update_fire(
+        "completed" if orch_result.success else "error",
+        orch_result.error[:500] if orch_result.error else None,
+        orch_result.run_id,
+    )
 
     logger.info(
         "schedule_orchestration_complete",

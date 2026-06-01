@@ -446,6 +446,58 @@ BASE_TOOLS: dict[str, ToolDef] = {
             "required": ["name"],
         },
     ),
+    "configure_cache": ToolDef(
+        name="configure_cache",
+        brief="Enable or disable result caching for a function.",
+        description=(
+            "Configure Redis-backed result caching for a function. "
+            "When enabled, identical inputs return cached results instantly "
+            "instead of re-executing in sandbox. Only successful results are cached. "
+            "Example: configure_cache(service='utils', function='convert', enabled=true, ttl_seconds=600)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name containing the function.",
+                },
+                "function": {
+                    "type": "string",
+                    "description": "Function name to configure caching for.",
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "description": "True to enable caching, false to disable.",
+                },
+                "ttl_seconds": {
+                    "type": "integer",
+                    "description": "Cache TTL in seconds (default: 300, max: 86400).",
+                },
+            },
+            "required": ["service", "function", "enabled"],
+        },
+    ),
+    "configure_discovery": ToolDef(
+        name="configure_discovery",
+        brief="Toggle namespace visibility in MCP server card discovery.",
+        description=(
+            "Control whether this namespace appears in the platform-level "
+            "server card at /.well-known/mcp.json. Per-namespace cards are "
+            "always available regardless of this setting. "
+            "Example: configure_discovery(discoverable=true)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "discoverable": {
+                    "type": "boolean",
+                    "description": "True to list in platform discovery, false to hide.",
+                },
+            },
+            "required": ["discoverable"],
+        },
+    ),
 }
 
 
@@ -1485,35 +1537,33 @@ AGENT_TOOLS: dict[str, ToolDef] = {
     ),
     "configure_agent_access": ToolDef(
         name="configure_agent_access",
-        brief="Add a function or state access rule for an agent.",
+        brief="Add access rules or set trust score for an agent.",
         description=(
-            "Add a per-agent access rule that restricts which functions or state keys "
-            "the agent can use. Rule types: "
-            "'allow_services' (whitelist services), "
-            "'deny_services' (block services), "
-            "'allow_functions' (whitelist specific functions by service.function pattern), "
-            "'deny_functions' (block specific functions by service.function pattern), "
-            "'allow_keys' (whitelist state keys), "
-            "'deny_keys' (block state keys). "
-            "Patterns support fnmatch-style globs (e.g., 'admin.delete_*'). "
-            "Deny rules always take precedence over allow rules. "
-            "When no rules exist, the agent has unrestricted access. "
-            "Example: configure_agent_access(agent_name='social-bot', "
-            "rule={'type': 'allow_services', 'patterns': ['social', 'content']})."
+            "Add a per-agent access rule or set the agent's trust score. "
+            "Provide 'rule' to add access rules, or 'trust_score' to set the score directly. "
+            "Rule types: "
+            "'allow_services', 'deny_services', 'allow_functions', 'deny_functions', "
+            "'allow_keys', 'deny_keys'. "
+            "Function rules support optional 'min_trust_score' (0-1000) to gate access "
+            "based on the agent's behavioral trust score. "
+            "Trust scores degrade automatically on security events and recover slowly "
+            "on successful executions. Default score is 500. "
+            "Example rule: configure_agent_access(agent_name='bot', "
+            "rule={'type': 'allow_functions', 'patterns': ['svc.*'], 'min_trust_score': 400}). "
+            "Example trust: configure_agent_access(agent_name='bot', trust_score=500)."
         ),
         input_schema={
             "type": "object",
             "properties": {
                 "agent_name": {
                     "type": "string",
-                    "description": "Name of the agent to configure access rules for.",
+                    "description": "Name of the agent to configure.",
                 },
                 "rule": {
                     "type": "object",
                     "description": (
                         "Access rule definition. Must include 'type' and 'patterns'. "
-                        "type: allow_services|deny_services|allow_functions|deny_functions|allow_keys|deny_keys. "
-                        "patterns: list of fnmatch glob patterns."
+                        "Optional 'min_trust_score' for trust-gated access."
                     ),
                     "properties": {
                         "type": {
@@ -1531,11 +1581,23 @@ AGENT_TOOLS: dict[str, ToolDef] = {
                             "type": "array",
                             "items": {"type": "string"},
                         },
+                        "min_trust_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1000,
+                            "description": "Minimum trust score required to use matched functions.",
+                        },
                     },
                     "required": ["type", "patterns"],
                 },
+                "trust_score": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "description": "Set the agent's trust score directly (admin override).",
+                },
             },
-            "required": ["agent_name", "rule"],
+            "required": ["agent_name"],
         },
     ),
     "list_agent_access_rules": ToolDef(
@@ -1926,6 +1988,24 @@ MCP_SERVER_TOOLS: dict[str, ToolDef] = {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Arguments for the stdio command. Example: ['-y', '@modelcontextprotocol/server-filesystem', '/data']",
+                },
+                "auth_type": {
+                    "type": "string",
+                    "enum": ["bearer", "oauth2", "none"],
+                    "description": "Authentication type. 'bearer' (default): static token via auth_token. 'oauth2': OAuth 2.0 with device flow or authorization code. 'none': no auth headers.",
+                    "default": "bearer",
+                },
+                "oauth_config": {
+                    "type": "object",
+                    "description": (
+                        "OAuth 2.0 configuration (required when auth_type='oauth2'). "
+                        "Fields: client_id, client_secret, scopes (array), flow ('device' or 'authorization_code'), "
+                        "device_authorization_endpoint (for device flow), token_endpoint, auth_endpoint (for auth code flow). "
+                        'Example: {"client_id": "123.apps.googleusercontent.com", "client_secret": "GOCSPX-...", '
+                        '"scopes": ["https://www.googleapis.com/auth/gmail.readonly"], '
+                        '"device_authorization_endpoint": "https://oauth2.googleapis.com/device/code", '
+                        '"token_endpoint": "https://oauth2.googleapis.com/token", "flow": "device"}'
+                    ),
                 },
             },
             "required": ["name"],
@@ -2327,6 +2407,246 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
                     "default": "24h",
                 },
             },
+        },
+    ),
+    "list_executions": ToolDef(
+        name="list_executions",
+        brief="List recent function execution history with optional filters.",
+        description=(
+            "List recent function executions for this namespace. "
+            "Filter by service name, function name, or status (completed, failed, timed_out). "
+            "Returns execution summaries with status, timing, and error messages. "
+            "Example: list_executions(service='social', function='post-to-bluesky', status='failed')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Filter by service name.",
+                },
+                "function": {
+                    "type": "string",
+                    "description": "Filter by function name.",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["completed", "failed", "timed_out"],
+                    "description": "Filter by execution status.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (default 20, max 100).",
+                    "default": 20,
+                },
+            },
+        },
+    ),
+    "describe_execution": ToolDef(
+        name="describe_execution",
+        brief="Get full detail for a specific execution including input, output, and errors.",
+        description=(
+            "Get complete execution detail by ID. Returns input data, output/error, "
+            "stdout/stderr, function version, timing, and backend metadata. "
+            "Use list_executions to find execution IDs. "
+            "Example: describe_execution(execution_id='abc-123-def')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "execution_id": {
+                    "type": "string",
+                    "description": "Execution UUID.",
+                },
+            },
+            "required": ["execution_id"],
+        },
+    ),
+    "add_security_scanner": ToolDef(
+        name="add_security_scanner",
+        brief="Add a security scanner to the namespace's scanner pipeline.",
+        description=(
+            "Add a scanner to the namespace's security pipeline. Scanners evaluate function "
+            "inputs/outputs for prompt injection, secrets, and other threats. "
+            "Three types: 'builtin' (pattern_scanner, secret_scanner, trust_boundary), "
+            "'webhook' (POST to external URL), 'python' (importable Python callable). "
+            "Example: add_security_scanner(type='webhook', name='my-guard', direction='output', "
+            "config={'url': 'https://guard.internal/scan', 'timeout_ms': 2000})."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["builtin", "webhook", "python"]},
+                "name": {"type": "string", "description": "Human-readable scanner name."},
+                "direction": {"type": "string", "enum": ["input", "output", "both"]},
+                "config": {"type": "object", "description": "Type-specific config."},
+            },
+            "required": ["type", "name", "direction", "config"],
+        },
+    ),
+    "list_security_scanners": ToolDef(
+        name="list_security_scanners",
+        brief="List all scanners in the namespace's security pipeline.",
+        description="List all configured security scanners for this namespace, including their type, direction, order, and enabled status.",
+        input_schema={"type": "object", "properties": {}},
+    ),
+    "update_security_scanner": ToolDef(
+        name="update_security_scanner",
+        brief="Update a security scanner's config, enabled status, or execution order.",
+        description="Update an existing scanner in the pipeline. Use to enable/disable scanners, change their config, or reorder them. Lower order numbers run first.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "scanner_id": {"type": "string", "description": "Scanner ID (e.g., 's-a1b2c3d4')."},
+                "enabled": {"type": "boolean", "description": "Enable or disable the scanner."},
+                "config": {"type": "object", "description": "Updated config (merged)."},
+                "order": {"type": "integer", "description": "Execution order (lower runs first)."},
+            },
+            "required": ["scanner_id"],
+        },
+    ),
+    "remove_security_scanner": ToolDef(
+        name="remove_security_scanner",
+        brief="Remove a scanner from the namespace's security pipeline.",
+        description="Remove a scanner by ID. Use list_security_scanners to find scanner IDs.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "scanner_id": {"type": "string", "description": "Scanner ID to remove."},
+            },
+            "required": ["scanner_id"],
+        },
+    ),
+    "configure_telemetry_webhook": ToolDef(
+        name="configure_telemetry_webhook",
+        brief="Set, update, or remove a telemetry webhook for this namespace.",
+        description=(
+            "Configure a webhook URL that receives execution metadata. "
+            "Supports HMAC-SHA256 signing and optional event batching. "
+            "Set events=['tool_call','orchestration_run'] to receive run completion summaries. "
+            "Set remove=true to disable the webhook."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "HTTPS webhook URL (HTTP allowed for localhost only).",
+                },
+                "secret": {
+                    "type": "string",
+                    "description": "HMAC-SHA256 signing secret (optional, encrypted at rest).",
+                },
+                "batch_enabled": {
+                    "type": "boolean",
+                    "description": "Enable event batching (default: false).",
+                },
+                "batch_interval_seconds": {
+                    "type": "integer",
+                    "description": "Flush interval for batching in seconds (1-60, default: 10).",
+                },
+                "events": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["tool_call", "orchestration_run"]},
+                    "description": "Event types to receive (default: ['tool_call']).",
+                },
+                "remove": {
+                    "type": "boolean",
+                    "description": "Set true to remove the webhook entirely.",
+                },
+            },
+        },
+    ),
+    "list_orchestration_runs": ToolDef(
+        name="list_orchestration_runs",
+        brief="List orchestration runs for an agent.",
+        description=(
+            "List orchestration runs for an agent with optional filters. Returns run ID, "
+            "trigger source, outcome, duration, and function call count. "
+            "Example: list_orchestration_runs(agent='social-bot', outcome='no_action')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string",
+                    "description": "Agent name.",
+                },
+                "trigger_type": {
+                    "type": "string",
+                    "enum": ["cron", "webhook", "manual", "ai", "heartbeat"],
+                    "description": "Filter by trigger type.",
+                },
+                "outcome": {
+                    "type": "string",
+                    "enum": [
+                        "completed",
+                        "no_action",
+                        "limit_hit",
+                        "error",
+                        "timeout",
+                        "cancelled",
+                    ],
+                    "description": "Filter by run outcome.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (1-50, default: 10).",
+                },
+            },
+            "required": ["agent"],
+        },
+    ),
+    "describe_orchestration_run": ToolDef(
+        name="describe_orchestration_run",
+        brief="Get full detail of an orchestration run.",
+        description=(
+            "Get full detail of an orchestration run including decision steps, "
+            "limits consumed vs configured, and function executions. "
+            "Use list_orchestration_runs to find run IDs. "
+            "Example: describe_orchestration_run(run_id='abc-123-def')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "run_id": {
+                    "type": "string",
+                    "description": "Orchestration run UUID.",
+                },
+            },
+            "required": ["run_id"],
+        },
+    ),
+    "list_schedule_fires": ToolDef(
+        name="list_schedule_fires",
+        brief="List fire history for a cron schedule.",
+        description=(
+            "List fire history for a cron schedule showing when each fire occurred, "
+            "whether it produced a run, and error details for failed fires. "
+            "Example: list_schedule_fires(agent='social-bot', schedule_id='abc-123')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string",
+                    "description": "Agent name.",
+                },
+                "schedule_id": {
+                    "type": "string",
+                    "description": "Schedule UUID (optional if agent provided).",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["started", "completed", "error", "skipped"],
+                    "description": "Filter by fire status.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (1-50, default: 10).",
+                },
+            },
+            "required": ["agent"],
         },
     ),
 }

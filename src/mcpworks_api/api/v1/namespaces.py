@@ -738,3 +738,96 @@ async def delete_function(
         await db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class TelemetryWebhookConfigRequest(BaseModel):
+    url: str | None = None
+    secret: str | None = None
+    batch_enabled: bool | None = None
+    batch_interval_seconds: int | None = Field(None, ge=1, le=60)
+
+
+@router.put("/{namespace_name}/telemetry-webhook")
+async def configure_telemetry_webhook(
+    namespace_name: str,
+    body: TelemetryWebhookConfigRequest,
+    account: Account = Depends(require_scope("namespaces:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    from mcpworks_api.core.encryption import encrypt_value
+    from mcpworks_api.services.telemetry import validate_webhook_url
+
+    ns_service = NamespaceServiceManager(db)
+    try:
+        ns = await ns_service.get_by_name(namespace_name, account.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    if body.url is not None:
+        error = validate_webhook_url(body.url)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        ns.telemetry_webhook_url = body.url
+
+    if body.secret is not None:
+        enc, dek = encrypt_value(body.secret)
+        ns.telemetry_webhook_secret_encrypted = enc
+        ns.telemetry_webhook_secret_dek = dek
+
+    config = dict(ns.telemetry_config or {})
+    if body.batch_enabled is not None:
+        config["batch_enabled"] = body.batch_enabled
+    if body.batch_interval_seconds is not None:
+        config["batch_interval_seconds"] = body.batch_interval_seconds
+    if config:
+        ns.telemetry_config = config
+
+    await db.commit()
+
+    return {
+        "url": ns.telemetry_webhook_url,
+        "has_secret": ns.telemetry_webhook_secret_encrypted is not None,
+        "batch_enabled": (ns.telemetry_config or {}).get("batch_enabled", False),
+        "batch_interval_seconds": (ns.telemetry_config or {}).get("batch_interval_seconds", 10),
+    }
+
+
+@router.get("/{namespace_name}/telemetry-webhook")
+async def get_telemetry_webhook(
+    namespace_name: str,
+    account: Account = Depends(require_scope("namespaces:read")),
+    db: AsyncSession = Depends(get_db),
+):
+    ns_service = NamespaceServiceManager(db)
+    try:
+        ns = await ns_service.get_by_name(namespace_name, account.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return {
+        "url": ns.telemetry_webhook_url,
+        "has_secret": ns.telemetry_webhook_secret_encrypted is not None,
+        "batch_enabled": (ns.telemetry_config or {}).get("batch_enabled", False),
+        "batch_interval_seconds": (ns.telemetry_config or {}).get("batch_interval_seconds", 10),
+    }
+
+
+@router.delete("/{namespace_name}/telemetry-webhook")
+async def delete_telemetry_webhook(
+    namespace_name: str,
+    account: Account = Depends(require_scope("namespaces:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    ns_service = NamespaceServiceManager(db)
+    try:
+        ns = await ns_service.get_by_name(namespace_name, account.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    ns.telemetry_webhook_url = None
+    ns.telemetry_webhook_secret_encrypted = None
+    ns.telemetry_webhook_secret_dek = None
+    ns.telemetry_config = None
+    await db.commit()
+
+    return {"removed": True}

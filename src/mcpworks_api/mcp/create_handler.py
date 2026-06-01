@@ -169,6 +169,18 @@ class CreateMCPHandler:
         "configure_agent_access": "write",
         "list_agent_access_rules": "read",
         "remove_agent_access_rule": "write",
+        "list_executions": "read",
+        "describe_execution": "read",
+        "add_security_scanner": "write",
+        "list_security_scanners": "read",
+        "update_security_scanner": "write",
+        "remove_security_scanner": "write",
+        "configure_telemetry_webhook": "write",
+        "configure_discovery": "write",
+        "configure_cache": "write",
+        "list_orchestration_runs": "read",
+        "describe_orchestration_run": "read",
+        "list_schedule_fires": "read",
         # API → MCP (019)
         "add_api_server": "write",
         "refresh_api_endpoints": "write",
@@ -547,6 +559,18 @@ class CreateMCPHandler:
             "configure_agent_access": self._configure_agent_access,
             "list_agent_access_rules": self._list_agent_access_rules,
             "remove_agent_access_rule": self._remove_agent_access_rule,
+            "list_executions": self._list_executions,
+            "describe_execution": self._describe_execution,
+            "add_security_scanner": self._add_security_scanner,
+            "list_security_scanners": self._list_security_scanners,
+            "update_security_scanner": self._update_security_scanner,
+            "remove_security_scanner": self._remove_security_scanner,
+            "configure_telemetry_webhook": self._configure_telemetry_webhook,
+            "configure_discovery": self._configure_discovery,
+            "configure_cache": self._configure_cache,
+            "list_orchestration_runs": self._list_orchestration_runs,
+            "describe_orchestration_run": self._describe_orchestration_run,
+            "list_schedule_fires": self._list_schedule_fires,
             "add_api_server": self._add_api_server,
             "refresh_api_endpoints": self._refresh_api_endpoints,
             "list_api_servers": self._list_api_servers,
@@ -851,7 +875,7 @@ class CreateMCPHandler:
             validated_optional_env = optional_env
 
         if output_trust is None:
-            from mcpworks_api.sandbox.injection_scan import suggest_trust_level
+            from mcpworks_api.core.scanners.pattern_scanner import suggest_trust_level
 
             suggested, reason = suggest_trust_level(code, required_env)
             raise ValueError(
@@ -2795,6 +2819,8 @@ class CreateMCPHandler:
         headers: dict | None = None,
         command: str | None = None,
         args: list | None = None,
+        auth_type: str = "bearer",
+        oauth_config: dict | None = None,
     ) -> MCPToolResult:
         from mcpworks_api.services.mcp_server import McpServerService
 
@@ -2809,22 +2835,21 @@ class CreateMCPHandler:
             headers=headers,
             command=command,
             args=args,
+            auth_type=auth_type,
+            oauth_config=oauth_config,
         )
-        return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "name": server.name,
-                            "url": server.url,
-                            "transport": server.transport,
-                            "tool_count": server.tool_count,
-                            "tools": [t["name"] for t in (server.tool_schemas or [])],
-                        }
-                    )
-                )
-            ]
-        )
+        result = {
+            "name": server.name,
+            "url": server.url,
+            "transport": server.transport,
+            "auth_type": server.auth_type,
+            "tool_count": server.tool_count,
+            "tools": [t["name"] for t in (server.tool_schemas or [])],
+        }
+        if server.auth_type == "oauth2":
+            result["oauth_status"] = "pending_authorization"
+            result["note"] = "OAuth configured. Call any tool to start the authorization flow."
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _remove_mcp_server(self, name: str) -> MCPToolResult:
         from mcpworks_api.services.mcp_server import McpServerService
@@ -2870,32 +2895,41 @@ class CreateMCPHandler:
         ns = await self._get_current_namespace_read()
         svc = McpServerService(self.db)
         server = await svc.get_by_name(ns.id, name)
-        return MCPToolResult(
-            content=[
-                MCPContent(
-                    text=json.dumps(
-                        {
-                            "name": server.name,
-                            "url": server.url,
-                            "transport": server.transport,
-                            "command": server.command,
-                            "args": server.command_args,
-                            "enabled": server.enabled,
-                            "tool_count": server.tool_count,
-                            "last_connected": server.last_connected_at.isoformat()
-                            if server.last_connected_at
-                            else None,
-                            "settings": server.get_settings(),
-                            "env_vars": list((server.env_vars or {}).keys()),
-                            "tools": [
-                                {"name": t["name"], "description": t.get("description", "")}
-                                for t in (server.tool_schemas or [])
-                            ],
-                        }
-                    )
-                )
-            ]
-        )
+        result = {
+            "name": server.name,
+            "url": server.url,
+            "transport": server.transport,
+            "command": server.command,
+            "args": server.command_args,
+            "enabled": server.enabled,
+            "auth_type": server.auth_type,
+            "tool_count": server.tool_count,
+            "last_connected": server.last_connected_at.isoformat()
+            if server.last_connected_at
+            else None,
+            "settings": server.get_settings(),
+            "env_vars": list((server.env_vars or {}).keys()),
+            "tools": [
+                {"name": t["name"], "description": t.get("description", "")}
+                for t in (server.tool_schemas or [])
+            ],
+        }
+        if server.auth_type == "oauth2":
+            from mcpworks_api.services.mcp_oauth import decrypt_oauth_config, get_oauth_status
+
+            result["oauth_status"] = get_oauth_status(server)
+            result["oauth_expires_at"] = (
+                server.oauth_tokens_expires_at.isoformat()
+                if server.oauth_tokens_expires_at
+                else None
+            )
+            try:
+                config = decrypt_oauth_config(server)
+                result["oauth_scopes"] = config.get("scopes", [])
+                result["oauth_flow"] = config.get("flow", "device")
+            except Exception:
+                result["oauth_scopes"] = []
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
 
     async def _refresh_mcp_server(self, name: str) -> MCPToolResult:
         from mcpworks_api.services.mcp_server import McpServerService
@@ -3430,8 +3464,38 @@ class CreateMCPHandler:
     async def _configure_agent_access(
         self,
         agent_name: str,
-        rule: dict,
+        rule: dict | None = None,
+        trust_score: int | None = None,
     ) -> MCPToolResult:
+        service = AgentService(self.db)
+        agent = await service.get_agent(self.account.id, agent_name)
+
+        if trust_score is not None:
+            if not (0 <= trust_score <= 1000):
+                raise ValueError("trust_score must be between 0 and 1000")
+            old_score = agent.trust_score
+            agent.trust_score = trust_score
+            from datetime import datetime
+
+            agent.trust_score_updated_at = datetime.now(UTC)
+            await self.db.flush()
+            return MCPToolResult(
+                content=[
+                    MCPContent(
+                        text=json.dumps(
+                            {
+                                "agent": agent_name,
+                                "trust_score": trust_score,
+                                "previous_score": old_score,
+                            }
+                        )
+                    )
+                ]
+            )
+
+        if rule is None:
+            raise ValueError("Either 'rule' or 'trust_score' must be provided")
+
         import secrets
 
         VALID_TYPES = {
@@ -3451,12 +3515,12 @@ class CreateMCPHandler:
         if not patterns or not isinstance(patterns, list):
             raise ValueError("Rule must include 'patterns' as a non-empty list of strings")
 
-        service = AgentService(self.db)
-        agent = await service.get_agent(self.account.id, agent_name)
-
         access_rules = dict(agent.access_rules or {})
         rule_id = f"r-{secrets.token_hex(4)}"
         new_rule = {"id": rule_id, "type": rule_type, "patterns": patterns}
+        min_trust = rule.get("min_trust_score")
+        if min_trust is not None:
+            new_rule["min_trust_score"] = int(min_trust)
 
         if rule_type in ("allow_keys", "deny_keys"):
             state_rules = list(access_rules.get("state_rules", []))
@@ -3524,4 +3588,425 @@ class CreateMCPHandler:
                     )
                 )
             ]
+        )
+
+    async def _list_executions(
+        self,
+        service: str | None = None,
+        function: str | None = None,
+        status: str | None = None,
+        limit: int = 20,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.execution import ExecutionService
+
+        ns = await self._get_current_namespace_read()
+        exec_service = ExecutionService(self.db)
+        result = await exec_service.list_executions(
+            namespace_id=ns.id,
+            service=service,
+            function=function,
+            status=status,
+            limit=min(limit, 100),
+        )
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _describe_execution(self, execution_id: str) -> MCPToolResult:
+        import uuid as uuid_mod
+
+        from mcpworks_api.services.execution import ExecutionService
+
+        ns = await self._get_current_namespace_read()
+        exec_service = ExecutionService(self.db)
+        try:
+            eid = uuid_mod.UUID(execution_id)
+        except ValueError:
+            raise ValueError(f"Invalid execution ID: {execution_id}")
+        result = await exec_service.get_execution(ns.id, eid)
+        if not result:
+            raise ValueError(f"Execution '{execution_id}' not found")
+        return MCPToolResult(content=[MCPContent(text=json.dumps(result))])
+
+    async def _add_security_scanner(
+        self, type: str, name: str, direction: str, config: dict
+    ) -> MCPToolResult:
+        import secrets as secrets_mod
+
+        valid_types = {"builtin", "webhook", "python"}
+        if type not in valid_types:
+            raise ValueError(
+                f"Invalid scanner type: {type}. Must be one of: {', '.join(sorted(valid_types))}"
+            )
+        if direction not in ("input", "output", "both"):
+            raise ValueError("direction must be 'input', 'output', or 'both'")
+
+        ns = await self._get_current_namespace()
+        pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
+        scanners = list(pipeline.get("scanners", []))
+
+        scanner_id = f"s-{secrets_mod.token_hex(4)}"
+        max_order = max((s.get("order", 0) for s in scanners), default=0)
+        entry = {
+            "id": scanner_id,
+            "type": type,
+            "name": name,
+            "direction": direction,
+            "order": max_order + 1,
+            "enabled": True,
+            "config": config,
+        }
+        scanners.append(entry)
+        pipeline["scanners"] = scanners
+        ns.scanner_pipeline = pipeline
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "scanner_added": {
+                                "id": scanner_id,
+                                "type": type,
+                                "name": name,
+                                "direction": direction,
+                                "order": entry["order"],
+                            }
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_security_scanners(self) -> MCPToolResult:
+        ns = await self._get_current_namespace_read()
+        pipeline = ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []}
+        summary = {
+            "fallback_policy": pipeline.get("fallback_policy", "fail_open"),
+            "scanners": [
+                {
+                    "id": s["id"],
+                    "type": s["type"],
+                    "name": s["name"],
+                    "direction": s["direction"],
+                    "order": s.get("order", 0),
+                    "enabled": s.get("enabled", True),
+                }
+                for s in pipeline.get("scanners", [])
+            ],
+        }
+        return MCPToolResult(content=[MCPContent(text=json.dumps(summary))])
+
+    async def _update_security_scanner(
+        self,
+        scanner_id: str,
+        enabled: bool | None = None,
+        config: dict | None = None,
+        order: int | None = None,
+    ) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+        pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
+        scanners = list(pipeline.get("scanners", []))
+
+        found = False
+        for s in scanners:
+            if s.get("id") == scanner_id:
+                if enabled is not None:
+                    s["enabled"] = enabled
+                if config:
+                    s["config"] = {**s.get("config", {}), **config}
+                if order is not None:
+                    s["order"] = order
+                found = True
+                break
+
+        if not found:
+            raise ValueError(f"Scanner '{scanner_id}' not found")
+
+        pipeline["scanners"] = scanners
+        ns.scanner_pipeline = pipeline
+        await self.db.flush()
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"scanner_updated": scanner_id}))])
+
+    async def _remove_security_scanner(self, scanner_id: str) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+        pipeline = dict(ns.scanner_pipeline or {"fallback_policy": "fail_open", "scanners": []})
+        scanners = list(pipeline.get("scanners", []))
+        new_scanners = [s for s in scanners if s.get("id") != scanner_id]
+        if len(new_scanners) == len(scanners):
+            raise ValueError(f"Scanner '{scanner_id}' not found")
+        pipeline["scanners"] = new_scanners
+        ns.scanner_pipeline = pipeline
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps({"scanner_removed": scanner_id, "remaining": len(new_scanners)})
+                )
+            ]
+        )
+
+    async def _configure_telemetry_webhook(
+        self,
+        url: str | None = None,
+        secret: str | None = None,
+        batch_enabled: bool | None = None,
+        batch_interval_seconds: int | None = None,
+        events: list[str] | None = None,
+        remove: bool = False,
+    ) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+
+        if remove:
+            ns.telemetry_webhook_url = None
+            ns.telemetry_webhook_secret_encrypted = None
+            ns.telemetry_webhook_secret_dek = None
+            ns.telemetry_config = None
+            await self.db.flush()
+            return MCPToolResult(content=[MCPContent(text=json.dumps({"webhook_removed": True}))])
+
+        if url is not None:
+            from mcpworks_api.services.telemetry import validate_webhook_url
+
+            error = validate_webhook_url(url)
+            if error:
+                raise ValueError(f"Invalid webhook URL: {error}")
+            ns.telemetry_webhook_url = url
+
+        if secret is not None:
+            from mcpworks_api.core.encryption import encrypt_value
+
+            enc, dek = encrypt_value(secret)
+            ns.telemetry_webhook_secret_encrypted = enc
+            ns.telemetry_webhook_secret_dek = dek
+
+        config = dict(ns.telemetry_config or {})
+        if batch_enabled is not None:
+            config["batch_enabled"] = batch_enabled
+        if batch_interval_seconds is not None:
+            config["batch_interval_seconds"] = max(1, min(60, batch_interval_seconds))
+        if events is not None:
+            valid_events = {"tool_call", "orchestration_run"}
+            config["events"] = [e for e in events if e in valid_events]
+        if config:
+            ns.telemetry_config = config
+
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "url": ns.telemetry_webhook_url,
+                            "has_secret": ns.telemetry_webhook_secret_encrypted is not None,
+                            "batch_enabled": (ns.telemetry_config or {}).get(
+                                "batch_enabled", False
+                            ),
+                            "batch_interval_seconds": (ns.telemetry_config or {}).get(
+                                "batch_interval_seconds", 10
+                            ),
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_discovery(self, discoverable: bool) -> MCPToolResult:
+        ns = await self._get_current_namespace()
+        ns.discoverable = discoverable
+        await self.db.flush()
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "namespace": ns.name,
+                            "discoverable": ns.discoverable,
+                            "server_card_url": f"https://{ns.name}.create.mcpworks.io/.well-known/mcp.json",
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _configure_cache(
+        self,
+        service: str,
+        function: str,
+        enabled: bool,
+        ttl_seconds: int = 300,
+    ) -> MCPToolResult:
+        from sqlalchemy import select
+
+        from mcpworks_api.models.function import Function
+        from mcpworks_api.models.namespace_service import NamespaceService
+
+        ns = await self._get_current_namespace()
+        svc_result = await self.db.execute(
+            select(NamespaceService).where(
+                NamespaceService.namespace_id == ns.id,
+                NamespaceService.name == service,
+            )
+        )
+        svc = svc_result.scalar_one_or_none()
+        if not svc:
+            raise ValueError(f"Service '{service}' not found")
+
+        fn_result = await self.db.execute(
+            select(Function).where(
+                Function.service_id == svc.id,
+                Function.name == function,
+                Function.deleted_at.is_(None),
+            )
+        )
+        fn = fn_result.scalar_one_or_none()
+        if not fn:
+            raise ValueError(f"Function '{function}' not found in service '{service}'")
+
+        ttl_seconds = max(1, min(86400, ttl_seconds))
+        fn.cache_policy = {"enabled": enabled, "ttl_seconds": ttl_seconds} if enabled else None
+        await self.db.flush()
+
+        return MCPToolResult(
+            content=[
+                MCPContent(
+                    text=json.dumps(
+                        {
+                            "function": f"{service}.{function}",
+                            "cache_enabled": enabled,
+                            "ttl_seconds": ttl_seconds if enabled else None,
+                        }
+                    )
+                )
+            ]
+        )
+
+    async def _list_orchestration_runs(
+        self,
+        agent: str,
+        trigger_type: str | None = None,
+        outcome: str | None = None,
+        limit: int = 10,
+    ) -> MCPToolResult:
+        from mcpworks_api.services.observability_service import ObservabilityService
+
+        service = AgentService(self.db)
+        agent_obj = await service.get_agent(self.account.id, agent)
+        svc = ObservabilityService(self.db)
+        runs, total = await svc.list_runs(
+            agent_id=agent_obj.id,
+            trigger_type=trigger_type,
+            outcome=outcome,
+            limit=min(limit, 50),
+        )
+        items = []
+        for r in runs:
+            items.append(
+                {
+                    "id": str(r.id),
+                    "trigger_type": r.trigger_type,
+                    "trigger_detail": r.trigger_detail,
+                    "orchestration_mode": r.orchestration_mode,
+                    "outcome": r.outcome,
+                    "status": r.status,
+                    "functions_called_count": r.functions_called_count,
+                    "started_at": r.started_at.isoformat() if r.started_at else None,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                    "duration_ms": r.duration_ms,
+                    "error": r.error,
+                }
+            )
+        return MCPToolResult(content=[MCPContent(text=json.dumps({"runs": items, "total": total}))])
+
+    async def _describe_orchestration_run(self, run_id: str) -> MCPToolResult:
+        import uuid as uuid_mod
+
+        from mcpworks_api.services.observability_service import ObservabilityService
+
+        svc = ObservabilityService(self.db)
+        try:
+            rid = uuid_mod.UUID(run_id)
+        except ValueError:
+            raise ValueError(f"Invalid run ID: {run_id}")
+        run = await svc.get_run(rid)
+        if not run:
+            raise ValueError(f"Orchestration run '{run_id}' not found")
+        steps = []
+        for tc in run.tool_calls:
+            steps.append(
+                {
+                    "sequence_number": tc.sequence_number,
+                    "decision_type": tc.decision_type,
+                    "tool_name": tc.tool_name,
+                    "reason_category": tc.reason_category,
+                    "duration_ms": tc.duration_ms,
+                    "status": tc.status,
+                }
+            )
+        execs = await svc.get_run_executions(rid)
+        exec_refs = [
+            {
+                "execution_id": str(e.id),
+                "function_name": e.function_name,
+                "status": e.status,
+                "duration_ms": e.execution_time_ms,
+            }
+            for e in execs
+        ]
+        detail = {
+            "id": str(run.id),
+            "agent_id": str(run.agent_id),
+            "trigger_type": run.trigger_type,
+            "trigger_detail": run.trigger_detail,
+            "orchestration_mode": run.orchestration_mode,
+            "outcome": run.outcome,
+            "status": run.status,
+            "functions_called_count": run.functions_called_count,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "duration_ms": run.duration_ms,
+            "limits_consumed": run.limits_consumed,
+            "limits_configured": run.limits_configured,
+            "result_summary": run.result_summary,
+            "error": run.error,
+            "steps": steps,
+            "executions": exec_refs,
+        }
+        return MCPToolResult(content=[MCPContent(text=json.dumps(detail))])
+
+    async def _list_schedule_fires(
+        self,
+        agent: str,
+        schedule_id: str | None = None,
+        status: str | None = None,
+        limit: int = 10,
+    ) -> MCPToolResult:
+        import uuid as uuid_mod
+
+        from mcpworks_api.services.observability_service import ObservabilityService
+
+        service = AgentService(self.db)
+        agent_obj = await service.get_agent(self.account.id, agent)
+        svc = ObservabilityService(self.db)
+        sched_uuid = uuid_mod.UUID(schedule_id) if schedule_id else None
+        fires, total = await svc.list_fires(
+            schedule_id=sched_uuid,
+            agent_id=agent_obj.id,
+            status=status,
+            limit=min(limit, 50),
+        )
+        items = []
+        for f in fires:
+            items.append(
+                {
+                    "id": str(f.id),
+                    "schedule_id": str(f.schedule_id),
+                    "agent_id": str(f.agent_id),
+                    "fired_at": f.fired_at.isoformat() if f.fired_at else None,
+                    "status": f.status,
+                    "agent_run_id": str(f.agent_run_id) if f.agent_run_id else None,
+                    "error_detail": f.error_detail,
+                }
+            )
+        return MCPToolResult(
+            content=[MCPContent(text=json.dumps({"fires": items, "total": total}))]
         )

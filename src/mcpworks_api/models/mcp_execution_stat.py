@@ -22,6 +22,7 @@ class McpExecutionStat(Base, UUIDMixin):
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    input_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     mcp_calls_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     mcp_bytes_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     result_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

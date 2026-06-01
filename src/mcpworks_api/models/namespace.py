@@ -6,15 +6,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
@@ -76,6 +78,15 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
+    scanner_pipeline: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    telemetry_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    telemetry_webhook_secret_encrypted: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    telemetry_webhook_secret_dek: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    telemetry_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     allowlist_changes_today: Mapped[int] = mapped_column(
         Integer,
         default=0,
@@ -86,6 +97,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         Integer,
         default=0,
         server_default="0",
+        nullable=False,
+    )
+
+    discoverable: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
         nullable=False,
     )
 

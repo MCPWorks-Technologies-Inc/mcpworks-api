@@ -1,3 +1,7 @@
+# Mempalace
+mempalace.yaml
+entities.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -96,6 +100,7 @@ TEST_PROMPT.md
 _create_function.sh
 
 # Claude Code local settings
+.claude/projects/
 .claude/settings.json
 
 # Claude Code local settings (may contain tokens in permissions)
@@ -124,3 +129,4 @@ docs/demo-video-script-5min.md
 .beads-credential-key
 .dolt/
 .ralph/
+.mcp.json.full

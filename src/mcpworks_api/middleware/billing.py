@@ -229,10 +229,16 @@ class BillingMiddleware(BaseHTTPMiddleware):
 
         tier = getattr(account, "effective_tier", None) or getattr(account, "tier", "trial")
 
+        namespace = getattr(request.state, "namespace", None)
+        ns_name = getattr(namespace, "name", "unknown") if namespace else "unknown"
+
         # Check quota before execution
         try:
             usage, limit = await self._check_quota(account)
             if limit != -1 and usage >= limit:
+                from mcpworks_api.middleware.observability import record_billing_check
+
+                record_billing_check(ns_name, "blocked")
                 asyncio.create_task(
                     self._log_security_event(
                         "billing.quota_exceeded",
@@ -267,6 +273,10 @@ class BillingMiddleware(BaseHTTPMiddleware):
             raise
         except Exception as e:
             logger.warning("rate_check_failed", error=str(e))
+
+        from mcpworks_api.middleware.observability import record_billing_check
+
+        record_billing_check(ns_name, "allowed")
 
         # Execute request
         try:

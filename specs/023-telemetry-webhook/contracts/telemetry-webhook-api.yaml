@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: MCPWorks Telemetry Webhook Configuration API
+  version: 1.0.0
+
+paths:
+  /v1/namespaces/{namespace}/telemetry-webhook:
+    put:
+      summary: Configure telemetry webhook for a namespace
+      tags: [namespaces, telemetry]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryWebhookConfig'
+      responses:
+        '200':
+          description: Webhook configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryWebhookStatus'
+        '400':
+          description: Invalid webhook URL
+        '401':
+          description: Not authenticated
+        '404':
+          description: Namespace not found
+
+    get:
+      summary: Get telemetry webhook configuration
+      tags: [namespaces, telemetry]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current webhook configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryWebhookStatus'
+
+    delete:
+      summary: Remove telemetry webhook
+      tags: [namespaces, telemetry]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed:
+                    type: boolean
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TelemetryWebhookConfig:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: HTTPS webhook URL (HTTP allowed for localhost only)
+        secret:
+          type: string
+          description: HMAC-SHA256 signing secret (optional, encrypted at rest)
+        batch_enabled:
+          type: boolean
+          default: false
+          description: Enable event batching
+        batch_interval_seconds:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 60
+          description: Flush interval when batching is enabled
+
+    TelemetryWebhookStatus:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+        has_secret:
+          type: boolean
+          description: Whether a signing secret is configured (never returns the secret itself)
+        batch_enabled:
+          type: boolean
+        batch_interval_seconds:
+          type: integer
+
+    TelemetryEventPayload:
+      type: object
+      description: Payload delivered to webhook endpoint
+      properties:
+        event:
+          type: string
+          enum: [tool_call]
+        namespace:
+          type: string
+        data:
+          type: object
+          properties:
+            function:
+              type: string
+            execution_id:
+              type: string
+            execution_time_ms:
+              type: integer
+            success:
+              type: boolean
+            backend:
+              type: string
+            version:
+              type: integer
+            timestamp:
+              type: string
+              format: date-time
+        signature:
+          type: string
+          description: Present only in X-MCPWorks-Signature header, not in body

@@ -54,9 +54,28 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             with contextlib.suppress(Exception):
                 await cleanup_analytics_data()
 
+    async def _retention_loop() -> None:
+        from mcpworks_api.tasks.retention import prune_observability_data
+
+        await asyncio.sleep(3600)
+        while True:
+            with contextlib.suppress(Exception):
+                await prune_observability_data()
+            await asyncio.sleep(86400)
+
+    async def _telemetry_batch_loop() -> None:
+        from mcpworks_api.services.telemetry import flush_telemetry_batches
+
+        while True:
+            await asyncio.sleep(10)
+            with contextlib.suppress(Exception):
+                await flush_telemetry_batches()
+
     scheduler_task = asyncio.create_task(run_scheduler_loop())
     discord_task = asyncio.create_task(run_discord_gateway())
     cleanup_task = asyncio.create_task(_daily_cleanup_loop())
+    telemetry_batch_task = asyncio.create_task(_telemetry_batch_loop())
+    retention_task = asyncio.create_task(_retention_loop())
 
     async with session_manager.run():
         yield
@@ -65,12 +84,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_task.cancel()
     discord_task.cancel()
     cleanup_task.cancel()
+    telemetry_batch_task.cancel()
+    retention_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await scheduler_task
     with contextlib.suppress(asyncio.CancelledError):
         await discord_task
     with contextlib.suppress(asyncio.CancelledError):
         await cleanup_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await telemetry_batch_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await retention_task
 
     await close_db()
     await close_redis()
@@ -230,6 +255,7 @@ def create_app() -> FastAPI:
     app.include_router(v1_router)
 
     from mcpworks_api.api.v1.api_proxy import router as api_proxy_router
+    from mcpworks_api.api.v1.mcp_oauth import router as mcp_oauth_router
     from mcpworks_api.api.v1.mcp_proxy import router as mcp_proxy_router
     from mcpworks_api.api.v1.public_chat import router as public_chat_router
     from mcpworks_api.api.v1.scratchpad_view import router as scratchpad_view_router
@@ -240,11 +266,17 @@ def create_app() -> FastAPI:
     app.include_router(public_chat_router)
     app.include_router(mcp_proxy_router)
     app.include_router(api_proxy_router)
+    app.include_router(mcp_oauth_router)
 
     # 015: Path-based agent sub-routes (/mcp/agent/{ns}/webhook, /chat, /view)
     from mcpworks_api.api.v1.agent_path_routes import router as agent_path_router
 
     app.include_router(agent_path_router)
+
+    # 028: MCP Server Card discovery (.well-known/mcp.json)
+    from mcpworks_api.api.v1.discovery import router as discovery_router
+
+    app.include_router(discovery_router)
 
     # Setup Prometheus metrics (after routers so routes are available)
     if settings.prometheus_enabled:

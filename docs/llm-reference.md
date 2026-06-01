@@ -6,13 +6,42 @@
 
 ## Platform Summary
 
-MCPWorks = self-hosted Python function platform managed and executed via MCP protocol.
+MCPWorks = self-hosted Python/TypeScript function platform managed and executed via MCP protocol.
 Two endpoints per namespace. Create endpoint for CRUD. Run endpoint for execution.
-All code runs in nsjail sandboxes. 59 packages pre-installed. No pip at runtime.
+All code runs in nsjail sandboxes. 59 Python packages + Node.js packages pre-installed. No pip/npm at runtime.
 
 ---
 
 ## MCP Configuration
+
+### Path-based routing (default, recommended)
+
+```json
+{
+  "mcpServers": {
+    "{ns}-create": {
+      "type": "http",
+      "url": "https://api.{BASE_DOMAIN}/mcp/create/{ns}",
+      "headers": { "Authorization": "Bearer {API_KEY}" }
+    },
+    "{ns}-run": {
+      "type": "http",
+      "url": "https://api.{BASE_DOMAIN}/mcp/run/{ns}",
+      "headers": {
+        "Authorization": "Bearer {API_KEY}",
+        "X-MCPWorks-Env": "base64:{base64-encoded JSON of env vars}"
+      }
+    },
+    "{ns}-agent": {
+      "type": "http",
+      "url": "https://api.{BASE_DOMAIN}/mcp/agent/{ns}",
+      "headers": { "Authorization": "Bearer {API_KEY}" }
+    }
+  }
+}
+```
+
+### Subdomain routing (alternative)
 
 ```json
 {
@@ -45,12 +74,12 @@ The `{ns}-agent` entry is only needed for namespaces with a running agent.
 
 ## Endpoints
 
-| Endpoint | Pattern | Purpose | Metered |
-|----------|---------|---------|---------|
-| Create | `{ns}.create.{BASE_DOMAIN}/mcp` | Namespace/service/function CRUD | No |
-| Run (code mode) | `{ns}.run.{BASE_DOMAIN}/mcp` | Single `execute` tool, write Python | Yes |
-| Run (tool mode) | `{ns}.run.{BASE_DOMAIN}/mcp?mode=tools` | One tool per function | Yes |
-| Agent | `{ns}.agent.{BASE_DOMAIN}/mcp` | Webhook delivery to agent containers | No |
+| Endpoint | Path Pattern | Subdomain Pattern | Purpose | Metered |
+|----------|-------------|-------------------|---------|---------|
+| Create | `api.{DOMAIN}/mcp/create/{ns}` | `{ns}.create.{DOMAIN}/mcp` | Namespace/service/function CRUD | No |
+| Run (code) | `api.{DOMAIN}/mcp/run/{ns}` | `{ns}.run.{DOMAIN}/mcp` | Single `execute` tool, write Python/TS | Yes |
+| Run (tools) | `api.{DOMAIN}/mcp/run/{ns}?mode=tools` | `{ns}.run.{DOMAIN}/mcp?mode=tools` | One tool per function | Yes |
+| Agent | `api.{DOMAIN}/mcp/agent/{ns}` | `{ns}.agent.{DOMAIN}/mcp` | Webhook delivery to agent containers | No |
 
 Default run mode is **code** (no query param needed). Agent endpoint is only active for namespaces with a running agent.
 
@@ -77,7 +106,7 @@ Default run mode is **code** (no query param needed). Agent endpoint is only act
 
 | Tool | Required Params | Optional Params | Notes |
 |------|----------------|-----------------|-------|
-| `make_function` | `service`, `name`, `backend` | `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `required_env`, `optional_env`, `template` | `template` overrides code/schemas/reqs as defaults |
+| `make_function` | `service`, `name`, `backend`, `output_trust` | `language`, `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `required_env`, `optional_env`, `template` | `output_trust`: `prompt` or `data`. `language`: `python` (default) or `typescript`. `template` overrides code/schemas/reqs |
 | `update_function` | `service`, `name` | `backend`, `code`, `config`, `input_schema`, `output_schema`, `description`, `tags`, `requirements`, `required_env`, `optional_env`, `restore_version` | Code/config/schema/req/env changes → new version |
 | `delete_function` | `service`, `name` | — | Permanent |
 | `list_functions` | `service` | `tag` | Returns qualified names (`service.function`) |
@@ -182,11 +211,9 @@ Three ways to return output (checked in order):
 
 | Backend | Status | Description |
 |---------|--------|-------------|
-| `code_sandbox` | Active | Secure Python execution (nsjail) |
-| `nanobot` | Future | — |
-| `github_repo` | Future | — |
+| `code_sandbox` | Active | Secure Python/TypeScript execution (nsjail) |
 
-Always use `code_sandbox` for now.
+Always use `code_sandbox`.
 
 ---
 
@@ -420,3 +447,9 @@ make_function(
 Public registration is disabled by default. Set `ALLOW_REGISTRATION=true` in `.env` to enable `POST /v1/auth/register`.
 
 API keys can also be exchanged for JWTs via `POST /v1/auth/token`.
+
+## Observability
+
+Prometheus metrics at `GET /metrics`. Health checks at `/v1/health`, `/v1/health/live`, `/v1/health/ready`. Security audit log at `GET /v1/audit/logs` (admin only). All logs are structured JSON with `X-Request-ID` correlation.
+
+Key metric families: `http_requests_total`, `sandbox_executions_total`, `mcpworks_agent_runs_total`, `mcpworks_agent_tool_calls_total`, `mcpworks_mcp_proxy_calls_total`, `mcpworks_function_calls_total`, `mcpworks_auth_attempts_total`, `mcpworks_security_events_total`. Full list in [SELF-HOSTING.md](SELF-HOSTING.md#available-metrics).

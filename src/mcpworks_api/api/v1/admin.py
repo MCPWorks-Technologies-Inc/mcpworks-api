@@ -2850,3 +2850,14 @@ async def admin_force_destroy(
     await db.commit()
 
     return {"id": str(destroyed.id), "name": destroyed.name, "destroyed": True}
+
+
+@router.get("/analytics/token-savings")
+async def admin_token_savings(
+    period: str = Query("30d", description="Time period", enum=["1h", "24h", "7d", "30d"]),
+    _admin: AdminUserId = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    from mcpworks_api.services.analytics import get_platform_token_savings
+
+    return await get_platform_token_savings(db, period)

@@ -48,11 +48,16 @@ The JWT key paths are pre-configured to `/app/keys/private.pem` and `/app/keys/p
 
 ## 3. Configure DNS
 
-Set up these DNS records pointing to your server:
+**Path-based routing** (default) — only one DNS record needed:
 
 | Record | Type | Value |
 |--------|------|-------|
 | `api.yourdomain.com` | A | Your server IP |
+
+If you use subdomain routing (`ROUTING_MODE=subdomain` in `.env`), you also need wildcard records:
+
+| Record | Type | Value |
+|--------|------|-------|
 | `*.create.yourdomain.com` | A | Your server IP |
 | `*.run.yourdomain.com` | A | Your server IP |
 | `*.agent.yourdomain.com` | A | Your server IP |

@@ -145,11 +145,11 @@ The following implemented components enforce the data-stays-in-sandbox architect
 | Component | File | Role |
 |-----------|------|------|
 | Code mode handler | `src/mcpworks_api/mcp/run_handler.py` | AI sends `code` string (~50 tokens), not data. The `execute_python` / `execute_typescript` tools accept code, not function results. |
-| Functions package injection | `src/mcpworks_api/mcp/code_mode.py` | All namespace functions are injected as importable Python inside the sandbox. `from functions import store_lead` calls the function inside the jail, not over the network. |
+| Functions package injection | `src/mcpworks_api/mcp/code_mode.py` | All namespace functions are injected as importable Python/TypeScript inside the sandbox. `from functions import store_lead` calls the function inside the jail, not over the network. |
 | nsjail sandbox | `deploy/nsjail/python.cfg`, `spawn-sandbox.sh` | Linux namespace jail: PID, mount, net, cgroup, seccomp-bpf isolation. Code runs in a disposable environment with no access to the host. |
 | File-based I/O | `deploy/nsjail/execute.py` | Input goes in as `/sandbox/input.json`, output comes out as `/sandbox/output.json`. Data flows through the filesystem, never through the AI's context window. |
-| Result extraction | `deploy/nsjail/execute.py:9-13` | Only the `result` variable is serialized back. All intermediate variables, data structures, and loop state are discarded when the sandbox exits. |
-| Output size caps | `deploy/nsjail/execute.py:29-31` | `MAX_OUTPUT_JSON_BYTES = 1MB`, `MAX_STDOUT_BYTES = 64KB`. Even if the function processes gigabytes, the return is capped. |
+| Result extraction | `deploy/nsjail/execute.py` | Only the `result` variable is serialized back. All intermediate variables, data structures, and loop state are discarded when the sandbox exits. |
+| Output size caps | `deploy/nsjail/execute.py` | `MAX_OUTPUT_JSON_BYTES = 1MB`, `MAX_STDOUT_BYTES = 64KB`. Even if the function processes gigabytes, the return is capped. |
 
 ### Data Flow Diagram
 

@@ -31,6 +31,11 @@ from mcpworks_api.core.database import get_db_context
 from mcpworks_api.core.encryption import decrypt_value
 from mcpworks_api.core.mcp_client import McpServerPool, is_mcp_tool
 from mcpworks_api.core.telemetry import make_event, telemetry_bus
+from mcpworks_api.middleware.observability import (
+    agents_running,
+    record_agent_run,
+    record_agent_tool_call,
+)
 from mcpworks_api.models.account import Account
 from mcpworks_api.models.agent import Agent, AgentChannel, AgentRun
 from mcpworks_api.services.agent_service import AgentService
@@ -96,6 +101,11 @@ class OrchestrationResult:
     duration_ms: int = 0
     error: str | None = None
     context_tokens: int = 0
+    run_id: str | None = None
+    outcome: str | None = None
+    limit_name: str | None = None
+    limits_consumed: dict | None = None
+    limits_configured: dict | None = None
 
 
 async def run_orchestration(
@@ -105,6 +115,8 @@ async def run_orchestration(
     trigger_data: dict,  # noqa: ARG001  — reserved for future use (logging, state)
     tier: str,
     account: Account,
+    schedule_id: str | None = None,
+    orchestration_mode: str | None = None,
 ) -> OrchestrationResult:
     """Execute the AI orchestration loop for an agent."""
     start_time = time.monotonic()
@@ -207,12 +219,14 @@ async def run_orchestration(
 
     messages: list[dict] = [{"role": "user", "content": trigger_context}]
     functions_called: list[str] = []
+    tool_call_records: list[dict] = []
     total_tokens = 0
     iterations = 0
     consecutive_failures = 0
     max_consecutive_failures = 3
     agent_id_str = str(agent.id)
     run_id = str(uuid_mod.uuid4())
+    namespace_name = agent.name
 
     def _emit(etype: str, **kw: object) -> None:
         telemetry_bus.emit(agent_id_str, make_event(etype, agent_id_str, run_id, **kw))
@@ -235,6 +249,7 @@ async def run_orchestration(
             total_tokens=context_tokens,
         )
 
+    agents_running.labels(namespace=namespace_name).inc()
     try:
         while iterations < limits["max_iterations"]:
             if total_tokens >= limits["max_ai_tokens"]:
@@ -245,6 +260,7 @@ async def run_orchestration(
                     total_tokens,
                     start_time,
                     context_tokens,
+                    limits=limits,
                 )
             if _elapsed_seconds(start_time) >= limits["max_execution_seconds"]:
                 return _limit_result(
@@ -254,6 +270,7 @@ async def run_orchestration(
                     total_tokens,
                     start_time,
                     context_tokens,
+                    limits=limits,
                 )
 
             response = await chat_with_tools(
@@ -278,6 +295,13 @@ async def run_orchestration(
 
             if stop_reason != "tool_use":
                 final_text = _extract_text(content_blocks)
+                _consumed = {
+                    "iterations": iterations,
+                    "ai_tokens": total_tokens,
+                    "functions_called": len(functions_called),
+                    "execution_seconds": round(_elapsed_seconds(start_time), 1),
+                }
+                outcome = "completed" if functions_called else "no_action"
                 result = OrchestrationResult(
                     success=True,
                     final_text=final_text,
@@ -286,6 +310,10 @@ async def run_orchestration(
                     total_tokens=total_tokens,
                     duration_ms=_elapsed_ms(start_time),
                     context_tokens=context_tokens,
+                    run_id=run_id,
+                    outcome=outcome,
+                    limits_consumed=_consumed,
+                    limits_configured=limits,
                 )
                 _emit(
                     "completion",
@@ -294,7 +322,15 @@ async def run_orchestration(
                     functions_called=functions_called,
                     total_tokens=total_tokens,
                 )
-                await _post_orchestration(agent, trigger_type, result)
+                await _post_orchestration(
+                    agent,
+                    trigger_type,
+                    result,
+                    tool_call_records=tool_call_records,
+                    schedule_id=schedule_id,
+                    orchestration_mode=orchestration_mode,
+                    run_id=run_id,
+                )
                 return result
 
             messages.append({"role": "assistant", "content": content_blocks})
@@ -411,18 +447,61 @@ async def run_orchestration(
                     trigger_type=trigger_type,
                     available_tools=tools,
                     procedure_covered=procedure_covered,
+                    agent_run_id=run_id,
                 )
+                tc_duration_ms = _elapsed_ms(tc_start)
                 _emit(
                     "tool_result",
                     name=tool_name,
                     result_preview=result_str[:200],
-                    duration_ms=_elapsed_ms(tc_start),
+                    duration_ms=tc_duration_ms,
                 )
 
                 is_error = '"error"' in result_str[:50]
+                tc_status = "error" if is_error else "success"
                 if not is_error:
                     functions_called.append(tool_name)
                     iteration_had_success = True
+
+                record_agent_tool_call(
+                    namespace=namespace_name,
+                    tool_name=tool_name,
+                    source=source,
+                    status=tc_status,
+                    duration_seconds=tc_duration_ms / 1000.0,
+                )
+
+                from mcpworks_api.models.agent_tool_call import (
+                    MAX_ERROR_CHARS,
+                    MAX_RESULT_PREVIEW_CHARS,
+                    MAX_TOOL_INPUT_BYTES,
+                )
+                from mcpworks_api.models.execution import _scrub_error_message
+
+                truncated_input = tool_input
+                input_str = json.dumps(tool_input, default=str)
+                if len(input_str) > MAX_TOOL_INPUT_BYTES:
+                    truncated_input = {
+                        "_truncated": True,
+                        "preview": input_str[:MAX_TOOL_INPUT_BYTES],
+                    }
+
+                tool_call_records.append(
+                    {
+                        "sequence_number": len(tool_call_records),
+                        "tool_name": tool_name,
+                        "tool_input": truncated_input,
+                        "result_preview": result_str[:MAX_RESULT_PREVIEW_CHARS],
+                        "duration_ms": tc_duration_ms,
+                        "source": source,
+                        "status": tc_status,
+                        "decision_type": "call",
+                        "reason_category": "error" if is_error else "success",
+                        "error_message": (
+                            _scrub_error_message(result_str[:MAX_ERROR_CHARS]) if is_error else None
+                        ),
+                    }
+                )
 
                 tool_results.append(_tool_result(tool_id, tool_name, result_str))
 
@@ -442,6 +521,7 @@ async def run_orchestration(
                         total_tokens,
                         start_time,
                         context_tokens,
+                        limits=limits,
                     )
 
         return _limit_result(
@@ -451,6 +531,7 @@ async def run_orchestration(
             total_tokens,
             start_time,
             context_tokens,
+            limits=limits,
         )
 
     except AIClientError as e:
@@ -469,8 +550,19 @@ async def run_orchestration(
             total_tokens=total_tokens,
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
+            run_id=run_id,
+            outcome="error",
+            limits_configured=limits,
         )
-        await _record_run(agent, trigger_type, result)
+        await _record_run(
+            agent,
+            trigger_type,
+            result,
+            tool_call_records=tool_call_records,
+            schedule_id=schedule_id,
+            orchestration_mode=orchestration_mode,
+            run_id=run_id,
+        )
         return result
     except Exception as e:
         _emit("error", message=str(e)[:300], phase="orchestration")
@@ -483,10 +575,22 @@ async def run_orchestration(
             total_tokens=total_tokens,
             duration_ms=_elapsed_ms(start_time),
             error=str(e)[:500],
+            run_id=run_id,
+            outcome="error",
+            limits_configured=limits,
         )
-        await _record_run(agent, trigger_type, result)
+        await _record_run(
+            agent,
+            trigger_type,
+            result,
+            tool_call_records=tool_call_records,
+            schedule_id=schedule_id,
+            orchestration_mode=orchestration_mode,
+            run_id=run_id,
+        )
         return result
     finally:
+        agents_running.labels(namespace=namespace_name).dec()
         if mcp_pool is not None:
             try:
                 await mcp_pool.__aexit__(None, None, None)
@@ -505,6 +609,7 @@ async def _dispatch_tool(
     trigger_type: str = "manual",
     available_tools: list[dict] | None = None,
     procedure_covered: dict[str, str] | None = None,
+    agent_run_id: str | None = None,
 ) -> str:
     """Dispatch a tool call to a platform tool, MCP tool, or namespace function."""
     from mcpworks_api.core.tool_permissions import ToolTier, is_tool_allowed
@@ -589,6 +694,7 @@ async def _dispatch_tool(
         agent,
         account,
         agent_state=agent_state,
+        agent_run_id=agent_run_id,
     )
 
 
@@ -670,12 +776,13 @@ async def _execute_namespace_function(
     account: Account,
     agent_state: dict | None = None,
     db: AsyncSession | None = None,
+    agent_run_id: str | None = None,
 ) -> str:
     """Execute a namespace function via the sandbox backend."""
     try:
         if db is not None:
             function_service = FunctionService(db)
-            _, version = await function_service.get_for_execution(
+            func, version = await function_service.get_for_execution(
                 namespace_id=agent.namespace_id,
                 service_name=service_name,
                 function_name=function_name,
@@ -683,7 +790,7 @@ async def _execute_namespace_function(
         else:
             async with get_db_context() as new_db:
                 function_service = FunctionService(new_db)
-                _, version = await function_service.get_for_execution(
+                func, version = await function_service.get_for_execution(
                     namespace_id=agent.namespace_id,
                     service_name=service_name,
                     function_name=function_name,
@@ -694,8 +801,11 @@ async def _execute_namespace_function(
             return json.dumps({"error": f"Backend not available: {version.backend}"})
 
         context = {"state": agent_state or {}}
+        if agent_run_id:
+            context["agent_run_id"] = agent_run_id
 
         execution_id = str(uuid_mod.uuid4())
+        exec_start = datetime.now(UTC)
         result = await backend.execute(
             code=version.code,
             config=version.config,
@@ -705,6 +815,57 @@ async def _execute_namespace_function(
             context=context,
             namespace=agent.name,
         )
+        exec_end = datetime.now(UTC)
+        exec_time_ms = int((exec_end - exec_start).total_seconds() * 1000)
+
+        from mcpworks_api.middleware.observability import record_function_call
+
+        record_function_call(
+            namespace=agent.name,
+            service=service_name,
+            function=function_name,
+            status="success" if result.success else "error",
+            duration_seconds=exec_time_ms / 1000.0,
+        )
+
+        try:
+            from mcpworks_api.models.execution import (
+                Execution,
+                ExecutionStatus,
+                _scrub_error_message,
+            )
+
+            async with get_db_context() as exec_db:
+                execution = Execution(
+                    id=uuid_mod.UUID(execution_id),
+                    namespace_id=agent.namespace_id,
+                    service_name=service_name,
+                    function_name=function_name,
+                    user_id=account.user_id,
+                    function_id=func.id,
+                    function_version_num=version.version,
+                    backend=version.backend,
+                    workflow_id=execution_id,
+                    status=ExecutionStatus.COMPLETED.value
+                    if result.success
+                    else ExecutionStatus.FAILED.value,
+                    input_data=input_data,
+                    result_data=result.output if result.success else None,
+                    error_message=_scrub_error_message(result.error or "")
+                    if result.error
+                    else None,
+                    started_at=exec_start,
+                    completed_at=exec_end,
+                    execution_time_ms=exec_time_ms,
+                    agent_run_id=uuid_mod.UUID(agent_run_id) if agent_run_id else None,
+                )
+                exec_db.add(execution)
+        except Exception:
+            logger.warning(
+                "orchestration_execution_record_failed",
+                execution_id=execution_id,
+                exc_info=True,
+            )
 
         if result.success:
             try:
@@ -807,6 +968,10 @@ async def _post_orchestration(
     agent: Agent,
     trigger_type: str,
     result: OrchestrationResult,
+    tool_call_records: list[dict] | None = None,
+    schedule_id: str | None = None,
+    orchestration_mode: str | None = None,
+    run_id: str | None = None,
 ) -> None:
     """Handle post-orchestration tasks: auto_channel, run recording."""
     if result.success and agent.auto_channel and result.final_text:
@@ -815,23 +980,90 @@ async def _post_orchestration(
         except Exception:
             logger.exception("auto_channel_send_failed", agent_name=agent.name)
 
-    await _record_run(agent, trigger_type, result)
+    await _record_run(
+        agent,
+        trigger_type,
+        result,
+        tool_call_records=tool_call_records,
+        schedule_id=schedule_id,
+        orchestration_mode=orchestration_mode,
+        run_id=run_id,
+    )
+
+    import asyncio as _aio
+
+    from mcpworks_api.services.telemetry import emit_orchestration_run_event
+
+    _aio.create_task(
+        emit_orchestration_run_event(
+            namespace_id=agent.namespace_id,
+            namespace_name=agent.name,
+            agent_name=agent.name,
+            run_id=run_id or "",
+            trigger_type=trigger_type,
+            orchestration_mode=orchestration_mode,
+            outcome=result.outcome,
+            duration_ms=result.duration_ms,
+            functions_called_count=len(result.functions_called),
+            limits_consumed=result.limits_consumed,
+            limits_configured=result.limits_configured,
+            error=result.error,
+        )
+    )
 
 
 async def _record_run(
     agent: Agent,
     trigger_type: str,
     result: OrchestrationResult,
+    tool_call_records: list[dict] | None = None,
+    schedule_id: str | None = None,
+    orchestration_mode: str | None = None,
+    run_id: str | None = None,
 ) -> None:
-    """Record an orchestration run as an AgentRun."""
+    """Record an orchestration run as an AgentRun with tool call audit trail."""
+    status_map = {
+        "completed": "completed",
+        "no_action": "no_action",
+        "limit_hit": "limit_hit",
+        "error": "failed",
+        "timeout": "timeout",
+        "cancelled": "cancelled",
+    }
+    outcome = result.outcome or ("completed" if result.success else "error")
+    status = status_map.get(outcome, "failed")
+    record_agent_run(
+        namespace=agent.name,
+        trigger_type=trigger_type,
+        status=status,
+        duration_seconds=(result.duration_ms or 0) / 1000.0,
+        iterations=result.iterations or 0,
+    )
     try:
+        import uuid as _uuid_mod
+
+        from mcpworks_api.models.agent_tool_call import AgentToolCall
+
+        sched_uuid = _uuid_mod.UUID(schedule_id) if schedule_id else None
+        run_uuid = _uuid_mod.UUID(run_id) if run_id else None
+
         async with get_db_context() as db:
+            run_kwargs: dict = {}
+            if run_uuid:
+                run_kwargs["id"] = run_uuid
             run = AgentRun(
                 agent_id=agent.id,
+                **run_kwargs,
                 trigger_type="ai",
                 trigger_detail=f"orchestration:{trigger_type}",
                 function_name=", ".join(result.functions_called[:10]) or None,
-                status="completed" if result.success else "failed",
+                status=status,
+                outcome=outcome,
+                orchestration_mode=orchestration_mode,
+                limits_consumed=result.limits_consumed,
+                limits_configured=result.limits_configured,
+                schedule_id=sched_uuid,
+                functions_called_count=len(result.functions_called),
                 started_at=datetime.now(UTC),
                 completed_at=datetime.now(UTC),
                 duration_ms=result.duration_ms,
@@ -839,6 +1071,16 @@ async def _record_run(
                 error=result.error[:1000] if result.error else None,
             )
             db.add(run)
+            await db.flush()
+
+            if tool_call_records:
+                for tc in tool_call_records:
+                    db.add(
+                        AgentToolCall(
+                            agent_run_id=run.id,
+                            **tc,
+                        )
+                    )
     except Exception:
         logger.exception("orchestration_run_record_failed", agent_name=agent.name)
 
@@ -872,7 +1114,14 @@ def _limit_result(
     total_tokens: int,
     start_time: float,
     context_tokens: int = 0,
+    limits: dict | None = None,
 ) -> OrchestrationResult:
+    _consumed = {
+        "iterations": iterations,
+        "ai_tokens": total_tokens,
+        "functions_called": len(functions_called),
+        "execution_seconds": round(_elapsed_seconds(start_time), 1),
+    }
     return OrchestrationResult(
         success=False,
         final_text=None,
@@ -882,6 +1131,9 @@ def _limit_result(
         duration_ms=_elapsed_ms(start_time),
         error=error,
         context_tokens=context_tokens,
+        outcome="limit_hit",
+        limits_consumed=_consumed,
+        limits_configured=limits,
     )
 
 
@@ -972,6 +1224,48 @@ async def run_procedure_orchestration(
 
             fn_schema = await get_function_input_schema(agent.namespace_id, step_db, function_ref)
 
+        input_mapping = step.get("input_mapping")
+        output_mapping = step.get("output_mapping")
+
+        pre_resolved: dict | None = None
+        if input_mapping and isinstance(input_mapping, dict):
+            from mcpworks_api.services.jsonpath import resolve_input_mapping
+
+            pre_resolved, mapping_errors = resolve_input_mapping(input_mapping, accumulated_context)
+            if mapping_errors:
+                step_result_entry: dict = {
+                    "step_number": step_num,
+                    "name": step_name,
+                    "status": "failed",
+                    "function_called": None,
+                    "result": None,
+                    "error": f"Input mapping failed: {'; '.join(mapping_errors)}",
+                    "attempt_count": 0,
+                    "attempts": [],
+                }
+                step_results.append(step_result_entry)
+                if failure_policy == "required":
+                    async with get_db_context() as db:
+                        exec_result = await db.execute(
+                            select(ProcedureExecution).where(ProcedureExecution.id == execution_id)
+                        )
+                        execution_obj = exec_result.scalar_one_or_none()
+                        if execution_obj:
+                            execution_obj.status = "failed"
+                            execution_obj.completed_at = datetime.now(UTC)
+                            execution_obj.step_results = step_results
+
+                    return OrchestrationResult(
+                        success=False,
+                        final_text=f"Procedure failed at step {step_num} ({step_name}): input mapping error",
+                        functions_called=functions_called,
+                        iterations=iterations,
+                        total_tokens=total_tokens,
+                        duration_ms=_elapsed_ms(start_time),
+                        error=f"Input mapping failed: {'; '.join(mapping_errors)}",
+                    )
+                continue
+
         step_result: dict = {
             "step_number": step_num,
             "name": step_name,
@@ -1001,10 +1295,14 @@ async def run_procedure_orchestration(
                 break
 
             ctx_lines = []
+            if pre_resolved:
+                for k, v in pre_resolved.items():
+                    ctx_lines.append(f"  {k} = {json.dumps(v, default=str)} (pre-resolved)")
             input_ctx = accumulated_context.get("input")
             if input_ctx and isinstance(input_ctx, dict):
                 for k, v in input_ctx.items():
-                    ctx_lines.append(f"  {k} = {json.dumps(v, default=str)}")
+                    if not pre_resolved or k not in pre_resolved:
+                        ctx_lines.append(f"  {k} = {json.dumps(v, default=str)}")
             for ctx_key, ctx_val in accumulated_context.items():
                 if ctx_key == "input":
                     continue
@@ -1014,12 +1312,22 @@ async def run_procedure_orchestration(
 
             schema_str = json.dumps(fn_schema, indent=2) if fn_schema else "{}"
 
+            mapping_hint = ""
+            if pre_resolved:
+                mapping_hint = (
+                    f"\n## Pre-Resolved Parameters\n"
+                    f"The following parameters have been pre-resolved from input mappings. "
+                    f"Use these exact values:\n```json\n"
+                    f"{json.dumps(pre_resolved, indent=2, default=str)}\n```\n"
+                )
+
             system_prompt = (
                 f"You are executing step {step_num} of a procedure.\n\n"
                 f"## Step: {step_name}\n"
                 f"## Instructions\n{instructions}\n\n"
                 f"## Required Function: `{tool_name}`\n"
                 f"Parameter schema:\n```json\n{schema_str}\n```\n\n"
+                f"{mapping_hint}"
                 f"## Available Data\n{ctx_formatted}\n\n"
                 f"## RULES\n"
                 f"- You MUST make a tool call to `{tool_name}`. Do NOT respond with text.\n"
@@ -1028,11 +1336,24 @@ async def run_procedure_orchestration(
             )
 
             if attempt > 0:
-                system_prompt += (
-                    f"\n## PREVIOUS ATTEMPT FAILED\n"
-                    f"You must call `{tool_name}` with the correct parameters. "
-                    f"Do not respond with text. Make the tool call now.\n"
+                prev = step_result["attempts"][-1]
+                prev_error = prev.get("error", "Unknown error")
+                prev_input = prev.get("tool_input")
+                retry_lines = [
+                    f"\n## PREVIOUS ATTEMPT FAILED (attempt {attempt})\n",
+                    f"Error: {prev_error}\n",
+                ]
+                if prev_input:
+                    retry_lines.append(
+                        f"Parameters you sent: ```json\n"
+                        f"{json.dumps(prev_input, default=str)}\n```\n"
+                    )
+                retry_lines.append(
+                    f"You must adapt your parameters to fix this error. "
+                    f"Do NOT repeat the same parameters. "
+                    f"Call `{tool_name}` with corrected parameters now.\n"
                 )
+                system_prompt += "\n".join(retry_lines)
 
             messages: list[dict] = [
                 {
@@ -1084,6 +1405,8 @@ async def run_procedure_orchestration(
                     )
                     continue
 
+                attempt_record["tool_input"] = tool_input
+
                 result_str = await _dispatch_tool(
                     called_tool,
                     tool_input,
@@ -1129,11 +1452,32 @@ async def run_procedure_orchestration(
 
         if step_succeeded:
             step_result["status"] = "success"
-            accumulated_context[f"step_{step_num}"] = {
-                "name": step_name,
-                "status": "success",
-                "result": step_result["result"],
-            }
+            step_output = step_result["result"]
+            if (
+                output_mapping
+                and isinstance(output_mapping, dict)
+                and isinstance(step_output, dict)
+            ):
+                from mcpworks_api.services.jsonpath import apply_output_mapping
+
+                extracted, out_errors = apply_output_mapping(output_mapping, step_output)
+                if out_errors:
+                    logger.warning(
+                        "procedure_output_mapping_partial",
+                        step=step_name,
+                        errors=out_errors,
+                    )
+                accumulated_context[f"step_{step_num}"] = {
+                    "name": step_name,
+                    "status": "success",
+                    "result": extracted if extracted else step_output,
+                }
+            else:
+                accumulated_context[f"step_{step_num}"] = {
+                    "name": step_name,
+                    "status": "success",
+                    "result": step_output,
+                }
         elif failure_policy == "skip":
             step_result["status"] = "skipped"
             accumulated_context[f"step_{step_num}"] = {
