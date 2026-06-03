@@ -44,6 +44,11 @@ services:
     container_name: mcpworks-api
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Routing pinned to path; subdomain routing is deprecated (wildcard-subdomain
+      # edge TLS proved fragile — incident 2026-06-03). Overrides any ROUTING_MODE
+      # left in .env. Path uses a single api.<domain> cert; no wildcard/on-demand TLS.
+      ROUTING_MODE: path
     ports:
       - "8000:8000"
     volumes:

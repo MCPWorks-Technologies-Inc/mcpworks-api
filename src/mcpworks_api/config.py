@@ -35,7 +35,11 @@ class Settings(BaseSettings):
     )
     routing_mode: Literal["path", "subdomain", "both"] = Field(
         default="path",
-        description="URL routing: path (/mcp/create/ns), subdomain (ns.create.domain), or both",
+        description=(
+            "URL routing. 'path' (api.<domain>/mcp/<endpoint>/<ns>) is canonical. "
+            "'subdomain'/'both' are DEPRECATED — they need wildcard/on-demand TLS, "
+            "which is operationally fragile; slated for removal."
+        ),
     )
     allow_registration: bool = Field(
         default=False,
