@@ -32,6 +32,9 @@ from mcpworks_api.models.namespace_api_server import (
 
 logger = structlog.get_logger(__name__)
 
+# Transient gateway statuses worth retrying on idempotent methods (flaky upstreams).
+_RETRYABLE_STATUSES = frozenset({502, 503, 504})
+
 
 @dataclass
 class ApiProxyResult:
@@ -218,6 +221,11 @@ async def proxy_api_call(
                     headers=req_headers or None,
                     json=body if body is not None else None,
                 )
+            # Retry transient gateway errors on idempotent methods (e.g. a flaky upstream
+            # returning 502/503/504). Non-idempotent methods never reach here (retry=False).
+            if retry and resp.status_code in _RETRYABLE_STATUSES and attempt < attempts - 1:
+                await asyncio.sleep(0.5 * (2**attempt))
+                continue
             ctx.api_calls_count += 1
             latency = int((time.monotonic() - start) * 1000)
             raw = resp.content
