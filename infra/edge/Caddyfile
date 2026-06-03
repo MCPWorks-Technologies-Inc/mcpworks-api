@@ -36,38 +36,9 @@ api.mcpworks.io {
     }
 }
 
-# ──────────────────────────────────────────────────────────────
-# DEPRECATED: Wildcard subdomain blocks (transition period)
-#
-# These exist for backward compatibility with clients still using
-# subdomain-based URLs like {ns}.create.mcpworks.io.
-# Set ROUTING_MODE=both in the API to enable.
-# Remove after transition period (90 days from 2026-03-30).
-# ──────────────────────────────────────────────────────────────
-
-# (Commented out — uncomment if ROUTING_MODE=both is needed)
-#
-# on_demand_tls {
-#     ask http://10.100.0.3:8000/v1/internal/verify-domain
-# }
-#
-# *.create.mcpworks.io {
-#     tls { on_demand }
-#     reverse_proxy 10.100.0.3:8000
-#     header { X-Content-Type-Options nosniff; X-Frame-Options DENY; -Server }
-# }
-#
-# *.run.mcpworks.io {
-#     tls { on_demand }
-#     reverse_proxy 10.100.0.3:8000
-#     header { X-Content-Type-Options nosniff; X-Frame-Options DENY; -Server }
-# }
-#
-# *.agent.mcpworks.io {
-#     tls { on_demand }
-#     reverse_proxy 10.100.0.3:8000
-#     header { X-Content-Type-Options nosniff; X-Frame-Options DENY; -Server }
-# }
+# Subdomain routing ({ns}.create/run/agent.mcpworks.io) was removed 2026-06-03.
+# Path routing via api.mcpworks.io is canonical (the API runs ROUTING_MODE=path);
+# it needs no wildcard / on-demand TLS — just the single api.mcpworks.io cert above.
 
 # GenOps (genops.dev) -> server1.pop11
 genops.dev {
