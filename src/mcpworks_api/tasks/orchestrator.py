@@ -198,6 +198,16 @@ async def run_orchestration(
             logger.exception("orchestration_mcp_pool_failed", agent_name=agent.name)
             mcp_pool = None
 
+    # 019/T033: expose the agent's scoped API servers' enabled endpoints as direct tools.
+    api_tools = await _load_agent_api_tools(agent)
+    if api_tools:
+        tools.extend(api_tools)
+        logger.info(
+            "orchestration_api_tools_loaded",
+            agent_name=agent.name,
+            api_tools_count=len(api_tools),
+        )
+
     from mcpworks_api.core.conversation_memory import load_history
 
     effective_system_prompt = augment_system_prompt(
@@ -598,6 +608,82 @@ async def run_orchestration(
                 logger.exception("orchestration_mcp_pool_cleanup_failed")
 
 
+async def _load_agent_api_tools(agent: Agent) -> list[dict]:
+    """Load an agent's scoped API servers' enabled endpoints as direct tools (019, T033).
+
+    Agents can't run code-mode primitives, so their scoped API endpoints are
+    surfaced as direct AI tools (Anthropic ``input_schema`` shape). Scoped by
+    ``agent.api_server_names``.
+    """
+    names = agent.api_server_names or []
+    if not names:
+        return []
+    from mcpworks_api.core.api_proxy import build_published_api_tool
+    from mcpworks_api.models.api_endpoint import ApiEndpoint
+    from mcpworks_api.models.namespace_api_server import NamespaceApiServer
+
+    async with get_db_context() as db:
+        stmt = (
+            select(NamespaceApiServer.name, ApiEndpoint)
+            .join(ApiEndpoint, ApiEndpoint.api_server_id == NamespaceApiServer.id)
+            .where(
+                NamespaceApiServer.namespace_id == agent.namespace_id,
+                NamespaceApiServer.name.in_(names),
+                NamespaceApiServer.enabled.is_(True),
+                ApiEndpoint.enabled.is_(True),
+            )
+            .order_by(NamespaceApiServer.name, ApiEndpoint.operation_id)
+        )
+        rows = (await db.execute(stmt)).all()
+    out: list[dict] = []
+    for sname, ep in rows:
+        tool = build_published_api_tool(
+            sname,
+            {
+                "operation_id": ep.operation_id,
+                "method": ep.method,
+                "path": ep.path,
+                "summary": ep.summary,
+                "param_schema": ep.param_schema,
+                "request_body_schema": ep.request_body_schema,
+            },
+        )
+        tool["input_schema"] = tool.pop("inputSchema")  # agent loop uses Anthropic schema key
+        out.append(tool)
+    return out
+
+
+async def _dispatch_agent_api_tool(tool_name: str, tool_input: dict, agent: Agent) -> str:
+    """Dispatch an agent's API direct tool to the proxy + scanner (019, T033/T034).
+
+    v1 supports stored credentials (injected server-side). Passthrough credentials
+    for agents are not yet wired (the agent has no per-call execution env here), so
+    a passthrough-only endpoint returns a structured missing_credential error.
+    """
+    from mcpworks_api.core.api_proxy import parse_api_tool_name, proxy_and_format
+    from mcpworks_api.core.exec_token_registry import ExecutionContext
+    from mcpworks_api.models.namespace import Namespace
+
+    parsed = parse_api_tool_name(tool_name)
+    if not parsed:
+        return json.dumps({"error": f"invalid API tool name: {tool_name}"})
+    server, operation_id = parsed
+    async with get_db_context() as db:
+        ns = (
+            await db.execute(select(Namespace).where(Namespace.id == agent.namespace_id))
+        ).scalar_one_or_none()
+        ctx = ExecutionContext(
+            execution_id=str(uuid_mod.uuid4()),
+            namespace_id=agent.namespace_id,
+            namespace_name=getattr(ns, "name", ""),
+            created_at=datetime.now(UTC),
+        )
+        _ok, text = await proxy_and_format(
+            ctx, server, operation_id, tool_input, db, namespace=ns, execution_id=ctx.execution_id
+        )
+    return text
+
+
 async def _dispatch_tool(
     tool_name: str,
     tool_input: dict,
@@ -661,6 +747,9 @@ async def _dispatch_tool(
         if mcp_pool is None:
             return json.dumps({"error": "MCP server pool not available"})
         return await mcp_pool.call_tool(tool_name, tool_input)
+
+    if tool_name.startswith("api__"):
+        return await _dispatch_agent_api_tool(tool_name, tool_input, agent)
 
     parsed = parse_tool_name(tool_name)
     if not parsed:

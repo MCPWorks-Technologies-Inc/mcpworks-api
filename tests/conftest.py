@@ -56,6 +56,9 @@ def get_test_settings() -> Settings:
         app_debug=True,
         jwt_private_key=_test_private_key_pem,
         jwt_public_key=_test_public_key_pem,
+        # Deterministic 32-byte KEK so envelope-encryption paths work in tests
+        # (b"mcpworks-test-kek-0123456789abc!"). Test-only; never used in prod.
+        encryption_kek_b64="bWNwd29ya3MtdGVzdC1rZWstMDEyMzQ1Njc4OWFiYyE=",
     )
 
 

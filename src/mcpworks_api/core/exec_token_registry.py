@@ -6,7 +6,7 @@ In-memory per-worker. Tokens registered at sandbox creation, cleared at cleanup.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import structlog
@@ -24,6 +24,10 @@ class ExecutionContext:
     created_at: datetime
     mcp_calls_count: int = 0
     mcp_bytes_total: int = 0
+    # API → MCP (019): per-execution API call counter and passthrough credential
+    # values resolved server-side at sandbox creation (never supplied by sandbox code).
+    api_calls_count: int = 0
+    passthrough_env: dict[str, str] = field(default_factory=dict)
 
 
 def register_execution(
@@ -31,12 +35,14 @@ def register_execution(
     namespace_id: uuid.UUID,
     namespace_name: str,
     execution_id: str,
+    passthrough_env: dict[str, str] | None = None,
 ) -> None:
     _registry[token] = ExecutionContext(
         execution_id=execution_id,
         namespace_id=namespace_id,
         namespace_name=namespace_name,
         created_at=datetime.now(UTC),
+        passthrough_env=passthrough_env or {},
     )
 
 

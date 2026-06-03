@@ -81,6 +81,9 @@ addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "network: tests that make real outbound network calls (live; skipped unless RUN_LIVE_TESTS=1; deselect with -m 'not network')",
+]
 
 [tool.coverage.run]
 source = ["src/mcpworks_api"]
@@ -161,6 +164,7 @@ module = [
     "prometheus_fastapi_instrumentator.*",
     "mcp.*",
     "jsonschema.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 

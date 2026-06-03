@@ -12,7 +12,9 @@ from mcpworks_api.models.agent import (
     ScheduledJob,
 )
 from mcpworks_api.models.agent_tool_call import AgentToolCall
+from mcpworks_api.models.api_endpoint import ApiEndpoint
 from mcpworks_api.models.api_key import APIKey
+from mcpworks_api.models.api_proxy_call import ApiProxyCall
 from mcpworks_api.models.audit_log import AuditAction, AuditLog
 from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 from mcpworks_api.models.email_log import EmailLog
@@ -22,6 +24,7 @@ from mcpworks_api.models.function_version import ALLOWED_BACKENDS, FunctionVersi
 from mcpworks_api.models.mcp_execution_stat import McpExecutionStat
 from mcpworks_api.models.mcp_proxy_call import McpProxyCall
 from mcpworks_api.models.namespace import Namespace
+from mcpworks_api.models.namespace_api_server import NamespaceApiServer
 from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
 from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
 from mcpworks_api.models.namespace_service import NamespaceService
@@ -73,6 +76,10 @@ __all__ = [
     "NamespaceGitRemote",
     # NamespaceMcpServer
     "NamespaceMcpServer",
+    # API → MCP (019)
+    "NamespaceApiServer",
+    "ApiEndpoint",
+    "ApiProxyCall",
     # NamespaceService (A0)
     "NamespaceService",
     # NamespaceShare

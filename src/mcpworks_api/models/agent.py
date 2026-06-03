@@ -83,6 +83,8 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         JSONB, nullable=True
     )  # DEPRECATED — use mcp_server_names
     mcp_server_names: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    # Names of NamespaceApiServer this agent may access (feature 019, parallel to mcp_server_names)
+    api_server_names: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
     access_rules: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     orchestration_limits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     heartbeat_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)

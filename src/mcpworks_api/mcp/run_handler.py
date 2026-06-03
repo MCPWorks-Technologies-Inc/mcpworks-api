@@ -145,7 +145,9 @@ class RunMCPHandler:
     async def get_tools(self) -> list[MCPTool]:
         """Generate tools list from database functions."""
         if self.mode == "code":
-            return self._get_code_mode_tools()
+            tools = self._get_code_mode_tools()
+            tools.extend(await self._load_published_api_tools())
+            return tools
 
         tier_notice = self._tier_notice()
         namespace = await self._get_namespace_for_read()
@@ -185,6 +187,8 @@ class RunMCPHandler:
                 inputSchema={"type": "object", "properties": {}},
             )
         )
+
+        tools.extend(await self._load_published_api_tools())
 
         return tools
 
@@ -304,6 +308,9 @@ class RunMCPHandler:
 
         if name == "_env_status":
             return await self._handle_env_status(sandbox_env)
+
+        if name.startswith("api__"):
+            return await self._dispatch_published_api(name, arguments, sandbox_env)
 
         if "." not in name:
             raise ValueError(f"Invalid tool name format. Expected service.function, got: {name}")
@@ -589,6 +596,151 @@ class RunMCPHandler:
             if s.tool_count > 0
         ]
 
+    async def _load_api_server_endpoints(self, namespace_id: uuid.UUID) -> list[dict[str, Any]]:
+        """Load enabled API-server endpoints for code-mode primitive generation (019)."""
+        from sqlalchemy import select
+
+        from mcpworks_api.models.api_endpoint import ApiEndpoint
+        from mcpworks_api.models.namespace_api_server import NamespaceApiServer
+
+        stmt = (
+            select(NamespaceApiServer)
+            .where(
+                NamespaceApiServer.namespace_id == namespace_id,
+                NamespaceApiServer.enabled.is_(True),
+            )
+            .order_by(NamespaceApiServer.name)
+        )
+        servers = (await self.db.execute(stmt)).scalars().all()
+        out: list[dict[str, Any]] = []
+        for server in servers:
+            eps = (
+                (
+                    await self.db.execute(
+                        select(ApiEndpoint)
+                        .where(
+                            ApiEndpoint.api_server_id == server.id,
+                            ApiEndpoint.enabled.is_(True),
+                        )
+                        .order_by(ApiEndpoint.operation_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not eps:
+                continue
+            out.append(
+                {
+                    "name": server.name,
+                    "endpoints": [
+                        {
+                            "operation_id": e.operation_id,
+                            "method": e.method,
+                            "path": e.path,
+                            "summary": e.summary,
+                        }
+                        for e in eps
+                    ],
+                }
+            )
+        return out
+
+    async def _load_api_passthrough_env(
+        self, namespace_id: uuid.UUID, sandbox_env: dict[str, str]
+    ) -> dict[str, str]:
+        """Resolve declared passthrough credential env vars from the execution env (019, T025).
+
+        Returns only the env vars that enabled API servers' passthrough injections
+        declare, scoped to this execution. The proxy reads these server-side; they
+        never transit the sandbox→proxy request body.
+        """
+        from sqlalchemy import select
+
+        from mcpworks_api.models.namespace_api_server import NamespaceApiServer
+
+        stmt = select(NamespaceApiServer.auth).where(
+            NamespaceApiServer.namespace_id == namespace_id,
+            NamespaceApiServer.enabled.is_(True),
+        )
+        rows = (await self.db.execute(stmt)).scalars().all()
+        declared: set[str] = set()
+        for auth in rows:
+            for inj in auth or []:
+                if inj.get("source") == "passthrough" and inj.get("env_var"):
+                    declared.add(inj["env_var"])
+        return {k: sandbox_env[k] for k in declared if k in sandbox_env}
+
+    async def _load_published_api_tools(self) -> list[MCPTool]:
+        """Published API endpoints surfaced as direct MCP tools (019, T030)."""
+        from sqlalchemy import select
+
+        from mcpworks_api.core.api_proxy import build_published_api_tool
+        from mcpworks_api.models.api_endpoint import ApiEndpoint
+        from mcpworks_api.models.namespace_api_server import NamespaceApiServer
+
+        namespace = await self._get_namespace_for_read()
+        stmt = (
+            select(NamespaceApiServer.name, ApiEndpoint)
+            .join(ApiEndpoint, ApiEndpoint.api_server_id == NamespaceApiServer.id)
+            .where(
+                NamespaceApiServer.namespace_id == namespace.id,
+                NamespaceApiServer.enabled.is_(True),
+                ApiEndpoint.published.is_(True),
+            )
+            .order_by(NamespaceApiServer.name, ApiEndpoint.operation_id)
+        )
+        rows = (await self.db.execute(stmt)).all()
+        return [
+            MCPTool(
+                **build_published_api_tool(
+                    sname,
+                    {
+                        "operation_id": ep.operation_id,
+                        "method": ep.method,
+                        "path": ep.path,
+                        "summary": ep.summary,
+                        "param_schema": ep.param_schema,
+                        "request_body_schema": ep.request_body_schema,
+                    },
+                )
+            )
+            for sname, ep in rows
+        ]
+
+    async def _dispatch_published_api(
+        self, name: str, arguments: dict[str, Any], sandbox_env: dict[str, str] | None
+    ) -> MCPToolResult:
+        """Dispatch a published-endpoint direct tool to the API proxy (019, T030/T034)."""
+        from mcpworks_api.core.api_proxy import parse_api_tool_name, proxy_and_format
+        from mcpworks_api.core.exec_token_registry import ExecutionContext
+
+        parsed = parse_api_tool_name(name)
+        if not parsed:
+            raise ValueError(f"Invalid API tool name: {name}")
+        server, operation_id = parsed
+
+        namespace = await self._get_namespace()
+        passthrough = await self._load_api_passthrough_env(namespace.id, sandbox_env or {})
+        execution_id = str(uuid.uuid4())
+        ctx = ExecutionContext(
+            execution_id=execution_id,
+            namespace_id=namespace.id,
+            namespace_name=self.namespace_name,
+            created_at=datetime.now(UTC),
+            passthrough_env=passthrough,
+        )
+        _ok, text = await proxy_and_format(
+            ctx,
+            server,
+            operation_id,
+            arguments,
+            self.db,
+            namespace=namespace,
+            execution_id=execution_id,
+        )
+        return MCPToolResult(content=[MCPContent(text=text)])
+
     async def _run_output_pipeline(
         self,
         content: str,
@@ -705,10 +857,15 @@ class RunMCPHandler:
         functions = await self.function_service.list_all_for_namespace(namespace_id=namespace.id)
 
         mcp_server_tools = await self._load_mcp_server_tools(namespace.id)
+        api_server_endpoints = await self._load_api_server_endpoints(namespace.id)
 
         run_url = url_builder.mcp_url(self.namespace_name, "run")
         extra_files = generate_functions_package(
-            functions, self.namespace_name, run_url=run_url, mcp_servers=mcp_server_tools
+            functions,
+            self.namespace_name,
+            run_url=run_url,
+            mcp_servers=mcp_server_tools,
+            api_servers=api_server_endpoints,
         )
 
         agent_context = await self._load_agent_context(namespace)
@@ -719,8 +876,18 @@ class RunMCPHandler:
             sandbox_env = {}
         has_ts = any(getattr(v, "language", "python") == "typescript" for _, v in functions)
         has_mcp = bool(mcp_server_tools)
-        if (has_ts or has_mcp) and self.api_key and getattr(self.api_key, "_raw_key", None):
+        has_api = bool(api_server_endpoints)
+        if (
+            (has_ts or has_mcp or has_api)
+            and self.api_key
+            and getattr(self.api_key, "_raw_key", None)
+        ):
             sandbox_env["__MCPWORKS_BRIDGE_KEY__"] = self.api_key._raw_key
+
+        # 019/T025: resolve passthrough credential env vars server-side for the proxy.
+        api_passthrough_env: dict[str, str] = {}
+        if has_api:
+            api_passthrough_env = await self._load_api_passthrough_env(namespace.id, sandbox_env)
 
         backend = get_backend("code_sandbox")
         if not backend:
@@ -739,13 +906,14 @@ class RunMCPHandler:
 
         exec_token = None
         result = None
-        if has_mcp and self.api_key and getattr(self.api_key, "_raw_key", None):
+        if (has_mcp or has_api) and self.api_key and getattr(self.api_key, "_raw_key", None):
             exec_token = self.api_key._raw_key
             register_execution(
                 token=exec_token,
                 namespace_id=namespace.id,
                 namespace_name=self.namespace_name,
                 execution_id=execution_id,
+                passthrough_env=api_passthrough_env,
             )
 
         try:

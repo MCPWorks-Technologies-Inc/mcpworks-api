@@ -559,6 +559,25 @@ Scheduled/webhook triggers default to `execute_only` unless elevated.
 
 ---
 
+## API → MCP (Ad-Hoc MCP from REST APIs)
+
+Register any plain REST/HTTP API on a namespace and synthesize an MCP from it — the inverse of the MCP Server Plugin model (which wraps a remote *MCP server*). Endpoints are discovered via **OpenAPI import** (URL or inline spec) or **manual definition**, then exposed in two ways:
+
+- **Functions-only (default):** enabled endpoints become sandbox-callable primitives `api__{server}__{operation_id}`. Code composes them; raw responses stay in the sandbox, so only extracted fields enter AI context (70–98% token savings on arbitrary APIs).
+- **Direct tools (opt-in):** a `published` endpoint — or an agent's scoped endpoints — surface as direct MCP tools returning the raw response.
+
+**Endpoint curation:** discovered endpoints default to *disabled*; the LLM/owner enables the ones to expose (no fixed cap; a safety ceiling guards pathological specs).
+
+**Credentials:** a per-server `auth` list of injections (header/query/bearer/basic) with two sources — `stored` (encrypted at rest in a dedicated column, injected server-side, never seen by callers) and `passthrough` (resolved at runtime from the execution env, never persisted). Injected by the internal proxy; never visible to sandbox code.
+
+**Internal proxy** (`POST /v1/internal/api-proxy`, bridge-key authed): resolves the namespace from the execution, builds the request, injects credentials, enforces an **SSRF gate** (denies private/link-local/loopback/metadata at call time — defeats DNS rebinding; redirects not followed), applies per-server settings (timeout, response cap, idempotent-only retries — POST/PATCH never auto-retried), and records telemetry to `api_proxy_calls`. Direct-tool responses are injection-scanned via the namespace scanner pipeline; the functions-only path is scanned at function-output.
+
+**Management tools** (create endpoint): `add_api_server`, `refresh_api_endpoints`, `list_api_servers`, `describe_api_server`, `list_endpoints`, `add_manual_endpoint`, `enable_endpoint`/`disable_endpoint`, `publish_endpoint`/`unpublish_endpoint`, `set_api_credentials`, `update_api_settings`, `remove_api_server`, `configure_agent_api_access`.
+
+**Data model:** `namespace_api_servers` (config + `auth` JSONB + encrypted credential columns), `api_endpoints` (per-endpoint `enabled`/`published` state), `api_proxy_calls` (telemetry); agents gain `api_server_names`. Full spec: `specs/019-api-to-mcp/`.
+
+---
+
 ## Security
 
 ### Authentication
@@ -694,6 +713,9 @@ Push to `main` triggers:
 ---
 
 ## Changelog
+
+**Unreleased (019-api-to-mcp):**
+- Added API → MCP: register a REST API (OpenAPI import or manual), expose endpoints as sandbox primitives (functions-only) or direct tools (published/agent), with stored/passthrough credential injection, SSRF defense, and per-call telemetry. See `specs/019-api-to-mcp/`.
 
 **v3.0.0 (2026-03-15):**
 - Complete rewrite reflecting production implementation

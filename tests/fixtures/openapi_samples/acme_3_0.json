@@ -1,0 +1,54 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Acme Orders API", "version": "1.0.0" },
+  "servers": [{ "url": "https://api.acme.example.com" }],
+  "paths": {
+    "/orders": {
+      "get": {
+        "operationId": "list_orders",
+        "summary": "List orders",
+        "parameters": [
+          { "name": "status", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "data": { "type": "array" } } }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "create_order",
+        "summary": "Create an order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "sku": { "type": "string" }, "qty": { "type": "integer" } },
+                "required": ["sku", "qty"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "created" } }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "get_order",
+        "summary": "Get one order",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

@@ -131,6 +131,8 @@ specs/                  # Speckit artifacts per feature
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), httpx, structlog (017-fix-procedure-execution)
 - PostgreSQL 15+ (existing), Redis 7+ (existing) (017-fix-procedure-execution)
 - PostgreSQL 15+ (new JSONB column on agents table) (018-agent-access-control)
+- Python 3.11+ (existing codebase) + FastAPI 0.109+, SQLAlchemy 2.0 async, Pydantic v2, httpx (existing), structlog (existing), PyYAML (existing — OpenAPI YAML), jsonschema (existing — param-schema validation). New: a minimal in-house OpenAPI extractor (no new heavy dependency — see research.md). (019-api-to-mcp)
+- PostgreSQL (existing) — new tables `namespace_api_servers`, `api_endpoints`, `api_proxy_calls`. No Redis dependency (proxy is stateless per call; reuses in-memory `exec_token_registry`). (019-api-to-mcp)
 - PostgreSQL 15+ (extend existing executions table) (020-execution-debugging)
 - Python 3.11+ + FastAPI 0.109+, SQLAlchemy 2.0+ (async), Pydantic v2, httpx (webhook calls), structlog (021-security-scanner-pipeline)
 - PostgreSQL 15+ (JSONB on namespaces for pipeline config; scan results in executions.backend_metadata) (021-security-scanner-pipeline)

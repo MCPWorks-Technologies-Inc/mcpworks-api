@@ -2652,6 +2652,226 @@ ANALYTICS_TOOLS: dict[str, ToolDef] = {
 }
 
 
+_AUTH_INJECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "description": "Logical name for this credential"},
+        "location": {"type": "string", "enum": ["header", "query", "bearer", "basic"]},
+        "key": {"type": "string", "description": "Header/query param name (n/a for bearer/basic)"},
+        "format": {"type": "string", "description": "Value template, e.g. 'Bearer {value}'"},
+        "source": {"type": "string", "enum": ["stored", "passthrough"]},
+        "value": {"type": "string", "description": "Secret value (stored only; write-only)"},
+        "env_var": {"type": "string", "description": "Execution env var (passthrough only)"},
+    },
+    "required": ["name", "location", "source"],
+}
+
+API_SERVER_TOOLS: dict[str, ToolDef] = {
+    "add_api_server": ToolDef(
+        name="add_api_server",
+        brief="Register a REST API as an ad-hoc MCP (OpenAPI import or manual).",
+        description=(
+            "Register a plain REST/HTTP API on this namespace. Discovers endpoints via OpenAPI "
+            "import (URL or inline document) or starts empty for manual definition. Discovered "
+            "endpoints are cataloged but DISABLED by default — enable the ones you need with "
+            "enable_endpoint. Enabled endpoints become callable in the sandbox as "
+            "api__{server}__{operation_id}. Credentials are injected server-side and never enter "
+            "sandbox code."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Server name (DNS-safe, unique per namespace)",
+                },
+                "base_url": {"type": "string", "description": "API base URL (https)"},
+                "description": {"type": "string"},
+                "spec_source": {
+                    "type": "string",
+                    "enum": ["openapi_url", "openapi_file", "manual"],
+                },
+                "openapi_url": {"type": "string", "description": "OpenAPI/Swagger spec URL"},
+                "openapi_file": {
+                    "type": "string",
+                    "description": "OpenAPI/Swagger spec as inline JSON/YAML",
+                },
+                "auth": {"type": "array", "items": _AUTH_INJECTION_SCHEMA},
+                "default_headers": {"type": "object", "description": "Static non-secret headers"},
+                "settings": {"type": "object"},
+                "enabled_endpoints": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "operation_ids to enable at add time",
+                },
+            },
+            "required": ["name", "base_url", "spec_source"],
+        },
+    ),
+    "refresh_api_endpoints": ToolDef(
+        name="refresh_api_endpoints",
+        brief="Re-fetch the OpenAPI spec and diff endpoints (preserves enabled/published).",
+        description=(
+            "Re-fetch the server's OpenAPI spec and reconcile endpoints. Added/removed/changed "
+            "are reported; enabled and published flags are preserved by operation_id. Manual "
+            "endpoints are untouched."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {"server": {"type": "string"}},
+            "required": ["server"],
+        },
+    ),
+    "list_api_servers": ToolDef(
+        name="list_api_servers",
+        brief="List registered API servers in this namespace.",
+        description="List all registered REST APIs with endpoint/enabled counts. Credentials redacted.",
+        input_schema={"type": "object", "properties": {}},
+    ),
+    "describe_api_server": ToolDef(
+        name="describe_api_server",
+        brief="Show an API server's settings, auth definitions (redacted), and endpoints.",
+        description="Full detail for one API server: settings, auth injection definitions (values redacted), and endpoints.",
+        input_schema={
+            "type": "object",
+            "properties": {"server": {"type": "string"}},
+            "required": ["server"],
+        },
+    ),
+    "list_endpoints": ToolDef(
+        name="list_endpoints",
+        brief="List an API server's endpoints (filterable by enabled/published).",
+        description="List endpoints for a server. filter: all | enabled | published.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "server": {"type": "string"},
+                "filter": {"type": "string", "enum": ["all", "enabled", "published"]},
+            },
+            "required": ["server"],
+        },
+    ),
+    "add_manual_endpoint": ToolDef(
+        name="add_manual_endpoint",
+        brief="Define a single API endpoint by hand (for APIs without an OpenAPI spec).",
+        description=(
+            "Manually define one endpoint. param_schema uses location buckets: "
+            "{'path': {...}, 'query': {...}, 'header': {...}}. Manual endpoints are enabled by default."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "server": {"type": "string"},
+                "operation_id": {"type": "string", "description": "Identifier-safe handle"},
+                "method": {"type": "string"},
+                "path": {"type": "string", "description": "Path with {param} placeholders"},
+                "summary": {"type": "string"},
+                "param_schema": {"type": "object"},
+                "request_body_schema": {"type": "object"},
+                "response_schema": {"type": "object"},
+            },
+            "required": ["server", "operation_id", "method", "path"],
+        },
+    ),
+    "enable_endpoint": ToolDef(
+        name="enable_endpoint",
+        brief="Enable endpoints (generate sandbox primitives).",
+        description="Enable one or more endpoints so they become callable api__{server}__{op} primitives.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "server": {"type": "string"},
+                "operation_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["server", "operation_ids"],
+        },
+    ),
+    "disable_endpoint": ToolDef(
+        name="disable_endpoint",
+        brief="Disable endpoints (remove from the sandbox catalog).",
+        description="Disable one or more endpoints. Cached schema is retained; the primitive is removed.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "server": {"type": "string"},
+                "operation_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["server", "operation_ids"],
+        },
+    ),
+    "remove_api_server": ToolDef(
+        name="remove_api_server",
+        brief="Delete an API server and all its endpoints.",
+        description="Delete the server, its endpoints, and stored credential material.",
+        input_schema={
+            "type": "object",
+            "properties": {"server": {"type": "string"}},
+            "required": ["server"],
+        },
+    ),
+    "update_api_settings": ToolDef(
+        name="update_api_settings",
+        brief="Update LLM-tunable per-server settings.",
+        description=(
+            "Update settings: response_limit_bytes, timeout_seconds, max_calls_per_execution, "
+            "retry_on_failure, retry_count, enabled."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {"server": {"type": "string"}, "settings": {"type": "object"}},
+            "required": ["server", "settings"],
+        },
+    ),
+    "set_api_credentials": ToolDef(
+        name="set_api_credentials",
+        brief="Set/update a stored credential value (never echoed).",
+        description="Set or rotate the secret value for a 'stored' auth injection. The value is encrypted and never returned.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "server": {"type": "string"},
+                "name": {"type": "string", "description": "Injection name"},
+                "value": {"type": "string"},
+            },
+            "required": ["server", "name", "value"],
+        },
+    ),
+    "publish_endpoint": ToolDef(
+        name="publish_endpoint",
+        brief="Expose an endpoint as a direct raw MCP tool (opt-in).",
+        description="Publish an endpoint as a direct MCP tool returning the raw response (unfiltered — prefer composing functions for large responses).",
+        input_schema={
+            "type": "object",
+            "properties": {"server": {"type": "string"}, "operation_id": {"type": "string"}},
+            "required": ["server", "operation_id"],
+        },
+    ),
+    "unpublish_endpoint": ToolDef(
+        name="unpublish_endpoint",
+        brief="Remove an endpoint's direct raw MCP tool exposure.",
+        description="Unpublish an endpoint (removes its direct MCP tool).",
+        input_schema={
+            "type": "object",
+            "properties": {"server": {"type": "string"}, "operation_id": {"type": "string"}},
+            "required": ["server", "operation_id"],
+        },
+    ),
+    "configure_agent_api_access": ToolDef(
+        name="configure_agent_api_access",
+        brief="Set which API servers an agent may access.",
+        description="Set the list of API server names an agent can reach (parallel to configure_agent_mcp).",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string"},
+                "api_servers": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["agent", "api_servers"],
+        },
+    ),
+}
+
+
 def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
     """Get a single tool definition by name.
 
@@ -2663,6 +2883,7 @@ def get_tool(name: str, verbosity: str = "standard") -> dict[str, Any] | None:
         RUN_TOOLS,
         GIT_TOOLS,
         MCP_SERVER_TOOLS,
+        API_SERVER_TOOLS,
         ANALYTICS_TOOLS,
     ):
         if name in registry:

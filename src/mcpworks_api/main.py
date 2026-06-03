@@ -254,6 +254,7 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(v1_router)
 
+    from mcpworks_api.api.v1.api_proxy import router as api_proxy_router
     from mcpworks_api.api.v1.mcp_oauth import router as mcp_oauth_router
     from mcpworks_api.api.v1.mcp_proxy import router as mcp_proxy_router
     from mcpworks_api.api.v1.public_chat import router as public_chat_router
@@ -264,6 +265,7 @@ def create_app() -> FastAPI:
     app.include_router(webhook_router)
     app.include_router(public_chat_router)
     app.include_router(mcp_proxy_router)
+    app.include_router(api_proxy_router)
     app.include_router(mcp_oauth_router)
 
     # 015: Path-based agent sub-routes (/mcp/agent/{ns}/webhook, /chat, /view)

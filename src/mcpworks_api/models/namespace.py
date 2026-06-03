@@ -24,6 +24,7 @@ from mcpworks_api.models.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from mcpworks_api.models.account import Account
     from mcpworks_api.models.api_key import APIKey
+    from mcpworks_api.models.namespace_api_server import NamespaceApiServer
     from mcpworks_api.models.namespace_git_remote import NamespaceGitRemote
     from mcpworks_api.models.namespace_mcp_server import NamespaceMcpServer
     from mcpworks_api.models.namespace_service import NamespaceService
@@ -148,6 +149,13 @@ class Namespace(Base, UUIDMixin, TimestampMixin):
         back_populates="namespace",
         cascade="all, delete-orphan",
         order_by="NamespaceMcpServer.name",
+    )
+
+    api_servers: Mapped[list["NamespaceApiServer"]] = relationship(
+        "NamespaceApiServer",
+        back_populates="namespace",
+        cascade="all, delete-orphan",
+        order_by="NamespaceApiServer.name",
     )
 
     __table_args__ = (

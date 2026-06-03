@@ -334,10 +334,70 @@ def _generate_mcp_server_module(server_name: str, tools: list[dict[str, Any]]) -
     return "\n".join(lines)
 
 
+_API_BRIDGE_TEMPLATE = '''\
+"""API proxy bridge: call registered REST API endpoints from sandbox code (019)."""
+import os
+
+_PROXY_URL = "{proxy_url}"
+_BRIDGE_KEY = os.environ.get("__MCPWORKS_BRIDGE_KEY__", "")
+
+
+def _call_api_endpoint(server, operation_id, path=None, query=None, body=None, headers=None):
+    if not _BRIDGE_KEY:
+        raise RuntimeError(
+            f"Cannot call API {{server}}.{{operation_id}}: bridge key not configured."
+        )
+    import httpx
+
+    response = httpx.post(
+        _PROXY_URL,
+        headers={{"Authorization": f"Bearer {{_BRIDGE_KEY}}"}},
+        json={{
+            "server": server,
+            "operation_id": operation_id,
+            "path": path or {{}},
+            "query": query or {{}},
+            "body": body,
+            "headers": headers or {{}},
+        }},
+        timeout=60,
+    )
+    data = response.json()
+    if "error" in data and data["error"]:
+        raise RuntimeError(
+            f"API {{server}}.{{operation_id}} failed: {{data['error']}}: {{data.get('reason', '')}}"
+        )
+    return data
+'''
+
+
+def _generate_api_wrapper(server_name: str, endpoint: dict[str, Any]) -> str:
+    safe_server = _sanitize(server_name)
+    op_id = endpoint["operation_id"]
+    qualified = f"api__{safe_server}__{_sanitize(op_id)}"
+    method = endpoint.get("method", "GET")
+    desc = endpoint.get("summary") or f"{method} {endpoint.get('path', '')}"
+    return f'''def {qualified}(path=None, query=None, body=None, headers=None):
+    """{desc} [{method} {endpoint.get("path", "")}]"""
+    from functions._registry import _track_call
+    _track_call("api:{server_name}.{op_id}")
+    from functions._api_bridge import _call_api_endpoint
+    return _call_api_endpoint("{server_name}", "{op_id}", path, query, body, headers)
+'''
+
+
+def _generate_api_server_module(server_name: str, endpoints: list[dict[str, Any]]) -> str:
+    lines = [f'"""REST API endpoints from the {server_name} server (019)."""\n']
+    for endpoint in endpoints:
+        lines.append(_generate_api_wrapper(server_name, endpoint))
+    return "\n".join(lines)
+
+
 def _generate_init_with_mcp(
     namespace: str,
     services: dict[str, list[tuple[Function, FunctionVersion]]],
     mcp_servers: list[dict[str, Any]] | None = None,
+    api_servers: list[dict[str, Any]] | None = None,
 ) -> str:
     doc_lines = [f"Available functions in the '{namespace}' namespace:", ""]
     imports: list[str] = []
@@ -381,6 +441,18 @@ def _generate_init_with_mcp(
                 imports.append(f"from functions._mcp.{safe_server} import {qualified}")
             doc_lines.append("")
 
+    if api_servers:
+        doc_lines.append("  [API]")
+        for server in api_servers:
+            safe_server = _sanitize(server["name"])
+            doc_lines.append(f"    [{server['name']}]")
+            for endpoint in server.get("endpoints", []):
+                qualified = f"api__{safe_server}__{_sanitize(endpoint['operation_id'])}"
+                desc = endpoint.get("summary") or endpoint.get("method", "")
+                doc_lines.append(f"      {qualified}(path, query, body, headers) — {desc}")
+                imports.append(f"from functions._api.{safe_server} import {qualified}")
+            doc_lines.append("")
+
     docstring = "\n".join(doc_lines)
     import_block = "\n".join(imports)
     return f'"""\n{docstring}\n"""\n\n{import_block}\n'
@@ -391,6 +463,7 @@ def generate_functions_package(
     namespace: str,
     run_url: str | None = None,
     mcp_servers: list[dict[str, Any]] | None = None,
+    api_servers: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     """Generate a ``functions/`` Python package from database records.
 
@@ -446,6 +519,23 @@ def generate_functions_package(
                 server["name"], server.get("tool_schemas", [])
             )
 
-    files["functions/__init__.py"] = _generate_init_with_mcp(namespace, services, mcp_servers)
+    if api_servers:
+        from mcpworks_api.config import get_settings
+
+        settings = get_settings()
+        base = getattr(settings, "base_scheme", "https") + "://"
+        base += "api." + getattr(settings, "base_domain", "localhost")
+        api_proxy_url = f"{base}/v1/internal/api-proxy"
+        files["functions/_api_bridge.py"] = _API_BRIDGE_TEMPLATE.format(proxy_url=api_proxy_url)
+        files["functions/_api/__init__.py"] = ""
+        for server in api_servers:
+            safe_server = _sanitize(server["name"])
+            files[f"functions/_api/{safe_server}.py"] = _generate_api_server_module(
+                server["name"], server.get("endpoints", [])
+            )
+
+    files["functions/__init__.py"] = _generate_init_with_mcp(
+        namespace, services, mcp_servers, api_servers
+    )
 
     return files
