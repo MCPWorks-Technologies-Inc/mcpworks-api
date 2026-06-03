@@ -7,6 +7,14 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # Don't redeploy prod (which restarts the API and drops live MCP connections)
+    # for changes that can't affect the running server0 service. Note: infra/server0/**
+    # IS deployed, so it is deliberately NOT ignored here.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'specs/**'
+      - 'infra/edge/**'
   workflow_dispatch:
 
 concurrency:

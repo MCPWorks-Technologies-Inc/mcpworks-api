@@ -14,11 +14,16 @@ MCPWorks production infrastructure runs on-premises on Hyper-V VMs ("POP11") wit
 
 | Host | Address | Role | Resources |
 |------|---------|------|-----------|
-| **api.mcpworks.io** | 159.203.30.199 (public), 10.100.0.1 (WG) | Edge proxy (Caddy only) | DO droplet, minimal |
+| **api.mcpworks.io** | 146.190.249.118 (public), 10.100.0.1 (WG) | Edge proxy (Caddy only) | DO droplet `mcpworks-edge` (tor1) |
 | **server0.pop11** | 10.0.0.14 (LAN), 10.100.0.3 (WG) | MCPWorks platform (API, Postgres, Redis, sandbox) | Hyper-V VM, 12 vCPU, dynamic RAM |
 | **server1.pop11** | TBD (LAN), 10.100.0.4 (WG) | GenOps (genops.dev) | Hyper-V VM (planned) |
 | **maeve.pop11** | 10.0.0.81 (LAN only) | Hyper-V host, GPU (RTX 3090), Ollama | NOT on WireGuard |
 | **monolith.pop11** | 10.0.0.41 (LAN), 10.100.0.2 (WG) | Dev machine | Simon's workstation |
+
+> **Prefer hostnames over IPs.** Reach the edge as `api.mcpworks.io` (DNS → the
+> `mcpworks-edge` droplet). The public IP can change on a droplet rebuild — it
+> moved from `159.203.30.199` (now **decommissioned** — do not reuse; DigitalOcean
+> may have reassigned it to another customer) to `146.190.249.118` on 2026-06-03.
 
 ## Network Architecture
 
@@ -27,7 +32,7 @@ MCPWorks production infrastructure runs on-premises on Hyper-V VMs ("POP11") wit
      │
      ▼
 ┌─────────────────────┐
-│  api.mcpworks.io    │  DO tor1, 159.203.30.199
+│  api.mcpworks.io    │  DO tor1, 146.190.249.118
 │  Caddy (TLS only)   │  WG: 10.100.0.1
 │  + agent containers │  (agents still here temporarily)
 │  + socat proxy      │

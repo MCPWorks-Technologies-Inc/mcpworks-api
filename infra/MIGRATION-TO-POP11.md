@@ -8,7 +8,7 @@
 ```
 [INTERNET]
      |
-api.mcpworks.io (159.203.30.199)    <-- Caddy only, TLS + reverse proxy
+api.mcpworks.io (146.190.249.118)   <-- Caddy only, TLS + reverse proxy (mcpworks-edge, tor1)
      | WireGuard (10.100.0.1 <-> 10.100.0.3)
      |
 server0.pop11 (10.0.0.14)           <-- API + Postgres + Redis + Sandbox
@@ -172,7 +172,7 @@ doctl databases delete <valkey-cluster-id>
 GitHub Actions deploy workflow needs updating:
 
 - `DEPLOY_HOST` changes to server0's public-reachable address
-  - Option A: SSH through api.mcpworks.io as jump host (`ssh -J root@159.203.30.199 root@10.100.0.3`)
+  - Option A: SSH through api.mcpworks.io as jump host (`ssh -J root@api.mcpworks.io root@10.100.0.3`) — use the hostname, not a hardcoded IP (the edge IP can change on rebuild)
   - Option B: SSH directly to server0 if it has a public IP or port forward
 - Deploy path stays `/opt/mcpworks`
 - Docker compose file reference changes
@@ -195,10 +195,10 @@ The WG tunnel is now a critical path. Add monitoring:
 
 ## Outbound NAT
 
-server0 and server1 use api.mcpworks.io as their default gateway for internet-bound traffic via WireGuard. This is already configured — outbound from server0 exits via 159.203.30.199.
+server0 and server1 use the edge (api.mcpworks.io) as their default gateway for internet-bound traffic via WireGuard. This is already configured — outbound from server0 exits via the edge's public IP (146.190.249.118).
 
 Verify:
 ```bash
 # On server0
-curl -s ifconfig.me  # Should show 159.203.30.199
+curl -s ifconfig.me  # Should show the edge public IP (146.190.249.118)
 ```
